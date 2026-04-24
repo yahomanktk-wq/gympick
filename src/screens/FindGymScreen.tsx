@@ -731,9 +731,13 @@ const s = StyleSheet.create({
   },
   filterRow:      { paddingHorizontal: 16, gap: 8, paddingBottom: 4 },
   filterChip:     {
-    paddingHorizontal: 16, paddingVertical: 8,
-    borderRadius: R.pill,
-    backgroundColor: C.surface,
+    paddingHorizontal: 16,
+    paddingVertical:   10,
+    borderRadius:      R.pill,
+    backgroundColor:   C.surface,
+    minHeight:         40,
+    justifyContent:    'center',
+    alignItems:        'center',
   },
   filterChipText: { fontSize: 14, fontWeight: '600', color: C.textSub },
 

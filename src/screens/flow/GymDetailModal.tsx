@@ -277,9 +277,6 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
         {activeTab === '정보' && (
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.content}>
 
-            {/* ── Photo strip ── */}
-            <PhotoStrip gymId={gymId} />
-
             {/* ── Gym name + location ── */}
             <View style={s.gymHeader}>
               <Text style={s.gymName}>{gym.name}</Text>
@@ -344,39 +341,7 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
               ))}
             </View>
 
-            {/* ── Machine inventory ── */}
-            <Text style={s.sectionTitle}>기구</Text>
-            <View style={s.card}>
-              <Text style={s.equipCount}>{gym.machines.length}개 머신 보유</Text>
-              {gym.machines.slice(0, 5).map((m, i) => (
-                <TouchableOpacity
-                  key={m.id}
-                  style={[s.equipRow, i > 0 && s.equipBorder]}
-                  activeOpacity={0.75}
-                  onPress={() => setSelectedMachineId(m.id)}
-                >
-                  <View style={[s.equipDot, { backgroundColor: C.accent }]} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.equipName}>{m.name}</Text>
-                    <Text style={s.equipMeta}>{m.brand} · {m.targetMuscle}</Text>
-                  </View>
-                  <View style={s.equipCatPill}>
-                    <Text style={s.equipCatText}>{m.category}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={13} color={C.textDim} style={{ marginLeft: 6 }} />
-                </TouchableOpacity>
-              ))}
-              {gym.machines.length > 5 && (
-                <TouchableOpacity
-                  style={s.allMachinesBtn}
-                  onPress={() => setShowAllMachines(true)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={s.allMachinesBtnText}>전체 머신 보기</Text>
-                  <Ionicons name="chevron-forward" size={14} color={C.accent} />
-                </TouchableOpacity>
-              )}
-            </View>
+
 
             {/* ── 정보 제보하기 ── */}
             <TouchableOpacity
