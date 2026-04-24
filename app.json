@@ -2,6 +2,7 @@
   "expo": {
     "name": "gympick",
     "slug": "gympick",
+    "scheme": "gympick",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -14,7 +15,13 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.gympick.app",
+      "usesAppleSignIn": true,
+      "buildNumber": "1",
       "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "주변 헬스장을 찾기 위해 현재 위치가 필요합니다. 위치 정보는 헬스장 검색 목적으로만 사용됩니다.",
+        "NSCameraUsageDescription": "머신을 스캔하여 자동으로 인식하기 위해 카메라 접근이 필요합니다.",
+        "NSPhotoLibraryUsageDescription": "운동 완료 사진을 저장하거나 프로필 사진을 설정하기 위해 사진 라이브러리 접근이 필요합니다.",
+        "NSPhotoLibraryAddUsageDescription": "운동 완료 카드 이미지를 사진 앱에 저장하기 위해 접근이 필요합니다.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -26,7 +33,15 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.gympick.app"
+      "package": "com.gympick.app",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA",
+        "READ_MEDIA_IMAGES",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -35,6 +50,26 @@
       "eas": {
         "projectId": "86787298-1093-4a67-ab35-e769813842fe"
       }
-    }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "운동 완료 사진을 저장하거나 선택하기 위해 사진 라이브러리 접근이 필요합니다.",
+          "cameraPermission": "운동 인증샷을 찍기 위해 카메라 접근이 필요합니다."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "운동 완료 카드 이미지를 사진 앱에 저장하기 위해 접근이 필요합니다.",
+          "savePhotosPermission": "운동 완료 카드 이미지를 사진 앱에 저장하기 위해 접근이 필요합니다.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
+      "expo-web-browser",
+      "expo-apple-authentication",
+      "expo-font"
+    ]
   }
 }
