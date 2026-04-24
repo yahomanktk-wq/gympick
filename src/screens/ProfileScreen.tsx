@@ -11,7 +11,10 @@ import {
   Modal,
   TextInput,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
+import { pickAndUploadProfileImage, saveProfileImageUrl, loadProfileImageUrl } from '../lib/profileImageStorage';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { C, R, T } from '../theme';
@@ -338,7 +341,7 @@ function DevRoleSwitcher({ currentRole, onSwitch }: { currentRole: UserRole; onS
 
 export default function ProfileScreen() {
   const nav = useNavigation<any>();
-  const { user, switchRole, signOut, updateNickname } = useAuth();
+  const { user, switchRole, signOut, updateNickname, updateProfileImage } = useAuth();
   const [showManager,       setShowManager]       = useState(false);
   const [showAdmin,         setShowAdmin]         = useState(false);
   const [showFavorites,     setShowFavorites]     = useState(false);
@@ -351,6 +354,7 @@ export default function ProfileScreen() {
   const [showNicknameEdit,  setShowNicknameEdit]  = useState(false);
   const [nicknameInput,     setNicknameInput]     = useState('');
   const [unreadCount,       setUnreadCount]       = useState(0);
+  const [uploading,         setUploading]         = useState(false);
 
   const loadUnreadCount = useCallback(async () => {
     if (!user) return;
@@ -359,6 +363,29 @@ export default function ProfileScreen() {
   }, [user?.id]);
 
   useEffect(() => { loadUnreadCount(); }, [loadUnreadCount]);
+
+  useEffect(() => {
+    if (!user) return;
+    loadProfileImageUrl(user.id).then(url => {
+      if (url && url !== user.profileImageUrl) {
+        updateProfileImage(url);
+      }
+    });
+  }, [user?.id]);
+
+  async function handlePickProfileImage() {
+    if (!user || uploading) return;
+    setUploading(true);
+    try {
+      const url = await pickAndUploadProfileImage(user.id);
+      if (url) {
+        await saveProfileImageUrl(user.id, url);
+        updateProfileImage(url);
+      }
+    } finally {
+      setUploading(false);
+    }
+  }
 
   // When user signs in, exit the auth flow.
   React.useEffect(() => {
@@ -431,13 +458,33 @@ export default function ProfileScreen() {
             )}
           </TouchableOpacity>
 
-          <View style={styles.avatarWrap}>
-            <Text style={styles.avatarInitial}>{user.name.charAt(0)}</Text>
+          <TouchableOpacity
+            style={styles.avatarWrap}
+            onPress={handlePickProfileImage}
+            activeOpacity={0.8}
+            disabled={uploading}
+          >
+            {user.profileImageUrl ? (
+              <ExpoImage
+                source={{ uri: user.profileImageUrl }}
+                style={styles.avatarImage}
+                contentFit="cover"
+              />
+            ) : (
+              <View style={styles.avatarEmpty} />
+            )}
+            <View style={styles.avatarEditBadge}>
+              {uploading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Ionicons name="camera" size={12} color="#FFFFFF" />
+              )}
+            </View>
             <View style={[styles.rolePip, { backgroundColor: roleMeta.bg, borderColor: roleMeta.color + '80' }]}>
               <Ionicons name={roleMeta.icon} size={9} color={roleMeta.color} />
               <Text style={[styles.rolePipText, { color: roleMeta.color }]}>{roleMeta.label}</Text>
             </View>
-          </View>
+          </TouchableOpacity>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
             {user.role === 'manager' && (
               <View style={styles.managerRoleBadge}>
@@ -766,8 +813,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
+    overflow: 'visible',
   },
-  avatarInitial: { fontSize: 34, fontWeight: '900', color: C.bg },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 999,
+  },
+  avatarEmpty: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: C.accent,
+  },
+  avatarEditBadge: {
+    position:        'absolute',
+    bottom:          2,
+    right:           2,
+    width:           24,
+    height:          24,
+    borderRadius:    12,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
   rolePip: {
     position: 'absolute',
     bottom: -2,

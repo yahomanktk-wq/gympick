@@ -156,7 +156,18 @@ export default function HomeScreen() {
       .filter((p): p is WorkoutFeedPost => p !== null);
     const combined = [...myPosts, ...mockPosts];
     const unique = combined.filter((p, i, arr) => arr.findIndex(x => x.id === p.id) === i);
-    return unique.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const sorted = unique.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    // 유저별로 오늘 날짜 기준 가장 최신 포스트 1개만 남기기
+    const today = new Date().toDateString();
+    const seenUsers = new Set<string>();
+    return sorted.filter(p => {
+      const postDate = new Date(p.createdAt).toDateString();
+      if (postDate !== today) return true; // 오늘이 아닌 건 그대로
+      if (seenUsers.has(p.userId)) return false; // 같은 유저의 오늘 포스트는 첫 번째만
+      seenUsers.add(p.userId);
+      return true;
+    });
   }, [sessions, user]);
 
   const thisWeekSessions = useMemo(() => {
@@ -194,7 +205,13 @@ export default function HomeScreen() {
               <Text style={st.name}>{user.nickname ?? user.name.split(' ')[0]}</Text>
             </View>
             <View style={st.avatar}>
-              <Text style={st.avatarTxt}>{(user.nickname ?? user.name).charAt(0).toUpperCase()}</Text>
+              {user.profileImageUrl ? (
+                <ExpoImage
+                  source={{ uri: user.profileImageUrl }}
+                  style={st.avatarImg}
+                  contentFit="cover"
+                />
+              ) : null}
             </View>
           </View>
         ) : (
@@ -545,8 +562,8 @@ const st = StyleSheet.create({
   },
   greet:     { fontSize: 14, color: C.textSub, fontWeight: '500' },
   name:      { fontSize: 30, fontWeight: '900', color: C.text, letterSpacing: -1 },
-  avatar:    { width: 42, height: 42, borderRadius: 21, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
-  avatarTxt: { fontSize: 16, fontWeight: '900', color: C.bg },
+  avatar:    { width: 42, height: 42, borderRadius: 21, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center', marginTop: 4, overflow: 'hidden' },
+  avatarImg: { width: '100%', height: '100%' },
 
   // Last session summary card
   recentCard: {

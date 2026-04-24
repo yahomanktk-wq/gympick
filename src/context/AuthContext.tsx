@@ -16,6 +16,7 @@ export interface AuthUser {
   role: UserRole;
   managedGymIds: string[];
   gymId?: string;
+  profileImageUrl?: string;
 }
 
 interface AuthContextValue {
@@ -29,8 +30,9 @@ interface AuthContextValue {
   signOut:      () => Promise<void>;
   signInGoogle:    () => Promise<{ error: string | null }>;
   signInApple:     () => Promise<{ error: string | null }>;
-  switchRole:      (role: UserRole) => void;
-  updateNickname:  (nickname: string) => Promise<{ error: string | null }>;
+  switchRole:         (role: UserRole) => void;
+  updateNickname:     (nickname: string) => Promise<{ error: string | null }>;
+  updateProfileImage: (url: string) => void;
 }
 
 // --- Mock users
@@ -90,8 +92,9 @@ const AuthContext = createContext<AuthContextValue>({
   signOut:      async () => {},
   signInGoogle:   async () => ({ error: null }),
   signInApple:    async () => ({ error: null }),
-  switchRole:     () => {},
-  updateNickname: async () => ({ error: null }),
+  switchRole:         () => {},
+  updateNickname:     async () => ({ error: null }),
+  updateProfileImage: () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -205,6 +208,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (e: any) {
       return { error: e.message ?? '닉네임 변경에 실패했습니다.' };
     }
+  };
+
+  const updateProfileImage = (url: string) => {
+    setUser(prev => prev ? { ...prev, profileImageUrl: url } : prev);
   };
 
   const signInGoogle = async (): Promise<{ error: string | null }> => {
@@ -323,8 +330,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       signInGoogle,
       signInApple,
-      switchRole:     role => setUser(MOCK_USERS[role]),
+      switchRole:         role => setUser(MOCK_USERS[role]),
       updateNickname,
+      updateProfileImage,
     }}>
       {children}
     </AuthContext.Provider>
