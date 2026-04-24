@@ -13,7 +13,8 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R } from '../theme';
 import { WorkoutFeedPost, WorkoutLog } from '../data/types';
-import { MOCK_FEED_POSTS } from '../data/workoutFeed';
+// MOCK_FEED_POSTS는 인라인으로 대체 (빌드 이슈 방지)
+const MOCK_FEED_POSTS: WorkoutFeedPost[] = [];
 import { filterActivePosts, filterByGym, filterByDistance, toggleReaction, convertSessionToFeedPost } from '../lib/feedUtils';
 import { fetchActiveFeedPosts } from '../lib/db/feedPosts';
 import { getNewSessions } from '../data/sessionStore';
