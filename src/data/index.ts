@@ -4,25 +4,32 @@ export { MACHINES } from './machines';
 
 import { GYMS } from './gyms';
 import { MACHINES } from './machines';
+import { getGymMachineIds } from './gymMachines';
 import { FilterChip, FilterType, GymWithMachines } from './types';
 
-// ─── Derived helpers ──────────────────────────────────────────────────────────
+// --- Derived helpers
 
-/** Attach full Machine objects to a Gym */
+/** Attach full Machine objects to a Gym, with machineIds derived from the join table. */
 export function getGymWithMachines(gymId: string): GymWithMachines | undefined {
   const gym = GYMS.find(g => g.id === gymId);
   if (!gym) return undefined;
+  const machineIds = getGymMachineIds(gymId);
   return {
     ...gym,
-    machines: MACHINES.filter(m => gym.machineIds.includes(m.id)),
+    machineIds,
+    machines: MACHINES.filter(m => machineIds.includes(m.id)),
   };
 }
 
-/** All gyms with their machines pre-joined */
-export const GYMS_WITH_MACHINES: GymWithMachines[] = GYMS.map(gym => ({
-  ...gym,
-  machines: MACHINES.filter(m => gym.machineIds.includes(m.id)),
-}));
+/** All gyms with their machines pre-joined - machineIds sourced from GYM_MACHINES. */
+export const GYMS_WITH_MACHINES: GymWithMachines[] = GYMS.map(gym => {
+  const machineIds = getGymMachineIds(gym.id);
+  return {
+    ...gym,
+    machineIds,
+    machines: MACHINES.filter(m => machineIds.includes(m.id)),
+  };
+});
 
 /** Derive unique, sorted filter chips from machine data */
 export function buildFilterChips(): FilterChip[] {
@@ -79,3 +86,29 @@ export function filterGyms(
 
   return list;
 }
+
+// --- New normalized exports
+
+export {
+  GYM_MACHINES,
+  getGymMachineIds,
+  getMachineGymIds,
+  getGymMachineLinks,
+} from './gymMachines';
+
+export {
+  MACHINE_REVIEWS,
+  FAVORITE_MACHINES,
+  getMachineReviews,
+  getUserFavorites,
+  isUserFavorite,
+} from './machineReviews';
+
+export {
+  RAW_WORKOUT_SESSIONS,
+  WORKOUT_ENTRIES,
+  WORKOUT_SETS,
+  WORKOUT_PHOTOS,
+  getMachinePRsFromSets,
+  getSessionPRMachinesFromSets,
+} from './workoutSessions';

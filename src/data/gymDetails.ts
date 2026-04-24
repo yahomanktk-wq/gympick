@@ -1,4 +1,7 @@
-// ─── Types ────────────────────────────────────────────────────────────────────
+import { MachineReview } from './types';
+import { getMachineReviews } from './machineReviews';
+
+// --- Types
 
 export interface DayHours {
   day:     string;
@@ -35,8 +38,8 @@ export interface MachineComment {
   rating: number;
 }
 
-// ─── Shared comment pool ──────────────────────────────────────────────────────
-// Used by MachineDetailModal — cycled by (machineId hash) % pool.length
+// --- Shared comment pool
+// Used by MachineDetailModal - cycled by (machineId hash) % pool.length
 
 export const COMMENT_POOL: MachineComment[] = [
   { id: 'c1',  user: 'Daniel K.',  initials: 'DK', rating: 5, date: 'Mar 3, 2026',  text: 'Best machine in the gym. Great range of motion and smooth cable tension throughout.' },
@@ -49,14 +52,33 @@ export const COMMENT_POOL: MachineComment[] = [
   { id: 'c8',  user: 'Tyler B.',   initials: 'TB', rating: 4, date: 'Jan 25, 2026', text: 'Consistent tension all the way through the rep. No dead spots. Really impressed.' },
 ];
 
-/** Returns 3 mock comments for a given machine, deterministically picked */
+/**
+ * Returns up to 3 comments for a given machine.
+ *
+ * Priority:
+ *  1. If machineReviews.ts has 3+ reviews for this machine, map them to
+ *     MachineComment shape and return the first 3 (newest-first).
+ *  2. Otherwise fall back to the deterministic COMMENT_POOL slice.
+ */
 export function getMachineComments(machineId: string): MachineComment[] {
+  const reviews: MachineReview[] = getMachineReviews(machineId);
+  if (reviews.length >= 3) {
+    return reviews.slice(0, 3).map(r => ({
+      id:       r.id,
+      user:     r.userName,
+      initials: r.userInitials,
+      text:     r.text,
+      date:     r.createdAt,
+      rating:   r.rating,
+    }));
+  }
+  // Fallback: deterministic slice from the shared pool
   const seed = machineId.charCodeAt(machineId.length - 1);
   const start = seed % (COMMENT_POOL.length - 2);
   return COMMENT_POOL.slice(start, start + 3);
 }
 
-// ─── Gym detail data ──────────────────────────────────────────────────────────
+// --- Gym detail data
 
 export const GYM_DETAILS: Record<string, GymDetailData> = {
   g01: {

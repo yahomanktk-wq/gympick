@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,33 +11,44 @@ import {
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { C, R, T } from '../theme';
+import { screenPad, cardPadH, cardPadV } from '../theme/responsive';
 import { UserRole } from '../data/types';
 import { useAuth } from '../context/AuthContext';
 import { MANAGED_GYMS, PENDING_GYMS, PENDING_EDITS, FLAGGED_ITEMS } from '../data/mockAdmin';
 import ManagerDashboard from './manager/ManagerDashboard';
 import AdminDashboard from './admin/AdminDashboard';
+import FavoritesScreen from './FavoritesScreen';
+import PRHistoryScreen from './PRHistoryScreen';
+import PrivacyPolicyScreen from './PrivacyPolicyScreen';
+import AuthFlow from './auth/AuthFlow';
+import NotificationsScreen from './NotificationsScreen';
+import ManagerRequestModal from './flow/ManagerRequestModal';
+import { getNotifications, getUnreadCount } from '../lib/db/notifications';
+import { getUserBadges } from '../data/badgeStore';
+import WorkoutBadgeComponent from '../components/WorkoutBadge';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// --- Types
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
-// ─── Static mock data ─────────────────────────────────────────────────────────
+// --- Static mock data
 
 const PERSONAL_STATS = [
-  { label: 'Workouts', value: '48' },
-  { label: 'PRs Set',  value: '12' },
-  { label: 'Streak',   value: '12d' },
-  { label: 'Volume',   value: '12t' },
+  { label: '운동 횟수', value: '48' },
+  { label: 'PR 횟수',  value: '12' },
+  { label: '연속 기록',   value: '12d' },
+  { label: '볼륨',   value: '12t' },
 ];
 
 const ACHIEVEMENTS = [
-  { id: '1', icon: 'flame',   label: '10-Day Streak', earned: true  },
-  { id: '2', icon: 'barbell', label: 'First PR',      earned: true  },
-  { id: '3', icon: 'trophy',  label: '50 Workouts',   earned: false },
-  { id: '4', icon: 'flash',   label: 'Speed Lifter',  earned: false },
-  { id: '5', icon: 'fitness', label: 'Iron Will',     earned: true  },
-  { id: '6', icon: 'medal',   label: 'Century Club',  earned: false },
+  { id: '1', icon: 'flame',   label: '10일 연속', earned: true  },
+  { id: '2', icon: 'barbell', label: '첫 PR',      earned: true  },
+  { id: '3', icon: 'trophy',  label: '50회 운동',   earned: false },
+  { id: '4', icon: 'flash',   label: '스피드 리프터',  earned: false },
+  { id: '5', icon: 'fitness', label: '철의 의지',     earned: true  },
+  { id: '6', icon: 'medal',   label: '센추리 클럽',  earned: false },
 ];
 
 const RECENT_PRS = [
@@ -46,16 +57,16 @@ const RECENT_PRS = [
   { id: '3', exercise: 'Bench Press', value: '90 kg × 5',  date: 'Feb 20'  },
 ];
 
-const SETTINGS_LIST: { icon: IoniconName; label: string; toggle?: boolean; danger?: boolean }[] = [
-  { icon: 'notifications-outline', label: 'Notifications',     toggle: true  },
-  { icon: 'barbell-outline',       label: 'Units (kg / lbs)'               },
-  { icon: 'heart-outline',         label: 'Connected Health'               },
-  { icon: 'shield-outline',        label: 'Privacy'                        },
-  { icon: 'help-circle-outline',   label: 'Help & Feedback'               },
-  { icon: 'log-out-outline',       label: 'Sign Out',          danger: true },
+const SETTINGS_LIST: { icon: IoniconName; label: string; toggle?: boolean; danger?: boolean; privacy?: boolean }[] = [
+  { icon: 'notifications-outline',  label: '알림',               toggle: true  },
+  { icon: 'barbell-outline',        label: '단위 (kg / lbs)'                   },
+  { icon: 'heart-outline',          label: '건강 앱 연동'                       },
+  { icon: 'document-text-outline',  label: '개인정보처리방침',   privacy: true  },
+  { icon: 'help-circle-outline',    label: '도움말 및 피드백'                   },
+  { icon: 'log-out-outline',        label: '로그아웃',            danger: true  },
 ];
 
-// ─── Role palette ─────────────────────────────────────────────────────────────
+// --- Role palette
 
 const ROLE_META: Record<UserRole, { label: string; color: string; bg: string; icon: IoniconName }> = {
   user:    { label: 'Member',  color: C.textSub, bg: C.surfaceHigh, icon: 'person-outline'           },
@@ -63,7 +74,7 @@ const ROLE_META: Record<UserRole, { label: string; color: string; bg: string; ic
   admin:   { label: 'Admin',   color: C.danger,  bg: C.dangerBg,   icon: 'shield-checkmark-outline'  },
 };
 
-// ─── Small re-usable pieces ───────────────────────────────────────────────────
+// --- Small re-usable pieces
 
 function SectionLabel({ text }: { text: string }) {
   return <Text style={styles.sectionLabel}>{text}</Text>;
@@ -78,11 +89,11 @@ function CardDivider() {
 }
 
 function SettingRow({
-  icon, label, toggle, danger,
-}: { icon: IoniconName; label: string; toggle?: boolean; danger?: boolean }) {
+  icon, label, toggle, danger, onPress,
+}: { icon: IoniconName; label: string; toggle?: boolean; danger?: boolean; privacy?: boolean; onPress?: () => void }) {
   const [on, setOn] = useState(false);
   return (
-    <TouchableOpacity style={styles.settingRow} activeOpacity={0.7}>
+    <TouchableOpacity style={styles.settingRow} activeOpacity={0.7} onPress={onPress}>
       <View style={[styles.settingIcon, danger && { backgroundColor: C.dangerBg }]}>
         <Ionicons name={icon} size={16} color={danger ? C.danger : C.textSub} />
       </View>
@@ -118,7 +129,41 @@ function AchievementBadge({ icon, label, earned }: { icon: string; label: string
   );
 }
 
-// ─── Manager section ──────────────────────────────────────────────────────────
+// --- Badge collection section
+
+function BadgeCollectionSection() {
+  const badges = getUserBadges();
+
+  return (
+    <>
+      <View style={styles.sectionRow}>
+        <Text style={styles.sectionLabel}>획득한 뱃지</Text>
+        <Text style={styles.sectionSub}>{badges.length}개</Text>
+      </View>
+      {badges.length === 0 ? (
+        <View style={styles.badgeEmptyCard}>
+          <Text style={styles.badgeEmptyText}>
+            아직 획득한 뱃지가 없어요. 운동을 기록해보세요!
+          </Text>
+        </View>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.workoutBadgeRow}
+        >
+          {badges.map(badge => (
+            <View key={badge.id} style={styles.workoutBadgeItem}>
+              <WorkoutBadgeComponent badge={badge} size="large" />
+            </View>
+          ))}
+        </ScrollView>
+      )}
+    </>
+  );
+}
+
+// --- Manager section
 
 function ManagerSection({ onOpen }: { onOpen: () => void }) {
   const approvedGyms = MANAGED_GYMS.filter(g => g.status === 'approved');
@@ -133,14 +178,14 @@ function ManagerSection({ onOpen }: { onOpen: () => void }) {
             <Ionicons name="business" size={18} color={C.accent} />
           </View>
           <View>
-            <Text style={styles.roleSectionTitle}>Manage Your Gyms</Text>
+            <Text style={styles.roleSectionTitle}>헬스장 관리</Text>
             <Text style={styles.roleSectionSub}>
-              {MANAGED_GYMS.length} gym{MANAGED_GYMS.length !== 1 ? 's' : ''} registered
+              {MANAGED_GYMS.length} 헬스장 등록됨
             </Text>
           </View>
         </View>
         <TouchableOpacity style={styles.openPanelBtn} onPress={onOpen} activeOpacity={0.85}>
-          <Text style={styles.openPanelBtnText}>Open</Text>
+          <Text style={styles.openPanelBtnText}>열기</Text>
           <Ionicons name="chevron-forward" size={13} color={C.bg} />
         </TouchableOpacity>
       </View>
@@ -159,7 +204,7 @@ function ManagerSection({ onOpen }: { onOpen: () => void }) {
               <Text style={styles.gymSummaryLoc}>{gym.location}</Text>
             </View>
             <View style={styles.gymSummaryMeta}>
-              <Text style={styles.gymSummaryMetaText}>{gym.machineIds.length} machines</Text>
+              <Text style={styles.gymSummaryMetaText}>머신 {gym.machineIds.length}개</Text>
             </View>
           </TouchableOpacity>
         </React.Fragment>
@@ -169,24 +214,24 @@ function ManagerSection({ onOpen }: { onOpen: () => void }) {
       <View style={styles.roleSummaryChips}>
         <View style={styles.summaryChip}>
           <View style={[styles.summaryChipDot, { backgroundColor: C.accent }]} />
-          <Text style={styles.summaryChipText}>{approvedGyms.length} live</Text>
+          <Text style={styles.summaryChipText}>{approvedGyms.length} 운영 중</Text>
         </View>
         {pendingGyms.length > 0 && (
           <View style={styles.summaryChip}>
             <View style={[styles.summaryChipDot, { backgroundColor: '#ffb547' }]} />
-            <Text style={styles.summaryChipText}>{pendingGyms.length} pending</Text>
+            <Text style={styles.summaryChipText}>{pendingGyms.length} 검토 중</Text>
           </View>
         )}
         <TouchableOpacity style={styles.registerGymChip} onPress={onOpen} activeOpacity={0.8}>
           <Ionicons name="add" size={12} color={C.accent} />
-          <Text style={styles.registerGymChipText}>Register gym</Text>
+          <Text style={styles.registerGymChipText}>헬스장 등록</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 }
 
-// ─── Admin section ────────────────────────────────────────────────────────────
+// --- Admin section
 
 function AdminSection({ onOpen }: { onOpen: () => void }) {
   const pendingGyms  = PENDING_GYMS.filter(g => g.status === 'pending').length;
@@ -194,9 +239,9 @@ function AdminSection({ onOpen }: { onOpen: () => void }) {
   const openFlags    = FLAGGED_ITEMS.filter(f => f.status === 'open').length;
 
   const queues = [
-    { label: 'Gyms',   count: pendingGyms,  color: '#ffb547' },
-    { label: 'Edits',  count: pendingEdits, color: '#5ba4ff' },
-    { label: 'Flagged',count: openFlags,    color: C.danger  },
+    { label: '헬스장',   count: pendingGyms,  color: '#ffb547' },
+    { label: '수정',  count: pendingEdits, color: '#5ba4ff' },
+    { label: '신고',count: openFlags,    color: C.danger  },
   ];
 
   return (
@@ -208,12 +253,12 @@ function AdminSection({ onOpen }: { onOpen: () => void }) {
             <Ionicons name="shield-checkmark" size={18} color={C.danger} />
           </View>
           <View>
-            <Text style={styles.roleSectionTitle}>Admin Panel</Text>
-            <Text style={styles.roleSectionSub}>Review queues · Manage data</Text>
+            <Text style={styles.roleSectionTitle}>관리자 패널</Text>
+            <Text style={styles.roleSectionSub}>검토 큐 · 데이터 관리</Text>
           </View>
         </View>
         <TouchableOpacity style={[styles.openPanelBtn, { backgroundColor: C.danger }]} onPress={onOpen} activeOpacity={0.85}>
-          <Text style={styles.openPanelBtnText}>Open</Text>
+          <Text style={styles.openPanelBtnText}>열기</Text>
           <Ionicons name="chevron-forward" size={13} color={C.bg} />
         </TouchableOpacity>
       </View>
@@ -238,7 +283,7 @@ function AdminSection({ onOpen }: { onOpen: () => void }) {
           <TouchableOpacity style={styles.adminAlertRow} onPress={onOpen} activeOpacity={0.75}>
             <Ionicons name="alert-circle" size={14} color='#ffb547' />
             <Text style={styles.adminAlertText}>
-              {pendingGyms + pendingEdits + openFlags} items need your attention
+              {pendingGyms + pendingEdits + openFlags}개 항목을 확인해주세요
             </Text>
             <Ionicons name="chevron-forward" size={13} color={C.textDim} />
           </TouchableOpacity>
@@ -248,7 +293,7 @@ function AdminSection({ onOpen }: { onOpen: () => void }) {
   );
 }
 
-// ─── Dev role switcher ────────────────────────────────────────────────────────
+// --- Dev role switcher
 
 function DevRoleSwitcher({ currentRole, onSwitch }: { currentRole: UserRole; onSwitch: (r: UserRole) => void }) {
   const [expanded, setExpanded] = useState(false);
@@ -260,7 +305,7 @@ function DevRoleSwitcher({ currentRole, onSwitch }: { currentRole: UserRole; onS
           <Ionicons name="flask" size={11} color={C.textDim} />
           <Text style={styles.devBadgeText}>DEV</Text>
         </View>
-        <Text style={styles.devToggleText}>Role Switcher</Text>
+        <Text style={styles.devToggleText}>역할 전환</Text>
         <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={14} color={C.textDim} />
       </TouchableOpacity>
 
@@ -287,12 +332,75 @@ function DevRoleSwitcher({ currentRole, onSwitch }: { currentRole: UserRole; onS
   );
 }
 
-// ─── Main screen ──────────────────────────────────────────────────────────────
+// --- Main screen
 
 export default function ProfileScreen() {
-  const { user, switchRole } = useAuth();
-  const [showManager, setShowManager] = useState(false);
-  const [showAdmin,   setShowAdmin]   = useState(false);
+  const nav = useNavigation<any>();
+  const { user, switchRole, signOut } = useAuth();
+  const [showManager,       setShowManager]       = useState(false);
+  const [showAdmin,         setShowAdmin]         = useState(false);
+  const [showFavorites,     setShowFavorites]     = useState(false);
+  const [showPRHistory,     setShowPRHistory]     = useState(false);
+  const [showPrivacy,       setShowPrivacy]       = useState(false);
+  const [showingAuth,       setShowingAuth]       = useState(false);
+  const [authPage,          setAuthPage]          = useState<'signin' | 'signup'>('signin');
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showManagerReq,    setShowManagerReq]    = useState(false);
+  const [unreadCount,       setUnreadCount]       = useState(0);
+
+  const loadUnreadCount = useCallback(async () => {
+    if (!user) return;
+    const notifs = await getNotifications(user.id);
+    setUnreadCount(getUnreadCount(notifs));
+  }, [user?.id]);
+
+  useEffect(() => { loadUnreadCount(); }, [loadUnreadCount]);
+
+  // When user signs in, exit the auth flow.
+  React.useEffect(() => {
+    if (user) setShowingAuth(false);
+  }, [user]);
+
+  // Guest profile view
+  if (!user && showingAuth) {
+    return (
+      <AuthFlow initialPage={authPage} />
+    );
+  }
+
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+        <View style={styles.guestContainer}>
+          <View style={styles.guestIconRing}>
+            <Ionicons name="barbell" size={36} color={C.accent} />
+          </View>
+          <Text style={styles.guestTitle}>GymPick에 오신 걸 환영해요</Text>
+          <Text style={styles.guestDesc}>
+            로그인하고 운동을 기록하고, 개인 기록을 추적하고, 즐겨찾기를 저장하세요.
+          </Text>
+          <TouchableOpacity
+            style={styles.guestSignInBtn}
+            activeOpacity={0.85}
+            onPress={() => { setAuthPage('signin'); setShowingAuth(true); }}
+          >
+            <Text style={styles.guestSignInTxt}>Login</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.guestCreateBtn}
+            activeOpacity={0.85}
+            onPress={() => { setAuthPage('signup'); setShowingAuth(true); }}
+          >
+            <Text style={styles.guestCreateTxt}>회원가입</Text>
+          </TouchableOpacity>
+          <Text style={styles.guestFooter}>
+            로그인 없이 헬스장과 머신을 탐색하세요.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const roleMeta = ROLE_META[user.role];
 
@@ -303,6 +411,22 @@ export default function ProfileScreen() {
 
         {/* ── Hero ── */}
         <View style={styles.hero}>
+          {/* Notification bell — top right of hero */}
+          <TouchableOpacity
+            style={styles.bellBtn}
+            onPress={() => setShowNotifications(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="notifications-outline" size={22} color={C.textSub} />
+            {unreadCount > 0 && (
+              <View style={styles.bellBadge}>
+                <Text style={styles.bellBadgeText}>
+                  {unreadCount > 9 ? '9+' : String(unreadCount)}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
           <View style={styles.avatarWrap}>
             <Text style={styles.avatarInitial}>{user.name.charAt(0)}</Text>
             <View style={[styles.rolePip, { backgroundColor: roleMeta.bg, borderColor: roleMeta.color + '80' }]}>
@@ -310,14 +434,26 @@ export default function ProfileScreen() {
               <Text style={[styles.rolePipText, { color: roleMeta.color }]}>{roleMeta.label}</Text>
             </View>
           </View>
-          <Text style={styles.userName}>{user.name}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            {user.role === 'manager' && (
+              <View style={styles.managerRoleBadge}>
+                <Text style={styles.managerRoleBadgeText}>매니저</Text>
+              </View>
+            )}
+            {user.role === 'admin' && (
+              <View style={styles.adminRoleBadge}>
+                <Text style={styles.adminRoleBadgeText}>어드민</Text>
+              </View>
+            )}
+            <Text style={styles.userName}>{user.nickname ?? user.name}</Text>
+          </View>
           <Text style={styles.userEmail}>{user.email}</Text>
         </View>
 
         {/* ── Role-specific panel (manager / admin) ── */}
         {user.role === 'manager' && (
           <>
-            <SectionLabel text="GYM MANAGEMENT" />
+            <SectionLabel text="헬스장 관리" />
             <ManagerSection onOpen={() => setShowManager(true)} />
             <View style={{ height: 28 }} />
           </>
@@ -325,14 +461,36 @@ export default function ProfileScreen() {
 
         {user.role === 'admin' && (
           <>
-            <SectionLabel text="ADMINISTRATION" />
+            <SectionLabel text="관리자" />
             <AdminSection onOpen={() => setShowAdmin(true)} />
             <View style={{ height: 28 }} />
           </>
         )}
 
+        {/* ── Manager request CTA (user role only) ── */}
+        {user.role === 'user' && (
+          <>
+            <SectionLabel text="헬스장 운영자이신가요?" />
+            <TouchableOpacity
+              style={styles.managerRequestCard}
+              onPress={() => setShowManagerReq(true)}
+              activeOpacity={0.85}
+            >
+              <View style={styles.managerRequestIcon}>
+                <Ionicons name="business-outline" size={20} color={C.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.managerRequestTitle}>헬스장 매니저 신청</Text>
+                <Text style={styles.managerRequestSub}>헬스장을 GymPick에 등록하고 관리하세요</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={C.textDim} />
+            </TouchableOpacity>
+            <View style={{ height: 28 }} />
+          </>
+        )}
+
         {/* ── Personal stats ── */}
-        <SectionLabel text="YOUR STATS" />
+        <SectionLabel text="내 통계" />
         <View style={styles.statsGrid}>
           {PERSONAL_STATS.map((s, i) => (
             <React.Fragment key={s.label}>
@@ -345,11 +503,14 @@ export default function ProfileScreen() {
           ))}
         </View>
 
+        {/* ── Workout Badges (task_3) ── */}
+        <BadgeCollectionSection />
+
         {/* ── Achievements ── */}
         <View style={styles.sectionRow}>
-          <SectionLabel text="ACHIEVEMENTS" />
+          <SectionLabel text="업적" />
           <Text style={styles.sectionSub}>
-            {ACHIEVEMENTS.filter(a => a.earned).length}/{ACHIEVEMENTS.length} earned
+            {ACHIEVEMENTS.filter(a => a.earned).length}/{ACHIEVEMENTS.length} 달성
           </Text>
         </View>
         <ScrollView
@@ -362,35 +523,68 @@ export default function ProfileScreen() {
 
         {/* ── Personal records ── */}
         <View style={styles.sectionRow}>
-          <SectionLabel text="PERSONAL RECORDS" />
-          <TouchableOpacity>
-            <Text style={styles.seeAll}>See all</Text>
+          <SectionLabel text="개인 기록" />
+          <TouchableOpacity onPress={() => setShowPRHistory(true)}>
+            <Text style={styles.seeAll}>전체 보기</Text>
           </TouchableOpacity>
         </View>
+        {user.id.startsWith('mock-') ? (
+          <View style={styles.prPlaceholderCard}>
+            <Ionicons name="trophy-outline" size={22} color={C.textDim} />
+            <Text style={styles.prPlaceholderText}>
+              운동을 기록하면 PR이 자동으로 추적돼요.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.card}>
+            {RECENT_PRS.map((pr, i) => (
+              <React.Fragment key={pr.id}>
+                <View style={styles.prRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.prExercise}>{pr.exercise}</Text>
+                    <Text style={styles.prValue}>{pr.value}</Text>
+                  </View>
+                  <Text style={styles.prDate}>{pr.date}</Text>
+                </View>
+                {i < RECENT_PRS.length - 1 && <Divider />}
+              </React.Fragment>
+            ))}
+          </View>
+        )}
+
+        {/* ── My Library ── */}
+        <SectionLabel text="내 라이브러리" />
         <View style={styles.card}>
-          {RECENT_PRS.map((pr, i) => (
-            <React.Fragment key={pr.id}>
-              <View style={styles.prRow}>
-                <View style={styles.prIcon}>
-                  <Ionicons name="trophy-outline" size={14} color={C.accent} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.prExercise}>{pr.exercise}</Text>
-                  <Text style={styles.prValue}>{pr.value}</Text>
-                </View>
-                <Text style={styles.prDate}>{pr.date}</Text>
-              </View>
-              {i < RECENT_PRS.length - 1 && <Divider />}
-            </React.Fragment>
-          ))}
+          <TouchableOpacity style={styles.navRow} activeOpacity={0.75} onPress={() => setShowFavorites(true)}>
+            <View style={styles.settingIcon}>
+              <Ionicons name="bookmark-outline" size={16} color={C.textSub} />
+            </View>
+            <Text style={styles.settingLabel}>즐겨찾기</Text>
+            <Ionicons name="chevron-forward" size={15} color={C.textDim} />
+          </TouchableOpacity>
+          <Divider />
+          <TouchableOpacity style={styles.navRow} activeOpacity={0.75} onPress={() => nav.navigate('WorkoutAnalytics')}>
+            <View style={styles.settingIcon}>
+              <Ionicons name="bar-chart-outline" size={16} color={C.textSub} />
+            </View>
+            <Text style={styles.settingLabel}>운동 분석</Text>
+            <Ionicons name="chevron-forward" size={15} color={C.textDim} />
+          </TouchableOpacity>
         </View>
 
         {/* ── Settings ── */}
-        <SectionLabel text="SETTINGS" />
+        <SectionLabel text="설정" />
         <View style={styles.card}>
           {SETTINGS_LIST.map((s, i) => (
             <React.Fragment key={s.label}>
-              <SettingRow {...s} />
+              <SettingRow
+                {...s}
+                onPress={
+                  s.label === '로그아웃' ? signOut
+                  : s.privacy ? () => setShowPrivacy(true)
+                  : undefined
+                }
+              />
               {i < SETTINGS_LIST.length - 1 && <Divider />}
             </React.Fragment>
           ))}
@@ -403,28 +597,127 @@ export default function ProfileScreen() {
       </ScrollView>
 
       {/* ── Modals ── */}
+      <Modal visible={showFavorites} animationType="slide" onRequestClose={() => setShowFavorites(false)}>
+        <FavoritesScreen onClose={() => setShowFavorites(false)} />
+      </Modal>
+      <Modal visible={showPRHistory} animationType="slide" onRequestClose={() => setShowPRHistory(false)}>
+        <PRHistoryScreen onClose={() => setShowPRHistory(false)} />
+      </Modal>
       <Modal visible={showManager} animationType="slide" onRequestClose={() => setShowManager(false)}>
         <ManagerDashboard onClose={() => setShowManager(false)} />
       </Modal>
       <Modal visible={showAdmin} animationType="slide" onRequestClose={() => setShowAdmin(false)}>
         <AdminDashboard onClose={() => setShowAdmin(false)} />
       </Modal>
+      <Modal visible={showPrivacy} animationType="slide" onRequestClose={() => setShowPrivacy(false)}>
+        <PrivacyPolicyScreen onClose={() => setShowPrivacy(false)} />
+      </Modal>
+      <Modal
+        visible={showNotifications}
+        animationType="slide"
+        onRequestClose={() => { setShowNotifications(false); loadUnreadCount(); }}
+      >
+        <NotificationsScreen
+          userId={user.id}
+          onClose={() => { setShowNotifications(false); loadUnreadCount(); }}
+        />
+      </Modal>
+      <ManagerRequestModal
+        visible={showManagerReq}
+        userId={user.id}
+        onClose={() => setShowManagerReq(false)}
+      />
     </SafeAreaView>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// --- Styles
 
 const styles = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: C.bg },
   scroll: { paddingBottom: 48 },
 
-  // ── Hero ──
+  // Bell
+  bellBtn: {
+    position: 'absolute', top: 12, right: 16,
+    width: 40, height: 40,
+    alignItems: 'center', justifyContent: 'center',
+    zIndex: 10,
+  },
+  bellBadge: {
+    position: 'absolute', top: 6, right: 6,
+    minWidth: 16, height: 16, borderRadius: 8,
+    backgroundColor: '#ff4d6d',
+    alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  bellBadgeText: { fontSize: 9, fontWeight: '800', color: '#fff' },
+
+  // Manager request card
+  managerRequestCard: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: C.surface,
+    borderRadius: R.card,
+    padding: 16,
+    marginHorizontal: 20,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: C.accent + '30',
+  },
+  managerRequestIcon: {
+    width: 40, height: 40, borderRadius: R.inner,
+    backgroundColor: C.accentBg,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  managerRequestTitle: { fontSize: 14, fontWeight: '700', color: C.text, marginBottom: 2 },
+  managerRequestSub:   { fontSize: 12, color: C.textDim },
+
+  // --- Guest
+  guestContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  guestIconRing: {
+    width:           80,
+    height:          80,
+    borderRadius:    40,
+    backgroundColor: C.accentBg,
+    alignItems:      'center',
+    justifyContent:  'center',
+    marginBottom:    24,
+  },
+  guestTitle:     { fontSize: 26, fontWeight: '900', color: C.text, letterSpacing: -0.5, marginBottom: 12, textAlign: 'center' },
+  guestDesc:      { fontSize: 14, color: C.textSub, textAlign: 'center', lineHeight: 21, marginBottom: 32 },
+  guestSignInBtn: {
+    alignSelf: 'stretch',
+    backgroundColor: C.accent,
+    borderRadius: R.btn,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  guestSignInTxt: { fontSize: 15, fontWeight: '800', color: C.bg },
+  guestCreateBtn: {
+    alignSelf: 'stretch',
+    borderRadius: R.btn,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: C.border,
+    marginBottom: 24,
+  },
+  guestCreateTxt: { fontSize: 15, fontWeight: '700', color: C.text },
+  guestFooter:    { fontSize: 12, color: C.textDim, textAlign: 'center' },
+
+  // --- Hero
   hero: {
     alignItems: 'center',
-    paddingTop: 28,
+    paddingTop: 32,
     paddingBottom: 24,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
+    position: 'relative',
   },
   avatarWrap: {
     width: 84,
@@ -450,36 +743,38 @@ const styles = StyleSheet.create({
     borderColor: C.border,
   },
   rolePipText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.3 },
-  userName:    { ...T.title, color: C.text, marginBottom: 4 },
+  userName:    { ...T.title, color: C.text },
   userEmail:   { fontSize: 13, color: C.textSub },
+  managerRoleBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: R.pill, backgroundColor: C.accent + '25' },
+  managerRoleBadgeText: { fontSize: 11, fontWeight: '800', color: C.accent },
+  adminRoleBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: R.pill, backgroundColor: C.danger + '25' },
+  adminRoleBadgeText: { fontSize: 11, fontWeight: '800', color: C.danger },
 
-  // ── Section labels ──
+  // --- Section labels
   sectionLabel: {
     fontSize: 11,
     fontWeight: '700',
     color: C.textDim,
     letterSpacing: 1.2,
-    marginHorizontal: 20,
-    marginBottom: 10,
+    marginHorizontal: screenPad,
+    marginBottom: 8,
     marginTop: 4,
   },
   sectionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginHorizontal: 20,
-    marginBottom: 10,
+    marginHorizontal: screenPad,
+    marginBottom: 8,
   },
   sectionSub: { fontSize: 12, color: C.textSub },
   seeAll:     { fontSize: 12, fontWeight: '600', color: C.accent },
 
-  // ── Role section card ──
+  // --- Role section card
   roleSection: {
-    marginHorizontal: 20,
+    marginHorizontal: screenPad,
     backgroundColor: C.surface,
     borderRadius: R.card,
-    borderWidth: 1,
-    borderColor: C.accent + '35',
     overflow: 'hidden',
   },
   roleSectionHeader: {
@@ -583,15 +878,13 @@ const styles = StyleSheet.create({
   },
   adminAlertText: { flex: 1, fontSize: 13, color: C.textSub },
 
-  // ── Stats grid ──
+  // --- Stats grid
   statsGrid: {
     flexDirection: 'row',
-    marginHorizontal: 20,
-    marginBottom: 28,
+    marginHorizontal: screenPad,
+    marginBottom: 24,
     backgroundColor: C.surface,
     borderRadius: R.card,
-    borderWidth: 1,
-    borderColor: C.border,
     overflow: 'hidden',
   },
   statCell:    { flex: 1, alignItems: 'center', paddingVertical: 18 },
@@ -599,16 +892,14 @@ const styles = StyleSheet.create({
   statLabel:   { fontSize: 10, color: C.textSub, marginTop: 3, fontWeight: '600' },
   statDivider: { width: 1, backgroundColor: C.border, marginVertical: 12 },
 
-  // ── Achievements ──
-  badgeRow: { paddingHorizontal: 20, gap: 10, paddingBottom: 4, marginBottom: 28 },
+  // --- Achievements
+  badgeRow: { paddingHorizontal: screenPad, gap: 10, paddingBottom: 4, marginBottom: 24 },
   badge: {
     width: 84,
     alignItems: 'center',
     backgroundColor: C.surface,
     borderRadius: R.card,
     padding: 12,
-    borderWidth: 1,
-    borderColor: C.border,
     gap: 6,
   },
   badgeIcon: {
@@ -622,40 +913,42 @@ const styles = StyleSheet.create({
   badgeLock:  { position: 'absolute', top: 8, right: 8 },
   badgeLabel: { fontSize: 10, fontWeight: '700', color: C.text, textAlign: 'center', lineHeight: 14 },
 
-  // ── Card ──
+  // --- Card
   card: {
     backgroundColor: C.surface,
     borderRadius: R.card,
-    marginHorizontal: 20,
-    marginBottom: 28,
-    borderWidth: 1,
-    borderColor: C.border,
+    marginHorizontal: screenPad,
+    marginBottom: 24,
     overflow: 'hidden',
   },
   divider:     { height: 1, backgroundColor: C.border, marginLeft: 54 },
   cardDivider: { height: 1, backgroundColor: C.border },
 
-  // ── Personal Records ──
-  prRow:      { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
-  prIcon:     { width: 34, height: 34, borderRadius: 10, backgroundColor: C.accentBg, alignItems: 'center', justifyContent: 'center' },
+  // --- Personal Records
+  prPlaceholderCard: {
+    marginHorizontal: screenPad, marginBottom: 24,
+    backgroundColor: C.surface, borderRadius: R.card,
+    padding: cardPadH, flexDirection: 'row', alignItems: 'center', gap: 14,
+  },
+  prPlaceholderText: { flex: 1, fontSize: 13, color: C.textSub, lineHeight: 20 },
+  prRow:      { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12 },
   prExercise: { fontSize: 14, fontWeight: '700', color: C.text },
   prValue:    { fontSize: 12, color: C.accent, fontWeight: '600', marginTop: 2 },
   prDate:     { fontSize: 11, color: C.textDim, fontWeight: '600' },
 
-  // ── Settings ──
+  // --- Settings / Nav rows
+  navRow:      { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
   settingRow:  { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
   settingIcon: { width: 34, height: 34, borderRadius: 9, backgroundColor: C.surfaceHigh, alignItems: 'center', justifyContent: 'center' },
   settingLabel:{ flex: 1, fontSize: 15, color: C.text, fontWeight: '500' },
 
-  // ── Dev role switcher ──
+  // --- Dev role switcher
   devWrap: {
-    marginHorizontal: 20,
-    marginTop: 12,
+    marginHorizontal: screenPad,
+    marginTop: 8,
     marginBottom: 8,
     backgroundColor: C.surface,
     borderRadius: R.card,
-    borderWidth: 1,
-    borderColor: C.border,
     overflow: 'hidden',
   },
   devToggle: {
@@ -695,4 +988,30 @@ const styles = StyleSheet.create({
   devRoleBtnText: { fontSize: 12, fontWeight: '700' },
 
   version: { textAlign: 'center', fontSize: 11, color: C.textDim, marginTop: 16, marginBottom: 4, fontWeight: '500' },
+
+  // Workout badge collection (task_3)
+  workoutBadgeRow: {
+    paddingHorizontal: screenPad,
+    gap:               12,
+    paddingBottom:     4,
+    marginBottom:      24,
+  },
+  workoutBadgeItem: {
+    alignItems: 'center',
+    gap:        6,
+  },
+  badgeEmptyCard: {
+    marginHorizontal: screenPad,
+    marginBottom:     24,
+    backgroundColor:  C.surface,
+    borderRadius:     R.card,
+    padding:          20,
+    alignItems:       'center',
+  },
+  badgeEmptyText: {
+    fontSize:   13,
+    color:      C.textSub,
+    textAlign:  'center',
+    lineHeight: 20,
+  },
 });

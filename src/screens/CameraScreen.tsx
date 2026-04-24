@@ -8,11 +8,12 @@ import {
   SafeAreaView,
   StatusBar,
   Animated,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T } from '../theme';
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+// --- Mock data
 
 interface ScanResult {
   name: string;
@@ -26,24 +27,24 @@ interface ScanResult {
 const MOCK_RESULT: ScanResult = {
   name:       'Cable Machine',
   brand:      'Life Fitness',
-  muscle:     'Back',
-  category:   'Strength',
+  muscle:     '등',
+  category:   '스트렝스',
   confidence: 94,
   gym:        'IronHub Fitness',
 };
 
 const RECENT_SCANS = [
-  { id: '1', name: 'Leg Press',    brand: 'Life Fitness',    muscle: 'Legs',    time: '2h ago' },
-  { id: '2', name: 'Smith Machine',brand: 'Matrix',          muscle: 'Shoulders',time: 'Yesterday' },
-  { id: '3', name: 'Lat Pulldown', brand: 'Hammer Strength', muscle: 'Back',    time: '2 days ago' },
+  { id: '1', name: 'Leg Press',    brand: 'Life Fitness',    muscle: '하체',    time: '2시간 전' },
+  { id: '2', name: 'Smith Machine',brand: 'Matrix',          muscle: '어깨',    time: '어제' },
+  { id: '3', name: 'Lat Pulldown', brand: 'Hammer Strength', muscle: '등',      time: '2일 전' },
 ];
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// --- Sub-components
 
 function ConfidenceBar({ value }: { value: number }) {
   return (
     <View style={styles.confRow}>
-      <Text style={styles.confLabel}>Confidence</Text>
+      <Text style={styles.confLabel}>인식률</Text>
       <View style={styles.confTrack}>
         <View style={[styles.confFill, { width: `${value}%` as any }]} />
       </View>
@@ -60,7 +61,7 @@ function ResultCard({ result }: { result: ScanResult }) {
           <Ionicons name="checkmark-circle" size={22} color={C.accent} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.resultEyebrow}>MACHINE IDENTIFIED</Text>
+          <Text style={styles.resultEyebrow}>머신 인식 완료</Text>
           <Text style={styles.resultName}>{result.name}</Text>
         </View>
       </View>
@@ -69,10 +70,10 @@ function ResultCard({ result }: { result: ScanResult }) {
 
       <View style={styles.resultGrid}>
         {[
-          { label: 'BRAND',    value: result.brand },
-          { label: 'MUSCLE',   value: result.muscle },
-          { label: 'CATEGORY', value: result.category },
-          { label: 'GYM',      value: result.gym },
+          { label: '브랜드',    value: result.brand },
+          { label: '부위',   value: result.muscle },
+          { label: '카테고리', value: result.category },
+          { label: '헬스장',      value: result.gym },
         ].map(({ label, value }) => (
           <View key={label} style={styles.resultCell}>
             <Text style={styles.resultCellLabel}>{label}</Text>
@@ -83,7 +84,7 @@ function ResultCard({ result }: { result: ScanResult }) {
 
       <TouchableOpacity style={styles.logBtn} activeOpacity={0.88}>
         <Ionicons name="add" size={16} color={C.bg} style={{ marginRight: 6 }} />
-        <Text style={styles.logBtnText}>Log to Workout</Text>
+        <Text style={styles.logBtnText}>운동에 추가</Text>
       </TouchableOpacity>
     </View>
   );
@@ -104,7 +105,7 @@ function RecentRow({ name, brand, muscle, time }: { name: string; brand: string;
   );
 }
 
-// ─── Screen ───────────────────────────────────────────────────────────────────
+// --- Screen
 
 export default function CameraScreen() {
   const [scanned, setScanned] = useState(false);
@@ -112,6 +113,17 @@ export default function CameraScreen() {
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
 
   const startScan = () => {
+    Alert.alert(
+      '카메라 권한 필요',
+      '머신을 자동으로 인식하기 위해 카메라 접근 권한이 필요합니다.',
+      [
+        { text: '취소', style: 'cancel' },
+        { text: '확인', onPress: () => doScan() },
+      ],
+    );
+  };
+
+  const doScan = () => {
     setScanning(true);
     setScanned(false);
 
@@ -137,8 +149,8 @@ export default function CameraScreen() {
 
         {/* ── Header ── */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Scan Machine</Text>
-          <Text style={styles.headerSub}>Point your camera at gym equipment</Text>
+          <Text style={styles.headerTitle}>머신 스캔</Text>
+          <Text style={styles.headerSub}>카메라를 머신에 향하게 하세요</Text>
         </View>
 
         {/* ── Viewfinder ── */}
@@ -167,8 +179,8 @@ export default function CameraScreen() {
               ) : (
                 <View style={styles.idleIcon}>
                   <Ionicons name="camera-outline" size={40} color={C.textDim} />
-                  <Text style={styles.idleText}>No camera in simulator</Text>
-                  <Text style={styles.idleHint}>Tap Scan to see a demo result</Text>
+                  <Text style={styles.idleText}>시뮬레이터에서는 카메라를 사용할 수 없어요</Text>
+                  <Text style={styles.idleHint}>스캔 버튼을 눌러 데모를 확인하세요</Text>
                 </View>
               )}
             </View>
@@ -177,7 +189,7 @@ export default function CameraScreen() {
             <View style={styles.statusPill}>
               <View style={[styles.statusDot, scanning && { backgroundColor: C.warning }, scanned && { backgroundColor: C.accent }]} />
               <Text style={styles.statusText}>
-                {scanning ? 'Scanning…' : scanned ? 'Machine found' : 'Ready to scan'}
+                {scanning ? '스캔 중...' : scanned ? '머신 인식됨' : '스캔 준비 완료'}
               </Text>
             </View>
           </View>
@@ -192,7 +204,7 @@ export default function CameraScreen() {
             activeOpacity={0.85}
           >
             <Ionicons name="scan" size={18} color={C.bg} style={{ marginRight: 8 }} />
-            <Text style={styles.scanBtnText}>{scanning ? 'Scanning…' : 'Scan Machine'}</Text>
+            <Text style={styles.scanBtnText}>{scanning ? '스캔 중...' : '머신 스캔'}</Text>
           </TouchableOpacity>
         )}
 
@@ -202,14 +214,14 @@ export default function CameraScreen() {
             <ResultCard result={MOCK_RESULT} />
             <TouchableOpacity style={styles.rescanBtn} onPress={() => setScanned(false)} activeOpacity={0.8}>
               <Ionicons name="refresh-outline" size={15} color={C.textSub} style={{ marginRight: 6 }} />
-              <Text style={styles.rescanText}>Scan Again</Text>
+              <Text style={styles.rescanText}>다시 스캔</Text>
             </TouchableOpacity>
           </>
         )}
 
         {/* ── Recent scans ── */}
         <View style={styles.sectionRow}>
-          <Text style={styles.sectionTitle}>Recent Scans</Text>
+          <Text style={styles.sectionTitle}>최근 스캔</Text>
         </View>
         <View style={styles.card}>
           {RECENT_SCANS.map((s, i) => (
@@ -225,7 +237,7 @@ export default function CameraScreen() {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// --- Styles
 
 const styles = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: C.bg },

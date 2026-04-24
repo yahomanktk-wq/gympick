@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { useNavigation } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -15,8 +16,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T } from '../../theme';
 import { GYMS_WITH_MACHINES, GymWithMachines, Machine } from '../../data';
+import MachineDetailModal from './MachineDetailModal';
+import { isGymFavorite, toggleGymFavorite } from '../../data/gymFavoriteStore';
+import { useAuth } from '../../context/AuthContext';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// --- Types
 
 type ViewName =
   | 'nearby'
@@ -42,7 +46,7 @@ interface LoggedExercise {
   sets: LoggedSet[];
 }
 
-// ─── Mock distances ───────────────────────────────────────────────────────────
+// --- Mock distances
 
 const MOCK_DIST: Record<string, { dist: string; distNum: number; open: boolean }> = {
   g01: { dist: '0.3 km', distNum: 0.3, open: true  },
@@ -63,7 +67,7 @@ const NEARBY_SORTED = [...GYMS_WITH_MACHINES].sort(
   (a, b) => getDist(a.id).distNum - getDist(b.id).distNum,
 );
 
-// ─── Muscle tag colour ────────────────────────────────────────────────────────
+// --- Muscle tag colour
 
 const MUSCLE_COLORS: Record<string, { fg: string; bg: string }> = {
   Chest:     C.tagMachine,
@@ -81,7 +85,7 @@ function musclePillStyle(muscle: string) {
   return { fg: m.fg, bg: m.bg };
 }
 
-// ─── Shared UI atoms ──────────────────────────────────────────────────────────
+// --- Shared UI atoms
 
 function NavHeader({
   title,
@@ -121,7 +125,7 @@ function Pill({ label, fg, bg }: { label: string; fg: string; bg: string }) {
   );
 }
 
-// ─── NearbyGymsView ───────────────────────────────────────────────────────────
+// --- NearbyGymsView
 
 function NearbyGymsView({
   onSelect,
@@ -172,9 +176,6 @@ function NearbyGymsView({
               activeOpacity={0.8}
               onPress={() => onSelect(gym.id)}
             >
-              {/* Accent left bar */}
-              <View style={[s.gymCardBar, { backgroundColor: meta.open ? C.accent : C.textDim }]} />
-
               <View style={{ flex: 1, paddingLeft: 14 }}>
                 <View style={s.gymCardTop}>
                   <Text style={s.gymCardName}>{gym.name}</Text>
@@ -208,20 +209,27 @@ function NearbyGymsView({
   );
 }
 
-// ─── GymDetailView ────────────────────────────────────────────────────────────
+// --- GymDetailView
 
 function GymDetailView({
   gym,
   onStartWorkout,
+  onViewAllMachines,
+  onOpenMachineDetail,
   onBack,
   onClose,
 }: {
   gym: GymWithMachines;
   onStartWorkout: () => void;
+  onViewAllMachines: () => void;
+  onOpenMachineDetail: (machineId: string) => void;
   onBack: () => void;
   onClose: () => void;
 }) {
+  const { user } = useAuth();
+  const nav = useNavigation<any>();
   const meta = getDist(gym.id);
+  const [isFav, setIsFav] = useState(() => isGymFavorite(gym.id));
 
   // Group machines by muscle for preview
   const byMuscle: Record<string, Machine[]> = {};
@@ -249,6 +257,17 @@ function GymDetailView({
                 <Text style={s.heroLoc}>{gym.location}</Text>
               </View>
             </View>
+            <TouchableOpacity
+              style={{ padding: 4, marginRight: 8 }}
+              activeOpacity={0.7}
+              onPress={() => { if (!user) { onClose(); nav.navigate('Profile'); return; } const next = toggleGymFavorite(gym.id); setIsFav(next); }}
+            >
+              <Ionicons
+                name={isFav ? 'bookmark' : 'bookmark-outline'}
+                size={22}
+                color={isFav ? C.accent : C.textSub}
+              />
+            </TouchableOpacity>
             <View style={[s.openBadge, { backgroundColor: meta.open ? C.accentBg : C.border }]}>
               <Text style={[s.openBadgeText, { color: meta.open ? C.accent : C.textSub }]}>
                 {meta.open ? 'Open' : 'Closed'}
@@ -312,6 +331,45 @@ function GymDetailView({
           ))}
         </View>
 
+        {/* Machine preview — first 4 + See All */}
+        <Text style={s.sectionTitle}>Machines</Text>
+        <View style={s.card}>
+          {gym.machines.slice(0, 4).map((machine, i) => {
+            const mp = musclePillStyle(machine.targetMuscle);
+            return (
+              <React.Fragment key={machine.id}>
+                {i > 0 && <View style={s.divider} />}
+                <TouchableOpacity
+                  style={s.machineRow}
+                  activeOpacity={0.75}
+                  onPress={() => onOpenMachineDetail(machine.id)}
+                >
+                  <View style={[s.machineIcon, { backgroundColor: mp.bg }]}>
+                    <Ionicons name="barbell-outline" size={16} color={mp.fg} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.machineName}>{machine.displayName ?? machine.name}</Text>
+                    <Text style={s.machineBrand}>{machine.brand}</Text>
+                  </View>
+                  <View style={s.categoryPill}>
+                    <Text style={s.categoryPillText}>{machine.category}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={13} color={C.textDim} style={{ marginLeft: 6 }} />
+                </TouchableOpacity>
+              </React.Fragment>
+            );
+          })}
+          {gym.machines.length > 4 && (
+            <TouchableOpacity style={s.seeAllRow} activeOpacity={0.8} onPress={onViewAllMachines}>
+              <View style={s.divider} />
+              <View style={s.seeAllInner}>
+                <Text style={s.seeAllText}>See All {gym.machines.length} Machines</Text>
+                <Ionicons name="chevron-forward" size={14} color={C.accent} />
+              </View>
+            </TouchableOpacity>
+          )}
+        </View>
+
         <View style={{ height: 100 }} />
       </ScrollView>
 
@@ -326,7 +384,7 @@ function GymDetailView({
   );
 }
 
-// ─── MachineListView ──────────────────────────────────────────────────────────
+// --- MachineListView
 
 function MachineListView({
   gym,
@@ -339,47 +397,79 @@ function MachineListView({
   onBack: () => void;
   onClose: () => void;
 }) {
-  const [activeFilter, setActiveFilter] = useState<string>('All');
+  const [searchQuery,    setSearchQuery]    = useState('');
+  const [activeMuscle,   setActiveMuscle]   = useState('All');
+  const [activeBrand,    setActiveBrand]    = useState('All');
+  const [activeCategory, setActiveCategory] = useState('All');
 
-  const muscles = ['All', ...Object.keys(
-    gym.machines.reduce((acc, m) => { acc[m.targetMuscle] = true; return acc; }, {} as Record<string, boolean>)
+  const muscles    = ['All', ...Object.keys(
+    gym.machines.reduce((acc, m) => { acc[m.targetMuscle] = true; return acc; }, {} as Record<string, boolean>),
   )];
+  const brands     = ['All', ...[...new Set(gym.machines.map(m => m.brand))].sort()];
+  const categories = ['All', ...[...new Set(gym.machines.map(m => m.category))].sort()];
 
-  const visible = activeFilter === 'All'
-    ? gym.machines
-    : gym.machines.filter(m => m.targetMuscle === activeFilter);
+  const visible = gym.machines.filter(m => {
+    const kw = searchQuery.trim().toLowerCase();
+    return (
+      (activeMuscle   === 'All' || m.targetMuscle === activeMuscle) &&
+      (activeBrand    === 'All' || m.brand        === activeBrand)  &&
+      (activeCategory === 'All' || m.category     === activeCategory) &&
+      (!kw || m.name.toLowerCase().includes(kw) || m.brand.toLowerCase().includes(kw))
+    );
+  });
 
-  // Group by muscle
   const byMuscle: Record<string, Machine[]> = {};
   for (const m of visible) {
     (byMuscle[m.targetMuscle] ??= []).push(m);
   }
 
-  return (
-    <SafeAreaView style={s.safe}>
-      <NavHeader title="Machines" onBack={onBack} onClose={onClose} />
-
-      {/* Filter chips */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={s.filterRow}
-      >
-        {muscles.map(muscle => (
+  function FilterChips({ options, active, onSelect }: { options: string[]; active: string; onSelect: (v: string) => void }) {
+    return (
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterRow}>
+        {options.map(opt => (
           <TouchableOpacity
-            key={muscle}
-            style={[s.filterChip, activeFilter === muscle && s.filterChipActive]}
-            onPress={() => setActiveFilter(muscle)}
+            key={opt}
+            style={[s.filterChip, active === opt && s.filterChipActive]}
+            onPress={() => onSelect(active === opt && opt !== 'All' ? 'All' : opt)}
             activeOpacity={0.7}
           >
-            <Text style={[s.filterChipText, activeFilter === muscle && s.filterChipTextActive]}>
-              {muscle}
-            </Text>
+            <Text style={[s.filterChipText, active === opt && s.filterChipTextActive]}>{opt}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={s.safe}>
+      <NavHeader title={`${gym.name} · Machines`} onBack={onBack} onClose={onClose} />
+
+      {/* Search */}
+      <View style={s.searchWrap}>
+        <Ionicons name="search" size={15} color={C.textSub} style={{ marginRight: 8 }} />
+        <TextInput
+          style={s.searchInput}
+          placeholder="Search machines…"
+          placeholderTextColor={C.textSub}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <Ionicons name="close-circle" size={15} color={C.textSub} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Muscle filter */}
+      <FilterChips options={muscles}    active={activeMuscle}   onSelect={setActiveMuscle} />
+      {/* Brand filter */}
+      <FilterChips options={brands}     active={activeBrand}    onSelect={setActiveBrand} />
+      {/* Type filter */}
+      <FilterChips options={categories} active={activeCategory} onSelect={setActiveCategory} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listContent}>
+        <Text style={s.resultCount}>{visible.length} machine{visible.length !== 1 ? 's' : ''}</Text>
         {Object.entries(byMuscle).map(([muscle, machines]) => {
           const mp = musclePillStyle(muscle);
           return (
@@ -402,7 +492,7 @@ function MachineListView({
                         <Ionicons name="barbell-outline" size={16} color={mp.fg} />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={s.machineName}>{machine.name}</Text>
+                        <Text style={s.machineName}>{machine.displayName ?? machine.name}</Text>
                         <Text style={s.machineBrand}>{machine.brand}</Text>
                       </View>
                       <View style={s.categoryPill}>
@@ -416,13 +506,18 @@ function MachineListView({
             </View>
           );
         })}
+        {visible.length === 0 && (
+          <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+            <Text style={{ fontSize: 13, color: C.textDim }}>No machines match your filters</Text>
+          </View>
+        )}
         <View style={{ height: 32 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// ─── ExerciseLogView ──────────────────────────────────────────────────────────
+// --- ExerciseLogView
 
 function ExerciseLogView({
   machine,
@@ -481,7 +576,7 @@ function ExerciseLogView({
           <Ionicons name="barbell" size={22} color={mp.fg} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={s.exHeaderName}>{machine.name}</Text>
+          <Text style={s.exHeaderName}>{machine.displayName ?? machine.name}</Text>
           <Text style={s.exHeaderMeta}>{gym.name} · {machine.brand}</Text>
         </View>
         <Pill label={machine.targetMuscle} fg={mp.fg} bg={mp.bg} />
@@ -569,7 +664,7 @@ function ExerciseLogView({
   );
 }
 
-// ─── WorkoutSummaryView ───────────────────────────────────────────────────────
+// --- WorkoutSummaryView
 
 function WorkoutSummaryView({
   machine,
@@ -631,7 +726,7 @@ function WorkoutSummaryView({
               <Ionicons name="barbell" size={18} color={mp.fg} />
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={s.gymCardName}>{machine.name}</Text>
+              <Text style={s.gymCardName}>{machine.displayName ?? machine.name}</Text>
               <Text style={s.gymCardLoc}>{machine.brand}</Text>
             </View>
             <Pill label={machine.targetMuscle} fg={mp.fg} bg={mp.bg} />
@@ -678,7 +773,7 @@ function WorkoutSummaryView({
   );
 }
 
-// ─── GymFlowModal (root) ──────────────────────────────────────────────────────
+// --- GymFlowModal (root)
 
 interface GymFlowModalProps {
   visible: boolean;
@@ -693,6 +788,7 @@ export default function GymFlowModal({ visible, onClose, initialGymId }: GymFlow
       : { view: 'nearby' },
   ]);
   const [loggedSets, setLoggedSets] = useState<LoggedSet[]>([]);
+  const [machineDetailId, setMachineDetailId] = useState<string | null>(null);
 
   // Reset stack when modal opens
   React.useEffect(() => {
@@ -742,6 +838,8 @@ export default function GymFlowModal({ visible, onClose, initialGymId }: GymFlow
         <GymDetailView
           gym={gym}
           onStartWorkout={() => push({ view: 'machine-list', gymId: gym.id })}
+          onViewAllMachines={() => push({ view: 'machine-list', gymId: gym.id })}
+          onOpenMachineDetail={machineId => setMachineDetailId(machineId)}
           onBack={pop}
           onClose={onClose}
         />
@@ -752,7 +850,7 @@ export default function GymFlowModal({ visible, onClose, initialGymId }: GymFlow
       return (
         <MachineListView
           gym={gym}
-          onSelectMachine={machineId => push({ view: 'exercise-log', gymId: gym.id, machineId })}
+          onSelectMachine={machineId => setMachineDetailId(machineId)}
           onBack={pop}
           onClose={onClose}
         />
@@ -788,6 +886,10 @@ export default function GymFlowModal({ visible, onClose, initialGymId }: GymFlow
     return null;
   }
 
+  const machineForDetail = machineDetailId
+    ? GYMS_WITH_MACHINES.flatMap(g => g.machines).find(m => m.id === machineDetailId) ?? null
+    : null;
+
   return (
     <Modal
       visible={visible}
@@ -798,11 +900,16 @@ export default function GymFlowModal({ visible, onClose, initialGymId }: GymFlow
       <View style={{ flex: 1, backgroundColor: C.bg }}>
         {renderView()}
       </View>
+      <MachineDetailModal
+        visible={machineDetailId !== null}
+        machine={machineForDetail}
+        onClose={() => setMachineDetailId(null)}
+      />
     </Modal>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// --- Styles
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
@@ -813,8 +920,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
   },
   navBtn: {
     width: 44,
@@ -835,12 +940,10 @@ const s = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: C.surface,
     marginHorizontal: 16,
-    marginVertical: 12,
+    marginVertical: 8,
     borderRadius: R.inner,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: C.border,
   },
   searchInput: {
     flex: 1,
@@ -858,14 +961,11 @@ const s = StyleSheet.create({
     alignItems: 'stretch',
     backgroundColor: C.surface,
     borderRadius: R.card,
-    borderWidth: 1,
-    borderColor: C.border,
-    marginBottom: 10,
+    marginBottom: 8,
     overflow: 'hidden',
-    paddingRight: 14,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
   },
-  gymCardBar: { width: 4, borderRadius: 2 },
   gymCardTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
   gymCardName: { flex: 1, fontSize: 15, fontWeight: '700', color: C.text },
   gymCardMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 },
@@ -894,10 +994,8 @@ const s = StyleSheet.create({
   heroCard: {
     backgroundColor: C.surface,
     borderRadius: R.card,
-    borderWidth: 1,
-    borderColor: C.border,
     padding: 16,
-    marginBottom: 20,
+    marginBottom: 24,
   },
   heroTop: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
   heroName: { fontSize: 20, fontWeight: '800', color: C.text, letterSpacing: -0.5 },
@@ -950,17 +1048,15 @@ const s = StyleSheet.create({
   card: {
     backgroundColor: C.surface,
     borderRadius: R.card,
-    borderWidth: 1,
-    borderColor: C.border,
     overflow: 'hidden',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   divider: { height: 1, backgroundColor: C.border },
 
   // Machine list filter
   filterRow: {
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 8,
     gap: 8,
   },
   filterChip: {
@@ -968,8 +1064,6 @@ const s = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: R.pill,
     backgroundColor: C.surface,
-    borderWidth: 1,
-    borderColor: C.border,
   },
   filterChipActive: {
     backgroundColor: C.accent,
@@ -996,15 +1090,13 @@ const s = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: R.pill,
-    borderWidth: 1,
-    borderColor: C.border,
   },
 
   // Machine row
   machineRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 12,
   },
@@ -1025,6 +1117,11 @@ const s = StyleSheet.create({
   },
   categoryPillText: { fontSize: 11, fontWeight: '600', color: C.tagCategory.fg },
 
+  // See All button (gym detail machine preview)
+  seeAllRow:   { overflow: 'hidden' },
+  seeAllInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14 },
+  seeAllText:  { fontSize: 13, fontWeight: '700', color: C.accent },
+
   // Exercise log header
   exerciseHeader: {
     flexDirection: 'row',
@@ -1032,8 +1129,6 @@ const s = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
   },
   exHeaderIcon: {
     width: 44,
@@ -1080,8 +1175,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: C.surface,
     borderRadius: R.inner,
-    borderWidth: 1,
-    borderColor: C.border,
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 8,
@@ -1115,8 +1208,6 @@ const s = StyleSheet.create({
     height: 34,
     borderRadius: 17,
     backgroundColor: C.surface,
-    borderWidth: 1.5,
-    borderColor: C.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1136,9 +1227,6 @@ const s = StyleSheet.create({
     gap: 8,
     backgroundColor: C.surface,
     borderRadius: R.inner,
-    borderWidth: 1,
-    borderColor: C.border,
-    borderStyle: 'dashed',
     paddingVertical: 14,
     marginTop: 4,
   },
@@ -1147,8 +1235,6 @@ const s = StyleSheet.create({
   // CTA bar
   ctaBar: {
     padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: C.border,
     backgroundColor: C.bg,
   },
   ctaButton: {
@@ -1181,9 +1267,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: C.surface,
     borderRadius: R.card,
-    borderWidth: 1,
-    borderColor: C.border,
-    marginBottom: 20,
+    marginBottom: 24,
     paddingVertical: 16,
   },
   summaryStat: { flex: 1, alignItems: 'center' },

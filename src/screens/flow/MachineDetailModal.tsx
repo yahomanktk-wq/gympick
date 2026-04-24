@@ -7,18 +7,22 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  Dimensions,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T } from '../../theme';
 import { Machine, GYMS_WITH_MACHINES } from '../../data';
 import { getMachineComments, MachineComment } from '../../data/gymDetails';
-import PostWorkoutLogModal from './PostWorkoutLogModal';
 import GymDetailModal from './GymDetailModal';
+import { isFavoriteMachine, addFavoriteMachine, removeFavoriteMachine } from '../../data/favoritesStore';
+import { useAuth } from '../../context/AuthContext';
+import { useNavigation } from '@react-navigation/native';
+import MachineCard from '../../components/MachineCard';
+import MachineCardBorder from '../../components/MachineCardBorder';
 
-const SCREEN_W = Dimensions.get('window').width;
-
-// ─── Mock distances ───────────────────────────────────────────────────────────
+// --- Mock distances
 
 const MOCK_DIST: Record<string, { dist: string; distNum: number; open: boolean }> = {
   g01: { dist: '0.3 km', distNum: 0.3, open: true  },
@@ -35,35 +39,7 @@ function getDist(id: string) {
   return MOCK_DIST[id] ?? { dist: '? km', distNum: 99, open: true };
 }
 
-// ─── Muscle colour palette ────────────────────────────────────────────────────
-
-const MUSCLE_COLORS: Record<string, { fg: string; bg: string }> = {
-  Chest:       C.tagMachine,
-  Back:        C.tagBrand,
-  Legs:        C.tagMuscle,
-  Shoulders:   { fg: '#ffd166', bg: '#ffd16618' },
-  Arms:        C.tagCategory,
-  Core:        { fg: '#06d6a0', bg: '#06d6a018' },
-  'Full Body': { fg: '#a8dadc', bg: '#a8dadc18' },
-  Glutes:      { fg: '#ff9ecd', bg: '#ff9ecd18' },
-};
-
-function mpStyle(muscle: string) {
-  return MUSCLE_COLORS[muscle] ?? { fg: C.textSub, bg: C.border };
-}
-
-// ─── Category descriptions ────────────────────────────────────────────────────
-
-const CATEGORY_DESC: Record<string, string> = {
-  Strength:     'Plate-loaded or selectorized strength machine designed for guided, isolated muscle loading along a fixed movement path. Ideal for progressive overload and hypertrophy.',
-  Cardio:       'Low-impact cardiovascular machine suited for building aerobic base, burning calories, and improving endurance with joint-friendly, rhythmic movement.',
-  HIIT:         'High-intensity conditioning tool designed for full-body metabolic output, power development, and anaerobic capacity in short, explosive efforts.',
-  Powerlifting: 'Heavy-duty free-weight equipment purpose-built for the core compound lifts — squat, bench, and deadlift — supporting maximum load and safe progression.',
-  CrossFit:     'Versatile functional fitness equipment suited to high-rep, full-body conditioning protocols and skill-based athletic movements.',
-  Pilates:      'Resistance-spring equipment that emphasises precise, controlled movement patterns for core stability, mobility, and postural alignment.',
-};
-
-// ─── Star rating ──────────────────────────────────────────────────────────────
+// --- Star rating
 
 function StarRow({ rating }: { rating: number }) {
   return (
@@ -80,7 +56,7 @@ function StarRow({ rating }: { rating: number }) {
   );
 }
 
-// ─── Comment card ─────────────────────────────────────────────────────────────
+// --- Comment card
 
 function CommentCard({ comment, last }: { comment: MachineComment; last: boolean }) {
   return (
@@ -100,27 +76,70 @@ function CommentCard({ comment, last }: { comment: MachineComment; last: boolean
   );
 }
 
-// ─── Props ────────────────────────────────────────────────────────────────────
+// --- Props
 
 interface Props {
-  visible:  boolean;
-  machine:  Machine | null;
-  onClose:  () => void;
+  visible:           boolean;
+  machine:           Machine | null;
+  onClose:           () => void;
+  favorites?:        Set<string>;  // kept for backward compat, ignored (global store used)
+  onToggleFavorite?: (id: string) => void;
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// --- Component
 
-export default function MachineDetailModal({ visible, machine, onClose }: Props) {
-  const [logVisible,      setLogVisible]      = useState(false);
-  const [gymDetailId,     setGymDetailId]     = useState<string | null>(null);
-  const [gymDetailVisible, setGymDetailVisible] = useState(false);
+export default function MachineDetailModal({ visible, machine, onClose, onToggleFavorite }: Props) {
+  const { user } = useAuth();
+  const nav = useNavigation<any>();
+  const [isFav,             setIsFav]             = useState(false);
+  const [gymDetailId,       setGymDetailId]       = useState<string | null>(null);
+  const [gymDetailVisible,  setGymDetailVisible]  = useState(false);
+  const [reviewText,        setReviewText]        = useState('');
+  const [reviewRating,      setReviewRating]      = useState(5);
+  const [userReviews,       setUserReviews]       = useState<MachineComment[]>([]);
+
+  React.useEffect(() => {
+    if (machine) setIsFav(isFavoriteMachine(machine.id));
+  }, [machine?.id]);
 
   if (!machine) return null;
 
-  const mp       = mpStyle(machine.targetMuscle);
-  const desc     = CATEGORY_DESC[machine.category]
-    ?? 'Versatile gym equipment for effective, targeted muscle training.';
-  const comments = getMachineComments(machine.id);
+  const mockReviews = getMachineComments(machine.id);
+  const allReviews  = [...userReviews, ...mockReviews];
+  const isFavorited = isFav;
+
+  function handleToggleFavorite() {
+    if (!machine) return;
+    if (!user) {
+      onClose();
+      nav.navigate('Profile');
+      return;
+    }
+    if (isFav) {
+      removeFavoriteMachine(machine.id);
+    } else {
+      addFavoriteMachine(machine.id);
+    }
+    setIsFav(!isFav);
+    onToggleFavorite?.(machine.id);
+  }
+
+  function submitReview() {
+    if (!reviewText.trim()) return;
+    const displayName = user?.nickname ?? user?.name ?? 'GymPick User';
+    const initials    = displayName.slice(0, 2).toUpperCase();
+    const r: MachineComment = {
+      id:       `ur-${Date.now()}`,
+      user:     displayName,
+      initials,
+      rating:   reviewRating,
+      text:     reviewText.trim(),
+      date:     new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    };
+    setUserReviews(prev => [r, ...prev]);
+    setReviewText('');
+    setReviewRating(5);
+  }
 
   const availableGyms = GYMS_WITH_MACHINES
     .filter(gym => gym.machines.some(m => m.id === machine.id))
@@ -149,97 +168,137 @@ export default function MachineDetailModal({ visible, machine, onClose }: Props)
             <TouchableOpacity style={s.navBtn} onPress={onClose} activeOpacity={0.7}>
               <Ionicons name="chevron-back" size={20} color={C.text} />
             </TouchableOpacity>
-            <Text style={s.navTitle} numberOfLines={1}>{machine.name}</Text>
-            <View style={s.navBtn} />
+            <Text style={s.navTitle} numberOfLines={1}>{machine.displayName ?? machine.name}</Text>
+            <TouchableOpacity
+              style={s.navBtn}
+              onPress={handleToggleFavorite}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={isFavorited ? 'heart' : 'heart-outline'}
+                size={22}
+                color={isFavorited ? '#ff4d6d' : C.textSub}
+              />
+            </TouchableOpacity>
           </View>
 
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.content}>
 
-            {/* ── Sports-card hero ── */}
-            <View style={[s.heroCard, { backgroundColor: mp.bg }]}>
-              {/* Large faded background icon */}
-              <Ionicons
-                name="barbell"
-                size={180}
-                color={mp.fg}
-                style={s.heroBgIcon}
-              />
-              {/* Overlay content */}
-              <View style={s.heroOverlay}>
-                {/* Category pill top-left */}
-                <View style={[s.heroCatPill, { backgroundColor: mp.fg + '22' }]}>
-                  <Text style={[s.heroCatText, { color: mp.fg }]}>{machine.category}</Text>
-                </View>
-                {/* Muscle pill top-right */}
-                <View style={[s.heroMusclePill, { backgroundColor: mp.fg + '22' }]}>
-                  <Text style={[s.heroMuscleText, { color: mp.fg }]}>{machine.targetMuscle}</Text>
-                </View>
-              </View>
-              {/* Center icon badge */}
-              <View style={[s.heroCenterBadge, { backgroundColor: mp.fg + '22', borderColor: mp.fg + '44' }]}>
-                <Ionicons name="barbell" size={36} color={mp.fg} />
-              </View>
-              {/* Bottom name strip */}
-              <View style={s.heroBottom}>
-                <Text style={s.heroName}>{machine.name}</Text>
-                <Text style={s.heroBrand}>{machine.brand}</Text>
-              </View>
-            </View>
+            {/* ── Poster hero card ── */}
+            <MachineCardBorder>
+              <MachineCard machine={machine} variant="detail" />
+            </MachineCardBorder>
 
             {/* ── Stats row ── */}
             <View style={s.statsCard}>
               <View style={s.statCell}>
                 <Text style={s.statVal}>{availableGyms.length}</Text>
-                <Text style={s.statLab}>Gyms</Text>
+                <Text style={s.statLab}>헬스장</Text>
               </View>
               <View style={s.statDiv} />
               <View style={s.statCell}>
                 <Text style={s.statVal}>{openCount}</Text>
-                <Text style={s.statLab}>Open now</Text>
+                <Text style={s.statLab}>지금 영업</Text>
               </View>
               <View style={s.statDiv} />
               <View style={s.statCell}>
                 <Text style={s.statVal}>{closestDist}</Text>
-                <Text style={s.statLab}>Closest</Text>
+                <Text style={s.statLab}>가장 가까운</Text>
               </View>
               <View style={s.statDiv} />
               <View style={s.statCell}>
                 <Text style={s.statVal}>{machine.category}</Text>
-                <Text style={s.statLab}>Type</Text>
+                <Text style={s.statLab}>타입</Text>
               </View>
             </View>
+
+            {/* ── 기록 분석 버튼 ── */}
+            {user && (
+              <TouchableOpacity
+                style={s.historyBtn}
+                activeOpacity={0.85}
+                onPress={() => {
+                  onClose();
+                  nav.navigate('MachineHistory', {
+                    machineId:    machine.id,
+                    machineName:  machine.displayName ?? machine.name,
+                    machineBrand: machine.brand,
+                  });
+                }}
+              >
+                <Ionicons name="bar-chart-outline" size={16} color={C.bg} />
+                <Text style={s.historyBtnTxt}>기록 분석</Text>
+              </TouchableOpacity>
+            )}
 
             {/* ── About ── */}
-            <Text style={s.sectionTitle}>About This Machine</Text>
+            <Text style={s.sectionTitle}>머신 정보</Text>
             <View style={s.descCard}>
-              <View style={s.descIconRow}>
-                <Ionicons name="information-circle-outline" size={16} color={C.accent} />
-                <Text style={s.descLabel}>{machine.category.toUpperCase()}</Text>
+              <View style={s.infoRow}>
+                <Text style={s.infoLabel}>머신 이름</Text>
+                <Text style={s.infoValue}>{machine.name}</Text>
               </View>
-              <Text style={s.descText}>{desc}</Text>
+              <View style={s.infoRow}>
+                <Text style={s.infoLabel}>브랜드</Text>
+                <Text style={s.infoValue}>{machine.brand}</Text>
+              </View>
+              <View style={[s.infoRow, { borderBottomWidth: 0 }]}>
+                <Text style={s.infoLabel}>타겟 부위</Text>
+                <Text style={s.infoValue}>{machine.targetMuscle}</Text>
+              </View>
             </View>
 
-            {/* ── Tips ── */}
-            <Text style={s.sectionTitle}>Training Tips</Text>
-            <View style={s.tipsCard}>
-              {getTips(machine.category).map((tip, i) => (
-                <View key={i} style={s.tipRow}>
-                  <View style={s.tipDot} />
-                  <Text style={s.tipText}>{tip}</Text>
-                </View>
-              ))}
-            </View>
-
-            {/* ── User comments ── */}
-            <Text style={s.sectionTitle}>User Reviews</Text>
+            {/* ── User reviews ── */}
+            <Text style={s.sectionTitle}>리뷰</Text>
             <View style={s.commentsCard}>
-              {comments.map((c, i) => (
-                <CommentCard key={c.id} comment={c} last={i === comments.length - 1} />
+              {allReviews.map((c, i) => (
+                <CommentCard key={c.id} comment={c} last={i === allReviews.length - 1} />
               ))}
+            </View>
+
+            {/* ── Write a review ── */}
+            <Text style={s.sectionTitle}>리뷰 작성</Text>
+            <View style={s.reviewCard}>
+              <View style={s.reviewStarRow}>
+                {[1, 2, 3, 4, 5].map(n => (
+                  <TouchableOpacity
+                    key={n}
+                    onPress={() => setReviewRating(n)}
+                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                  >
+                    <Ionicons
+                      name={n <= reviewRating ? 'star' : 'star-outline'}
+                      size={26}
+                      color={n <= reviewRating ? '#ffd166' : C.textDim}
+                    />
+                  </TouchableOpacity>
+                ))}
+                <Text style={s.reviewRatingLabel}>{reviewRating}.0</Text>
+              </View>
+              <TextInput
+                style={s.reviewInput}
+                placeholder="이 머신에 대한 경험을 공유해보세요…"
+                placeholderTextColor={C.textDim}
+                multiline
+                numberOfLines={3}
+                value={reviewText}
+                onChangeText={setReviewText}
+                textAlignVertical="top"
+              />
+              <TouchableOpacity
+                style={[s.reviewSubmitBtn, !reviewText.trim() && { opacity: 0.35 }]}
+                activeOpacity={0.85}
+                disabled={!reviewText.trim()}
+                onPress={submitReview}
+              >
+                <Ionicons name="send" size={15} color={C.bg} />
+                <Text style={s.reviewSubmitTxt}>리뷰 등록</Text>
+              </TouchableOpacity>
             </View>
 
             {/* ── Available at ── */}
-            <Text style={s.sectionTitle}>Available At</Text>
+            <Text style={s.sectionTitle}>보유 헬스장</Text>
             <View style={s.gymList}>
               {availableGyms.map((gym, i) => {
                 const meta = getDist(gym.id);
@@ -262,7 +321,7 @@ export default function MachineDetailModal({ visible, machine, onClose }: Props)
                       <View style={{ alignItems: 'flex-end', gap: 5 }}>
                         <View style={[s.openBadge, { backgroundColor: meta.open ? C.accentBg : C.border }]}>
                           <Text style={[s.openBadgeText, { color: meta.open ? C.accent : C.textSub }]}>
-                            {meta.open ? 'Open' : 'Closed'}
+                            {meta.open ? '영업 중' : '영업 종료'}
                           </Text>
                         </View>
                         <View style={s.distBadge}>
@@ -270,7 +329,6 @@ export default function MachineDetailModal({ visible, machine, onClose }: Props)
                           <Text style={s.distText}>{meta.dist}</Text>
                         </View>
                       </View>
-                      <Ionicons name="chevron-forward" size={14} color={C.textDim} style={{ marginLeft: 4 }} />
                     </TouchableOpacity>
                   </React.Fragment>
                 );
@@ -279,29 +337,10 @@ export default function MachineDetailModal({ visible, machine, onClose }: Props)
 
             <View style={{ height: 100 }} />
           </ScrollView>
+          </KeyboardAvoidingView>
 
-          {/* ── CTA bar ── */}
-          <View style={s.ctaBar}>
-            <TouchableOpacity
-              style={s.ctaButton}
-              activeOpacity={0.85}
-              onPress={() => setLogVisible(true)}
-            >
-              <Ionicons name="create-outline" size={18} color={C.bg} />
-              <Text style={s.ctaText}>Log This Machine</Text>
-            </TouchableOpacity>
-          </View>
         </SafeAreaView>
       </Modal>
-
-      {/* Post-workout log */}
-      <PostWorkoutLogModal
-        visible={logVisible}
-        onClose={saved => {
-          setLogVisible(false);
-          if (saved) onClose();
-        }}
-      />
 
       {/* Gym detail */}
       <GymDetailModal
@@ -313,139 +352,72 @@ export default function MachineDetailModal({ visible, machine, onClose }: Props)
   );
 }
 
-// ─── Training tips per category ───────────────────────────────────────────────
-
-function getTips(category: string): string[] {
-  const tips: Record<string, string[]> = {
-    Strength: [
-      'Start with a lighter warm-up set before loading to working weight.',
-      'Control the eccentric (lowering) phase for maximum muscle activation.',
-      'Rest 60–90 seconds between sets for hypertrophy, 2–3 min for strength.',
-    ],
-    Cardio: [
-      'Maintain an even pace for steady-state cardio, or vary intensity for intervals.',
-      'Keep your posture upright and core engaged throughout the session.',
-      'Stay hydrated and track heart rate to stay within your target zone.',
-    ],
-    HIIT: [
-      'Keep effort maximum during work intervals — hold nothing back.',
-      'Full recovery during rest periods improves quality of the next interval.',
-      'Limit HIIT sessions to 2–3 per week to allow adequate recovery.',
-    ],
-    Powerlifting: [
-      'Warm up progressively to your working weight across multiple sets.',
-      'Brace your core before every rep — treat every lift as a max effort.',
-      'Film your sets from the side to check depth, bar path, and technique.',
-    ],
-    CrossFit: [
-      'Scale the workout to your current fitness level without ego.',
-      'Prioritise movement quality over speed, especially when fatigued.',
-      'Log your scores to track improvement across repeated workouts.',
-    ],
-    Pilates: [
-      'Breathe deliberately — exhale on exertion, inhale on release.',
-      'Focus on precision and control rather than range of motion.',
-      'Engage the deep core muscles before initiating any movement.',
-    ],
-  };
-  return tips[category] ?? [
-    'Warm up properly before your working sets.',
-    'Log your performance after each session to track progress.',
-  ];
-}
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// --- Styles
 
 const s = StyleSheet.create({
   safe:    { flex: 1, backgroundColor: C.bg },
   content: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 24 },
 
+  historyBtn: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    justifyContent:  'center',
+    gap:             8,
+    backgroundColor: C.accent,
+    borderRadius:    R.btn,
+    paddingVertical: 13,
+    marginBottom:    24,
+  },
+  historyBtnTxt: {
+    fontSize:   14,
+    fontWeight: '800',
+    color:      C.bg,
+  },
+
   // Nav
   navHeader: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 8, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: C.border,
   },
   navBtn:   { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   navTitle: { flex: 1, textAlign: 'center', ...T.section, color: C.text },
-
-  // Sports-card hero
-  heroCard: {
-    width: SCREEN_W,
-    height: 280,
-    marginLeft: -16,
-    marginBottom: 0,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroBgIcon: {
-    position: 'absolute',
-    opacity: 0.08,
-    transform: [{ rotate: '-15deg' }],
-  },
-  heroOverlay: {
-    position: 'absolute',
-    top: 16, left: 16, right: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  heroCatPill:   { paddingHorizontal: 10, paddingVertical: 5, borderRadius: R.pill },
-  heroCatText:   { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
-  heroMusclePill:{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: R.pill },
-  heroMuscleText:{ fontSize: 11, fontWeight: '800' },
-  heroCenterBadge: {
-    width: 72, height: 72, borderRadius: 20,
-    borderWidth: 1.5,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  heroBottom: {
-    position: 'absolute',
-    bottom: 18, left: 16, right: 16,
-  },
-  heroName:  { fontSize: 22, fontWeight: '900', color: C.text, letterSpacing: -0.4 },
-  heroBrand: { fontSize: 13, color: C.textSub, marginTop: 3 },
 
   // Stats card
   statsCard: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: C.surface,
-    borderWidth: 1, borderColor: C.border,
-    borderBottomLeftRadius: R.card, borderBottomRightRadius: R.card,
+    borderRadius: R.card,
     paddingVertical: 14,
-    marginBottom: 20,
+    marginTop: 16,
+    marginBottom: 24,
   },
   statCell: { flex: 1, alignItems: 'center' },
   statVal:  { fontSize: 12, fontWeight: '800', color: C.text, marginBottom: 2, textAlign: 'center' },
   statLab:  { fontSize: 9, color: C.textSub, fontWeight: '600' },
   statDiv:  { width: 1, height: 28, backgroundColor: C.border },
 
-  // About / desc
+  // Section titles + About card
   sectionTitle: { ...T.section, color: C.text, marginBottom: 10, marginTop: 4 },
   descCard: {
     backgroundColor: C.surface, borderRadius: R.card,
-    borderWidth: 1, borderColor: C.border,
-    padding: 16, marginBottom: 20,
+    overflow: 'hidden', marginBottom: 24,
   },
-  descIconRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
-  descLabel:   { fontSize: 11, fontWeight: '700', color: C.accent, letterSpacing: 0.5 },
-  descText:    { fontSize: 14, color: C.textSub, lineHeight: 21 },
-
-  // Tips
-  tipsCard: {
-    backgroundColor: C.surface, borderRadius: R.card,
-    borderWidth: 1, borderColor: C.border,
-    padding: 16, marginBottom: 20, gap: 12,
+  infoRow: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    justifyContent:  'space-between',
+    paddingHorizontal: 16,
+    paddingVertical:   14,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
   },
-  tipRow:  { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  tipDot:  { width: 5, height: 5, borderRadius: 3, backgroundColor: C.accent, marginTop: 6 },
-  tipText: { flex: 1, fontSize: 13, color: C.textSub, lineHeight: 20 },
+  infoLabel: { fontSize: 13, color: C.textSub },
+  infoValue: { fontSize: 14, fontWeight: '700', color: C.text, flexShrink: 1, textAlign: 'right', marginLeft: 12 },
 
   // Comments
   commentsCard: {
     backgroundColor: C.surface, borderRadius: R.card,
-    borderWidth: 1, borderColor: C.border,
-    overflow: 'hidden', marginBottom: 20,
+    overflow: 'hidden', marginBottom: 24,
   },
   commentRow:    { flexDirection: 'row', gap: 12, padding: 14 },
   commentBorder: { borderBottomWidth: 1, borderBottomColor: C.border },
@@ -464,11 +436,10 @@ const s = StyleSheet.create({
   // Gym list
   gymList: {
     backgroundColor: C.surface, borderRadius: R.card,
-    borderWidth: 1, borderColor: C.border,
-    overflow: 'hidden', marginBottom: 20,
+    overflow: 'hidden', marginBottom: 24,
   },
   divider:    { height: 1, backgroundColor: C.border },
-  gymRow:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 13, gap: 12 },
+  gymRow:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, gap: 12 },
   gymDot:     { width: 8, height: 8, borderRadius: 4 },
   gymRowName: { fontSize: 14, fontWeight: '700', color: C.text },
   gymRowMeta: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
@@ -479,8 +450,21 @@ const s = StyleSheet.create({
   distBadge:     { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: C.accentBg, paddingHorizontal: 7, paddingVertical: 3, borderRadius: R.pill },
   distText:      { fontSize: 10, fontWeight: '700', color: C.accent },
 
-  // CTA
-  ctaBar:    { padding: 16, borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.bg },
-  ctaButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: C.accent, borderRadius: R.btn, paddingVertical: 16 },
-  ctaText:   { fontSize: 15, fontWeight: '800', color: C.bg },
+  // Review input
+  reviewCard: {
+    backgroundColor: C.surface, borderRadius: R.card,
+    padding: 16, marginBottom: 24, gap: 14,
+  },
+  reviewStarRow:    { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  reviewRatingLabel:{ fontSize: 13, fontWeight: '700', color: C.textSub, marginLeft: 4 },
+  reviewInput: {
+    backgroundColor: C.surfaceHigh, borderRadius: R.inner,
+    padding: 12, fontSize: 14, color: C.text,
+    minHeight: 80,
+  },
+  reviewSubmitBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: C.accent, borderRadius: R.btn, paddingVertical: 13,
+  },
+  reviewSubmitTxt: { fontSize: 14, fontWeight: '800', color: C.bg },
 });

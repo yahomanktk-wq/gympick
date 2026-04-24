@@ -1,3 +1,5 @@
+// DEPRECATED: This screen is superseded by FindGymScreen and is no longer used in the navigator.
+// Kept for reference only - do not import or route to this screen.
 import React, { useState, useMemo } from 'react';
 import {
   View,
@@ -19,7 +21,7 @@ import {
   filterGyms,
 } from '../data';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// --- Constants
 
 const FILTER_CHIPS = buildFilterChips();
 
@@ -30,7 +32,7 @@ const CHIP_META: Record<FilterType, { label: string; fg: string; bg: string }> =
   category: { label: 'Category', ...C.tagCategory },
 };
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// --- Sub-components
 
 function Pill({ label, type }: { label: string; type: FilterType }) {
   const m = CHIP_META[type];
@@ -78,7 +80,7 @@ function GymCard({ gym }: { gym: GymWithMachines }) {
   );
 }
 
-// ─── Screen ───────────────────────────────────────────────────────────────────
+// --- Screen
 
 export default function SearchScreen() {
   const [query, setQuery]             = useState('');
@@ -200,10 +202,10 @@ export default function SearchScreen() {
         ListEmptyComponent={
           <View style={styles.empty}>
             <Ionicons name="search" size={48} color={C.textDim} />
-            <Text style={styles.emptyText}>No gyms match.</Text>
-            <Text style={styles.emptyHint}>Try different keywords or clear filters.</Text>
+            <Text style={styles.emptyText}>맞는 헬스장이 없어요.</Text>
+            <Text style={styles.emptyHint}>다른 키워드나 필터로 검색해보세요.</Text>
             <TouchableOpacity style={styles.emptyBtn} onPress={clearAll}>
-              <Text style={styles.emptyBtnText}>Clear filters</Text>
+              <Text style={styles.emptyBtnText}>필터 초기화</Text>
             </TouchableOpacity>
           </View>
         }
@@ -212,7 +214,7 @@ export default function SearchScreen() {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// --- Styles
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },

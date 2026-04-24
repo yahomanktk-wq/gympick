@@ -1,7 +1,7 @@
-// ─── GymPick Design System ────────────────────────────────────────────────────
+// --- GymPick Design System
 
 export const C = {
-  // Backgrounds — three-level depth
+  // Backgrounds - three-level depth
   bg:          '#0a0a0c',   // deepest layer (screen bg)
   surface:     '#131316',   // cards, sheets
   surfaceHigh: '#1c1c22',   // inner rows, inputs
@@ -10,7 +10,7 @@ export const C = {
   border:      '#252530',
   borderSub:   '#1a1a24',
 
-  // Accent — neon lime
+  // Accent - neon lime
   accent:      '#c8ff57',
   accentDim:   '#8cb83a',
   accentBg:    '#c8ff5715',   // translucent accent fill
@@ -37,6 +37,14 @@ export const R = {
   inner:  12,
   pill:   100,
   btn:    16,
+} as const;
+
+export const S = {
+  xs:  4,
+  sm:  8,
+  md:  16,
+  lg:  24,
+  xl:  32,
 } as const;
 
 export const T = {

@@ -1,68 +1,65 @@
 import { Gym } from './types';
 
-export const GYMS: Gym[] = [
+// --- Gym core entity data
+// Machine inventory lives in GYM_MACHINES (gymMachines.ts), not here.
+
+const BASE_GYMS: Gym[] = [
   {
     id: 'g01',
     name: 'IronHub Fitness',
-    location: 'Gangnam-gu, Seoul',
+    location: '서울시 강남구',
     description:
-      'Premium strength training facility with top-tier equipment, dedicated lifting platforms, and expert coaching staff.',
-    machineIds: ['m01', 'm02', 'm03', 'm04', 'm05', 'm20'],
+      '최고급 장비와 전담 리프팅 플랫폼, 전문 코칭 스태프를 갖춘 프리미엄 스트렝스 트레이닝 센터입니다.',
   },
   {
     id: 'g02',
     name: 'PulseZone Gym',
-    location: 'Mapo-gu, Seoul',
+    location: '서울시 마포구',
     description:
-      'High-energy cardio and HIIT-focused gym packed with the latest functional and conditioning equipment.',
-    machineIds: ['m07', 'm08', 'm09', 'm10', 'm11'],
+      '최신 기능성 장비를 갖추고 유산소·HIIT 중심 프로그램을 운영하는 활기찬 피트니스 센터입니다.',
   },
   {
     id: 'g03',
     name: 'CoreForge Studio',
-    location: 'Yongsan-gu, Seoul',
+    location: '서울시 용산구',
     description:
-      'Boutique studio specialising in core training, pilates-inspired machines, and functional mobility work.',
-    machineIds: ['m01', 'm16', 'm17', 'm18', 'm19', 'm21'],
+      '코어 트레이닝, 필라테스 기반 머신, 기능성 유연성 운동에 특화된 부티크 스튜디오입니다.',
   },
   {
     id: 'g04',
     name: 'MaxLift Arena',
-    location: 'Songpa-gu, Seoul',
+    location: '서울시 송파구',
     description:
-      'Spacious powerlifting and bodybuilding gym with a full free-weight section and competition-grade bars.',
-    machineIds: ['m01', 'm04', 'm05', 'm06', 'm12', 'm13', 'm20'],
+      '풀 프리웨이트 구역과 대회 수준의 바벨을 갖춘 파워리프팅·보디빌딩 전문 대형 헬스장입니다.',
   },
   {
     id: 'g05',
     name: 'FlexPoint Club',
-    location: 'Seodaemun-gu, Seoul',
+    location: '서울시 서대문구',
     description:
-      'All-round community gym with a wide variety of machines and classes catering to every fitness level.',
-    machineIds: ['m01', 'm02', 'm04', 'm07', 'm08', 'm22', 'm23'],
+      '다양한 머신과 클래스를 갖춰 모든 수준의 회원이 편리하게 이용할 수 있는 커뮤니티 헬스장입니다.',
   },
   {
     id: 'g06',
     name: 'Apex Performance',
-    location: 'Seocho-gu, Seoul',
+    location: '서울시 서초구',
     description:
-      'Athletic performance centre built for sport-specific conditioning, Olympic lifting, and CrossFit training.',
-    machineIds: ['m01', 'm10', 'm11', 'm12', 'm14', 'm15'],
+      '스포츠 특화 컨디셔닝, 올림픽 리프팅, 크로스핏 트레이닝을 위한 애슬레틱 퍼포먼스 센터입니다.',
   },
   {
     id: 'g07',
     name: 'Momentum Fitness',
-    location: 'Nowon-gu, Seoul',
+    location: '서울시 노원구',
     description:
-      'Neighbourhood gym offering solid strength equipment, open floor space, and affordable memberships.',
-    machineIds: ['m03', 'm06', 'm12', 'm13', 'm20', 'm21'],
+      '충분한 스트렝스 장비와 넓은 운동 공간, 합리적인 회원권을 제공하는 동네 밀착형 헬스장입니다.',
   },
   {
     id: 'g08',
     name: 'UrbanSweat Gym',
-    location: 'Jongno-gu, Seoul',
+    location: '서울시 종로구',
     description:
-      'Modern multi-purpose gym combining cardio decks, strength zones, and recovery facilities under one roof.',
-    machineIds: ['m02', 'm07', 'm09', 'm16', 'm17', 'm20', 'm22'],
+      '유산소, 스트렝스, 회복 시설을 한 공간에 갖춘 현대적인 멀티 퍼포즈 헬스장입니다.',
   },
 ];
+
+export const GYMS: Gym[] = BASE_GYMS;

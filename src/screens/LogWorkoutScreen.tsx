@@ -11,16 +11,22 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T } from '../theme';
 import PostWorkoutLogModal from './flow/PostWorkoutLogModal';
+import { useAuth } from '../context/AuthContext';
+import AuthFlow from './auth/AuthFlow';
 
 export default function LogWorkoutScreen() {
+  const { user } = useAuth();
   const [visible, setVisible] = useState(false);
 
-  // Open the modal every time this tab is focused (i.e. every tab press)
+  // Open the modal every time this tab is focused — only for logged-in users.
   useFocusEffect(
     useCallback(() => {
+      if (!user) return;
       setVisible(true);
-    }, []),
+    }, [user]),
   );
+
+  if (!user) return <AuthFlow />;
 
   return (
     <SafeAreaView style={s.safe}>
@@ -32,17 +38,18 @@ export default function LogWorkoutScreen() {
           <Ionicons name="barbell" size={42} color={C.accent} />
         </View>
 
-        <Text style={s.title}>Log a Workout</Text>
+        <Text style={s.title}>운동 기록하기</Text>
         <Text style={s.sub}>
-          Record what you performed{'\n'}after your session is done
+          운동을 마친 후 수행한 내용을 기록하세요
         </Text>
 
         <View style={s.features}>
           {[
-            { icon: 'map-outline',          text: 'Pick the gym you trained at'     },
-            { icon: 'barbell-outline',       text: 'Select the machines you used'   },
-            { icon: 'create-outline',        text: 'Log weight, reps, and sets'     },
-            { icon: 'camera-outline',        text: 'Capture a workout photo'        },
+            { icon: 'body-outline',          text: '운동한 부위를 선택하세요'        },
+            { icon: 'map-outline',           text: '헬스장을 선택하세요'             },
+            { icon: 'barbell-outline',       text: '사용한 머신을 선택하세요'        },
+            { icon: 'create-outline',        text: '세트, 무게, 횟수를 기록하세요'   },
+            { icon: 'camera-outline',        text: '운동 완료 카드 사진을 생성하세요' },
           ].map(f => (
             <View key={f.text} style={s.featureRow}>
               <Ionicons name={f.icon as any} size={15} color={C.accent} />
@@ -57,13 +64,13 @@ export default function LogWorkoutScreen() {
           onPress={() => setVisible(true)}
         >
           <Ionicons name="add" size={18} color={C.bg} />
-          <Text style={s.startBtnText}>Start Logging</Text>
+          <Text style={s.startBtnText}>기록 시작</Text>
         </TouchableOpacity>
       </View>
 
       <PostWorkoutLogModal
         visible={visible}
-        onClose={() => setVisible(false)}
+        onClose={(_saved) => setVisible(false)}
       />
     </SafeAreaView>
   );
@@ -75,7 +82,7 @@ const s = StyleSheet.create({
     flex:           1,
     alignItems:     'center',
     justifyContent: 'center',
-    paddingHorizontal: 36,
+    paddingHorizontal: 32,
   },
 
   iconRing: {
@@ -83,25 +90,21 @@ const s = StyleSheet.create({
     height:          96,
     borderRadius:    48,
     backgroundColor: C.accentBg,
-    borderWidth:     1.5,
-    borderColor:     C.accent + '40',
     alignItems:      'center',
     justifyContent:  'center',
     marginBottom:    24,
   },
 
   title: { ...T.title, color: C.text, textAlign: 'center', marginBottom: 10 },
-  sub:   { fontSize: 14, color: C.textSub, textAlign: 'center', lineHeight: 22, marginBottom: 28 },
+  sub:   { fontSize: 14, color: C.textSub, textAlign: 'center', lineHeight: 22, marginBottom: 24 },
 
   features: {
     alignSelf:       'stretch',
     backgroundColor: C.surface,
     borderRadius:    20,
-    borderWidth:     1,
-    borderColor:     C.border,
-    padding:         18,
+    padding:         16,
     gap:             12,
-    marginBottom:    28,
+    marginBottom:    24,
   },
   featureRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   featureText:{ fontSize: 13, color: C.textSub, fontWeight: '500' },

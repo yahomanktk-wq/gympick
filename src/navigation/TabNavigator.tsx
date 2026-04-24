@@ -7,10 +7,10 @@ import { C } from '../theme';
 import HomeScreen       from '../screens/HomeScreen';
 import FindGymScreen    from '../screens/FindGymScreen';
 import LogWorkoutScreen from '../screens/LogWorkoutScreen';
-import WorkoutScreen    from '../screens/WorkoutScreen';
+import JournalScreen   from '../screens/JournalScreen';
 import ProfileScreen    from '../screens/ProfileScreen';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// --- Types
 
 type TabParamList = {
   Home:       undefined;
@@ -31,18 +31,18 @@ interface TabCfg {
 }
 
 const TAB_CFG: Record<keyof TabParamList, TabCfg> = {
-  Home:       { active: 'home',       inactive: 'home-outline',        label: 'Home'     },
-  FindGym:    { active: 'map',        inactive: 'map-outline',          label: 'Find Gym' },
-  LogWorkout: { active: 'add-circle', inactive: 'add-circle-outline',   label: 'Log',     size: 28, center: true },
-  Journal:    { active: 'book',       inactive: 'book-outline',         label: 'Journal'  },
-  Profile:    { active: 'person',     inactive: 'person-outline',       label: 'Profile'  },
+  Home:       { active: 'home',       inactive: 'home-outline',        label: '홈'       },
+  FindGym:    { active: 'map',        inactive: 'map-outline',          label: '검색'     },
+  LogWorkout: { active: 'add-circle', inactive: 'add-circle-outline',   label: '기록하기', size: 29, center: true },
+  Journal:    { active: 'book',       inactive: 'book-outline',         label: '운동일지' },
+  Profile:    { active: 'person',     inactive: 'person-outline',       label: '프로필'   },
 };
 
-// ─── Tab item ─────────────────────────────────────────────────────────────────
+// --- Tab item
 
 function TabItem({ name, focused }: { name: keyof TabParamList; focused: boolean }) {
   const cfg   = TAB_CFG[name];
-  const size  = cfg.size ?? 22;
+  const size  = cfg.size ?? 23;
   const color = (cfg.center || focused) ? C.accent : C.textSub;
 
   return (
@@ -53,12 +53,12 @@ function TabItem({ name, focused }: { name: keyof TabParamList; focused: boolean
         size={size}
         color={color}
       />
-      <Text style={[tabSt.label, { color }]}>{cfg.label}</Text>
+      <Text style={[tabSt.label, { color }]} numberOfLines={1}>{cfg.label}</Text>
     </View>
   );
 }
 
-// ─── Navigator ────────────────────────────────────────────────────────────────
+// --- Navigator
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
@@ -77,13 +77,13 @@ export default function TabNavigator() {
       <Tab.Screen name="Home"       component={HomeScreen}       />
       <Tab.Screen name="FindGym"    component={FindGymScreen}    />
       <Tab.Screen name="LogWorkout" component={LogWorkoutScreen} />
-      <Tab.Screen name="Journal"    component={WorkoutScreen}    />
+      <Tab.Screen name="Journal"    component={JournalScreen}    />
       <Tab.Screen name="Profile"    component={ProfileScreen}    />
     </Tab.Navigator>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// --- Styles
 
 const tabSt = StyleSheet.create({
   bar: {
@@ -119,9 +119,9 @@ const tabSt = StyleSheet.create({
   },
 
   label: {
-    fontSize:      9,
+    fontSize:      8,
     fontWeight:    '700',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
+    letterSpacing: 0,
+    textAlign:     'center',
   },
 });
