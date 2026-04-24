@@ -27,9 +27,10 @@ interface AuthContextValue {
     name: string, nickname: string, birthDate: string,
   ) => Promise<{ error: string | null; needsVerification: boolean }>;
   signOut:      () => Promise<void>;
-  signInGoogle: () => Promise<{ error: string | null }>;
-  signInApple:  () => Promise<{ error: string | null }>;
-  switchRole: (role: UserRole) => void;
+  signInGoogle:    () => Promise<{ error: string | null }>;
+  signInApple:     () => Promise<{ error: string | null }>;
+  switchRole:      (role: UserRole) => void;
+  updateNickname:  (nickname: string) => Promise<{ error: string | null }>;
 }
 
 // --- Mock users
@@ -87,9 +88,10 @@ const AuthContext = createContext<AuthContextValue>({
   signIn:       async () => ({ error: null }),
   signUp:       async () => ({ error: null, needsVerification: false }),
   signOut:      async () => {},
-  signInGoogle: async () => ({ error: null }),
-  signInApple:  async () => ({ error: null }),
-  switchRole:   () => {},
+  signInGoogle:   async () => ({ error: null }),
+  signInApple:    async () => ({ error: null }),
+  switchRole:     () => {},
+  updateNickname: async () => ({ error: null }),
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -184,6 +186,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await supabase.auth.signOut();
     }
     setUser(null);
+  };
+
+  const updateNickname = async (nickname: string): Promise<{ error: string | null }> => {
+    try {
+      if (!user) return { error: '로그인이 필요합니다.' };
+      const trimmed = nickname.trim();
+      if (!trimmed) return { error: '닉네임을 입력해주세요.' };
+
+      if (supabaseConfigured) {
+        const { upsertUserProfile } = await import('./db/userProfiles');
+        await upsertUserProfile(user.id, { nickname: trimmed });
+      }
+
+      // 로컬 user 상태 즉시 업데이트
+      setUser(prev => prev ? { ...prev, nickname: trimmed } : prev);
+      return { error: null };
+    } catch (e: any) {
+      return { error: e.message ?? '닉네임 변경에 실패했습니다.' };
+    }
   };
 
   const signInGoogle = async (): Promise<{ error: string | null }> => {
@@ -302,7 +323,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       signInGoogle,
       signInApple,
-      switchRole: role => setUser(MOCK_USERS[role]),
+      switchRole:     role => setUser(MOCK_USERS[role]),
+      updateNickname,
     }}>
       {children}
     </AuthContext.Provider>
