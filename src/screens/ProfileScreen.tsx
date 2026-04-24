@@ -9,6 +9,8 @@ import {
   StatusBar,
   Switch,
   Modal,
+  TextInput,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -336,7 +338,7 @@ function DevRoleSwitcher({ currentRole, onSwitch }: { currentRole: UserRole; onS
 
 export default function ProfileScreen() {
   const nav = useNavigation<any>();
-  const { user, switchRole, signOut } = useAuth();
+  const { user, switchRole, signOut, updateNickname } = useAuth();
   const [showManager,       setShowManager]       = useState(false);
   const [showAdmin,         setShowAdmin]         = useState(false);
   const [showFavorites,     setShowFavorites]     = useState(false);
@@ -346,6 +348,8 @@ export default function ProfileScreen() {
   const [authPage,          setAuthPage]          = useState<'signin' | 'signup'>('signin');
   const [showNotifications, setShowNotifications] = useState(false);
   const [showManagerReq,    setShowManagerReq]    = useState(false);
+  const [showNicknameEdit,  setShowNicknameEdit]  = useState(false);
+  const [nicknameInput,     setNicknameInput]     = useState('');
   const [unreadCount,       setUnreadCount]       = useState(0);
 
   const loadUnreadCount = useCallback(async () => {
@@ -446,6 +450,13 @@ export default function ProfileScreen() {
               </View>
             )}
             <Text style={styles.userName}>{user.nickname ?? user.name}</Text>
+            <TouchableOpacity
+              onPress={() => { setNicknameInput(user.nickname ?? user.name ?? ''); setShowNicknameEdit(true); }}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="pencil-outline" size={16} color={C.textSub} />
+            </TouchableOpacity>
           </View>
           <Text style={styles.userEmail}>{user.email}</Text>
         </View>
@@ -467,28 +478,6 @@ export default function ProfileScreen() {
           </>
         )}
 
-        {/* ── Manager request CTA (user role only) ── */}
-        {user.role === 'user' && (
-          <>
-            <SectionLabel text="헬스장 운영자이신가요?" />
-            <TouchableOpacity
-              style={styles.managerRequestCard}
-              onPress={() => setShowManagerReq(true)}
-              activeOpacity={0.85}
-            >
-              <View style={styles.managerRequestIcon}>
-                <Ionicons name="business-outline" size={20} color={C.accent} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.managerRequestTitle}>헬스장 매니저 신청</Text>
-                <Text style={styles.managerRequestSub}>헬스장을 GymPick에 등록하고 관리하세요</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={C.textDim} />
-            </TouchableOpacity>
-            <View style={{ height: 28 }} />
-          </>
-        )}
-
         {/* ── Personal stats ── */}
         <SectionLabel text="내 통계" />
         <View style={styles.statsGrid}>
@@ -502,24 +491,6 @@ export default function ProfileScreen() {
             </React.Fragment>
           ))}
         </View>
-
-        {/* ── Workout Badges (task_3) ── */}
-        <BadgeCollectionSection />
-
-        {/* ── Achievements ── */}
-        <View style={styles.sectionRow}>
-          <SectionLabel text="업적" />
-          <Text style={styles.sectionSub}>
-            {ACHIEVEMENTS.filter(a => a.earned).length}/{ACHIEVEMENTS.length} 달성
-          </Text>
-        </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.badgeRow}
-        >
-          {ACHIEVEMENTS.map(a => <AchievementBadge key={a.id} {...a} />)}
-        </ScrollView>
 
         {/* ── Personal records ── */}
         <View style={styles.sectionRow}>
@@ -590,6 +561,28 @@ export default function ProfileScreen() {
           ))}
         </View>
 
+        {/* ── Manager request CTA (user role only) — 하단 이동 ── */}
+        {user.role === 'user' && (
+          <>
+            <SectionLabel text="헬스장 운영자이신가요?" />
+            <TouchableOpacity
+              style={styles.managerRequestCard}
+              onPress={() => setShowManagerReq(true)}
+              activeOpacity={0.85}
+            >
+              <View style={styles.managerRequestIcon}>
+                <Ionicons name="business-outline" size={20} color={C.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.managerRequestTitle}>헬스장 매니저 신청</Text>
+                <Text style={styles.managerRequestSub}>헬스장을 GymPick에 등록하고 관리하세요</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={C.textDim} />
+            </TouchableOpacity>
+            <View style={{ height: 28 }} />
+          </>
+        )}
+
         {/* ── Dev tool ── */}
         <DevRoleSwitcher currentRole={user.role} onSwitch={switchRole} />
 
@@ -627,6 +620,52 @@ export default function ProfileScreen() {
         userId={user.id}
         onClose={() => setShowManagerReq(false)}
       />
+
+      {/* ── 닉네임 수정 모달 ── */}
+      <Modal
+        visible={showNicknameEdit}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowNicknameEdit(false)}
+      >
+        <View style={styles.nicknameModalOverlay}>
+          <View style={styles.nicknameModalCard}>
+            <Text style={styles.nicknameModalTitle}>닉네임 수정</Text>
+            <TextInput
+              style={styles.nicknameInput}
+              value={nicknameInput}
+              onChangeText={setNicknameInput}
+              placeholder="닉네임 입력"
+              placeholderTextColor={C.textDim}
+              maxLength={20}
+              autoFocus
+            />
+            <View style={styles.nicknameModalBtns}>
+              <TouchableOpacity
+                style={styles.nicknameCancelBtn}
+                onPress={() => setShowNicknameEdit(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.nicknameCancelTxt}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.nicknameSaveBtn}
+                activeOpacity={0.8}
+                onPress={async () => {
+                  const { error } = await updateNickname(nicknameInput);
+                  if (error) {
+                    Alert.alert('오류', error);
+                    return;
+                  }
+                  setShowNicknameEdit(false);
+                }}
+              >
+                <Text style={styles.nicknameSaveTxt}>저장</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1013,5 +1052,64 @@ const styles = StyleSheet.create({
     color:      C.textSub,
     textAlign:  'center',
     lineHeight: 20,
+  },
+  // Nickname edit modal
+  nicknameModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  nicknameModalCard: {
+    backgroundColor: C.surface,
+    borderRadius: R.card,
+    padding: 24,
+    width: '100%',
+    gap: 16,
+  },
+  nicknameModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: C.text,
+    textAlign: 'center',
+  },
+  nicknameInput: {
+    backgroundColor: C.surfaceHigh,
+    borderRadius: R.inner,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: C.text,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  nicknameModalBtns: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  nicknameCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: R.btn,
+    backgroundColor: C.surfaceHigh,
+    alignItems: 'center',
+  },
+  nicknameCancelTxt: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: C.textSub,
+  },
+  nicknameSaveBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: R.btn,
+    backgroundColor: C.accent,
+    alignItems: 'center',
+  },
+  nicknameSaveTxt: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: C.bg,
   },
 });
