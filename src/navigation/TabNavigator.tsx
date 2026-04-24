@@ -1,0 +1,127 @@
+import React from 'react';
+import { View, Text, StyleSheet, Platform } from 'react-native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Ionicons } from '@expo/vector-icons';
+import { C } from '../theme';
+
+import HomeScreen       from '../screens/HomeScreen';
+import FindGymScreen    from '../screens/FindGymScreen';
+import LogWorkoutScreen from '../screens/LogWorkoutScreen';
+import WorkoutScreen    from '../screens/WorkoutScreen';
+import ProfileScreen    from '../screens/ProfileScreen';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type TabParamList = {
+  Home:       undefined;
+  FindGym:    undefined;
+  LogWorkout: undefined;
+  Journal:    undefined;
+  Profile:    undefined;
+};
+
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+
+interface TabCfg {
+  active:   IoniconName;
+  inactive: IoniconName;
+  label:    string;
+  size?:    number;
+  center?:  boolean; // visually emphasised action tab
+}
+
+const TAB_CFG: Record<keyof TabParamList, TabCfg> = {
+  Home:       { active: 'home',       inactive: 'home-outline',        label: 'Home'     },
+  FindGym:    { active: 'map',        inactive: 'map-outline',          label: 'Find Gym' },
+  LogWorkout: { active: 'add-circle', inactive: 'add-circle-outline',   label: 'Log',     size: 28, center: true },
+  Journal:    { active: 'book',       inactive: 'book-outline',         label: 'Journal'  },
+  Profile:    { active: 'person',     inactive: 'person-outline',       label: 'Profile'  },
+};
+
+// ─── Tab item ─────────────────────────────────────────────────────────────────
+
+function TabItem({ name, focused }: { name: keyof TabParamList; focused: boolean }) {
+  const cfg   = TAB_CFG[name];
+  const size  = cfg.size ?? 22;
+  const color = (cfg.center || focused) ? C.accent : C.textSub;
+
+  return (
+    <View style={[tabSt.item, cfg.center && tabSt.centerItem]}>
+      {cfg.center && <View style={tabSt.centerRing} />}
+      <Ionicons
+        name={focused ? cfg.active : cfg.inactive}
+        size={size}
+        color={color}
+      />
+      <Text style={[tabSt.label, { color }]}>{cfg.label}</Text>
+    </View>
+  );
+}
+
+// ─── Navigator ────────────────────────────────────────────────────────────────
+
+const Tab = createBottomTabNavigator<TabParamList>();
+
+export default function TabNavigator() {
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown:     false,
+        tabBarShowLabel: false,
+        tabBarStyle:     tabSt.bar,
+        tabBarIcon:      ({ focused }) => (
+          <TabItem name={route.name as keyof TabParamList} focused={focused} />
+        ),
+      })}
+    >
+      <Tab.Screen name="Home"       component={HomeScreen}       />
+      <Tab.Screen name="FindGym"    component={FindGymScreen}    />
+      <Tab.Screen name="LogWorkout" component={LogWorkoutScreen} />
+      <Tab.Screen name="Journal"    component={WorkoutScreen}    />
+      <Tab.Screen name="Profile"    component={ProfileScreen}    />
+    </Tab.Navigator>
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const tabSt = StyleSheet.create({
+  bar: {
+    backgroundColor: C.surface,
+    borderTopWidth:  1,
+    borderTopColor:  C.border,
+    height:          Platform.OS === 'ios' ? 80 : 68,
+    paddingBottom:   Platform.OS === 'ios' ? 16 : 4,
+    elevation:       0,
+    shadowOpacity:   0,
+  },
+
+  item: {
+    alignItems:     'center',
+    justifyContent: 'center',
+    gap:            4,
+    paddingTop:     6,
+  },
+
+  // Center "Log" tab gets a subtle ring behind the icon
+  centerItem: {
+    position: 'relative',
+  },
+  centerRing: {
+    position:        'absolute',
+    width:           48,
+    height:          48,
+    borderRadius:    24,
+    backgroundColor: C.accentBg,
+    borderWidth:     1,
+    borderColor:     C.accent + '30',
+    top:             -2,
+  },
+
+  label: {
+    fontSize:      9,
+    fontWeight:    '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+});
