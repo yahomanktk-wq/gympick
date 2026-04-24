@@ -478,7 +478,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
                   onPress={() => handleCardPress(m.id)}
                   style={{ position: 'relative' }}
                 >
-                  <MachineCardBorder>
+                  <MachineCardBorder width={MACHINE_CARD_W2}>
                     <MachineCard machine={m} variant="grid" width={MACHINE_CARD_W2} />
                   </MachineCardBorder>
                   {localSelectedId === m.id && (
@@ -513,7 +513,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
                   onPress={() => handleCardPress(fw.id)}
                   style={{ position: 'relative' }}
                 >
-                  <MachineCardBorder>
+                  <MachineCardBorder width={MACHINE_CARD_W2}>
                     <MachineCard
                       machine={{ id: fw.id, name: fw.name, brand: fw.brand, targetMuscle: fw.targetMuscle, category: 'Free Weight' }}
                       variant="grid"

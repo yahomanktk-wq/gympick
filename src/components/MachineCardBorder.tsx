@@ -6,6 +6,7 @@ interface Props {
   borderColor?:  string;
   borderWidth?:  number;
   borderRadius?: number;
+  width?:        number;
 }
 
 export default function MachineCardBorder({
@@ -13,9 +14,10 @@ export default function MachineCardBorder({
   borderColor  = '#000000',
   borderWidth  = 2,
   borderRadius = 16,
+  width,
 }: Props) {
   return (
-    <View style={{ borderColor, borderWidth, borderRadius }}>
+    <View style={{ borderColor, borderWidth, borderRadius, width }}>
       {children}
     </View>
   );

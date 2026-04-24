@@ -83,8 +83,9 @@ export default function MachineCard({ machine, width, variant = 'detail' }: Prop
       <View style={s.imageBg}>
         <Image
           source={{ uri: resolvedImageUrl }}
-          style={{ width: '100%', height: '100%', backgroundColor: '#FFFFFF' }}
+          style={{ width: '100%', height: '100%' }}
           contentFit="contain"
+          backgroundColor="#FFFFFF"
         />
       </View>
 
@@ -265,7 +266,7 @@ const s = StyleSheet.create({
     right:           0,
     flexDirection:   'column',
     alignItems:      'flex-start',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'transparent',
   },
   machineNameZone: {
     alignSelf:         'stretch',
@@ -273,10 +274,12 @@ const s = StyleSheet.create({
     justifyContent:    'center',
     height:            80,
     paddingHorizontal: 4,
+    backgroundColor:   '#FFFFFF',
   },
   machineNameZoneGrid: {
     height:            52,
     paddingHorizontal: 2,
+    backgroundColor:   '#FFFFFF',
   },
   machineName: {
     alignSelf:     'stretch',

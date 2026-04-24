@@ -263,7 +263,7 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
                     onPress={() => setSelectedMachineId(machine.id)}
                     activeOpacity={0.85}
                   >
-                    <MachineCardBorder>
+                    <MachineCardBorder width={CARD_W}>
                       <MachineCard machine={machine} variant="grid" width={CARD_W} />
                     </MachineCardBorder>
                   </TouchableOpacity>
