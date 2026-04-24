@@ -2,13 +2,9 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { Platform } from 'react-native';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
-import * as AuthSession from 'expo-auth-session';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { UserRole } from '../data/types';
 import { supabase } from '../lib/supabase';
-
-WebBrowser.maybeCompleteAuthSession();
 
 // --- Types
 
@@ -102,20 +98,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const supabaseConfigured = !!(process.env.EXPO_PUBLIC_SUPABASE_URL);
 
-  // Expo Go: useProxy=true, 실제 빌드: 앱 스킴(gympick://) 사용
-  const isExpoGo = typeof __DEV__ !== 'undefined' && __DEV__ &&
-    !('__expo_module_core_TEMPORARY_moduleObject' in global);
-  const redirectUri = AuthSession.makeRedirectUri(
-    isExpoGo ? { useProxy: true } : { scheme: 'gympick', path: 'auth/callback' }
-  );
-
-  const [_googleRequest, _googleResponse, promptGoogleAsync] = Google.useAuthRequest({
-    iosClientId:     process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-    webClientId:     process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-    redirectUri,
-  });
-
   useEffect(() => {
     if (!supabaseConfigured) {
       setLoading(false);
@@ -206,14 +188,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInGoogle = async (): Promise<{ error: string | null }> => {
     try {
-      const result = await promptGoogleAsync(
-        isExpoGo ? { useProxy: true } : undefined
-      );
-
-      if (result.type !== 'success') {
-        return { error: '구글 로그인이 취소되었습니다.' };
-      }
-
       if (!supabaseConfigured) {
         setUser({
           id:            'google-mock',
@@ -226,19 +200,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: null };
       }
 
-      const { authentication } = result;
-      if (!authentication?.idToken) {
-        return { error: '구글 인증 토큰을 받지 못했습니다.' };
-      }
-
-      const { data, error } = await supabase.auth.signInWithIdToken({
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        token:    authentication.idToken,
+        options: {
+          redirectTo:          'gympick://auth/callback',
+          skipBrowserRedirect: true,
+        },
       });
 
       if (error) return { error: error.message };
-      if (data.user) setUser(mapSupabaseUser(data.user));
-      return { error: null };
+      if (!data.url) return { error: '구글 로그인 URL을 받지 못했습니다.' };
+
+      const result = await WebBrowser.openAuthSessionAsync(
+        data.url,
+        'gympick://auth/callback',
+      );
+
+      if (result.type === 'success') {
+        const url    = result.url;
+        const hash   = url.split('#')[1] ?? '';
+        const query  = url.split('?')[1] ?? '';
+        const params = new URLSearchParams(hash || query);
+        const accessToken  = params.get('access_token');
+        const refreshToken = params.get('refresh_token') ?? '';
+
+        if (accessToken) {
+          const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+            access_token:  accessToken,
+            refresh_token: refreshToken,
+          });
+          if (sessionError) return { error: sessionError.message };
+          if (sessionData.user) setUser(mapSupabaseUser(sessionData.user));
+          return { error: null };
+        }
+      }
+
+      if (result.type === 'cancel') {
+        return { error: '구글 로그인이 취소되었습니다.' };
+      }
+
+      return { error: '구글 로그인 중 오류가 발생했습니다.' };
     } catch (e: any) {
       return { error: e.message ?? '구글 로그인 중 오류가 발생했습니다.' };
     }
