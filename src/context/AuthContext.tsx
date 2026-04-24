@@ -195,7 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!trimmed) return { error: '닉네임을 입력해주세요.' };
 
       if (supabaseConfigured) {
-        const { upsertUserProfile } = await import('./db/userProfiles');
+        const { upsertUserProfile } = await import('../lib/db/userProfiles');
         await upsertUserProfile(user.id, { nickname: trimmed });
       }
 
