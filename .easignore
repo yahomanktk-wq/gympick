@@ -1,0 +1,21 @@
+# Large image directories not needed for build
+machine_card_image/
+# Git history
+.git/
+# node_modules (EAS installs server-side)
+node_modules/
+# Raw data and scripts (루트 data 폴더만 제외, src/data는 제외하지 않음)
+/data/
+scripts/
+export_All-GYM-Machines.csv
+download_machine_images.py
+check_machines.py
+# Prompt/planning text files
+*.txt
+prompt.txt
+260315.txt
+260417.txt
+# Claude internal
+.claude/
+# SVG source
+GYMPICK_LOGO.svg
