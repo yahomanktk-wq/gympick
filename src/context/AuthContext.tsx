@@ -102,9 +102,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const supabaseConfigured = !!(process.env.EXPO_PUBLIC_SUPABASE_URL);
 
-  // useProxy: true → Expo 프록시 서버를 통해 리디렉션
-  // Expo Go 개발 환경에서 Google 로그인 가능하게 함
-  const redirectUri = AuthSession.makeRedirectUri();
+  // Expo Go: useProxy=true, 실제 빌드: 앱 스킴(gympick://) 사용
+  const isExpoGo = typeof __DEV__ !== 'undefined' && __DEV__ &&
+    !('__expo_module_core_TEMPORARY_moduleObject' in global);
+  const redirectUri = AuthSession.makeRedirectUri(
+    isExpoGo ? { useProxy: true } : { scheme: 'gympick', path: 'auth/callback' }
+  );
 
   const [_googleRequest, _googleResponse, promptGoogleAsync] = Google.useAuthRequest({
     iosClientId:     process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
@@ -203,7 +206,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInGoogle = async (): Promise<{ error: string | null }> => {
     try {
-      const result = await promptGoogleAsync();
+      const result = await promptGoogleAsync(
+        isExpoGo ? { useProxy: true } : undefined
+      );
 
       if (result.type !== 'success') {
         return { error: '구글 로그인이 취소되었습니다.' };
