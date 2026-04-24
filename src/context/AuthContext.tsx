@@ -69,17 +69,31 @@ const MOCK_CREDENTIALS: Record<string, { user: AuthUser; password: string }> = {
   'manager@gympick.app':  { user: DEMO_MANAGER,        password: 'Demo1234!' },
 };
 
-function mapSupabaseUser(sbUser: SupabaseUser): AuthUser {
+function mapSupabaseUser(sbUser: SupabaseUser, profileImageUrl?: string): AuthUser {
   const mock = Object.values(MOCK_USERS).find(m => m.email === sbUser.email);
-  if (mock) return mock;
+  if (mock) return { ...mock, profileImageUrl };
   return {
-    id:            sbUser.id,
-    name:          sbUser.user_metadata?.name ?? sbUser.email?.split('@')[0] ?? 'User',
-    nickname:      sbUser.user_metadata?.nickname,
-    email:         sbUser.email ?? '',
-    role:          'user',
-    managedGymIds: [],
+    id:             sbUser.id,
+    name:           sbUser.user_metadata?.name ?? sbUser.email?.split('@')[0] ?? 'User',
+    nickname:       sbUser.user_metadata?.nickname,
+    email:          sbUser.email ?? '',
+    role:           'user',
+    managedGymIds:  [],
+    profileImageUrl,
   };
+}
+
+async function fetchProfileImageUrl(userId: string): Promise<string | undefined> {
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('avatar_url')
+      .eq('id', userId)
+      .single();
+    return data?.avatar_url ?? undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 // --- Context
@@ -109,13 +123,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ? mapSupabaseUser(session.user) : null);
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        const avatarUrl = await fetchProfileImageUrl(session.user.id);
+        setUser(mapSupabaseUser(session.user, avatarUrl));
+      } else {
+        setUser(null);
+      }
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ? mapSupabaseUser(session.user) : null);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        // 기존 profileImageUrl 유지 (덮어씌우지 않음)
+        setUser(prev => {
+          const existingUrl = prev?.id === session.user!.id ? prev?.profileImageUrl : undefined;
+          return mapSupabaseUser(session.user!, existingUrl);
+        });
+      } else {
+        setUser(null);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -138,7 +165,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
     });
     if (error) return { error: error.message };
-    if (data.user) setUser(mapSupabaseUser(data.user));
+    if (data.user) {
+      const avatarUrl = await fetchProfileImageUrl(data.user.id);
+      setUser(mapSupabaseUser(data.user, avatarUrl));
+    }
     return { error: null };
   };
 
@@ -258,7 +288,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             refresh_token: refreshToken,
           });
           if (sessionError) return { error: sessionError.message };
-          if (sessionData.user) setUser(mapSupabaseUser(sessionData.user));
+          if (sessionData.user) {
+            const avatarUrl = await fetchProfileImageUrl(sessionData.user.id);
+            setUser(mapSupabaseUser(sessionData.user, avatarUrl));
+          }
           return { error: null };
         }
       }
@@ -311,7 +344,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (error) return { error: error.message };
-      if (data.user) setUser(mapSupabaseUser(data.user));
+      if (data.user) {
+        const avatarUrl = await fetchProfileImageUrl(data.user.id);
+        setUser(mapSupabaseUser(data.user, avatarUrl));
+      }
       return { error: null };
     } catch (e: any) {
       if (e.code === 'ERR_REQUEST_CANCELED') {
