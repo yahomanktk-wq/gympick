@@ -34,7 +34,7 @@ const { width: SCREEN_W } = Dimensions.get('window');
 
 // Session detail photo dimensions
 const DET_PHOTO_W = SCREEN_W - 32;
-const DET_PHOTO_H = Math.round(DET_PHOTO_W * 16 / 9);
+const DET_PHOTO_H_DEFAULT = Math.round(DET_PHOTO_W * 16 / 9);
 
 // Retro grid cell dimensions — 3.5 visible per row, 4:3 ratio
 const RETRO_CELL_W = Math.floor((SCREEN_W - 32) / 3.5);
@@ -215,7 +215,25 @@ function SessionDetailModal({
   onOpenMachine: (machineId: string, machineName: string, machineBrand: string, targetMuscle?: string) => void;
 }) {
   const nav      = useNavigation<any>();
-  const photoRef = useRef<View>(null);
+  const photoRef    = useRef<View>(null);
+  const [photoHeight, setPhotoHeight] = useState(DET_PHOTO_H_DEFAULT);
+
+  // 이미지 로드 시 실제 비율로 높이 동적 조정
+  const photoUri = session?.compositeUri ?? session?.photoUri;
+  useEffect(() => {
+    if (!photoUri) {
+      setPhotoHeight(DET_PHOTO_H_DEFAULT);
+      return;
+    }
+    Image.getSize(
+      photoUri,
+      (w, h) => {
+        const ratio = h / w;
+        setPhotoHeight(Math.round(DET_PHOTO_W * ratio));
+      },
+      () => setPhotoHeight(DET_PHOTO_H_DEFAULT),
+    );
+  }, [photoUri]);
 
   if (!session) return null;
 
@@ -295,8 +313,8 @@ function SessionDetailModal({
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 48 }}>
 
-          {/* 4:5 workout photo with overlay */}
-          <View ref={photoRef} style={det.photoCard}>
+          {/* 오운완 사진 - 실제 비율로 동적 높이 */}
+          <View ref={photoRef} style={[det.photoCard, { height: photoHeight }]}>
             {(session.compositeUri ?? session.photoUri) ? (
               <Image
                 source={{ uri: (session.compositeUri ?? session.photoUri)! }}
@@ -733,7 +751,7 @@ const det = StyleSheet.create({
   dateLine: { fontSize: 12, color: C.textSub, marginTop: 3 },
   closeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
 
-  photoCard:          { width: DET_PHOTO_W, height: DET_PHOTO_H, borderRadius: R.card, overflow: 'hidden', marginTop: 16, marginBottom: 16, alignSelf: 'center' },
+  photoCard:          { width: DET_PHOTO_W, borderRadius: R.card, overflow: 'hidden', marginTop: 8, marginBottom: 8, alignSelf: 'center' },
   photoBg:            { ...StyleSheet.absoluteFillObject, backgroundColor: '#07070f' },
   photoLogoLeftWrap:  { position: 'absolute', left: 0, top: 0, bottom: 0, width: 22, justifyContent: 'center', alignItems: 'center', zIndex: 2 },
   photoLogoRightWrap: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 32, zIndex: 2 },
