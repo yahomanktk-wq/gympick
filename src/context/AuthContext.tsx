@@ -69,30 +69,38 @@ const MOCK_CREDENTIALS: Record<string, { user: AuthUser; password: string }> = {
   'manager@gympick.app':  { user: DEMO_MANAGER,        password: 'Demo1234!' },
 };
 
-function mapSupabaseUser(sbUser: SupabaseUser, profileImageUrl?: string): AuthUser {
+interface ProfileData {
+  avatarUrl?: string;
+  nickname?:  string;
+}
+
+function mapSupabaseUser(sbUser: SupabaseUser, profileData?: ProfileData): AuthUser {
   const mock = Object.values(MOCK_USERS).find(m => m.email === sbUser.email);
-  if (mock) return { ...mock, profileImageUrl };
+  if (mock) return { ...mock, profileImageUrl: profileData?.avatarUrl };
   return {
-    id:             sbUser.id,
-    name:           sbUser.user_metadata?.name ?? sbUser.email?.split('@')[0] ?? 'User',
-    nickname:       sbUser.user_metadata?.nickname,
-    email:          sbUser.email ?? '',
-    role:           'user',
-    managedGymIds:  [],
-    profileImageUrl,
+    id:              sbUser.id,
+    name:            sbUser.user_metadata?.name ?? sbUser.email?.split('@')[0] ?? 'User',
+    nickname:        profileData?.nickname ?? sbUser.user_metadata?.nickname,
+    email:           sbUser.email ?? '',
+    role:            'user',
+    managedGymIds:   [],
+    profileImageUrl: profileData?.avatarUrl,
   };
 }
 
-async function fetchProfileImageUrl(userId: string): Promise<string | undefined> {
+async function fetchProfileData(userId: string): Promise<ProfileData> {
   try {
     const { data } = await supabase
       .from('profiles')
-      .select('avatar_url')
+      .select('avatar_url, nickname')
       .eq('id', userId)
       .single();
-    return data?.avatar_url ?? undefined;
+    return {
+      avatarUrl: data?.avatar_url ?? undefined,
+      nickname:  data?.nickname   ?? undefined,
+    };
   } catch {
-    return undefined;
+    return {};
   }
 }
 
@@ -125,20 +133,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
-        const avatarUrl = await fetchProfileImageUrl(session.user.id);
-        setUser(mapSupabaseUser(session.user, avatarUrl));
+        const profileData = await fetchProfileData(session.user.id);
+        setUser(mapSupabaseUser(session.user, profileData));
       } else {
         setUser(null);
       }
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        // 기존 profileImageUrl 유지 (덮어씌우지 않음)
-        setUser(prev => {
-          const existingUrl = prev?.id === session.user!.id ? prev?.profileImageUrl : undefined;
-          return mapSupabaseUser(session.user!, existingUrl);
+        fetchProfileData(session.user!.id).then(profileData => {
+          setUser(mapSupabaseUser(session.user!, profileData));
         });
       } else {
         setUser(null);
@@ -166,8 +172,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (error) return { error: error.message };
     if (data.user) {
-      const avatarUrl = await fetchProfileImageUrl(data.user.id);
-      setUser(mapSupabaseUser(data.user, avatarUrl));
+      const profileData = await fetchProfileData(data.user.id);
+      setUser(mapSupabaseUser(data.user, profileData));
     }
     return { error: null };
   };
@@ -289,8 +295,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
           if (sessionError) return { error: sessionError.message };
           if (sessionData.user) {
-            const avatarUrl = await fetchProfileImageUrl(sessionData.user.id);
-            setUser(mapSupabaseUser(sessionData.user, avatarUrl));
+            const profileData = await fetchProfileData(sessionData.user.id);
+            setUser(mapSupabaseUser(sessionData.user, profileData));
           }
           return { error: null };
         }
@@ -345,8 +351,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (error) return { error: error.message };
       if (data.user) {
-        const avatarUrl = await fetchProfileImageUrl(data.user.id);
-        setUser(mapSupabaseUser(data.user, avatarUrl));
+        const profileData = await fetchProfileData(data.user.id);
+        setUser(mapSupabaseUser(data.user, profileData));
       }
       return { error: null };
     } catch (e: any) {

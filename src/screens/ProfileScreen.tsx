@@ -480,12 +480,12 @@ export default function ProfileScreen() {
                 <Ionicons name="camera" size={12} color="#FFFFFF" />
               )}
             </View>
+          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
             <View style={[styles.rolePip, { backgroundColor: roleMeta.bg, borderColor: roleMeta.color + '80' }]}>
               <Ionicons name={roleMeta.icon} size={9} color={roleMeta.color} />
               <Text style={[styles.rolePipText, { color: roleMeta.color }]}>{roleMeta.label}</Text>
             </View>
-          </TouchableOpacity>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
             {user.role === 'manager' && (
               <View style={styles.managerRoleBadge}>
                 <Text style={styles.managerRoleBadgeText}>매니저</Text>
@@ -838,16 +838,13 @@ const styles = StyleSheet.create({
     justifyContent:  'center',
   },
   rolePip: {
-    position: 'absolute',
-    bottom: -2,
-    right: -6,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
     paddingHorizontal: 7,
     paddingVertical: 3,
     borderRadius: R.pill,
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: C.border,
   },
   rolePipText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.3 },

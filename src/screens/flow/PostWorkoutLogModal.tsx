@@ -700,19 +700,27 @@ function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onR
   onBack: () => void;
   onClose: () => void;
 }) {
+  const scrollRef = useRef<ScrollView>(null);
   const hasSets = sets.length > 0 && sets.some(s => s.weight > 0 || s.reps > 0);
+
+  function handleAdd() {
+    onAdd();
+    setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  }
 
   return (
     <SafeAreaView style={s.safe}>
       <NavHeader title="세트 기록" onBack={onBack} onClose={onClose} />
       <StepBar total={5} current={2} />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
+      <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
         <Text style={s.hint}>프리셋 또는 스테퍼로 입력하세요</Text>
         <SetCard
           ex={exercise}
           sets={sets}
           onChange={onChange}
-          onAdd={onAdd}
+          onAdd={handleAdd}
           onCopyPrev={onCopyPrev}
           onRemove={onRemove}
         />

@@ -159,7 +159,7 @@ function RetroWeeklyGrid({
                 const session  = sessions.find(s => isSameDay(new Date(s.date), day));
                 const isToday  = isSameDay(day, today);
                 const isFuture = day > today;
-                const photoSrc = session?.compositeUri ?? session?.photoUri;
+                const photoSrc = session?.compositeUri ?? session?.photoUri ?? null;
 
                 return (
                   <TouchableOpacity
@@ -178,6 +178,7 @@ function RetroWeeklyGrid({
                           source={{ uri: photoSrc }}
                           style={StyleSheet.absoluteFill}
                           resizeMode="cover"
+                          onError={() => {}}
                         />
                         <View style={rg.photoOverlay}>
                           <Text style={rg.photoDate}>{day.getDate()}</Text>
