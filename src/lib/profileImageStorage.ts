@@ -21,33 +21,42 @@ export async function pickAndUploadProfileImage(
 
     const asset    = result.assets[0];
     const uri      = asset.uri;
-    const ext      = uri.split('.').pop()?.split('?')[0] ?? 'jpg';
+    const ext      = uri.split('.').pop()?.split('?')[0]?.toLowerCase() ?? 'jpg';
+    const mimeType = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
     const fileName = `${userId}/profile.${ext}`;
 
-    const response    = await fetch(uri);
-    const blob        = await response.blob();
-    const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload  = () => resolve(reader.result as ArrayBuffer);
-      reader.onerror = reject;
-      reader.readAsArrayBuffer(blob);
+    // React Native에서는 FileReader 미지원 → FormData 방식 사용
+    const formData = new FormData();
+    formData.append('file', {
+      uri,
+      name:  `profile.${ext}`,
+      type:  mimeType,
+    } as any);
+
+    const uploadUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/storage/v1/object/${BUCKET}/${fileName}`;
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token ?? '';
+
+    const response = await fetch(uploadUrl, {
+      method:  'POST',
+      headers: {
+        'Authorization':  `Bearer ${accessToken}`,
+        'apikey':         process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',
+        'x-upsert':       'true',
+      },
+      body: formData,
     });
 
-    const { data, error } = await supabase.storage
-      .from(BUCKET)
-      .upload(fileName, arrayBuffer, {
-        contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
-        upsert:      true,
-      });
-
-    if (error || !data) {
-      console.warn('[profileImage] upload failed:', error?.message);
+    if (!response.ok) {
+      const text = await response.text();
+      console.warn('[profileImage] upload failed:', text);
       return null;
     }
 
     const { data: urlData } = supabase.storage
       .from(BUCKET)
-      .getPublicUrl(data.path);
+      .getPublicUrl(fileName);
 
     return `${urlData.publicUrl}?t=${Date.now()}`;
   } catch (err) {

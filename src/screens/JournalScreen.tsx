@@ -174,10 +174,10 @@ function RetroWeeklyGrid({
                   >
                     {photoSrc ? (
                       <>
-                        <Image
+                        <ExpoImage
                           source={{ uri: photoSrc }}
                           style={StyleSheet.absoluteFill}
-                          resizeMode="cover"
+                          contentFit="cover"
                           onError={() => {}}
                         />
                         <View style={rg.photoOverlay}>
