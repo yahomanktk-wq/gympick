@@ -400,20 +400,20 @@ function SessionDetailModal({
             ))}
           </View>
 
-          {/* 운동 루틴 + 타겟부위 칩 (한 줄) */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <Text style={[det.sectionTitle, { marginBottom: 0 }]}>운동 루틴</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, justifyContent: 'flex-end', flex: 1, marginLeft: 8 }}>
-              {muscles.map(m => {
-                const col = mp(m);
-                return (
-                  <View key={m} style={[det.muscleChip, { backgroundColor: col.bg, borderColor: col.fg + '40' }]}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: col.fg }}>{m}</Text>
-                  </View>
-                );
-              })}
-            </View>
+          {/* Muscle chips */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 20 }}>
+            {muscles.map(m => {
+              const col = mp(m);
+              return (
+                <View key={m} style={[det.muscleChip, { backgroundColor: col.bg, borderColor: col.fg + '40' }]}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: col.fg }}>{m}</Text>
+                </View>
+              );
+            })}
           </View>
+
+          {/* 운동 루틴 */}
+          <Text style={det.sectionTitle}>운동 루틴</Text>
           <View style={det.routineCard}>
             {session.machines.map((m, i) => {
               const isPR      = prMachines.has(m.machineId);
@@ -465,10 +465,7 @@ function SessionDetailModal({
                       {Array.from({ length: Math.min(m.sets, 6) }).map((_, si) => (
                         <Text
                           key={si}
-                          style={[
-                            det.routineSetLine,
-                            isPR && si === m.sets - 1 && { color: C.accent, fontWeight: '800' },
-                          ]}
+                          style={det.routineSetLine}
                         >
                           {m.weight > 0 ? `${m.weight}kg` : '--'} × {m.reps}
                         </Text>
@@ -784,7 +781,7 @@ const det = StyleSheet.create({
   routineCard:       { backgroundColor: '#FFFFFF', borderRadius: R.card, overflow: 'hidden', marginBottom: 20 },
   routineDivider:    { height: 1, backgroundColor: '#E5E5E5' },
   routineRow:        { flexDirection: 'row', alignItems: 'flex-start', padding: 12, gap: 10 },
-  routineRowPR:      { backgroundColor: '#FFFFFF' },
+  routineRowPR:      { backgroundColor: '#F0FFF0' },
   routineImgWrap:    { width: 64, height: 64, borderRadius: 10, overflow: 'hidden', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: C.border },
   routineInfo:       { flex: 1, justifyContent: 'center' },
   routineMachineName:{ fontSize: 12, fontWeight: '700', color: '#000000', lineHeight: 16 },
