@@ -92,28 +92,21 @@ export default function WorkoutFeedCard({ post, onReact }: Props) {
           }}
         />
 
-        {/* 좌상단: 내 오운완 배지 또는 근육 배지 */}
-        <View style={s.badgeRow}>
-          {post.isMyPost && (
+        {/* 좌상단: 내 오운완 배지만 유지 (타겟부위 칩 제거) */}
+        {post.isMyPost && (
+          <View style={s.badgeRow}>
             <View style={s.myPostBadge}>
               <Text style={s.myPostBadgeText}>내 오운완</Text>
             </View>
-          )}
-          {post.muscles.map(m => (
-            <MuscleBadge key={m} label={m} />
-          ))}
-        </View>
+          </View>
+        )}
 
         {/* 우상단: 남은 시간 */}
         <View style={s.timeLabelWrap}>
           <TimeLabel createdAt={post.createdAt} />
         </View>
 
-        {/* 하단 오버레이: 닉네임 + 헬스장명 */}
-        <View style={s.bottomOverlay}>
-          <Text style={s.nickname}>{post.nickname}</Text>
-          <Text style={s.gymName} numberOfLines={1}>{post.gymName}</Text>
-        </View>
+
       </View>
 
       {/* ── Reaction bar ── */}
