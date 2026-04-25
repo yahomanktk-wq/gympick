@@ -39,6 +39,5 @@ export async function upsertUserProfile(
     nickname:   updates.nickname,
     name:       updates.name,
     birth_date: updates.birthDate,
-    updated_at: new Date().toISOString(),
   });
 }

@@ -106,6 +106,8 @@ export interface WorkoutPhoto {
   titleOverride?:   string;          // custom title instead of auto-generated "MUSCLE DAY"
   originalUrl?:     string;          // raw image from the camera roll
   overlayImageUrl?: string;          // rendered version with stats/text overlay
+  compositeUri?:    string;          // Supabase Storage URL of overlay composite image
+  photoUri?:        string;          // Supabase Storage URL of raw camera photo
 }
 
 // --- machine_reviews
