@@ -50,7 +50,7 @@ export async function pickAndUploadProfileImage(
 
     if (!response.ok) {
       const text = await response.text();
-      console.warn('[profileImage] upload failed:', text);
+      console.warn('[profileImage] upload failed:', response.status, text);
       return null;
     }
 
@@ -69,9 +69,10 @@ export async function saveProfileImageUrl(
   userId: string,
   url: string,
 ): Promise<void> {
-  await supabase
+  const { error } = await supabase
     .from('profiles')
-    .upsert({ id: userId, avatar_url: url, updated_at: new Date().toISOString() });
+    .upsert({ id: userId, avatar_url: url });
+  if (error && __DEV__) console.warn('[profileImage] saveUrl error:', error.message);
 }
 
 export async function loadProfileImageUrl(

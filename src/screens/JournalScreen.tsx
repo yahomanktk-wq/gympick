@@ -317,10 +317,11 @@ function SessionDetailModal({
           {/* 오운완 사진 - 실제 비율로 동적 높이 */}
           <View ref={photoRef} style={[det.photoCard, { height: photoHeight }]}>
             {(session.compositeUri ?? session.photoUri) ? (
-              <Image
+              <ExpoImage
                 source={{ uri: (session.compositeUri ?? session.photoUri)! }}
                 style={StyleSheet.absoluteFill}
-                resizeMode="contain"
+                contentFit="contain"
+                onError={() => {}}
               />
             ) : (
               <View style={det.photoBg} />
