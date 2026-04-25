@@ -110,10 +110,16 @@ export default function WorkoutFeedScreen() {
 
         // 2. Supabase 피드 조회 (실패 시 Mock fallback)
         const [serverPosts] = await Promise.all([fetchActiveFeedPosts()]);
-        const fallbackPosts = serverPosts.length === 0 ? filterActivePosts(MOCK_FEED_POSTS) : serverPosts;
+        const myUserId = user?.id ?? 'guest';
+
+        // 서버 포스트에서 내 포스트 제외 (로컬 myPosts와 중복 방지)
+        const otherPosts = (serverPosts.length === 0
+          ? filterActivePosts(MOCK_FEED_POSTS)
+          : serverPosts
+        ).filter(p => p.userId !== myUserId);
 
         // 3. 합산 + 중복 제거 + 최신순
-        const combined = [...myPosts, ...fallbackPosts];
+        const combined = [...myPosts, ...otherPosts];
         const unique   = combined.filter((p, i, arr) =>
           arr.findIndex(x => x.id === p.id) === i
         );
