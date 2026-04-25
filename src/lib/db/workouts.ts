@@ -55,12 +55,14 @@ type SetRow = {
 };
 
 type PhotoRow = {
-  id:           string;
-  session_id:   string;
-  user_id:      string;
-  captured_at:  string;
-  text_color:   string;
-  aspect_ratio?: string | null;
+  id:             string;
+  session_id:     string;
+  user_id:        string;
+  captured_at:    string;
+  text_color:     string;
+  aspect_ratio?:  string | null;
+  composite_uri?: string | null;
+  photo_uri?:     string | null;
 };
 
 // --- Row converters
@@ -102,12 +104,14 @@ function rowToSet(r: SetRow): WorkoutSet {
 
 function rowToPhoto(r: PhotoRow): WorkoutPhoto {
   return {
-    id:          r.id,
-    sessionId:   r.session_id,
-    userId:      r.user_id,
-    capturedAt:  r.captured_at,
-    textColor:   r.text_color,
-    aspectRatio: (r.aspect_ratio as PhotoAspectRatio) ?? undefined,
+    id:           r.id,
+    sessionId:    r.session_id,
+    userId:       r.user_id,
+    capturedAt:   r.captured_at,
+    textColor:    r.text_color,
+    aspectRatio:  (r.aspect_ratio as PhotoAspectRatio) ?? undefined,
+    compositeUri: r.composite_uri ?? undefined,
+    photoUri:     r.photo_uri ?? undefined,
   };
 }
 
@@ -230,6 +234,29 @@ export async function fetchSessionsWithPhotos(sessionIds: string[]): Promise<Set
   );
 }
 
+/** Fetch photos for a list of session ids. Returns map of sessionId → WorkoutPhoto */
+export async function fetchPhotosForSessions(
+  sessionIds: string[],
+): Promise<Map<string, WorkoutPhoto>> {
+  if (!sessionIds.length) return new Map();
+
+  const { data, error } = await supabase
+    .from('workout_photos')
+    .select('id, session_id, user_id, captured_at, text_color, aspect_ratio, composite_uri, photo_uri')
+    .in('session_id', sessionIds);
+
+  if (error || !data?.length) {
+    if (__DEV__ && error) console.warn('[db/workouts] fetchPhotosForSessions error:', error.message);
+    return new Map();
+  }
+
+  const map = new Map<string, WorkoutPhoto>();
+  for (const row of data) {
+    map.set(row.session_id, rowToPhoto(row));
+  }
+  return map;
+}
+
 // --- workout_photos
 
 /** Fetch photos for a session. Falls back to mock. */
@@ -299,8 +326,8 @@ export async function fetchWorkoutLogs(userId: string): Promise<WorkoutLog[]> {
     // 3. Sets - fetchWorkoutSetsForEntries owns the mock fallback
     const sets = await fetchWorkoutSetsForEntries(entryIds);
 
-    // 4. Photo presence - fetchSessionsWithPhotos owns the mock fallback
-    const photoSessionIds = await fetchSessionsWithPhotos(sessionIds);
+    // 4. Photo data (URI included) - fetchPhotosForSessions owns the mock fallback
+    const photoMap = await fetchPhotosForSessions(sessionIds);
 
     // 5. Gym display names - Supabase query with local GYMS mock as fallback
     const { data: gymData } = await supabase
@@ -353,7 +380,9 @@ export async function fetchWorkoutLogs(userId: string): Promise<WorkoutLog[]> {
         date:        session.date,
         bodyWeight:  session.bodyWeight,
         machines,
-        hasPhoto:    photoSessionIds.has(session.id),
+        hasPhoto:     photoMap.has(session.id),
+        compositeUri: photoMap.get(session.id)?.compositeUri,
+        photoUri:     photoMap.get(session.id)?.photoUri,
       };
     });
     return [...getNewSessions(userId), ...assembled];

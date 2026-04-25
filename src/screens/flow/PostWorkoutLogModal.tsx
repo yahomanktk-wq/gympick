@@ -1423,9 +1423,10 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
 
     // 사진 업로드 (Supabase Storage)
     let finalPhotoUrl: string | undefined;
-    const localUri = effectiveCompositeUri ?? photoUri ?? undefined;
-    if (localUri && user && supabaseConfigured) {
-      finalPhotoUrl = await uploadWorkoutPhoto(localUri, user.id, sessionId);
+    if (effectiveCompositeUri && user && supabaseConfigured) {
+      finalPhotoUrl = await uploadWorkoutPhoto(effectiveCompositeUri, user.id, sessionId, true);
+    } else if (photoUri && user && supabaseConfigured) {
+      finalPhotoUrl = await uploadWorkoutPhoto(photoUri, user.id, sessionId, false);
     }
 
     const workoutLog: WorkoutLog = {
