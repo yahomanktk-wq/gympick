@@ -429,20 +429,20 @@ function SessionDetailModal({
             ))}
           </View>
 
-          {/* Muscle chips */}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 20 }}>
-            {muscles.map(m => {
-              const col = mp(m);
-              return (
-                <View key={m} style={[det.muscleChip, { backgroundColor: col.bg, borderColor: col.fg + '40' }]}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: col.fg }}>{m}</Text>
-                </View>
-              );
-            })}
+          {/* 운동 루틴 + 타겟부위 칩 한 줄 */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <Text style={[det.sectionTitle, { marginBottom: 0 }]}>운동 루틴</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, justifyContent: 'flex-end', flex: 1, marginLeft: 8 }}>
+              {muscles.map(m => {
+                const col = mp(m);
+                return (
+                  <View key={m} style={[det.muscleChip, { backgroundColor: col.bg, borderColor: col.fg + '40' }]}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: col.fg }}>{m}</Text>
+                  </View>
+                );
+              })}
+            </View>
           </View>
-
-          {/* 운동 루틴 */}
-          <Text style={det.sectionTitle}>운동 루틴</Text>
           <View style={det.routineCard}>
             {machines.map((m, i) => {
               const isPR      = prMachines.has(m.machineId);
