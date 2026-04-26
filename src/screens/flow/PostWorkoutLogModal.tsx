@@ -40,7 +40,7 @@ import TodayWorkoutListScreen from './TodayWorkoutListScreen';
 import MachineCard from '../../components/MachineCard';
 import MachineCardBorder from '../../components/MachineCardBorder';
 import { FREE_WEIGHTS } from '../../data/freeWeights';
-import { fetchFreeWeights } from '../../lib/db';
+import { fetchFreeWeights, fetchWorkoutLogs } from '../../lib/db';
 
 // --- Types
 
@@ -1215,6 +1215,31 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   const [routineMachineIds,   setRoutineMachineIds]   = useState<string[]>([]);
   const [routineReadOnly,     setRoutineReadOnly]     = useState(false);
   const [routineExtraInfo,    setRoutineExtraInfo]    = useState<MachineExtraInfo | undefined>(undefined);
+  const [sessions,            setSessions]            = React.useState<WorkoutLog[]>([]);
+  const [dbFreeWeights,       setDbFreeWeights]       = useState<typeof FREE_WEIGHTS>([]);
+
+  React.useEffect(() => {
+    if (!visible) return;
+    fetchFreeWeights().then(data => {
+      setDbFreeWeights(data.map(m => ({
+        id:           m.id,
+        name:         m.name,
+        brand:        m.brand,
+        targetMuscle: m.targetMuscle,
+      })));
+    }).catch(() => {
+      setDbFreeWeights(FREE_WEIGHTS);
+    });
+  }, [visible]);
+
+  React.useEffect(() => {
+    if (!visible || !user) return;
+    fetchWorkoutLogs(user.id).then(data => {
+      setSessions(data);
+    }).catch(() => {
+      setSessions(MOCK_SESSIONS);
+    });
+  }, [visible, user?.id]);
 
   React.useEffect(() => {
     if (visible) {
@@ -1302,8 +1327,8 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
         }
       }
 
-      // XP 계산 및 레벨 업데이트 (머신 운동만, 프리웨이트 제외)
-      if (!currentExerciseId.startsWith('fw')) {
+      // XP 계산 및 레벨 업데이트 (머신 + 프리웨이트 모두 적용)
+      {
         const existingLevel = getMachineLevelData(currentExerciseId);
         const volume        = exSets.reduce((sum, s) => sum + s.weight * s.reps, 0);
         const xpResult      = calculateXP({
@@ -1387,7 +1412,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     const result: ExerciseInfo[] = [];
     for (const id of loggedIds) {
       if (id.startsWith('fw')) {
-        const fw = FREE_WEIGHTS.find(f => f.id === id);
+        const fw = (dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS).find(f => f.id === id);
         if (fw) result.push({ id: fw.id, name: fw.name, brand: fw.brand, targetMuscle: fw.targetMuscle });
       } else {
         const m = gym.machines.find(m => m.id === id);
@@ -1401,7 +1426,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   const currentExercise: ExerciseInfo | null = useMemo(() => {
     if (!currentExerciseId || !gym) return null;
     if (currentExerciseId.startsWith('fw')) {
-      const fw = FREE_WEIGHTS.find(f => f.id === currentExerciseId);
+      const fw = (dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS).find(f => f.id === currentExerciseId);
       if (fw) return { id: fw.id, name: fw.name, brand: fw.brand, targetMuscle: fw.targetMuscle };
     } else {
       const m = gym.machines.find(m => m.id === currentExerciseId);
@@ -1609,7 +1634,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             gymId={gym!.id}
             gymName={gym!.name}
             selectedMuscles={Array.from(selectedMuscles)}
-            pastSessions={MOCK_SESSIONS}
+            pastSessions={sessions}
             onSelectMachineIds={(ids, extraInfo) => {
               if (ids.length === 0) {
                 // Start Fresh: skip today-list, go directly to machine selection
