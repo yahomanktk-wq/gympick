@@ -226,21 +226,30 @@ function SessionDetailModal({
       setPhotoHeight(DET_PHOTO_H_DEFAULT);
       return;
     }
-    Image.getSize(
-      photoUri,
-      (w, h) => {
-        const ratio = h / w;
-        setPhotoHeight(Math.round(DET_PHOTO_W * ratio));
-      },
-      () => setPhotoHeight(DET_PHOTO_H_DEFAULT),
-    );
+    try {
+      Image.getSize(
+        photoUri,
+        (w, h) => {
+          if (w > 0 && h > 0) {
+            const ratio = h / w;
+            setPhotoHeight(Math.round(DET_PHOTO_W * ratio));
+          } else {
+            setPhotoHeight(DET_PHOTO_H_DEFAULT);
+          }
+        },
+        () => setPhotoHeight(DET_PHOTO_H_DEFAULT),
+      );
+    } catch {
+      setPhotoHeight(DET_PHOTO_H_DEFAULT);
+    }
   }, [photoUri]);
 
   if (!session) return null;
 
   const vol       = sessionVolume(session);
-  const totalSets = session.machines.reduce((a, m) => a + m.sets, 0);
-  const muscles   = [...new Set(session.machines.map(m => m.targetMuscle))];
+  const machines  = session.machines ?? [];
+  const totalSets = machines.reduce((a, m) => a + m.sets, 0);
+  const muscles   = [...new Set(machines.map(m => m.targetMuscle))];
 
   const dateStr = new Date(session.date).toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
@@ -249,7 +258,7 @@ function SessionDetailModal({
     hour: '2-digit', minute: '2-digit',
   });
 
-  const muscleCounts = session.machines.reduce<Record<string, number>>((acc, m) => {
+  const muscleCounts = machines.reduce<Record<string, number>>((acc, m) => {
     acc[m.targetMuscle] = (acc[m.targetMuscle] ?? 0) + 1; return acc;
   }, {});
   const sortedMuscles = Object.entries(muscleCounts)
@@ -352,7 +361,7 @@ function SessionDetailModal({
                       style={{ maxHeight: DET_PHOTO_H * 0.45 }}
                       nestedScrollEnabled
                     >
-                      {session.machines.map(m => {
+                      {machines.map(m => {
                         const brandTag = `[${m.machineBrand.toUpperCase().replace(/ /g, '_')}]`;
                         const namePart = m.machineName.toUpperCase().replace(/ /g, '_');
                         return (
@@ -388,10 +397,10 @@ function SessionDetailModal({
           </View>
 
           {/* 운동 노트 */}
-          {session.machines.some(m => m.note) && (
+          {machines.some(m => m.note) && (
             <View style={det.noteSection}>
               <Text style={det.sectionTitle}>운동 노트</Text>
-              {session.machines
+              {machines
                 .filter(m => m.note)
                 .map(m => (
                   <View key={m.machineId} style={det.noteSectionItem}>
@@ -406,7 +415,7 @@ function SessionDetailModal({
           {/* Stats */}
           <View style={det.statsRow}>
             {[
-              { val: session.machines.length, lab: '운동' },
+              { val: machines.length, lab: '운동' },
               { val: totalSets,               lab: '세트'      },
               { val: vol > 0 ? (vol / 1000).toFixed(1) : '--', lab: '볼륨' },
             ].map((item, i, arr) => (
@@ -435,7 +444,7 @@ function SessionDetailModal({
           {/* 운동 루틴 */}
           <Text style={det.sectionTitle}>운동 루틴</Text>
           <View style={det.routineCard}>
-            {session.machines.map((m, i) => {
+            {machines.map((m, i) => {
               const isPR      = prMachines.has(m.machineId);
               const brandKey  = m.machineBrand.toUpperCase().replace(/\s+/g, '_');
               const brandLogo = brandLogos[brandKey];
