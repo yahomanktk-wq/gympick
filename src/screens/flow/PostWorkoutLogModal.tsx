@@ -1597,9 +1597,48 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
               mediaTypes: ['images'],
               allowsEditing: false,
               quality: 0.9,
+              exif: true,
             });
             if (!result.canceled && result.assets[0]) {
-              setPhotoUri(result.assets[0].uri);
+              const asset = result.assets[0];
+
+              // 당일 촬영 사진만 허용
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+
+              // creationTime (ms) 또는 exif DateTimeOriginal 로 날짜 확인
+              let photoDate: Date | null = null;
+              if (asset.exif?.DateTimeOriginal) {
+                // exif 형식: "2026:04:25 14:30:00"
+                const raw = asset.exif.DateTimeOriginal as string;
+                const [datePart, timePart] = raw.split(' ');
+                const [y, m, d] = datePart.split(':');
+                photoDate = new Date(`${y}-${m}-${d}T${timePart}`);
+              } else if ((asset as any).creationTime) {
+                photoDate = new Date((asset as any).creationTime);
+              }
+
+              // 날짜 확인 불가하거나 오늘이 아니면 차단
+              if (!photoDate) {
+                Alert.alert(
+                  '사진 확인 불가',
+                  '촬영 날짜를 확인할 수 없는 사진은 업로드할 수 없어요.',
+                  [{ text: '확인' }],
+                );
+                return;
+              }
+
+              photoDate.setHours(0, 0, 0, 0);
+              if (photoDate.getTime() !== today.getTime()) {
+                Alert.alert(
+                  '오늘 사진만 선택 가능',
+                  '운동 인증샷은 오늘 촬영한 사진만 업로드할 수 있어요.',
+                  [{ text: '확인' }],
+                );
+                return;
+              }
+
+              setPhotoUri(asset.uri);
               setPhotoTaken(true);
             }
           },
