@@ -109,8 +109,6 @@ export default function MachineCard({ machine, width, variant = 'detail' }: Prop
           <Text
             style={[s.machineName, isGrid && s.machineNameGrid]}
             numberOfLines={2}
-            adjustsFontSizeToFit
-            minimumFontScale={isGrid ? 0.6 : 0.65}
             textBreakStrategy="balanced"
           >
             {machine.displayName ?? machine.name}
