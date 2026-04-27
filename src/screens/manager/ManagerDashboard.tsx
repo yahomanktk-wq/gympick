@@ -33,6 +33,7 @@ import { getRequestsByGymId, markRequestAsRead } from '../../data/gymRequestStor
 import type { GymRequest } from '../../data/gymRequestStore';
 import { getManagedGymById, getGymMachineIds, updateGymMachines } from '../../data/managedGymStore';
 import { FREE_WEIGHTS } from '../../data/freeWeights';
+import { submitGymRegistrationRequest } from '../../lib/db/gymRegistrationRequests';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -1153,7 +1154,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
 
   // ─── Register helpers ─────────────────────────────────────────────────────
 
-  const submitRegistration = useCallback(() => {
+  const submitRegistration = useCallback(async () => {
     if (submitting) return;
     if (!regForm.name.trim() || !regForm.location.trim()) {
       Alert.alert('입력 오류', '헬스장 이름과 위치는 필수 항목입니다.');
@@ -1165,6 +1166,26 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
       return;
     }
     setSubmitting(true);
+
+    const notes = [
+      regForm.phone       ? `전화: ${regForm.phone}`           : '',
+      regForm.hours       ? `운영시간: ${regForm.hours}`        : '',
+      regForm.description ? regForm.description                : '',
+    ].filter(Boolean).join('\n');
+
+    const { error } = await submitGymRegistrationRequest(
+      user?.id ?? '',
+      regForm.name.trim(),
+      regForm.location.trim(),
+      notes,
+    );
+
+    if (error) {
+      Alert.alert('오류', '등록 신청 중 오류가 발생했습니다.\n' + error);
+      setSubmitting(false);
+      return;
+    }
+
     const newGym: ManagedGym = {
       id: uid(), ...regForm, hours: serializeHours(regHours),
       machineIds: [], managerId: user?.id ?? 'u2',
