@@ -20,8 +20,7 @@ import MachineCard       from '../components/MachineCard';
 import MachineCardBorder from '../components/MachineCardBorder';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const CARD_W        = (SCREEN_W - 32 - 8) / 2;
-const CARD_INNER_W  = CARD_W - 4; // MachineCardBorder borderWidth(2) * 2
+const CARD_W = (SCREEN_W - 32 - 8) / 2;
 
 // --- Mock data
 
@@ -218,12 +217,12 @@ export default function FavoritesScreen({ onClose }: { onClose: () => void }) {
                 {filteredMachines.map(m => (
                   <TouchableOpacity
                     key={m.id}
-                    style={{ position: 'relative' }}
+                    style={{ width: CARD_W, position: 'relative' }}
                     activeOpacity={0.85}
                     onPress={() => setSelectedMachine(m)}
                   >
-                    <MachineCardBorder width={CARD_W}>
-                      <MachineCard machine={m} variant="grid" width={CARD_INNER_W} />
+                    <MachineCardBorder>
+                      <MachineCard machine={m} variant="grid" width={CARD_W} />
                     </MachineCardBorder>
                     <TouchableOpacity
                       style={st.removeOverlay}
