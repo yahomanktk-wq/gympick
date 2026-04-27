@@ -195,7 +195,7 @@ function GymRequestsView({
     <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
       <TouchableOpacity onPress={onBack} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <Ionicons name="chevron-back" size={20} color={C.text} />
-        <Text style={{ fontSize: 16, fontWeight: '800', color: C.text }}>헬스장 등록 요청</Text>
+        <Text style={{ fontSize: 16, fontWeight: '800', color: C.text }}>헬스장 신규 등록 제안(유저)</Text>
       </TouchableOpacity>
 
       <Text style={{ fontSize: 12, fontWeight: '700', color: C.textDim, letterSpacing: 1 }}>검토 대기 ({pending.length})</Text>
@@ -265,7 +265,7 @@ function HomeView({ pendingGymCount, pendingEditCount, openFlagCount, gymReportC
       {[
         {
           icon: 'business-outline' as const,
-          title: '헬스장 등록 승인 대기',
+          title: '헬스장 등록 심사 대기(매니저)',
           count: pendingGymCount,
           sub: `${pendingGymCount}개 검토 대기`,
           onPress: () => onPush('pending-gyms'),
@@ -329,7 +329,7 @@ function HomeView({ pendingGymCount, pendingEditCount, openFlagCount, gymReportC
         },
         {
           icon: 'business-outline' as const,
-          title: '헬스장 등록 요청',
+          title: '헬스장 신규 등록 제안(유저)',
           count: gymRequestCount,
           sub: gymRequestCount > 0 ? `${gymRequestCount}개 검토 대기` : '접수된 요청 없음',
           onPress: () => onPush('gym-registration-requests'),
@@ -1452,10 +1452,32 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     setFlaggedItems(prev => prev.map(f => f.id === item.id ? { ...f, status: 'resolved' } : f));
   }, []);
 
-  const handleApproveGym  = useCallback((id: string) => {
+  const handleApproveGym  = useCallback(async (id: string) => {
     updateGymStatus(id, 'approved');
     setGymList(prev => prev.map(g => g.id === id ? { ...g, status: 'approved' } : g));
-  }, []);
+
+    const gym = pendingGyms.find(g => g.id === id);
+    if (!gym) return;
+
+    try {
+      const { supabase } = await import('../../lib/supabase');
+      const newGymId = `g${Date.now()}`;
+      const { error } = await supabase.from('gyms').insert({
+        id:          newGymId,
+        name:        gym.name,
+        location:    gym.location,
+        description: gym.description ?? '',
+      });
+      if (error) {
+        if (__DEV__) console.warn('[AdminDashboard] 헬스장 등록 실패:', error.message);
+        Alert.alert('등록 오류', '헬스장 승인은 완료되었으나 DB 등록에 실패했습니다.\n수동으로 등록해주세요.');
+        return;
+      }
+      Alert.alert('승인 완료', `${gym.name}이(가) 승인되어 등록되었습니다.`);
+    } catch (e: any) {
+      if (__DEV__) console.warn('[AdminDashboard] 헬스장 등록 오류:', e);
+    }
+  }, [pendingGyms]);
 
   const handleRejectGym   = useCallback((id: string) => {
     updateGymStatus(id, 'rejected');
@@ -1520,7 +1542,7 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     'gym-reports':       '정보 제보 관리',
     'manager-requests':  '매니저 신청 관리',
     'register-gym':               '헬스장 직접 등록',
-    'gym-registration-requests':  '헬스장 등록 요청',
+    'gym-registration-requests':  '헬스장 신규 등록 제안(유저)',
   };
 
   // --- Render
