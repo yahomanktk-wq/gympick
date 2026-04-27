@@ -710,6 +710,13 @@ function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onR
     }, 100);
   }
 
+  function handleCopyPrev() {
+    onCopyPrev();
+    setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  }
+
   return (
     <SafeAreaView style={s.safe}>
       <NavHeader title="세트 기록" onBack={onBack} onClose={onClose} />
@@ -721,7 +728,7 @@ function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onR
           sets={sets}
           onChange={onChange}
           onAdd={handleAdd}
-          onCopyPrev={onCopyPrev}
+          onCopyPrev={handleCopyPrev}
           onRemove={onRemove}
         />
 
