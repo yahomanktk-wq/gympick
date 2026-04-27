@@ -63,9 +63,7 @@ const RECENT_PRS = [
 ];
 
 const SETTINGS_LIST: { icon: IoniconName; label: string; toggle?: boolean; danger?: boolean; privacy?: boolean }[] = [
-  { icon: 'notifications-outline',  label: '알림',               toggle: true  },
   { icon: 'barbell-outline',        label: '단위 (kg / lbs)'                   },
-  { icon: 'heart-outline',          label: '건강 앱 연동'                       },
   { icon: 'document-text-outline',  label: '개인정보처리방침',   privacy: true  },
   { icon: 'help-circle-outline',    label: '도움말 및 피드백'                   },
   { icon: 'log-out-outline',        label: '로그아웃',            danger: true  },
@@ -341,7 +339,23 @@ function DevRoleSwitcher({ currentRole, onSwitch }: { currentRole: UserRole; onS
 
 export default function ProfileScreen() {
   const nav = useNavigation<any>();
-  const { user, switchRole, signOut, updateNickname, updateProfileImage } = useAuth();
+  const { user, switchRole, signOut, updateNickname, updateProfileImage, updateWeightUnit } = useAuth();
+
+  function handleSettingPress(label: string) {
+    if (label === '단위 (kg / lbs)') {
+      const current = user?.weightUnit ?? 'kg';
+      const next = current === 'kg' ? 'lbs' : 'kg';
+      Alert.alert(
+        '단위 설정',
+        `현재: ${current}\n${next}로 변경하시겠어요?`,
+        [
+          { text: '취소', style: 'cancel' },
+          { text: '변경', onPress: () => updateWeightUnit(next) },
+        ]
+      );
+      return;
+    }
+  }
   const [showManager,       setShowManager]       = useState(false);
   const [showAdmin,         setShowAdmin]         = useState(false);
   const [showFavorites,     setShowFavorites]     = useState(false);
@@ -585,7 +599,7 @@ export default function ProfileScreen() {
             <View style={styles.settingIcon}>
               <Ionicons name="bar-chart-outline" size={16} color={C.textSub} />
             </View>
-            <Text style={styles.settingLabel}>운동 분석</Text>
+            <Text style={styles.settingLabel}>3대 PR 분석</Text>
             <Ionicons name="chevron-forward" size={15} color={C.textDim} />
           </TouchableOpacity>
         </View>
@@ -597,9 +611,15 @@ export default function ProfileScreen() {
             <React.Fragment key={s.label}>
               <SettingRow
                 {...s}
+                label={
+                  s.label === '단위 (kg / lbs)'
+                    ? `단위 (${user?.weightUnit ?? 'kg'})`
+                    : s.label
+                }
                 onPress={
                   s.label === '로그아웃' ? signOut
                   : s.privacy ? () => setShowPrivacy(true)
+                  : s.label === '단위 (kg / lbs)' ? () => handleSettingPress(s.label)
                   : undefined
                 }
               />

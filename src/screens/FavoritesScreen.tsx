@@ -16,7 +16,8 @@ import { getFavoriteMachineIds, removeFavoriteMachine } from '../data/favoritesS
 import { getGymFavorites, removeGymFavorite } from '../data/gymFavoriteStore';
 import GymDetailModal     from './flow/GymDetailModal';
 import MachineDetailModal from './flow/MachineDetailModal';
-import SelectableMachineCard from '../components/SelectableMachineCard';
+import MachineCard       from '../components/MachineCard';
+import MachineCardBorder from '../components/MachineCardBorder';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W = (SCREEN_W - 32 - 8) / 2;
@@ -214,14 +215,15 @@ export default function FavoritesScreen({ onClose }: { onClose: () => void }) {
             ) : (
               <View style={st.machineGrid}>
                 {filteredMachines.map(m => (
-                  <View key={m.id} style={{ position: 'relative' }}>
-                    <SelectableMachineCard
-                      machine={m}
-                      width={CARD_W}
-                      selected={false}
-                      completed={false}
-                      onSelect={() => setSelectedMachine(m)}
-                    />
+                  <TouchableOpacity
+                    key={m.id}
+                    style={{ position: 'relative' }}
+                    activeOpacity={0.85}
+                    onPress={() => setSelectedMachine(m)}
+                  >
+                    <MachineCardBorder width={CARD_W}>
+                      <MachineCard machine={m} variant="grid" width={CARD_W} />
+                    </MachineCardBorder>
                     <TouchableOpacity
                       style={st.removeOverlay}
                       onPress={() => removeMachine(m.id)}
@@ -229,7 +231,7 @@ export default function FavoritesScreen({ onClose }: { onClose: () => void }) {
                     >
                       <Ionicons name="heart" size={14} color="#ff4d6d" />
                     </TouchableOpacity>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             )}
