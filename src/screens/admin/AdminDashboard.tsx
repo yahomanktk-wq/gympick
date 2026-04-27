@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -52,6 +52,11 @@ import {
   type AdminRegisteredGym,
 } from '../../data/adminGymStore';
 import MachineCard from '../../components/MachineCard';
+import {
+  fetchGymRegistrationRequests,
+  updateGymRequestStatus,
+  type GymRegistrationRequest,
+} from '../../lib/db/gymRegistrationRequests';
 
 const SCREEN_W     = Dimensions.get('window').width;
 const CAT_CARD_W   = Math.floor((SCREEN_W - 40 - 12) / 2);
@@ -60,7 +65,7 @@ const CAT_BRANDS   = ['All', ...Array.from(new Set(MACHINES.map(m => m.brand))).
 
 // --- Types
 
-type AdminView = 'home' | 'pending-gyms' | 'gym-detail' | 'pending-edits' | 'flagged' | 'machine-catalog' | 'brand-copyright' | 'gym-reports' | 'manager-requests' | 'register-gym';
+type AdminView = 'home' | 'pending-gyms' | 'gym-detail' | 'pending-edits' | 'flagged' | 'machine-catalog' | 'brand-copyright' | 'gym-reports' | 'manager-requests' | 'register-gym' | 'gym-registration-requests';
 
 // --- Shared components
 
@@ -128,6 +133,7 @@ interface HomeViewProps {
   gymReportCount: number;
   managerRequestCount: number;
   registeredGymCount: number;
+  gymRequestCount: number;
   onPush: (v: AdminView) => void;
 }
 
@@ -173,7 +179,69 @@ interface MachineCatalogViewProps {
 
 // --- Module-level view components
 
-function HomeView({ pendingGymCount, pendingEditCount, openFlagCount, gymReportCount, managerRequestCount, registeredGymCount, onPush }: HomeViewProps) {
+function GymRequestsView({
+  requests,
+  onUpdateStatus,
+  onBack,
+}: {
+  requests:       GymRegistrationRequest[];
+  onUpdateStatus: (id: string, status: 'reviewed' | 'resolved') => void;
+  onBack:         () => void;
+}) {
+  const pending  = requests.filter(r => r.status === 'pending');
+  const reviewed = requests.filter(r => r.status !== 'pending');
+
+  return (
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+      <TouchableOpacity onPress={onBack} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <Ionicons name="chevron-back" size={20} color={C.text} />
+        <Text style={{ fontSize: 16, fontWeight: '800', color: C.text }}>헬스장 등록 요청</Text>
+      </TouchableOpacity>
+
+      <Text style={{ fontSize: 12, fontWeight: '700', color: C.textDim, letterSpacing: 1 }}>검토 대기 ({pending.length})</Text>
+      {pending.length === 0 && (
+        <Text style={{ fontSize: 13, color: C.textDim, paddingVertical: 12 }}>검토 대기 중인 요청이 없어요.</Text>
+      )}
+      {pending.map(req => (
+        <View key={req.id} style={{ backgroundColor: C.surface, borderRadius: R.card, padding: 16, gap: 8 }}>
+          <Text style={{ fontSize: 15, fontWeight: '800', color: C.text }}>{req.gymName}</Text>
+          <Text style={{ fontSize: 13, color: C.textSub }}>{req.location}</Text>
+          {req.notes ? <Text style={{ fontSize: 12, color: C.textDim }}>{req.notes}</Text> : null}
+          <Text style={{ fontSize: 11, color: C.textDim }}>{new Date(req.createdAt).toLocaleDateString('ko-KR')}</Text>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+            <TouchableOpacity
+              style={{ flex: 1, padding: 10, borderRadius: R.btn, backgroundColor: C.accent, alignItems: 'center' }}
+              onPress={() => onUpdateStatus(req.id, 'reviewed')}
+            >
+              <Text style={{ color: C.bg, fontWeight: '700', fontSize: 13 }}>검토 완료</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ flex: 1, padding: 10, borderRadius: R.btn, backgroundColor: C.surface, alignItems: 'center', borderWidth: 1, borderColor: C.border }}
+              onPress={() => onUpdateStatus(req.id, 'resolved')}
+            >
+              <Text style={{ color: C.text, fontWeight: '700', fontSize: 13 }}>처리 완료</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ))}
+
+      {reviewed.length > 0 && (
+        <>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: C.textDim, letterSpacing: 1, marginTop: 8 }}>처리된 요청 ({reviewed.length})</Text>
+          {reviewed.map(req => (
+            <View key={req.id} style={{ backgroundColor: C.surface, borderRadius: R.card, padding: 16, gap: 4, opacity: 0.6 }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: C.text }}>{req.gymName}</Text>
+              <Text style={{ fontSize: 12, color: C.textSub }}>{req.location}</Text>
+              <Text style={{ fontSize: 11, color: C.accent, fontWeight: '600' }}>{req.status === 'reviewed' ? '검토 완료' : '처리 완료'}</Text>
+            </View>
+          ))}
+        </>
+      )}
+    </ScrollView>
+  );
+}
+
+function HomeView({ pendingGymCount, pendingEditCount, openFlagCount, gymReportCount, managerRequestCount, registeredGymCount, gymRequestCount, onPush }: HomeViewProps) {
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
       {/* Stats */}
@@ -258,6 +326,14 @@ function HomeView({ pendingGymCount, pendingEditCount, openFlagCount, gymReportC
           sub: registeredGymCount > 0 ? `${registeredGymCount}개 등록됨` : '새 헬스장 등록',
           onPress: () => onPush('register-gym'),
           color: '#38bdf8',
+        },
+        {
+          icon: 'business-outline' as const,
+          title: '헬스장 등록 요청',
+          count: gymRequestCount,
+          sub: gymRequestCount > 0 ? `${gymRequestCount}개 검토 대기` : '접수된 요청 없음',
+          onPress: () => onPush('gym-registration-requests'),
+          color: '#fb923c',
         },
       ].map(q => (
         <TouchableOpacity key={q.title} style={styles.queueCard} onPress={q.onPress} activeOpacity={0.85}>
@@ -1321,6 +1397,11 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
   const [gymReports,   setGymReports]    = useState<GymInfoReport[]>(() => getAllGymInfoReports());
   const [managerApps,  setManagerApps]   = useState<ManagerApplication[]>(() => getAllManagerApplications());
   const [registeredGyms, setRegisteredGyms] = useState<AdminRegisteredGym[]>(() => getAllAdminGyms());
+  const [gymRequests,    setGymRequests]    = useState<GymRegistrationRequest[]>([]);
+
+  useEffect(() => {
+    fetchGymRegistrationRequests().then(setGymRequests);
+  }, []);
 
   // --- Machine catalog state
   const [catQuery,    setCatQuery]    = useState('');
@@ -1352,6 +1433,7 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
   const gymReportCount      = gymReports.filter(r => r.status === 'pending').length;
   const managerRequestCount = managerApps.filter(a => a.status === 'pending').length;
   const registeredGymCount  = registeredGyms.length;
+  const gymRequestCount     = gymRequests.filter(r => r.status === 'pending').length;
 
   // --- Actions
 
@@ -1437,7 +1519,8 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     'brand-copyright':   '브랜드 저작권',
     'gym-reports':       '정보 제보 관리',
     'manager-requests':  '매니저 신청 관리',
-    'register-gym':      '헬스장 직접 등록',
+    'register-gym':               '헬스장 직접 등록',
+    'gym-registration-requests':  '헬스장 등록 요청',
   };
 
   // --- Render
@@ -1467,6 +1550,7 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
           gymReportCount={gymReportCount}
           managerRequestCount={managerRequestCount}
           registeredGymCount={registeredGymCount}
+          gymRequestCount={gymRequestCount}
           onPush={push}
         />
       )}
@@ -1535,6 +1619,17 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
           registeredGyms={registeredGyms}
           onSave={handleRegisterGym}
           onUpdate={handleUpdateGym}
+        />
+      )}
+      {currentView === 'gym-registration-requests' && (
+        <GymRequestsView
+          requests={gymRequests}
+          onUpdateStatus={async (id, status) => {
+            await updateGymRequestStatus(id, status);
+            const updated = await fetchGymRegistrationRequests();
+            setGymRequests(updated);
+          }}
+          onBack={pop}
         />
       )}
     </SafeAreaView>

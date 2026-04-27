@@ -189,7 +189,7 @@ export default function HomeScreen() {
     });
   }, []);
 
-  function openNearby()          { nav.navigate('Find'); }
+  function openNearby()          { nav.navigate('FindGym'); }
   function openGym(id: string)   { setGymDetailId(id); setGymDetailVisible(true); }
 
   return (

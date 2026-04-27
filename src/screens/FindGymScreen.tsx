@@ -11,6 +11,8 @@ import {
   SafeAreaView,
   StatusBar,
   Dimensions,
+  Alert,
+  Modal,
 } from 'react-native';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -19,6 +21,8 @@ const CARD_W   = (SCREEN_W - 32 - GRID_GAP) / 2;  // 16px h-padding each side
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { C, R, T } from '../theme';
+import { useAuth } from '../context/AuthContext';
+import { submitGymRegistrationRequest } from '../lib/db/gymRegistrationRequests';
 import { fetchMachines, fetchGymsWithMachines } from '../lib/db';
 import { useFetch } from '../lib/useFetch';
 import { MachineWithGyms, GymWithMachines } from '../data/types';
@@ -214,6 +218,7 @@ const RANKING_MUSCLES = ['CHEST', 'BACK', 'LEGS', 'SHOULDERS', 'ARMS', 'GLUTES']
 
 export default function FindGymScreen() {
   const nav = useNavigation<any>();
+  const { user } = useAuth();
   const flatListRef = useRef<FlatList<MachineWithGyms>>(null);
   const [keyword,          setKeyword]          = useState('');
   const [activeMuscle,     setActiveMuscle]     = useState('All');
@@ -228,6 +233,11 @@ export default function FindGymScreen() {
   const [activeTab,         setActiveTab]         = useState<'machine' | 'gym' | 'favorite'>('machine');
   const [gymFavoriteIds] = useState<string[]>(() => getGymFavorites());
   const [olympicVisible,    setOlympicVisible]    = useState(false);
+  const [showGymRequestModal, setShowGymRequestModal] = useState(false);
+  const [reqGymName,   setReqGymName]   = useState('');
+  const [reqLocation,  setReqLocation]  = useState('');
+  const [reqNotes,     setReqNotes]     = useState('');
+  const [reqLoading,   setReqLoading]   = useState(false);
 
   // --- Supabase data - falls back to mock automatically
   const { data: machinesData, loading: machinesLoading } = useFetch(() => fetchMachines(),         []);
@@ -296,6 +306,34 @@ export default function FindGymScreen() {
     setActiveMuscle('All');
     setActiveBrand('All');
     flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }
+
+  async function handleSubmitGymRequest() {
+    if (!reqGymName.trim() || !reqLocation.trim()) {
+      Alert.alert('입력 오류', '헬스장명과 위치를 입력해주세요.');
+      return;
+    }
+    if (!user) {
+      Alert.alert('로그인 필요', '로그인 후 이용해주세요.');
+      return;
+    }
+    setReqLoading(true);
+    const { error } = await submitGymRegistrationRequest(
+      user.id,
+      reqGymName.trim(),
+      reqLocation.trim(),
+      reqNotes.trim(),
+    );
+    setReqLoading(false);
+    if (error) {
+      Alert.alert('오류', error);
+      return;
+    }
+    Alert.alert('신청 완료', '헬스장 등록 요청이 접수되었습니다.\n검토 후 등록해드리겠습니다.');
+    setShowGymRequestModal(false);
+    setReqGymName('');
+    setReqLocation('');
+    setReqNotes('');
   }
 
   // --- Filtered machines
@@ -605,6 +643,16 @@ export default function FindGymScreen() {
               />
             ))
           ))}
+          {activeTab === 'gym' && (
+            <TouchableOpacity
+              style={s.gymRequestBtn}
+              onPress={() => setShowGymRequestModal(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="add-circle-outline" size={18} color={C.accent} />
+              <Text style={s.gymRequestBtnText}>내 헬스장 등록 요청하기</Text>
+            </TouchableOpacity>
+          )}
           <View style={{ height: 32 }} />
         </ScrollView>
       )}
@@ -682,6 +730,65 @@ export default function FindGymScreen() {
         visible={olympicVisible}
         onClose={() => setOlympicVisible(false)}
       />
+
+      <Modal visible={showGymRequestModal} transparent animationType="slide" onRequestClose={() => setShowGymRequestModal(false)}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <View style={{ backgroundColor: C.bg, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, gap: 16 }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: C.text }}>헬스장 등록 요청</Text>
+
+            <View style={{ gap: 8 }}>
+              <Text style={{ fontSize: 12, color: C.textSub, fontWeight: '600' }}>헬스장명 *</Text>
+              <TextInput
+                value={reqGymName}
+                onChangeText={setReqGymName}
+                placeholder="예) 짐픽 강남점"
+                placeholderTextColor={C.textDim}
+                style={{ backgroundColor: C.surface, borderRadius: R.inner, padding: 12, color: C.text, fontSize: 14 }}
+              />
+            </View>
+
+            <View style={{ gap: 8 }}>
+              <Text style={{ fontSize: 12, color: C.textSub, fontWeight: '600' }}>위치 *</Text>
+              <TextInput
+                value={reqLocation}
+                onChangeText={setReqLocation}
+                placeholder="예) 서울 강남구 역삼동"
+                placeholderTextColor={C.textDim}
+                style={{ backgroundColor: C.surface, borderRadius: R.inner, padding: 12, color: C.text, fontSize: 14 }}
+              />
+            </View>
+
+            <View style={{ gap: 8 }}>
+              <Text style={{ fontSize: 12, color: C.textSub, fontWeight: '600' }}>기타사항</Text>
+              <TextInput
+                value={reqNotes}
+                onChangeText={setReqNotes}
+                placeholder="추가로 알려주실 내용이 있으면 입력해주세요"
+                placeholderTextColor={C.textDim}
+                multiline
+                numberOfLines={3}
+                style={{ backgroundColor: C.surface, borderRadius: R.inner, padding: 12, color: C.text, fontSize: 14, minHeight: 80, textAlignVertical: 'top' }}
+              />
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity
+                style={{ flex: 1, padding: 14, borderRadius: R.btn, backgroundColor: C.surface, alignItems: 'center' }}
+                onPress={() => setShowGymRequestModal(false)}
+              >
+                <Text style={{ color: C.textSub, fontWeight: '700' }}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 1, padding: 14, borderRadius: R.btn, backgroundColor: C.accent, alignItems: 'center' }}
+                onPress={handleSubmitGymRequest}
+                disabled={reqLoading}
+              >
+                <Text style={{ color: C.bg, fontWeight: '800' }}>{reqLoading ? '신청 중...' : '신청하기'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -895,5 +1002,24 @@ const s = StyleSheet.create({
     color:      C.textDim,
     marginTop:  8,
     marginBottom: 16,
+  },
+
+  gymRequestBtn: {
+    flexDirection:    'row',
+    alignItems:       'center',
+    justifyContent:   'center',
+    gap:              8,
+    marginHorizontal: 0,
+    marginVertical:   16,
+    paddingVertical:  14,
+    borderRadius:     R.card,
+    borderWidth:      1,
+    borderColor:      C.accent,
+    borderStyle:      'dashed',
+  },
+  gymRequestBtnText: {
+    fontSize:   14,
+    fontWeight: '700',
+    color:      C.accent,
   },
 });
