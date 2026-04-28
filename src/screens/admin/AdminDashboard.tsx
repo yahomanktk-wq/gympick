@@ -1427,8 +1427,26 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
   }, [catSelected]);
 
   // --- Counts
+  // gymRequests에서 매니저 요청을 PendingGym 형태로 변환
+  const managerGymRequests: PendingGym[] = gymRequests
+    .filter(r => (r.requesterRole ?? 'user') === 'manager')
+    .map(r => ({
+      id:          r.id,
+      name:        r.gymName,
+      location:    r.location,
+      description: r.notes ?? '',
+      phone:       '',
+      website:     '',
+      hours:       '',
+      managerId:   r.userId,
+      managerName: r.userId,
+      submittedAt: r.createdAt,
+      status:      r.status === 'pending' ? 'pending' : 'approved' as ReviewStatus,
+    }));
+
   const pendingGymCount     = pendingGyms.filter(g => g.status === 'pending').length
-                            + gymList.filter(g => g.status === 'pending').length;
+                            + gymList.filter(g => g.status === 'pending').length
+                            + managerGymRequests.filter(g => g.status === 'pending').length;
   const pendingEditCount    = pendingEdits.filter(e => e.status === 'pending').length
                             + editList.filter(e => e.status === 'pending').length;
   const openFlagCount       = flaggedItems.filter(f => f.status === 'open').length;
@@ -1558,7 +1576,7 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
       )}
       {currentView === 'pending-gyms' && (
         <PendingGymsView
-          pendingGyms={pendingGyms}
+          pendingGyms={[...pendingGyms, ...managerGymRequests]}
           gymList={gymList}
           onSelectGym={handleSelectGym}
           onApproveGym={handleApproveGym}
