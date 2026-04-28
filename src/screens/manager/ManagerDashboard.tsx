@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -1009,10 +1009,51 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
     setViewStack(p => p.slice(0, -1));
   }, [viewStack.length, onClose]);
 
-  // Gyms — fall back to all MANAGED_GYMS so the UI is testable with any role
+  // Gyms — Supabase에서 manager_id로 조회 + Mock fallback
   const userGyms = MANAGED_GYMS.filter(g => g.managerId === (user?.id ?? ''));
   const myGyms   = userGyms.length > 0 ? userGyms : MANAGED_GYMS;
   const [gyms, setGyms]               = useState<ManagedGym[]>(myGyms);
+
+  // Supabase에서 승인된 헬스장 로딩
+  useEffect(() => {
+    if (!user?.id) return;
+    async function loadApprovedGyms() {
+      try {
+        const { supabase } = await import('../../lib/supabase');
+        const { data, error } = await supabase
+          .from('gyms')
+          .select('*')
+          .eq('manager_id', user!.id);
+
+        if (error || !data || data.length === 0) return;
+
+        const approvedGyms: ManagedGym[] = data.map((g: any) => ({
+          id:          g.id,
+          name:        g.name,
+          location:    g.location,
+          address:     g.location,
+          phone:       g.phone ?? '',
+          website:     g.website ?? '',
+          hours:       g.hours ?? '',
+          description: g.description ?? '',
+          managerId:   g.manager_id,
+          machineIds:  [],
+          status:      'approved' as const,
+          submittedAt: g.created_at?.slice(0, 10) ?? '',
+          photoCount:  0,
+        }));
+
+        setGyms(prev => {
+          const existingIds = new Set(prev.map(g => g.id));
+          const newGyms = approvedGyms.filter(g => !existingIds.has(g.id));
+          return [...newGyms, ...prev];
+        });
+      } catch (e: any) {
+        console.warn('[ManagerDashboard] 헬스장 로딩 오류:', e.message);
+      }
+    }
+    loadApprovedGyms();
+  }, [user?.id]);
   const [selectedGym, setSelectedGym] = useState<ManagedGym | null>(null);
 
   // Register form

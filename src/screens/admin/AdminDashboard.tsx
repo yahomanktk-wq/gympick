@@ -1476,6 +1476,7 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
         name:        gym.name,
         location:    gym.location,
         description: gym.description ?? '',
+        manager_id:  gym.managerId ?? null,
       });
       if (error) {
         Alert.alert('등록 오류', '승인은 완료되었으나 헬스장 DB 등록에 실패했습니다. ' + error.message);
