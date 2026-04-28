@@ -1447,12 +1447,11 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
       await updateGymRequestStatus(id, 'reviewed');
       setGymRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'reviewed' } : r));
 
-      // 신청자 role을 manager로 업데이트
+      // 신청자 role을 manager로 업데이트 (row 없으면 생성)
       if (gym.managerId) {
         await supabase
           .from('profiles')
-          .update({ role: 'manager' })
-          .eq('id', gym.managerId);
+          .upsert({ id: gym.managerId, role: 'manager' });
       }
 
       Alert.alert('승인 완료', `${gym.name}이(가) 승인되어 등록되었습니다.`);
