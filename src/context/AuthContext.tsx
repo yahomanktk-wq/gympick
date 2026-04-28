@@ -83,7 +83,7 @@ function mapSupabaseUser(sbUser: SupabaseUser, profileData?: ProfileData): AuthU
     name:            sbUser.user_metadata?.name ?? sbUser.email?.split('@')[0] ?? 'User',
     nickname:        profileData?.nickname ?? sbUser.user_metadata?.nickname,
     email:           sbUser.email ?? '',
-    role:            'user',
+    role:            (profileData?.role ?? 'user') as UserRole,
     managedGymIds:   [],
     profileImageUrl: profileData?.avatarUrl,
   };
@@ -103,6 +103,34 @@ async function fetchProfileData(userId: string): Promise<ProfileData> {
     };
   } catch {
     return {};
+  }
+}
+
+async function ensureProfileExists(sbUser: SupabaseUser): Promise<void> {
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', sbUser.id)
+      .single();
+
+    if (!data) {
+      // profiles row 없으면 생성
+      await supabase.from('profiles').insert({
+        id:    sbUser.id,
+        email: sbUser.email ?? '',
+        name:  sbUser.user_metadata?.name ?? sbUser.email?.split('@')[0] ?? 'User',
+        role:  'user',
+      });
+    }
+  } catch {
+    // row 없어서 에러 → 생성 시도
+    await supabase.from('profiles').upsert({
+      id:    sbUser.id,
+      email: sbUser.email ?? '',
+      name:  sbUser.user_metadata?.name ?? sbUser.email?.split('@')[0] ?? 'User',
+      role:  'user',
+    });
   }
 }
 
@@ -174,6 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (error) return { error: error.message };
     if (data.user) {
+      await ensureProfileExists(data.user);
       const profileData = await fetchProfileData(data.user.id);
       setUser(mapSupabaseUser(data.user, profileData));
     }
@@ -297,6 +326,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
           if (sessionError) return { error: sessionError.message };
           if (sessionData.user) {
+            await ensureProfileExists(sessionData.user);
             const profileData = await fetchProfileData(sessionData.user.id);
             setUser(mapSupabaseUser(sessionData.user, profileData));
           }
@@ -353,6 +383,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (error) return { error: error.message };
       if (data.user) {
+        await ensureProfileExists(data.user);
         const profileData = await fetchProfileData(data.user.id);
         setUser(mapSupabaseUser(data.user, profileData));
       }
