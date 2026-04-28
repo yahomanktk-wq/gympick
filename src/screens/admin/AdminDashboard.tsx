@@ -379,120 +379,50 @@ function HomeView({ pendingGymCount, pendingEditCount, openFlagCount, gymReportC
 }
 
 function PendingGymsView({ pendingGyms, gymList, onSelectGym, onApproveGym, onRejectGym }: PendingGymsViewProps) {
-  const legacyPending  = pendingGyms.filter(g => g.status === 'pending');
-  const legacyReviewed = pendingGyms.filter(g => g.status !== 'pending');
-  const regPending     = gymList.filter(g => g.status === 'pending').length;
+  // 모든 신청 건을 하나로 통합 (pendingGyms + gymList)
+  const allPending  = pendingGyms.filter(g => g.status === 'pending');
+  const allReviewed = pendingGyms.filter(g => g.status !== 'pending');
+
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
-      {/* ── 신규 등록 신청 (gymRegistrationStore) ── */}
+      {/* ── 신규 등록 신청 (전체) ── */}
       <Text style={styles.sectionTitle}>신규 등록 신청</Text>
-      <Text style={styles.sectionSub}>{regPending}개 검토 대기</Text>
+      <Text style={styles.sectionSub}>{allPending.length}개 검토 대기</Text>
 
-      {gymList.length === 0 && <EmptyQueue label="신규 등록 신청이 없어요" />}
+      {allPending.length === 0 && <EmptyQueue label="신규 등록 신청이 없어요" />}
 
-      {gymList.map(gym => {
-        const isPending  = gym.status === 'pending';
-        const isApproved = gym.status === 'approved';
-        const badgeColor = isApproved ? C.accent : C.danger;
-        const badgeBg    = isApproved ? C.accentBg : C.dangerBg;
-        const badgeLabel = isApproved ? '승인됨' : '거절됨';
-        return (
-          <View key={gym.id} style={[styles.pendingCard, !isPending && { opacity: 0.65 }]}>
-            <View style={styles.pendingCardTop}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.pendingName}>{gym.name}</Text>
-                <View style={styles.locRow}>
-                  <Ionicons name="location-outline" size={11} color={C.textSub} />
-                  <Text style={styles.locText}>{gym.location}</Text>
-                </View>
+      {allPending.map(gym => (
+        <TouchableOpacity
+          key={gym.id}
+          style={styles.pendingCard}
+          onPress={() => onSelectGym(gym)}
+          activeOpacity={0.85}
+        >
+          <View style={styles.pendingCardTop}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.pendingName}>{gym.name}</Text>
+              <View style={styles.locRow}>
+                <Ionicons name="location-outline" size={11} color={C.textSub} />
+                <Text style={styles.locText}>{gym.location}</Text>
               </View>
-              {!isPending && (
-                <View style={[styles.reviewedBadge, { backgroundColor: badgeBg }]}>
-                  <Text style={[styles.reviewedBadgeText, { color: badgeColor }]}>{badgeLabel}</Text>
-                </View>
-              )}
             </View>
-            <View style={styles.submittedRow}>
-              <Ionicons name="person-outline" size={11} color={C.textSub} />
-              <Text style={styles.submittedText}>신청자: {gym.managerName} · {gym.submittedAt.slice(0, 10)}</Text>
-            </View>
-            {isPending && (
-              <ReviewButtons
-                onApprove={() => onApproveGym(gym.id)}
-                onReject={() => onRejectGym(gym.id)}
-              />
-            )}
+            <Ionicons name="chevron-forward" size={16} color={C.textDim} />
           </View>
-        );
-      })}
+          {gym.description ? (
+            <Text style={styles.pendingDesc} numberOfLines={2}>{gym.description}</Text>
+          ) : null}
+          <View style={styles.submittedRow}>
+            <Ionicons name="person-outline" size={11} color={C.textSub} />
+            <Text style={styles.submittedText}>신청자: {gym.managerName} · {gym.submittedAt.slice(0, 10)}</Text>
+          </View>
+          <ReviewButtons
+            onApprove={() => onApproveGym(gym.id)}
+            onReject={() => onRejectGym(gym.id)}
+          />
+        </TouchableOpacity>
+      ))}
 
-      {/* ── 기존 대기 목록 (mockAdmin) ── */}
-      {(legacyPending.length > 0 || legacyReviewed.length > 0) && (
-        <>
-          <Text style={[styles.sectionTitle, { marginTop: 24 }]}>등록 대기 (기존)</Text>
-          <Text style={styles.sectionSub}>{legacyPending.length}개 검토 대기</Text>
-
-          {legacyPending.length === 0 && <EmptyQueue label="모든 등록이 검토되었어요" />}
-
-          {legacyPending.map(gym => (
-            <TouchableOpacity
-              key={gym.id}
-              style={styles.pendingCard}
-              onPress={() => onSelectGym(gym)}
-              activeOpacity={0.85}
-            >
-              <View style={styles.pendingCardTop}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.pendingName}>{gym.name}</Text>
-                  <View style={styles.locRow}>
-                    <Ionicons name="location-outline" size={11} color={C.textSub} />
-                    <Text style={styles.locText}>{gym.location}</Text>
-                  </View>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={C.textDim} />
-              </View>
-              <Text style={styles.pendingDesc} numberOfLines={2}>{gym.description}</Text>
-              <View style={styles.submittedRow}>
-                <Ionicons name="person-outline" size={11} color={C.textSub} />
-                <Text style={styles.submittedText}>신청자: {gym.managerName} · {gym.submittedAt}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-
-          {legacyReviewed.length > 0 && (
-            <>
-              <Text style={[styles.sectionTitle, { marginTop: 20, fontSize: 12, color: C.textDim }]}>처리 완료</Text>
-              {legacyReviewed.map(gym => {
-                const isApproved = gym.status === 'approved';
-                const badgeColor = isApproved ? C.accent : C.danger;
-                const badgeBg    = isApproved ? C.accentBg : C.dangerBg;
-                const badgeLabel = isApproved ? '승인됨' : '거절됨';
-                return (
-                  <View key={gym.id} style={[styles.pendingCard, { opacity: 0.65 }]}>
-                    <View style={styles.pendingCardTop}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.pendingName}>{gym.name}</Text>
-                        <View style={styles.locRow}>
-                          <Ionicons name="location-outline" size={11} color={C.textSub} />
-                          <Text style={styles.locText}>{gym.location}</Text>
-                        </View>
-                      </View>
-                      <View style={[styles.reviewedBadge, { backgroundColor: badgeBg }]}>
-                        <Text style={[styles.reviewedBadgeText, { color: badgeColor }]}>{badgeLabel}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.submittedRow}>
-                      <Ionicons name="person-outline" size={11} color={C.textSub} />
-                      <Text style={styles.submittedText}>신청자: {gym.managerName} · {gym.submittedAt}</Text>
-                    </View>
-                  </View>
-                );
-              })}
-            </>
-          )}
-        </>
-      )}
     </ScrollView>
   );
 }
@@ -1426,8 +1356,7 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     setCatSelected(new Set());
   }, [catSelected]);
 
-  // --- Counts
-  // gymRequests에서 매니저 요청을 PendingGym 형태로 변환
+  // --- 매니저 요청을 PendingGym 형태로 변환
   const managerGymRequests: PendingGym[] = gymRequests
     .filter(r => (r.requesterRole ?? 'user') === 'manager')
     .map(r => ({
@@ -1441,9 +1370,10 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
       managerId:   r.userId,
       managerName: r.userId,
       submittedAt: r.createdAt,
-      status:      r.status === 'pending' ? 'pending' : 'approved' as ReviewStatus,
+      status:      (r.status === 'pending' ? 'pending' : 'approved') as ReviewStatus,
     }));
 
+  // --- Counts
   const pendingGymCount     = pendingGyms.filter(g => g.status === 'pending').length
                             + gymList.filter(g => g.status === 'pending').length
                             + managerGymRequests.filter(g => g.status === 'pending').length;
@@ -1472,10 +1402,64 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     setFlaggedItems(prev => prev.map(f => f.id === item.id ? { ...f, status: 'resolved' } : f));
   }, []);
 
-  const handleApproveGym  = useCallback((id: string) => {
+  const handleApproveGym  = useCallback(async (id: string) => {
+    // 로컬 상태 업데이트
     updateGymStatus(id, 'approved');
     setGymList(prev => prev.map(g => g.id === id ? { ...g, status: 'approved' } : g));
-  }, []);
+    setPendingGyms(prev => prev.map(g => g.id === id ? { ...g, status: 'approved' as ReviewStatus } : g));
+
+    // 승인된 헬스장 찾기 (pendingGyms + gymRequests 매니저 요청에서)
+    const managerReqs: PendingGym[] = gymRequests
+      .filter(r => (r.requesterRole ?? 'user') === 'manager')
+      .map(r => ({
+        id:          r.id,
+        name:        r.gymName,
+        location:    r.location,
+        description: r.notes ?? '',
+        phone:       '',
+        website:     '',
+        hours:       '',
+        managerId:   r.userId,
+        managerName: r.userId,
+        submittedAt: r.createdAt,
+        status:      'pending' as ReviewStatus,
+      }));
+    const allGyms = [...pendingGyms, ...managerReqs];
+    const gym = allGyms.find(g => g.id === id);
+    if (!gym) return;
+
+    try {
+      const { supabase } = await import('../../lib/supabase');
+      const newGymId = `g_${Date.now()}`;
+      const { error } = await supabase.from('gyms').insert({
+        id:          newGymId,
+        name:        gym.name,
+        location:    gym.location,
+        description: gym.description ?? '',
+      });
+      if (error) {
+        Alert.alert('등록 오류', '승인은 완료되었으나 헬스장 DB 등록에 실패했습니다. ' + error.message);
+        return;
+      }
+
+      // gym_registration_requests 상태도 업데이트
+      const { updateGymRequestStatus } = await import('../../lib/db/gymRegistrationRequests');
+      await updateGymRequestStatus(id, 'reviewed');
+      setGymRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'reviewed' } : r));
+
+      // 신청자 role을 manager로 업데이트
+      if (gym.managerId) {
+        await supabase
+          .from('profiles')
+          .update({ role: 'manager' })
+          .eq('id', gym.managerId);
+      }
+
+      Alert.alert('승인 완료', `${gym.name}이(가) 승인되어 등록되었습니다.`);
+    } catch (e: any) {
+      if (__DEV__) console.warn('[AdminDashboard] 헬스장 등록 오류:', e);
+    }
+  }, [pendingGyms, gymRequests]);
 
   const handleRejectGym   = useCallback((id: string) => {
     updateGymStatus(id, 'rejected');

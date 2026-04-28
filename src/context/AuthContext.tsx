@@ -17,7 +17,6 @@ export interface AuthUser {
   managedGymIds: string[];
   gymId?: string;
   profileImageUrl?: string;
-  weightUnit?: 'kg' | 'lbs';
 }
 
 interface AuthContextValue {
@@ -34,7 +33,6 @@ interface AuthContextValue {
   switchRole:         (role: UserRole) => void;
   updateNickname:     (nickname: string) => Promise<{ error: string | null }>;
   updateProfileImage: (url: string) => void;
-  updateWeightUnit:   (unit: 'kg' | 'lbs') => Promise<void>;
 }
 
 // --- Mock users
@@ -72,9 +70,9 @@ const MOCK_CREDENTIALS: Record<string, { user: AuthUser; password: string }> = {
 };
 
 interface ProfileData {
-  avatarUrl?:  string;
-  nickname?:   string;
-  weightUnit?: 'kg' | 'lbs';
+  avatarUrl?: string;
+  nickname?:  string;
+  role?:      'user' | 'manager' | 'admin';
 }
 
 function mapSupabaseUser(sbUser: SupabaseUser, profileData?: ProfileData): AuthUser {
@@ -88,7 +86,6 @@ function mapSupabaseUser(sbUser: SupabaseUser, profileData?: ProfileData): AuthU
     role:            'user',
     managedGymIds:   [],
     profileImageUrl: profileData?.avatarUrl,
-    weightUnit:      profileData?.weightUnit ?? 'kg',
   };
 }
 
@@ -96,13 +93,13 @@ async function fetchProfileData(userId: string): Promise<ProfileData> {
   try {
     const { data } = await supabase
       .from('profiles')
-      .select('avatar_url, nickname, weight_unit')
+      .select('avatar_url, nickname, role')
       .eq('id', userId)
       .single();
     return {
-      avatarUrl:  data?.avatar_url  ?? undefined,
-      nickname:   data?.nickname    ?? undefined,
-      weightUnit: (data?.weight_unit as 'kg' | 'lbs') ?? 'kg',
+      avatarUrl: data?.avatar_url ?? undefined,
+      nickname:  data?.nickname   ?? undefined,
+      role:      data?.role       ?? undefined,
     };
   } catch {
     return {};
@@ -122,7 +119,6 @@ const AuthContext = createContext<AuthContextValue>({
   switchRole:         () => {},
   updateNickname:     async () => ({ error: null }),
   updateProfileImage: () => {},
-  updateWeightUnit:   async () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -256,14 +252,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(prev => prev ? { ...prev, profileImageUrl: url } : prev);
   };
 
-  const updateWeightUnit = async (unit: 'kg' | 'lbs') => {
-    if (!user) return;
-    if (supabaseConfigured) {
-      await supabase.from('profiles').upsert({ id: user.id, weight_unit: unit });
-    }
-    setUser(prev => prev ? { ...prev, weightUnit: unit } : prev);
-  };
-
   const signInGoogle = async (): Promise<{ error: string | null }> => {
     try {
       if (!supabaseConfigured) {
@@ -389,7 +377,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       switchRole:         role => setUser(MOCK_USERS[role]),
       updateNickname,
       updateProfileImage,
-      updateWeightUnit,
     }}>
       {children}
     </AuthContext.Provider>
