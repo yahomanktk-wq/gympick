@@ -150,7 +150,7 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
     });
   }, [gymMachines, machineMuscleFilter, machineBrandFilter]);
 
-  if (!gymId || !gym || !details) return null;
+  if (!gymId || !gym) return null;
 
   const machineForDetail = selectedMachineId
     ? gym.machines.find(m => m.id === selectedMachineId) ?? null
@@ -292,7 +292,7 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
                 <View style={s.infoIcon}>
                   <Ionicons name="call-outline" size={14} color={C.accent} />
                 </View>
-                <Text style={s.infoText}>{details.phone}</Text>
+                <Text style={s.infoText}>{details?.phone || '정보 없음'}</Text>
               </View>
               <View style={[s.infoRow, { marginTop: 12 }]}>
                 <View style={s.infoIcon}>
@@ -305,11 +305,15 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
             {/* ── Operating hours ── */}
             <Text style={s.sectionTitle}>영업 시간</Text>
             <View style={s.card}>
-              <HoursTable hours={details.hours} />
+              {details?.hours ? (
+                <HoursTable hours={details.hours} />
+              ) : (
+                <Text style={[s.infoText, { padding: 16 }]}>운영시간 정보 없음</Text>
+              )}
             </View>
 
             {/* ── Notices ── */}
-            {details.notices.length > 0 && (
+            {details?.notices && details.notices.length > 0 && (
               <React.Fragment>
                 <Text style={s.sectionTitle}>공지사항</Text>
                 <View style={s.card}>
@@ -328,18 +332,22 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
             )}
 
             {/* ── Pricing ── */}
-            <Text style={s.sectionTitle}>이용 요금</Text>
-            <View style={s.card}>
-              {details.pricing.map((tier, i) => (
-                <View key={i} style={[s.priceRow, i > 0 && s.priceBorder]}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.priceLabel}>{tier.label}</Text>
-                    {tier.note && <Text style={s.priceNote}>{tier.note}</Text>}
-                  </View>
-                  <Text style={s.priceValue}>{tier.price}</Text>
+            {details?.pricing && details.pricing.length > 0 ? (
+              <React.Fragment>
+                <Text style={s.sectionTitle}>이용 요금</Text>
+                <View style={s.card}>
+                  {details.pricing.map((tier, i) => (
+                    <View key={i} style={[s.priceRow, i > 0 && s.priceBorder]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.priceLabel}>{tier.label}</Text>
+                        {tier.note && <Text style={s.priceNote}>{tier.note}</Text>}
+                      </View>
+                      <Text style={s.priceValue}>{tier.price}</Text>
+                    </View>
+                  ))}
                 </View>
-              ))}
-            </View>
+              </React.Fragment>
+            ) : null}
 
 
 
