@@ -16,13 +16,14 @@ import { supabase } from '../supabase';
 // CREATE POLICY "gym_req_read_own" ON gym_registration_requests FOR SELECT USING (auth.uid()::text = user_id);
 
 export interface GymRegistrationRequest {
-  id:        string;
-  userId:    string;
-  gymName:   string;
-  location:  string;
-  notes:     string;
-  status:    'pending' | 'reviewed' | 'resolved';
-  createdAt: string;
+  id:            string;
+  userId:        string;
+  gymName:       string;
+  location:      string;
+  notes:         string;
+  status:        'pending' | 'reviewed' | 'resolved';
+  requesterRole: 'user' | 'manager';
+  createdAt:     string;
 }
 
 export async function submitGymRegistrationRequest(
@@ -30,16 +31,18 @@ export async function submitGymRegistrationRequest(
   gymName: string,
   location: string,
   notes: string,
+  requesterRole: 'user' | 'manager' = 'user',
 ): Promise<{ error: string | null }> {
   try {
     const { error } = await supabase
       .from('gym_registration_requests')
       .insert({
-        user_id:  userId,
-        gym_name: gymName,
+        user_id:        userId,
+        gym_name:       gymName,
         location,
         notes,
-        status:   'pending',
+        status:         'pending',
+        requester_role: requesterRole,
       });
     if (error) return { error: error.message };
     return { error: null };
@@ -56,13 +59,14 @@ export async function fetchGymRegistrationRequests(): Promise<GymRegistrationReq
 
   if (error || !data) return [];
   return data.map(r => ({
-    id:        r.id,
-    userId:    r.user_id,
-    gymName:   r.gym_name,
-    location:  r.location,
-    notes:     r.notes ?? '',
-    status:    r.status,
-    createdAt: r.created_at,
+    id:            r.id,
+    userId:        r.user_id,
+    gymName:       r.gym_name,
+    location:      r.location,
+    notes:         r.notes ?? '',
+    status:        r.status,
+    requesterRole: r.requester_role ?? 'user',
+    createdAt:     r.created_at,
   }));
 }
 

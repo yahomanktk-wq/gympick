@@ -1178,6 +1178,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
       regForm.name.trim(),
       regForm.location.trim(),
       notes,
+      'manager',
     );
 
     if (error) {

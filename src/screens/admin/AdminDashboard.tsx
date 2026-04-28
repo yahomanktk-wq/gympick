@@ -188,8 +188,10 @@ function GymRequestsView({
   onUpdateStatus: (id: string, status: 'reviewed' | 'resolved') => void;
   onBack:         () => void;
 }) {
-  const pending  = requests.filter(r => r.status === 'pending');
-  const reviewed = requests.filter(r => r.status !== 'pending');
+  // 유저 요청만 표시
+  const userRequests = requests.filter(r => (r.requesterRole ?? 'user') === 'user');
+  const pending  = userRequests.filter(r => r.status === 'pending');
+  const reviewed = userRequests.filter(r => r.status !== 'pending');
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
@@ -1433,7 +1435,7 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
   const gymReportCount      = gymReports.filter(r => r.status === 'pending').length;
   const managerRequestCount = managerApps.filter(a => a.status === 'pending').length;
   const registeredGymCount  = registeredGyms.length;
-  const gymRequestCount     = gymRequests.filter(r => r.status === 'pending').length;
+  const gymRequestCount     = gymRequests.filter(r => r.status === 'pending' && (r.requesterRole ?? 'user') === 'user').length;
 
   // --- Actions
 
@@ -1452,32 +1454,10 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     setFlaggedItems(prev => prev.map(f => f.id === item.id ? { ...f, status: 'resolved' } : f));
   }, []);
 
-  const handleApproveGym  = useCallback(async (id: string) => {
+  const handleApproveGym  = useCallback((id: string) => {
     updateGymStatus(id, 'approved');
     setGymList(prev => prev.map(g => g.id === id ? { ...g, status: 'approved' } : g));
-
-    const gym = pendingGyms.find(g => g.id === id);
-    if (!gym) return;
-
-    try {
-      const { supabase } = await import('../../lib/supabase');
-      const newGymId = `g${Date.now()}`;
-      const { error } = await supabase.from('gyms').insert({
-        id:          newGymId,
-        name:        gym.name,
-        location:    gym.location,
-        description: gym.description ?? '',
-      });
-      if (error) {
-        if (__DEV__) console.warn('[AdminDashboard] 헬스장 등록 실패:', error.message);
-        Alert.alert('등록 오류', '헬스장 승인은 완료되었으나 DB 등록에 실패했습니다.\n수동으로 등록해주세요.');
-        return;
-      }
-      Alert.alert('승인 완료', `${gym.name}이(가) 승인되어 등록되었습니다.`);
-    } catch (e: any) {
-      if (__DEV__) console.warn('[AdminDashboard] 헬스장 등록 오류:', e);
-    }
-  }, [pendingGyms]);
+  }, []);
 
   const handleRejectGym   = useCallback((id: string) => {
     updateGymStatus(id, 'rejected');
