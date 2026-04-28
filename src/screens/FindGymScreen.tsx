@@ -13,6 +13,8 @@ import {
   Dimensions,
   Alert,
   Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 
 const SCREEN_W = Dimensions.get('window').width;

@@ -47,6 +47,22 @@ export default function ManagerRequestModal({ visible, userId, onClose }: Props)
     if (!gymName.trim() || !location.trim()) return;
     setLoading(true);
     try {
+      // Supabase manager_requests 테이블에 저장
+      const { supabase } = await import('../../lib/supabase');
+      const { error } = await supabase.from('manager_requests').insert({
+        user_id:  userId,
+        gym_name: gymName.trim(),
+        location: location.trim(),
+        phone:    phone.trim(),
+        message:  message.trim(),
+        status:   'pending',
+      });
+
+      if (error) {
+        console.warn('[ManagerRequestModal] Supabase 저장 실패:', error.message);
+      }
+
+      // 로컬 Mock에도 저장 (Fallback)
       addManagerApplication({
         applicantUserId: userId,
         applicantName: user?.name ?? user?.nickname ?? userId,
@@ -55,8 +71,10 @@ export default function ManagerRequestModal({ visible, userId, onClose }: Props)
         phone: phone.trim(),
         message: message.trim(),
       });
+
       setStep('complete');
-    } catch {
+    } catch (e: any) {
+      console.warn('[ManagerRequestModal] 오류:', e.message);
       setStep('complete');
     } finally {
       setLoading(false);

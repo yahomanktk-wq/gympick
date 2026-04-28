@@ -17,12 +17,12 @@ export default function App() {
     <AuthProvider>
       <SafeAreaProvider>
         <NavigationContainer>
-          <Stack.Navigator screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="Main"              component={TabNavigator}            />
-            <Stack.Screen name="WorkoutFeed"      component={WorkoutFeedScreen}       />
-            <Stack.Screen name="WorkoutAnalytics" component={WorkoutAnalyticsScreen}  />
-            <Stack.Screen name="MachineRanking"   component={MachineRankingScreen}    />
-            <Stack.Screen name="MachineHistory"   component={MachineHistoryScreen}    />
+          <Stack.Navigator screenOptions={{ headerShown: false, gestureEnabled: false }}>
+            <Stack.Screen name="Main"              component={TabNavigator}            options={{ gestureEnabled: false }} />
+            <Stack.Screen name="WorkoutFeed"      component={WorkoutFeedScreen}       options={{ gestureEnabled: true, fullScreenGestureEnabled: true }} />
+            <Stack.Screen name="WorkoutAnalytics" component={WorkoutAnalyticsScreen}  options={{ gestureEnabled: true, fullScreenGestureEnabled: true }} />
+            <Stack.Screen name="MachineRanking"   component={MachineRankingScreen}    options={{ gestureEnabled: true, fullScreenGestureEnabled: true }} />
+            <Stack.Screen name="MachineHistory"   component={MachineHistoryScreen}    options={{ gestureEnabled: true, fullScreenGestureEnabled: true }} />
           </Stack.Navigator>
         </NavigationContainer>
         <StatusBar style="light" />

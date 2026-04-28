@@ -393,34 +393,37 @@ function PendingGymsView({ pendingGyms, gymList, onSelectGym, onApproveGym, onRe
       {allPending.length === 0 && <EmptyQueue label="신규 등록 신청이 없어요" />}
 
       {allPending.map(gym => (
-        <TouchableOpacity
+        <View
           key={gym.id}
           style={styles.pendingCard}
-          onPress={() => onSelectGym(gym)}
-          activeOpacity={0.85}
         >
-          <View style={styles.pendingCardTop}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.pendingName}>{gym.name}</Text>
-              <View style={styles.locRow}>
-                <Ionicons name="location-outline" size={11} color={C.textSub} />
-                <Text style={styles.locText}>{gym.location}</Text>
+          <TouchableOpacity
+            onPress={() => onSelectGym(gym)}
+            activeOpacity={0.85}
+          >
+            <View style={styles.pendingCardTop}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.pendingName}>{gym.name}</Text>
+                <View style={styles.locRow}>
+                  <Ionicons name="location-outline" size={11} color={C.textSub} />
+                  <Text style={styles.locText}>{gym.location}</Text>
+                </View>
               </View>
+              <Ionicons name="chevron-forward" size={16} color={C.textDim} />
             </View>
-            <Ionicons name="chevron-forward" size={16} color={C.textDim} />
-          </View>
-          {gym.description ? (
-            <Text style={styles.pendingDesc} numberOfLines={2}>{gym.description}</Text>
-          ) : null}
-          <View style={styles.submittedRow}>
-            <Ionicons name="person-outline" size={11} color={C.textSub} />
-            <Text style={styles.submittedText}>신청자: {gym.managerName} · {gym.submittedAt.slice(0, 10)}</Text>
-          </View>
+            {gym.description ? (
+              <Text style={styles.pendingDesc} numberOfLines={2}>{gym.description}</Text>
+            ) : null}
+            <View style={styles.submittedRow}>
+              <Ionicons name="person-outline" size={11} color={C.textSub} />
+              <Text style={styles.submittedText}>신청자: {gym.managerName} · {gym.submittedAt.slice(0, 10)}</Text>
+            </View>
+          </TouchableOpacity>
           <ReviewButtons
             onApprove={() => onApproveGym(gym.id)}
             onReject={() => onRejectGym(gym.id)}
           />
-        </TouchableOpacity>
+        </View>
       ))}
 
     </ScrollView>
@@ -1328,6 +1331,43 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
   const [editList,     setEditList]      = useState<RegEditRequest[]>(() => getAllEditRequests());
   const [gymReports,   setGymReports]    = useState<GymInfoReport[]>(() => getAllGymInfoReports());
   const [managerApps,  setManagerApps]   = useState<ManagerApplication[]>(() => getAllManagerApplications());
+
+  // Supabase manager_requests 데이터 로딩
+  useEffect(() => {
+    async function loadManagerRequests() {
+      try {
+        const { supabase } = await import('../../lib/supabase');
+        const { data, error } = await supabase
+          .from('manager_requests')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error || !data) return;
+
+        const supabaseApps: ManagerApplication[] = data.map((r: any) => ({
+          id:              r.id,
+          applicantUserId: r.user_id,
+          applicantName:   r.user_id,
+          gymName:         r.gym_name,
+          location:        r.location,
+          phone:           r.phone ?? '',
+          message:         r.message ?? '',
+          createdAt:       r.created_at,
+          status:          r.status,
+        }));
+
+        setManagerApps(prev => {
+          // 중복 제거 후 합산
+          const existingIds = new Set(supabaseApps.map(a => a.id));
+          const localOnly = prev.filter(a => !existingIds.has(a.id));
+          return [...supabaseApps, ...localOnly];
+        });
+      } catch (e: any) {
+        console.warn('[AdminDashboard] manager_requests 로딩 오류:', e.message);
+      }
+    }
+    loadManagerRequests();
+  }, []);
   const [registeredGyms, setRegisteredGyms] = useState<AdminRegisteredGym[]>(() => getAllAdminGyms());
   const [gymRequests,    setGymRequests]    = useState<GymRegistrationRequest[]>([]);
 
@@ -1447,11 +1487,19 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
       await updateGymRequestStatus(id, 'reviewed');
       setGymRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'reviewed' } : r));
 
-      // 신청자 role을 manager로 업데이트 (row 없으면 생성)
+      // 신청자 role을 manager로 업데이트
       if (gym.managerId) {
-        await supabase
+        console.log('[AdminDashboard] role 업데이트 시도 - managerId:', gym.managerId);
+        const { data: updateData, error: updateError } = await supabase
           .from('profiles')
-          .upsert({ id: gym.managerId, role: 'manager' });
+          .update({ role: 'manager' })
+          .eq('id', gym.managerId)
+          .select();
+        console.log('[AdminDashboard] role 업데이트 결과:', updateData, updateError?.message);
+
+        if (updateError) {
+          console.warn('[AdminDashboard] role 업데이트 실패:', updateError.message);
+        }
       }
 
       Alert.alert('승인 완료', `${gym.name}이(가) 승인되어 등록되었습니다.`);
@@ -1490,10 +1538,41 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     setGymReports(getAllGymInfoReports());
   }, []);
 
-  const handleApproveApplication = useCallback((id: string) => {
+  const handleApproveApplication = useCallback(async (id: string) => {
     updateApplicationStatus(id, 'approved');
     setManagerApps(getAllManagerApplications());
-  }, []);
+
+    // Supabase에서 해당 신청 찾기
+    try {
+      const { supabase } = await import('../../lib/supabase');
+
+      // manager_requests 테이블에서 user_id 조회
+      const { data: reqData } = await supabase
+        .from('manager_requests')
+        .select('user_id')
+        .eq('id', id)
+        .single();
+
+      const targetUserId = reqData?.user_id ?? managerApps.find(a => a.id === id)?.applicantUserId;
+
+      if (targetUserId) {
+        console.log('[AdminDashboard] 매니저 승인 - userId:', targetUserId);
+        const { error } = await supabase
+          .from('profiles')
+          .update({ role: 'manager' })
+          .eq('id', targetUserId);
+        console.log('[AdminDashboard] role 업데이트:', error?.message ?? 'OK');
+
+        // manager_requests 상태도 업데이트
+        await supabase
+          .from('manager_requests')
+          .update({ status: 'approved' })
+          .eq('id', id);
+      }
+    } catch (e: any) {
+      console.warn('[AdminDashboard] 매니저 승인 오류:', e.message);
+    }
+  }, [managerApps]);
 
   const handleRejectApplication = useCallback((id: string) => {
     updateApplicationStatus(id, 'rejected');
