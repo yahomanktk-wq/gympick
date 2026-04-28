@@ -1,20 +1,5 @@
 import { supabase } from '../supabase';
 
-// -- Supabase SQL Editor에서 수동 실행 필요:
-// CREATE TABLE IF NOT EXISTS gym_registration_requests (
-//   id         TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-//   user_id    TEXT NOT NULL,
-//   gym_name   TEXT NOT NULL,
-//   location   TEXT NOT NULL,
-//   notes      TEXT DEFAULT '',
-//   status     TEXT NOT NULL DEFAULT 'pending'
-//                CHECK (status IN ('pending', 'reviewed', 'resolved')),
-//   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-// );
-// ALTER TABLE gym_registration_requests ENABLE ROW LEVEL SECURITY;
-// CREATE POLICY "gym_req_insert" ON gym_registration_requests FOR INSERT WITH CHECK (auth.uid()::text = user_id);
-// CREATE POLICY "gym_req_read_own" ON gym_registration_requests FOR SELECT USING (auth.uid()::text = user_id);
-
 export interface GymRegistrationRequest {
   id:            string;
   userId:        string;
