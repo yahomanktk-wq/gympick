@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { C, R, T } from '../theme';
 import { screenPad, cardPadH, cardPadV } from '../theme/responsive';
-import { UserRole } from '../data/types';
+import { UserRole, ManagedGym } from '../data/types';
 import { useAuth } from '../context/AuthContext';
 import { MANAGED_GYMS, PENDING_GYMS, PENDING_EDITS, FLAGGED_ITEMS } from '../data/mockAdmin';
 import ManagerDashboard from './manager/ManagerDashboard';
@@ -168,9 +168,9 @@ function BadgeCollectionSection() {
 
 // --- Manager section
 
-function ManagerSection({ onOpen }: { onOpen: () => void }) {
-  const approvedGyms = MANAGED_GYMS.filter(g => g.status === 'approved');
-  const pendingGyms  = MANAGED_GYMS.filter(g => g.status === 'pending');
+function ManagerSection({ onOpen, gyms }: { onOpen: () => void; gyms: ManagedGym[] }) {
+  const approvedGyms = gyms.filter(g => g.status === 'approved');
+  const pendingGyms  = gyms.filter(g => g.status === 'pending');
 
   return (
     <View style={styles.roleSection}>
@@ -183,7 +183,7 @@ function ManagerSection({ onOpen }: { onOpen: () => void }) {
           <View>
             <Text style={styles.roleSectionTitle}>헬스장 관리</Text>
             <Text style={styles.roleSectionSub}>
-              {MANAGED_GYMS.length} 헬스장 등록됨
+              {gyms.length} 헬스장 등록됨
             </Text>
           </View>
         </View>
@@ -194,7 +194,7 @@ function ManagerSection({ onOpen }: { onOpen: () => void }) {
       </View>
 
       {/* Gym quick-status rows */}
-      {MANAGED_GYMS.map((gym, i) => (
+      {gyms.map((gym, i) => (
         <React.Fragment key={gym.id}>
           {i > 0 && <CardDivider />}
           <TouchableOpacity style={styles.gymSummaryRow} onPress={onOpen} activeOpacity={0.75}>
@@ -369,6 +369,53 @@ export default function ProfileScreen() {
   const [nicknameInput,     setNicknameInput]     = useState('');
   const [unreadCount,       setUnreadCount]       = useState(0);
   const [uploading,         setUploading]         = useState(false);
+  const [managerGyms,       setManagerGyms]       = useState<ManagedGym[]>([]);
+
+  // 매니저 헬스장 목록 로딩 (Supabase + Mock 합치기)
+  useEffect(() => {
+    if (!user?.id || user.role !== 'manager') return;
+
+    const mockGyms = MANAGED_GYMS.filter(g => g.managerId === user.id);
+
+    async function loadGyms() {
+      try {
+        const { supabase } = await import('../lib/supabase');
+        const { data, error } = await supabase
+          .from('gyms')
+          .select('*, gym_machines(machine_id)')
+          .eq('manager_id', user!.id);
+
+        if (error || !data || data.length === 0) {
+          setManagerGyms(mockGyms.length > 0 ? mockGyms : MANAGED_GYMS);
+          return;
+        }
+
+        const supabaseGyms: ManagedGym[] = data.map((g: any) => ({
+          id:          g.id,
+          name:        g.name,
+          location:    g.location,
+          description: g.description ?? '',
+          phone:       g.phone ?? '',
+          website:     g.website ?? '',
+          hours:       g.hours ?? '',
+          managerId:   g.manager_id,
+          machineIds:  (g.gym_machines ?? []).map((gm: any) => gm.machine_id),
+          status:      'approved' as const,
+          submittedAt: g.created_at?.slice(0, 10) ?? '',
+          photoCount:  0,
+        }));
+
+        const existingIds = new Set(supabaseGyms.map(g => g.id));
+        const uniqueMockGyms = mockGyms.filter(g => !existingIds.has(g.id));
+        setManagerGyms([...supabaseGyms, ...uniqueMockGyms]);
+      } catch (e: any) {
+        console.warn('[ProfileScreen] 헬스장 로딩 오류:', e.message);
+        setManagerGyms(mockGyms.length > 0 ? mockGyms : MANAGED_GYMS);
+      }
+    }
+
+    loadGyms();
+  }, [user?.id, user?.role]);
 
   const loadUnreadCount = useCallback(async () => {
     if (!user) return;
@@ -526,7 +573,7 @@ export default function ProfileScreen() {
         {user.role === 'manager' && (
           <>
             <SectionLabel text="헬스장 관리" />
-            <ManagerSection onOpen={() => setShowManager(true)} />
+            <ManagerSection onOpen={() => setShowManager(true)} gyms={managerGyms} />
             <View style={{ height: 28 }} />
           </>
         )}
