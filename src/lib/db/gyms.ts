@@ -10,6 +10,8 @@ type GymRow = {
   name:        string;
   location:    string;
   description: string;
+  latitude?:   number | null;
+  longitude?:  number | null;
 };
 
 function rowToGym(row: GymRow): Gym {
@@ -18,6 +20,8 @@ function rowToGym(row: GymRow): Gym {
     name:        row.name,
     location:    row.location,
     description: row.description,
+    latitude:    row.latitude  ?? null,
+    longitude:   row.longitude ?? null,
   };
 }
 
@@ -27,7 +31,7 @@ function rowToGym(row: GymRow): Gym {
 export async function fetchGyms(): Promise<Gym[]> {
   const { data, error } = await supabase
     .from('gyms')
-    .select('id, name, location, description')
+    .select('id, name, location, description, latitude, longitude')
     .order('name');
 
   if (error || !data?.length) {
@@ -41,7 +45,7 @@ export async function fetchGyms(): Promise<Gym[]> {
 export async function fetchGym(id: string): Promise<Gym | undefined> {
   const { data, error } = await supabase
     .from('gyms')
-    .select('id, name, location, description')
+    .select('id, name, location, description, latitude, longitude')
     .eq('id', id)
     .single();
 

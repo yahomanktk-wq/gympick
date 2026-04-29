@@ -30,6 +30,8 @@ export interface Gym {
   name:        string;
   location:    string;
   description: string;
+  latitude?:   number | null;
+  longitude?:  number | null;
 }
 
 // --- machines

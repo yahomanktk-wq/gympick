@@ -57,6 +57,7 @@ import {
   updateGymRequestStatus,
   type GymRegistrationRequest,
 } from '../../lib/db/gymRegistrationRequests';
+import { geocodeAddress } from '../../lib/geocoding';
 
 const SCREEN_W     = Dimensions.get('window').width;
 const CAT_CARD_W   = Math.floor((SCREEN_W - 40 - 12) / 2);
@@ -1471,12 +1472,15 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     try {
       const { supabase } = await import('../../lib/supabase');
       const newGymId = `g_${Date.now()}`;
+      const coords = await geocodeAddress(gym.location);
       const { error } = await supabase.from('gyms').insert({
         id:          newGymId,
         name:        gym.name,
         location:    gym.location,
         description: gym.description ?? '',
         manager_id:  gym.managerId ?? null,
+        latitude:    coords?.latitude  ?? null,
+        longitude:   coords?.longitude ?? null,
       });
       if (error) {
         Alert.alert('등록 오류', '승인은 완료되었으나 헬스장 DB 등록에 실패했습니다. ' + error.message);

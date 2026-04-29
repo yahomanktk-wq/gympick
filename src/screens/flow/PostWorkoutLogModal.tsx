@@ -19,7 +19,7 @@ import * as MediaLibrary from 'expo-media-library';
 import { captureRef } from 'react-native-view-shot';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T } from '../../theme';
-import { GYMS_WITH_MACHINES, GymWithMachines, Machine, MACHINES } from '../../data';
+import { GymWithMachines, Machine, MACHINES } from '../../data';
 import { MOCK_SESSIONS, getMachinePRsFull } from '../../data/workoutSessions';
 import { WorkoutLog } from '../../data/types';
 import { addNewSession } from '../../data/sessionStore';
@@ -41,6 +41,9 @@ import MachineCard from '../../components/MachineCard';
 import MachineCardBorder from '../../components/MachineCardBorder';
 import { FREE_WEIGHTS } from '../../data/freeWeights';
 import { fetchFreeWeights, fetchWorkoutLogs } from '../../lib/db';
+import * as Location from 'expo-location';
+import { calcDistanceKm, formatDistance } from '../../lib/geocoding';
+import { fetchGymsWithMachines } from '../../lib/db/gyms';
 
 // --- Types
 
@@ -84,28 +87,9 @@ const LOGO_STRIP_W = Math.round(LOGO_STRIP_H * (2805 / 279)); // ≈ 141px
 // Safe padding inside the overlay
 const OVERLAY_PAD = 20;
 
-const MOCK_DIST: Record<string, { dist: string; distNum: number }> = {
-  g01: { dist: '0.3 km', distNum: 0.3 },
-  g02: { dist: '0.9 km', distNum: 0.9 },
-  g03: { dist: '1.1 km', distNum: 1.1 },
-  g04: { dist: '1.4 km', distNum: 1.4 },
-  g05: { dist: '2.0 km', distNum: 2.0 },
-  g06: { dist: '2.3 km', distNum: 2.3 },
-  g07: { dist: '3.1 km', distNum: 3.1 },
-  g08: { dist: '4.5 km', distNum: 4.5 },
-};
-
 // Fixed presets as specified
 const WEIGHT_PRESETS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 140, 160, 180, 200];
 const REPS_PRESETS   = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20];
-
-function getDist(id: string) {
-  return MOCK_DIST[id] ?? { dist: '? km', distNum: 99 };
-}
-
-const GYM_LIST = [...GYMS_WITH_MACHINES].sort(
-  (a, b) => getDist(a.id).distNum - getDist(b.id).distNum,
-);
 
 // Global machine lookup map for resolving routine machines not in current gym
 const ALL_MACHINES_MAP: Record<string, Machine> = Object.fromEntries(
@@ -284,31 +268,99 @@ function GymSelectStep({ onSelect, onClose }: {
   onSelect: (gym: GymWithMachines) => void;
   onClose: () => void;
 }) {
+  const [gyms,         setGyms]         = useState<GymWithMachines[]>([]);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [loading,      setLoading]      = useState(true);
+  const [locError,     setLocError]     = useState(false);
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+
+      const gymList = await fetchGymsWithMachines();
+
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          const userLat = loc.coords.latitude;
+          const userLon = loc.coords.longitude;
+          setUserLocation({ latitude: userLat, longitude: userLon });
+
+          const sorted = [...gymList].sort((a, b) => {
+            const distA = (a.latitude != null && a.longitude != null)
+              ? calcDistanceKm(userLat, userLon, a.latitude, a.longitude)
+              : 9999;
+            const distB = (b.latitude != null && b.longitude != null)
+              ? calcDistanceKm(userLat, userLon, b.latitude, b.longitude)
+              : 9999;
+            return distA - distB;
+          });
+          setGyms(sorted);
+        } else {
+          setLocError(true);
+          setGyms(gymList);
+        }
+      } catch {
+        setLocError(true);
+        setGyms(gymList);
+      }
+
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  function getDistLabel(gym: GymWithMachines): string {
+    if (!userLocation || gym.latitude == null || gym.longitude == null) return '';
+    const km = calcDistanceKm(userLocation.latitude, userLocation.longitude, gym.latitude, gym.longitude);
+    return formatDistance(km);
+  }
+
   return (
     <SafeAreaView style={s.safe}>
       <NavHeader title="어디서 운동했나요?" onClose={onClose} />
       <StepBar total={5} current={0} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
         <Text style={s.hint}>오늘 운동한 헬스장을 선택하세요</Text>
-        {GYM_LIST.map(gym => {
-          const machineCount = gym.machines.length;
-          return (
-            <TouchableOpacity key={gym.id} style={s.gymCard} activeOpacity={0.8} onPress={() => onSelect(gym)}>
-              <View style={{ flex: 1, paddingLeft: 14 }}>
-                <Text style={s.gymCardName}>{gym.name}</Text>
-                <View style={s.gymMeta}>
-                  <Ionicons name="location-outline" size={12} color={C.textSub} />
-                  <Text style={s.gymMetaLoc}>{gym.location}</Text>
-                  <Text style={s.dot}>·</Text>
-                  <Ionicons name="navigate-outline" size={11} color={C.accent} />
-                  <Text style={s.gymMetaDist}>{getDist(gym.id).dist}</Text>
+
+        {locError && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12, backgroundColor: C.surfaceHigh, borderRadius: R.inner, padding: 10 }}>
+            <Ionicons name="location-outline" size={13} color={C.textSub} />
+            <Text style={{ fontSize: 12, color: C.textSub }}>위치 권한이 없어 거리 정보를 표시할 수 없어요</Text>
+          </View>
+        )}
+
+        {loading ? (
+          <View style={{ paddingVertical: 48, alignItems: 'center' }}>
+            <Text style={{ fontSize: 13, color: C.textDim }}>헬스장 목록 로딩 중...</Text>
+          </View>
+        ) : (
+          gyms.map(gym => {
+            const distLabel    = getDistLabel(gym);
+            const machineCount = gym.machines.length;
+            return (
+              <TouchableOpacity key={gym.id} style={s.gymCard} activeOpacity={0.8} onPress={() => onSelect(gym)}>
+                <View style={{ flex: 1, paddingLeft: 14 }}>
+                  <Text style={s.gymCardName}>{gym.name}</Text>
+                  <View style={s.gymMeta}>
+                    <Ionicons name="location-outline" size={12} color={C.textSub} />
+                    <Text style={s.gymMetaLoc}>{gym.location}</Text>
+                    {distLabel ? (
+                      <>
+                        <Text style={s.dot}>·</Text>
+                        <Ionicons name="navigate-outline" size={11} color={C.accent} />
+                        <Text style={s.gymMetaDist}>{distLabel}</Text>
+                      </>
+                    ) : null}
+                  </View>
+                  <Text style={s.gymMachineCount}>{machineCount} 머신</Text>
                 </View>
-                <Text style={s.gymMachineCount}>{machineCount} 머신</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={C.textDim} style={{ alignSelf: 'center' }} />
-            </TouchableOpacity>
-          );
-        })}
+                <Ionicons name="chevron-forward" size={16} color={C.textDim} style={{ alignSelf: 'center' }} />
+              </TouchableOpacity>
+            );
+          })
+        )}
       </ScrollView>
     </SafeAreaView>
   );
