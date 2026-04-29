@@ -1,11 +1,12 @@
-const KAKAO_API_KEY = process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY ?? '';
+// 카카오 REST API 키 (하드코딩 — Expo Go 환경변수 런타임 미지원 대응)
+const KAKAO_API_KEY = '9f0b2658cebf8693772d95d9f11c697f';
 
 /**
  * 주소 문자열을 카카오 Geocoding API로 위도/경도로 변환한다.
  * 실패하면 null 반환.
  */
 export async function geocodeAddress(address: string): Promise<{ latitude: number; longitude: number } | null> {
-  if (!address.trim() || !KAKAO_API_KEY) return null;
+  if (!address.trim()) return null;
 
   try {
     const url = `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(address)}`;
@@ -13,11 +14,17 @@ export async function geocodeAddress(address: string): Promise<{ latitude: numbe
       headers: { Authorization: `KakaoAK ${KAKAO_API_KEY}` },
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      if (__DEV__) console.warn('[geocoding] 카카오 API 응답 오류:', res.status);
+      return null;
+    }
 
     const json = await res.json();
     const doc  = json?.documents?.[0];
-    if (!doc) return null;
+    if (!doc) {
+      if (__DEV__) console.warn('[geocoding] 주소 검색 결과 없음:', address);
+      return null;
+    }
 
     const latitude  = parseFloat(doc.y);
     const longitude = parseFloat(doc.x);

@@ -342,17 +342,18 @@ function GymSelectStep({ onSelect, onClose }: {
             return (
               <TouchableOpacity key={gym.id} style={s.gymCard} activeOpacity={0.8} onPress={() => onSelect(gym)}>
                 <View style={{ flex: 1, paddingLeft: 14 }}>
-                  <Text style={s.gymCardName}>{gym.name}</Text>
-                  <View style={s.gymMeta}>
-                    <Ionicons name="location-outline" size={12} color={C.textSub} />
-                    <Text style={s.gymMetaLoc}>{gym.location}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={[s.gymCardName, { flex: 1 }]} numberOfLines={1}>{gym.name}</Text>
                     {distLabel ? (
-                      <>
-                        <Text style={s.dot}>·</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
                         <Ionicons name="navigate-outline" size={11} color={C.accent} />
                         <Text style={s.gymMetaDist}>{distLabel}</Text>
-                      </>
+                      </View>
                     ) : null}
+                  </View>
+                  <View style={s.gymMeta}>
+                    <Ionicons name="location-outline" size={12} color={C.textSub} />
+                    <Text style={s.gymMetaLoc} numberOfLines={1}>{gym.location}</Text>
                   </View>
                   <Text style={s.gymMachineCount}>{machineCount} 머신</Text>
                 </View>

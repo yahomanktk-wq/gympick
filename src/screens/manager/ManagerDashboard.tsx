@@ -35,6 +35,7 @@ import { getManagedGymById, getGymMachineIds, updateGymMachines } from '../../da
 import { FREE_WEIGHTS } from '../../data/freeWeights';
 import { submitGymRegistrationRequest } from '../../lib/db/gymRegistrationRequests';
 import { fetchGymMachineIds, saveGymMachineIds } from '../../lib/db/gymMachines';
+import { geocodeAddress } from '../../lib/geocoding';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -1216,7 +1217,19 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
       Alert.alert('이미 등록 요청 중', '현재 검토 중인 헬스장 등록 요청이 있습니다.');
       return;
     }
+
+    // 주소 검증 — 카카오 Geocoding으로 좌표 확인
     setSubmitting(true);
+    const coords = await geocodeAddress(regForm.location.trim());
+    if (!coords) {
+      setSubmitting(false);
+      Alert.alert(
+        '주소를 확인해주세요',
+        `"${regForm.location.trim()}" 주소를 찾을 수 없어요.\n\n도로명 주소나 지번 주소를 정확하게 입력해주세요.\n예) 서울 강남구 테헤란로 152`,
+        [{ text: '확인', style: 'default' }],
+      );
+      return;
+    }
 
     const notes = [
       regForm.phone       ? `전화: ${regForm.phone}`           : '',

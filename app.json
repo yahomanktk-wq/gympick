@@ -49,7 +49,8 @@
     "extra": {
       "eas": {
         "projectId": "86787298-1093-4a67-ab35-e769813842fe"
-      }
+      },
+      "kakaoRestApiKey": "9f0b2658cebf8693772d95d9f11c697f"
     },
     "plugins": [
       [

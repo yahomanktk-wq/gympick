@@ -38,8 +38,10 @@ import MachineDetailModal from './flow/MachineDetailModal';
 import MachineCard        from '../components/MachineCard';
 import MachineCardBorder  from '../components/MachineCardBorder';
 import OlympicNavigator   from './olympic/OlympicNavigator';
+import * as Location from 'expo-location';
+import { calcDistanceKm, formatDistance } from '../lib/geocoding';
 
-// --- Mock distances
+// --- Mock distances (영업 중 여부만 사용, 거리는 GPS로 대체)
 
 const MOCK_DIST: Record<string, { dist: string; distNum: number; open: boolean }> = {
   g01: { dist: '0.3 km', distNum: 0.3, open: true  },
@@ -139,10 +141,12 @@ function SectionHead({ title, count }: { title: string; count: number }) {
 function GymCard({
   gym,
   matchCount,
+  distLabel,
   onPress,
 }: {
   gym:        GymWithMachines;
   matchCount: number;
+  distLabel:  string;
   onPress:    () => void;
 }) {
   const meta = getDist(gym.id);
@@ -162,10 +166,12 @@ function GymCard({
           <Text style={s.gymCardLoc}>{gym.location}</Text>
         </View>
         <View style={s.gymCardFooter}>
-          <View style={s.distBadge}>
-            <Ionicons name="navigate-outline" size={10} color={C.accent} />
-            <Text style={s.distText}>{meta.dist}</Text>
-          </View>
+          {distLabel ? (
+            <View style={s.distBadge}>
+              <Ionicons name="navigate-outline" size={10} color={C.accent} />
+              <Text style={s.distText}>{distLabel}</Text>
+            </View>
+          ) : null}
           <Text style={s.gymMatchText}>
             {matchCount} 머신
           </Text>
@@ -240,6 +246,20 @@ export default function FindGymScreen() {
   const [reqLocation,  setReqLocation]  = useState('');
   const [reqNotes,     setReqNotes]     = useState('');
   const [reqLoading,   setReqLoading]   = useState(false);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+
+  // GPS 위치 요청
+  useEffect(() => {
+    async function loadLocation() {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+      } catch {}
+    }
+    loadLocation();
+  }, []);
 
   // --- Supabase data - falls back to mock automatically
   const { data: machinesData, loading: machinesLoading } = useFetch(() => fetchMachines(),         []);
@@ -360,8 +380,23 @@ export default function FindGymScreen() {
     const kw = keyword.trim().toLowerCase();
     return allGyms
       .filter(gym => !kw || gym.name.toLowerCase().includes(kw))
-      .sort((a, b) => getDist(a.id).distNum - getDist(b.id).distNum);
-  }, [allGyms, keyword]);
+      .sort((a, b) => {
+        if (!userLocation) return getDist(a.id).distNum - getDist(b.id).distNum;
+        const distA = (a.latitude != null && a.longitude != null)
+          ? calcDistanceKm(userLocation.latitude, userLocation.longitude, a.latitude, a.longitude)
+          : 9999;
+        const distB = (b.latitude != null && b.longitude != null)
+          ? calcDistanceKm(userLocation.latitude, userLocation.longitude, b.latitude, b.longitude)
+          : 9999;
+        return distA - distB;
+      });
+  }, [allGyms, keyword, userLocation]);
+
+  function getDistLabel(gym: GymWithMachines): string {
+    if (!userLocation || gym.latitude == null || gym.longitude == null) return '';
+    const km = calcDistanceKm(userLocation.latitude, userLocation.longitude, gym.latitude, gym.longitude);
+    return formatDistance(km);
+  }
 
   const favTabMachines = useMemo(
     () => allMachines.filter(m => favorites.has(m.id)),
@@ -638,6 +673,7 @@ export default function FindGymScreen() {
                 key={gym.id}
                 gym={gym}
                 matchCount={gym.machines.length}
+                distLabel={getDistLabel(gym)}
                 onPress={() => {
                   setGymDetailId(gym.id);
                   setGymDetailVisible(true);
@@ -695,6 +731,7 @@ export default function FindGymScreen() {
                       key={gym.id}
                       gym={gym}
                       matchCount={gym.machines.length}
+                      distLabel={getDistLabel(gym)}
                       onPress={() => {
                         setGymDetailId(gym.id);
                         setGymDetailVisible(true);
