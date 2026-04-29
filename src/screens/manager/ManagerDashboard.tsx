@@ -317,6 +317,7 @@ interface RegisterViewProps {
   submitting: boolean;
   serializeHours: (h: OperatingHours) => string;
   onSubmit: () => void;
+  onNextStep: () => void;
   onBack: () => void;
 }
 
@@ -459,7 +460,7 @@ function HomeView({ gyms, onOpenEdit, onOpenMachines, onOpenManage, onRegister }
 
 function RegisterView({
   step, setStep, regForm, onChangeField, regHours, updateRegDay,
-  regNotices, toggleRegNotice, submitting, serializeHours, onSubmit, onBack,
+  regNotices, toggleRegNotice, submitting, serializeHours, onSubmit, onNextStep, onBack,
 }: RegisterViewProps) {
   if (step === 4) {
     return (
@@ -535,7 +536,7 @@ function RegisterView({
           )}
           <TouchableOpacity
             style={[styles.stepNext, step > 1 && { flex: 1 }, submitting && step === 3 && { opacity: 0.5 }]}
-            onPress={step < 3 ? () => setStep(s => s + 1) : onSubmit}
+            onPress={step < 3 ? (step === 1 ? onNextStep : () => setStep(s => s + 1)) : onSubmit}
             activeOpacity={0.88}
             disabled={submitting && step === 3}
           >
@@ -1206,6 +1207,26 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
 
   // ─── Register helpers ─────────────────────────────────────────────────────
 
+  // step 1 → 2 이동 시 주소 검증
+  const handleNextStep = useCallback(async () => {
+    if (!regForm.name.trim() || !regForm.location.trim()) {
+      Alert.alert('입력 오류', '헬스장 이름과 위치는 필수 항목입니다.');
+      return;
+    }
+    setSubmitting(true);
+    const coords = await geocodeAddress(regForm.location.trim());
+    setSubmitting(false);
+    if (!coords) {
+      Alert.alert(
+        '주소를 확인해주세요',
+        `"${regForm.location.trim()}" 주소를 찾을 수 없어요.\n\n도로명 주소나 지번 주소를 정확하게 입력해주세요.\n예) 서울 강남구 테헤란로 152`,
+        [{ text: '확인', style: 'default' }],
+      );
+      return;
+    }
+    setStep(s => s + 1);
+  }, [regForm, setStep]);
+
   const submitRegistration = useCallback(async () => {
     if (submitting) return;
     if (!regForm.name.trim() || !regForm.location.trim()) {
@@ -1217,19 +1238,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
       Alert.alert('이미 등록 요청 중', '현재 검토 중인 헬스장 등록 요청이 있습니다.');
       return;
     }
-
-    // 주소 검증 — 카카오 Geocoding으로 좌표 확인
     setSubmitting(true);
-    const coords = await geocodeAddress(regForm.location.trim());
-    if (!coords) {
-      setSubmitting(false);
-      Alert.alert(
-        '주소를 확인해주세요',
-        `"${regForm.location.trim()}" 주소를 찾을 수 없어요.\n\n도로명 주소나 지번 주소를 정확하게 입력해주세요.\n예) 서울 강남구 테헤란로 152`,
-        [{ text: '확인', style: 'default' }],
-      );
-      return;
-    }
 
     const notes = [
       regForm.phone       ? `전화: ${regForm.phone}`           : '',
@@ -1402,6 +1411,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
           submitting={submitting}
           serializeHours={serializeHours}
           onSubmit={submitRegistration}
+          onNextStep={handleNextStep}
           onBack={pop}
         />
       )}
