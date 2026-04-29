@@ -34,6 +34,7 @@ import type { GymRequest } from '../../data/gymRequestStore';
 import { getManagedGymById, getGymMachineIds, updateGymMachines } from '../../data/managedGymStore';
 import { FREE_WEIGHTS } from '../../data/freeWeights';
 import { submitGymRegistrationRequest } from '../../lib/db/gymRegistrationRequests';
+import { fetchGymMachineIds, saveGymMachineIds } from '../../lib/db/gymMachines';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -1022,7 +1023,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
         const { supabase } = await import('../../lib/supabase');
         const { data, error } = await supabase
           .from('gyms')
-          .select('*')
+          .select('*, gym_machines(machine_id)')
           .eq('manager_id', user!.id);
 
         if (error || !data || data.length === 0) return;
@@ -1037,7 +1038,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
           hours:       g.hours ?? '',
           description: g.description ?? '',
           managerId:   g.manager_id,
-          machineIds:  [],
+          machineIds:  (g.gym_machines ?? []).map((gm: any) => gm.machine_id),
           status:      'approved' as const,
           submittedAt: g.created_at?.slice(0, 10) ?? '',
           photoCount:  0,
@@ -1142,18 +1143,27 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
     push('edit');
   }, [push]);
 
-  const openMachines = useCallback((gym: ManagedGym) => {
+  const openMachines = useCallback(async (gym: ManagedGym) => {
     if (!gym) return;
-    const savedIds = getGymMachineIds(gym.id);
-    const ids = savedIds.length > 0 ? savedIds : [...(gym.machineIds ?? [])];
     setSelectedGym(gym);
-    setGymMachineIds([...ids]);
-    originalMachineIds.current = [...ids];
+    setGymMachineIds([]);
+    originalMachineIds.current = [];
     setShowSaveConfirm(false);
     setMachineMusclFilter('전체');
     setMachineBrandFilter('전체');
     setShowOwnedOnly(false);
     push('machines');
+
+    // Supabase에서 머신 ID 로딩 (push 후 비동기)
+    const supabaseIds = await fetchGymMachineIds(gym.id);
+    const localIds = getGymMachineIds(gym.id);
+    const ids = supabaseIds.length > 0
+      ? supabaseIds
+      : localIds.length > 0
+        ? localIds
+        : [...(gym.machineIds ?? [])];
+    setGymMachineIds([...ids]);
+    originalMachineIds.current = [...ids];
   }, [push]);
 
   const openManage = useCallback((gym: ManagedGym, tab: ManagerTab = 'routine') => {
@@ -1337,13 +1347,17 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
             </View>
           ) : currentView === 'machines' ? (
             <TouchableOpacity
-              onPress={() => {
-                if (selectedGym) {
-                  updateGymMachines(selectedGym.id, gymMachineIds);
-                  originalMachineIds.current = [...gymMachineIds];
-                  setShowSaveConfirm(false);
-                  Alert.alert('저장 완료', '머신 목록이 저장되었습니다.');
+              onPress={async () => {
+                if (!selectedGym) return;
+                updateGymMachines(selectedGym.id, gymMachineIds);
+                const { error } = await saveGymMachineIds(selectedGym.id, gymMachineIds);
+                if (error) {
+                  Alert.alert('저장 실패', 'Supabase 저장 중 오류가 발생했습니다.\n' + error);
+                  return;
                 }
+                originalMachineIds.current = [...gymMachineIds];
+                setShowSaveConfirm(false);
+                Alert.alert('저장 완료', '머신 목록이 저장되었습니다.');
               }}
               style={styles.headerSaveBtn}
               activeOpacity={0.8}
@@ -1418,8 +1432,14 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.saveConfirmSaveBtn}
-                    onPress={() => {
-                      if (selectedGym) updateGymMachines(selectedGym.id, gymMachineIds);
+                    onPress={async () => {
+                      if (!selectedGym) return;
+                      updateGymMachines(selectedGym.id, gymMachineIds);
+                      const { error } = await saveGymMachineIds(selectedGym.id, gymMachineIds);
+                      if (error) {
+                        Alert.alert('저장 실패', 'Supabase 저장 중 오류가 발생했습니다.\n' + error);
+                        return;
+                      }
                       originalMachineIds.current = [...gymMachineIds];
                       setShowSaveConfirm(false);
                       pop();

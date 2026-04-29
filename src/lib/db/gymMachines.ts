@@ -68,6 +68,38 @@ export async function getMachineGymIds(machineId: string): Promise<string[]> {
   return data.map((r: { gym_id: string }) => r.gym_id);
 }
 
+/**
+ * 헬스장의 머신 목록을 Supabase에 저장한다.
+ * 기존 gym_machines 레코드를 삭제 후 새로 insert (upsert 방식).
+ */
+export async function saveGymMachineIds(gymId: string, machineIds: string[]): Promise<{ error: string | null }> {
+  try {
+    const { error: deleteError } = await supabase
+      .from('gym_machines')
+      .delete()
+      .eq('gym_id', gymId);
+    if (deleteError) return { error: deleteError.message };
+
+    if (machineIds.length === 0) return { error: null };
+
+    const rows = machineIds.map(machineId => ({
+      gym_id:     gymId,
+      machine_id: machineId,
+      unit_count: 1,
+      condition:  'good',
+    }));
+
+    const { error: insertError } = await supabase
+      .from('gym_machines')
+      .insert(rows);
+    if (insertError) return { error: insertError.message };
+
+    return { error: null };
+  } catch (e: any) {
+    return { error: e.message ?? '알 수 없는 오류' };
+  }
+}
+
 /** Returns full link rows for a gym (inventory view). Falls back to mock. */
 export async function fetchGymMachineLinks(gymId: string): Promise<GymMachineLink[]> {
   const { data, error } = await supabase
