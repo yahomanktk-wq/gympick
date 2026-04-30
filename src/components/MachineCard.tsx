@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, Image as RNImage } from 'react-native';
 import { Image } from 'expo-image';
 import Svg, { Rect } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
@@ -81,11 +81,13 @@ export default function MachineCard({ machine, width, variant = 'detail' }: Prop
 
       {/* ── Background image ─────── */}
       <View style={s.imageBg}>
-        <Image
-          source={{ uri: resolvedImageUrl }}
-          style={{ width: '100%', height: '100%', backgroundColor: '#FFFFFF' }}
-          contentFit="contain"
-        />
+        <View style={{ width: '100%', height: '100%', backgroundColor: '#FFFFFF' }}>
+          <RNImage
+            source={{ uri: resolvedImageUrl }}
+            style={{ width: '100%', height: '100%' }}
+            resizeMode="contain"
+          />
+        </View>
       </View>
 
       {/* ── Copyright blur overlay ──── */}
@@ -228,13 +230,15 @@ const s = StyleSheet.create({
   },
   imageBg: {
     position:        'absolute',
-    top:             0,
-    left:            0,
-    right:           0,
-    bottom:          0,
+    top:             BORDER_INSET,
+    left:            BORDER_INSET,
+    right:           BORDER_INSET,
+    bottom:          BORDER_INSET,
     alignItems:      'center',
     justifyContent:  'center',
     backgroundColor: '#FFFFFF',
+    borderRadius:    12,
+    overflow:        'hidden',
   },
   blurOverlay: {
     position:          'absolute',

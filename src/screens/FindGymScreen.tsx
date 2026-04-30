@@ -21,7 +21,8 @@ const SCREEN_W = Dimensions.get('window').width;
 const GRID_GAP = 8;
 const CARD_W   = (SCREEN_W - 32 - GRID_GAP) / 2;  // 16px h-padding each side
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import GymMapView from '../components/GymMapView';
 import { C, R, T } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import { submitGymRegistrationRequest } from '../lib/db/gymRegistrationRequests';
@@ -247,6 +248,17 @@ export default function FindGymScreen() {
   const [reqNotes,     setReqNotes]     = useState('');
   const [reqLoading,   setReqLoading]   = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [gymViewMode,   setGymViewMode]   = useState<'list' | 'map'>('list');
+  const [mapSelectedId, setMapSelectedId] = useState<string | null>(null);
+
+  const route = useRoute<any>();
+
+  useEffect(() => {
+    if (route.params?.initialTab === 'gym' && route.params?.viewMode === 'map') {
+      setActiveTab('gym');
+      setGymViewMode('map');
+    }
+  }, []);
 
   // GPS 위치 요청
   useEffect(() => {
@@ -651,48 +663,89 @@ export default function FindGymScreen() {
         />
       )}
 
-      {/* Gym tab — ScrollView */}
+      {/* Gym tab */}
       {activeTab === 'gym' && (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[s.results, { paddingTop: 16 }]}
-        >
-          {isLoading && (
-            <View style={s.loadingRow}>
-              <Text style={s.loadingText}>로딩 중...</Text>
-            </View>
-          )}
-          {!isLoading && (
-            <SectionHead title="헬스장" count={filteredGymsForTab.length} />
-          )}
-          {!isLoading && (filteredGymsForTab.length === 0 ? (
-            <EmptyRow label="헬스장을 찾을 수 없어요." />
-          ) : (
-            filteredGymsForTab.map(gym => (
-              <GymCard
-                key={gym.id}
-                gym={gym}
-                matchCount={gym.machines.length}
-                distLabel={getDistLabel(gym)}
-                onPress={() => {
-                  setGymDetailId(gym.id);
-                  setGymDetailVisible(true);
-                }}
-              />
-            ))
-          ))}
-          {activeTab === 'gym' && (
+        <View style={{ flex: 1 }}>
+          {/* 리스트/지도 토글 */}
+          <View style={s.viewToggleRow}>
             <TouchableOpacity
-              style={s.gymRequestBtn}
-              onPress={() => setShowGymRequestModal(true)}
+              style={[s.viewToggleBtn, gymViewMode === 'list' && s.viewToggleBtnActive]}
+              onPress={() => setGymViewMode('list')}
               activeOpacity={0.8}
             >
-              <Ionicons name="add-circle-outline" size={18} color={C.accent} />
-              <Text style={s.gymRequestBtnText}>내 헬스장 등록 요청하기</Text>
+              <Ionicons name="list" size={14} color={gymViewMode === 'list' ? C.bg : C.textSub} />
+              <Text style={[s.viewToggleText, gymViewMode === 'list' && s.viewToggleTextActive]}>리스트</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.viewToggleBtn, gymViewMode === 'map' && s.viewToggleBtnActive]}
+              onPress={() => setGymViewMode('map')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="map-outline" size={14} color={gymViewMode === 'map' ? C.bg : C.textSub} />
+              <Text style={[s.viewToggleText, gymViewMode === 'map' && s.viewToggleTextActive]}>지도</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* 리스트 뷰 */}
+          {gymViewMode === 'list' && (
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={[s.results, { paddingTop: 8 }]}
+            >
+              {isLoading && (
+                <View style={s.loadingRow}>
+                  <Text style={s.loadingText}>로딩 중...</Text>
+                </View>
+              )}
+              {!isLoading && (
+                <SectionHead title="헬스장" count={filteredGymsForTab.length} />
+              )}
+              {!isLoading && (filteredGymsForTab.length === 0 ? (
+                <EmptyRow label="헬스장을 찾을 수 없어요." />
+              ) : (
+                filteredGymsForTab.map(gym => (
+                  <GymCard
+                    key={gym.id}
+                    gym={gym}
+                    matchCount={gym.machines.length}
+                    distLabel={getDistLabel(gym)}
+                    onPress={() => {
+                      setGymDetailId(gym.id);
+                      setGymDetailVisible(true);
+                    }}
+                  />
+                ))
+              ))}
+              <TouchableOpacity
+                style={s.gymRequestBtn}
+                onPress={() => setShowGymRequestModal(true)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="add-circle-outline" size={18} color={C.accent} />
+                <Text style={s.gymRequestBtnText}>내 헬스장 등록 요청하기</Text>
+              </TouchableOpacity>
+              <View style={{ height: 32 }} />
+            </ScrollView>
           )}
-          <View style={{ height: 32 }} />
-        </ScrollView>
+
+          {/* 지도 뷰 */}
+          {gymViewMode === 'map' && (
+            <GymMapView
+              gyms={filteredGymsForTab}
+              userLocation={userLocation}
+              selectedGymId={mapSelectedId}
+              onSelectGym={gym => {
+                if (mapSelectedId === gym.id) {
+                  setGymDetailId(gym.id);
+                  setGymDetailVisible(true);
+                  setMapSelectedId(null);
+                } else {
+                  setMapSelectedId(gym.id);
+                }
+              }}
+            />
+          )}
+        </View>
       )}
 
       {/* Favorites tab — FlatList */}
@@ -1052,6 +1105,39 @@ const s = StyleSheet.create({
     color:      C.textDim,
     marginTop:  8,
     marginBottom: 16,
+  },
+
+  viewToggleRow: {
+    flexDirection:     'row',
+    gap:               6,
+    paddingHorizontal: 16,
+    paddingVertical:   10,
+    backgroundColor:   C.bg,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  viewToggleBtn: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               5,
+    paddingHorizontal: 14,
+    paddingVertical:   7,
+    borderRadius:      R.pill,
+    backgroundColor:   C.surface,
+    borderWidth:       1,
+    borderColor:       C.border,
+  },
+  viewToggleBtnActive: {
+    backgroundColor: C.accent,
+    borderColor:     C.accent,
+  },
+  viewToggleText: {
+    fontSize:   13,
+    fontWeight: '700',
+    color:      C.textSub,
+  },
+  viewToggleTextActive: {
+    color: C.bg,
   },
 
   gymRequestBtn: {

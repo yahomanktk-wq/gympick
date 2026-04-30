@@ -35,11 +35,6 @@ const LAST_SESSION = {
   volume:  '8.7t',
 };
 
-const NEARBY_GYMS = [
-  { id: '1', gymDataId: 'g01', name: 'IronHub Fitness', dist: '0.3 km', machines: 18 },
-  { id: '2', gymDataId: 'g04', name: 'MaxLift Arena',   dist: '0.9 km', machines: 24 },
-  { id: '3', gymDataId: 'g05', name: 'FlexPoint Club',  dist: '1.4 km', machines: 15 },
-];
 
 const LAST_MACHINES = [
   { name: 'Chest Press',   weight: 70, reps: 10, sets: 4, muscle: 'Chest' },
@@ -386,29 +381,21 @@ export default function HomeScreen() {
         {/* ── Nearby Gyms ── */}
         <View style={st.sectionRow}>
           <Text style={st.sectionTitle}>주변 헬스장</Text>
-          <TouchableOpacity onPress={openNearby}>
-            <Text style={st.seeAll}>더 보기</Text>
-          </TouchableOpacity>
         </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={st.gymScroll}
+        <TouchableOpacity
+          style={st.nearbyMapBtn}
+          activeOpacity={0.85}
+          onPress={() => nav.navigate('FindGym', { initialTab: 'gym', viewMode: 'map' })}
         >
-          {NEARBY_GYMS.map(g => (
-            <TouchableOpacity
-              key={g.id}
-              style={st.gymChip}
-              activeOpacity={0.8}
-              onPress={() => openGym(g.gymDataId)}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={st.gymName} numberOfLines={1}>{g.name}</Text>
-                <Text style={st.gymSub}>{g.dist} · {g.machines} 머신</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+          <View style={st.nearbyMapBtnLeft}>
+            <Ionicons name="map-outline" size={22} color={C.accent} />
+            <View>
+              <Text style={st.nearbyMapBtnTitle}>내 주변 헬스장 보기</Text>
+              <Text style={st.nearbyMapBtnSub}>지도에서 가까운 헬스장을 확인하세요</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={C.textDim} />
+        </TouchableOpacity>
 
         {/* ── 오늘의 오운완 피드 ── */}
         <View style={st.sectionRow}>
@@ -649,6 +636,36 @@ const st = StyleSheet.create({
   },
   gymName: { fontSize: 14, fontWeight: '700', color: C.text },
   gymSub:  { fontSize: 12, color: C.textSub, marginTop: 2 },
+
+  // Nearby map button
+  nearbyMapBtn: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    justifyContent:    'space-between',
+    backgroundColor:   C.surface,
+    borderRadius:      R.card,
+    borderWidth:       1,
+    borderColor:       C.border,
+    padding:           16,
+    marginBottom:      24,
+    marginHorizontal:  screenPad,
+  },
+  nearbyMapBtnLeft: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           12,
+    flex:          1,
+  },
+  nearbyMapBtnTitle: {
+    fontSize:     15,
+    fontWeight:   '700',
+    color:        C.text,
+    marginBottom: 2,
+  },
+  nearbyMapBtnSub: {
+    fontSize: 12,
+    color:    C.textSub,
+  },
 
   // Last Session card
   sessionCard: {
