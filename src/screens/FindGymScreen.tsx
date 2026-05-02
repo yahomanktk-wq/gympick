@@ -41,23 +41,7 @@ import MachineCardBorder  from '../components/MachineCardBorder';
 import OlympicNavigator   from './olympic/OlympicNavigator';
 import * as Location from 'expo-location';
 import { calcDistanceKm, formatDistance } from '../lib/geocoding';
-
-// --- Mock distances (영업 중 여부만 사용, 거리는 GPS로 대체)
-
-const MOCK_DIST: Record<string, { dist: string; distNum: number; open: boolean }> = {
-  g01: { dist: '0.3 km', distNum: 0.3, open: true  },
-  g02: { dist: '0.9 km', distNum: 0.9, open: true  },
-  g03: { dist: '1.1 km', distNum: 1.1, open: true  },
-  g04: { dist: '1.4 km', distNum: 1.4, open: false },
-  g05: { dist: '2.0 km', distNum: 2.0, open: true  },
-  g06: { dist: '2.3 km', distNum: 2.3, open: false },
-  g07: { dist: '3.1 km', distNum: 3.1, open: true  },
-  g08: { dist: '4.5 km', distNum: 4.5, open: true  },
-};
-
-function getDist(id: string) {
-  return MOCK_DIST[id] ?? { dist: '-- km', distNum: 99, open: true };
-}
+import FavoriteGymRecommendation from '../components/FavoriteGymRecommendation';
 
 // --- Muscle colour palette
 
@@ -150,16 +134,13 @@ function GymCard({
   distLabel:  string;
   onPress:    () => void;
 }) {
-  const meta = getDist(gym.id);
   return (
     <TouchableOpacity style={s.gymCard} activeOpacity={0.8} onPress={onPress}>
       <View style={{ flex: 1, paddingLeft: 0 }}>
         <View style={s.gymCardTop}>
           <Text style={s.gymCardName}>{gym.name}</Text>
-          <View style={[s.openBadge, { backgroundColor: meta.open ? C.accentBg : C.border }]}>
-            <Text style={[s.openBadgeText, { color: meta.open ? C.accent : C.textSub }]}>
-              {meta.open ? '영업 중' : '영업 종료'}
-            </Text>
+          <View style={[s.openBadge, { backgroundColor: C.accentBg }]}>
+            <Text style={[s.openBadgeText, { color: C.accent }]}>영업 중</Text>
           </View>
         </View>
         <View style={s.gymCardMeta}>
@@ -356,6 +337,7 @@ export default function FindGymScreen() {
       user.id,
       reqGymName.trim(),
       reqLocation.trim(),
+      '',
       reqNotes.trim(),
     );
     setReqLoading(false);
@@ -393,7 +375,7 @@ export default function FindGymScreen() {
     return allGyms
       .filter(gym => !kw || gym.name.toLowerCase().includes(kw))
       .sort((a, b) => {
-        if (!userLocation) return getDist(a.id).distNum - getDist(b.id).distNum;
+        if (!userLocation) return 0;
         const distA = (a.latitude != null && a.longitude != null)
           ? calcDistanceKm(userLocation.latitude, userLocation.longitude, a.latitude, a.longitude)
           : 9999;
@@ -771,6 +753,18 @@ export default function FindGymScreen() {
           )}
           ListHeaderComponent={
             <View>
+              {/* 즐겨찾기 머신 기반 추천 헬스장 */}
+              <SectionHead title="내 머신 보유 추천 헬스장" count={0} />
+              <FavoriteGymRecommendation
+                userLocation={userLocation}
+                onSelectGym={(gymId) => {
+                  setGymDetailId(gymId);
+                  setGymDetailVisible(true);
+                }}
+              />
+
+              <View style={s.sectionDivider} />
+
               {/* Favorite gyms */}
               <SectionHead title="즐겨찾기 헬스장" count={gymFavoriteIds.length} />
               {gymFavoriteIds.length === 0 ? (

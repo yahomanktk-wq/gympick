@@ -1403,7 +1403,7 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     .map(r => ({
       id:          r.id,
       name:        r.gymName,
-      location:    r.location,
+      location:    r.location + (r.addressDetail ? ' ' + r.addressDetail : ''),
       description: r.notes ?? '',
       phone:       '',
       website:     '',
@@ -1455,7 +1455,7 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
       .map(r => ({
         id:          r.id,
         name:        r.gymName,
-        location:    r.location,
+        location:    r.location + (r.addressDetail ? ' ' + r.addressDetail : ''),
         description: r.notes ?? '',
         phone:       '',
         website:     '',
@@ -1472,15 +1472,19 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     try {
       const { supabase } = await import('../../lib/supabase');
       const newGymId = `g_${Date.now()}`;
+      const gymRequest = gymRequests.find(r => r.id === id);
+      const baseLocation  = gymRequest?.location ?? gym.location;
+      const addressDetail = gymRequest?.addressDetail ?? null;
       const coords = await geocodeAddress(gym.location);
       const { error } = await supabase.from('gyms').insert({
-        id:          newGymId,
-        name:        gym.name,
-        location:    gym.location,
-        description: gym.description ?? '',
-        manager_id:  gym.managerId ?? null,
-        latitude:    coords?.latitude  ?? null,
-        longitude:   coords?.longitude ?? null,
+        id:             newGymId,
+        name:           gym.name,
+        location:       baseLocation,
+        address_detail: addressDetail,
+        description:    gym.description ?? '',
+        manager_id:     gym.managerId ?? null,
+        latitude:       coords?.latitude  ?? null,
+        longitude:      coords?.longitude ?? null,
       });
       if (error) {
         Alert.alert('등록 오류', '승인은 완료되었으나 헬스장 DB 등록에 실패했습니다. ' + error.message);

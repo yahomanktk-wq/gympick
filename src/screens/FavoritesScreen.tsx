@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   StatusBar,
   Dimensions,
 } from 'react-native';
+import * as Location from 'expo-location';
+import FavoriteGymRecommendation from '../components/FavoriteGymRecommendation';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R } from '../theme';
 import { MACHINES } from '../data';
@@ -88,10 +90,24 @@ export default function FavoritesScreen({ onClose }: { onClose: () => void }) {
   // Gym favorites from store
   const [favoriteGymIds,    setFavoriteGymIds]    = useState<string[]>(() => getGymFavorites());
   const [removedMachineIds, setRemovedMachineIds] = useState<Set<string>>(new Set());
+  const [userLocation,      setUserLocation]      = useState<{ latitude: number; longitude: number } | null>(null);
 
   // Detail modals
   const [gymDetailId,      setGymDetailId]      = useState<string | null>(null);
   const [selectedMachine,  setSelectedMachine]  = useState<typeof MACHINES[0] | null>(null);
+
+  useEffect(() => {
+    async function loadLocation() {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+        }
+      } catch {}
+    }
+    loadLocation();
+  }, []);
 
   const [selectedMuscle, setSelectedMuscle] = useState<string>('전체');
   const [selectedBrand,  setSelectedBrand]  = useState<string>('전체');
@@ -142,8 +158,17 @@ export default function FavoritesScreen({ onClose }: { onClose: () => void }) {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={st.scroll}>
 
+        {/* ── 즐겨찾기 머신 기반 추천 헬스장 ── */}
+        <Text style={st.sectionLabel}>내 머신 보유 추천 헬스장</Text>
+        <View style={{ paddingHorizontal: 16, marginBottom: 8 }}>
+          <FavoriteGymRecommendation
+            userLocation={userLocation}
+            onSelectGym={(gymId) => setGymDetailId(gymId)}
+          />
+        </View>
+
         {/* ── Favorite Gyms ── */}
-        <Text style={st.sectionLabel}>헬스장</Text>
+        <Text style={st.sectionLabel}>즐겨찾기 헬스장</Text>
         {favoriteGymIds.length === 0 ? (
           <View style={st.emptyState}>
             <Ionicons name="business-outline" size={36} color={C.textDim} />

@@ -19,7 +19,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T } from '../../theme';
 import { ManagedGym, Machine, GymStatus } from '../../data/types';
-import { MANAGED_GYMS } from '../../data/mockAdmin';
 import { MACHINES } from '../../data/machines';
 import { useAuth } from '../../context/AuthContext';
 import MachineCard from '../../components/MachineCard';
@@ -43,10 +42,10 @@ type ManagerView = 'home' | 'register' | 'edit' | 'machines' | 'manage';
 type ManagerTab  = 'routine' | 'notice' | 'request';
 
 interface GymForm {
-  name: string; location: string; description: string;
+  name: string; location: string; addressDetail: string; description: string;
   phone: string; website: string;
 }
-const EMPTY_GYM_FORM: GymForm = { name: '', location: '', description: '', phone: '', website: '' };
+const EMPTY_GYM_FORM: GymForm = { name: '', location: '', addressDetail: '', description: '', phone: '', website: '' };
 
 type DayHours = { enabled: boolean; open: string; close: string };
 type OperatingHours = {
@@ -488,9 +487,10 @@ function RegisterView({
         <StepBar current={step} labels={STEP_LABELS} />
         {step === 1 && (
           <SectionCard title="헬스장을 소개해 주세요">
-            <Field label="헬스장 이름 *" value={regForm.name}        onChangeText={t => onChangeField('name', t)}        placeholder="예) 아이언헙 피트니스" />
-            <Field label="위치 *"        value={regForm.location}    onChangeText={t => onChangeField('location', t)}    placeholder="예) 서울 강남구" />
-            <Field label="헬스장 소개 *" value={regForm.description} onChangeText={t => onChangeField('description', t)} placeholder="헬스장만의 특징을 알려주세요" multiline hint="공개 프로필에 표시됩니다" />
+            <Field label="헬스장 이름 *"   value={regForm.name}          onChangeText={t => onChangeField('name', t)}          placeholder="예) 아이언헙 피트니스" />
+            <Field label="위치 *"          value={regForm.location}      onChangeText={t => onChangeField('location', t)}      placeholder="예) 서울 강남구" />
+            <Field label="세부주소"         value={regForm.addressDetail} onChangeText={t => onChangeField('addressDetail', t)} placeholder="예) 3층 301호" hint="건물명, 층수, 호수 등" />
+            <Field label="헬스장 소개 *"   value={regForm.description}   onChangeText={t => onChangeField('description', t)}   placeholder="헬스장만의 특징을 알려주세요" multiline hint="공개 프로필에 표시됩니다" />
           </SectionCard>
         )}
         {step === 2 && (
@@ -506,6 +506,7 @@ function RegisterView({
               {([
                 ['헬스장 이름', regForm.name],
                 ['위치',        regForm.location],
+                ['세부주소',    regForm.addressDetail || '—'],
                 ['헬스장 소개', regForm.description],
                 ['전화번호',    regForm.phone   || '—'],
                 ['웹사이트',    regForm.website || '—'],
@@ -663,7 +664,7 @@ function MachinesView({
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow} contentContainerStyle={styles.filterRowContent}>
         {['전체', ...CATALOG_MUSCLES].map(m => (
-          <TouchableOpacity key={m} style={[styles.filterChip, machineMusclFilter === m && styles.filterChipActive]} onPress={() => setMachineMusclFilter(m)}>
+          <TouchableOpacity key={m} style={[styles.filterChip, machineMusclFilter === m && styles.filterChipActive]} onPress={() => setMachineMusclFilter(machineMusclFilter === m && m !== '전체' ? '전체' : m)}>
             <Text style={[styles.filterChipText, machineMusclFilter === m && styles.filterChipTextActive]}>{m}</Text>
           </TouchableOpacity>
         ))}
@@ -671,7 +672,7 @@ function MachinesView({
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.filterRow, { marginTop: 0, marginBottom: 12 }]} contentContainerStyle={styles.filterRowContent}>
         {['전체', ...CATALOG_BRANDS].map(b => (
-          <TouchableOpacity key={b} style={[styles.filterChip, machineBrandFilter === b && styles.filterChipActive]} onPress={() => setMachineBrandFilter(b)}>
+          <TouchableOpacity key={b} style={[styles.filterChip, machineBrandFilter === b && styles.filterChipActive]} onPress={() => setMachineBrandFilter(machineBrandFilter === b && b !== '전체' ? '전체' : b)}>
             <Text style={[styles.filterChipText, machineBrandFilter === b && styles.filterChipTextActive]}>{b}</Text>
           </TouchableOpacity>
         ))}
@@ -1012,10 +1013,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
     setViewStack(p => p.slice(0, -1));
   }, [viewStack.length, onClose]);
 
-  // Gyms — Supabase에서 manager_id로 조회 + Mock fallback
-  const userGyms = MANAGED_GYMS.filter(g => g.managerId === (user?.id ?? ''));
-  const myGyms   = userGyms.length > 0 ? userGyms : MANAGED_GYMS;
-  const [gyms, setGyms]               = useState<ManagedGym[]>(myGyms);
+  const [gyms, setGyms]               = useState<ManagedGym[]>([]);
 
   // Supabase에서 승인된 헬스장 로딩
   useEffect(() => {
@@ -1139,7 +1137,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
 
   const openEdit = useCallback((gym: ManagedGym) => {
     setSelectedGym(gym);
-    setEditForm({ name: gym.name, location: gym.location, description: gym.description, phone: gym.phone, website: gym.website });
+    setEditForm({ name: gym.name, location: gym.location, addressDetail: '', description: gym.description, phone: gym.phone, website: gym.website });
     setEditHours(DEFAULT_HOURS); setEditNotices([]);
     setPhotos(Array.from({ length: gym.photoCount }, (_, i) => `p_${gym.id}_${i}`));
     push('edit');
@@ -1242,7 +1240,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
 
     const notes = [
       regForm.phone       ? `전화: ${regForm.phone}`           : '',
-      regForm.hours       ? `운영시간: ${regForm.hours}`        : '',
+      serializeHours(regHours) ? `운영시간: ${serializeHours(regHours)}` : '',
       regForm.description ? regForm.description                : '',
     ].filter(Boolean).join('\n');
 
@@ -1250,6 +1248,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
       user?.id ?? '',
       regForm.name.trim(),
       regForm.location.trim(),
+      regForm.addressDetail.trim(),
       notes,
       'manager',
     );
@@ -1260,8 +1259,12 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
       return;
     }
 
+    const fullLocation = regForm.location.trim() +
+      (regForm.addressDetail.trim() ? ' ' + regForm.addressDetail.trim() : '');
+
     const newGym: ManagedGym = {
-      id: uid(), ...regForm, hours: serializeHours(regHours),
+      id: uid(), ...regForm, location: fullLocation,
+      hours: serializeHours(regHours),
       machineIds: [], managerId: user?.id ?? 'u2',
       status: 'pending',
       submittedAt: new Date().toISOString().split('T')[0],

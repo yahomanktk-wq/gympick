@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T } from '../../theme';
-import { Machine, GYMS_WITH_MACHINES } from '../../data';
+import { Machine } from '../../data';
 import { getMachineComments, MachineComment } from '../../data/gymDetails';
 import GymDetailModal from './GymDetailModal';
 import { isFavoriteMachine, addFavoriteMachine, removeFavoriteMachine } from '../../data/favoritesStore';
@@ -21,23 +21,11 @@ import { useAuth } from '../../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import MachineCard from '../../components/MachineCard';
 import MachineCardBorder from '../../components/MachineCardBorder';
-
-// --- Mock distances
-
-const MOCK_DIST: Record<string, { dist: string; distNum: number; open: boolean }> = {
-  g01: { dist: '0.3 km', distNum: 0.3, open: true  },
-  g02: { dist: '0.9 km', distNum: 0.9, open: true  },
-  g03: { dist: '1.1 km', distNum: 1.1, open: true  },
-  g04: { dist: '1.4 km', distNum: 1.4, open: false },
-  g05: { dist: '2.0 km', distNum: 2.0, open: true  },
-  g06: { dist: '2.3 km', distNum: 2.3, open: false },
-  g07: { dist: '3.1 km', distNum: 3.1, open: true  },
-  g08: { dist: '4.5 km', distNum: 4.5, open: true  },
-};
-
-function getDist(id: string) {
-  return MOCK_DIST[id] ?? { dist: '? km', distNum: 99, open: true };
-}
+import GymMapView from '../../components/GymMapView';
+import * as Location from 'expo-location';
+import { calcDistanceKm, formatDistance } from '../../lib/geocoding';
+import { fetchGymsWithMachines } from '../../lib/db/gyms';
+import { GymWithMachines } from '../../data/types';
 
 // --- Star rating
 
@@ -97,9 +85,36 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
   const [reviewText,        setReviewText]        = useState('');
   const [reviewRating,      setReviewRating]      = useState(5);
   const [userReviews,       setUserReviews]       = useState<MachineComment[]>([]);
+  const [userLocation,      setUserLocation]      = useState<{ latitude: number; longitude: number } | null>(null);
+  const [mapSelectedId,     setMapSelectedId]     = useState<string | null>(null);
+  const [gymsWithCoords,    setGymsWithCoords]    = useState<GymWithMachines[]>([]);
+  const [allAvailableGyms,  setAllAvailableGyms]  = useState<GymWithMachines[]>([]);
 
   React.useEffect(() => {
     if (machine) setIsFav(isFavoriteMachine(machine.id));
+  }, [machine?.id]);
+
+  React.useEffect(() => {
+    if (!machine) return;
+    const machineId = machine.id;
+    async function loadData() {
+      // GPS
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+        }
+      } catch {}
+      // 헬스장 목록 (Supabase)
+      try {
+        const allGyms = await fetchGymsWithMachines();
+        const filtered = allGyms.filter(g => g.machineIds.includes(machineId));
+        setAllAvailableGyms(filtered);
+        setGymsWithCoords(filtered.filter(g => g.latitude != null && g.longitude != null));
+      } catch {}
+    }
+    loadData();
   }, [machine?.id]);
 
   if (!machine) return null;
@@ -141,12 +156,23 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
     setReviewRating(5);
   }
 
-  const availableGyms = GYMS_WITH_MACHINES
-    .filter(gym => gym.machines.some(m => m.id === machine.id))
-    .sort((a, b) => getDist(a.id).distNum - getDist(b.id).distNum);
+  const availableGyms = allAvailableGyms.sort((a, b) => {
+    if (!userLocation) return 0;
+    const distA = (a.latitude != null && a.longitude != null)
+      ? calcDistanceKm(userLocation.latitude, userLocation.longitude, a.latitude, a.longitude)
+      : 9999;
+    const distB = (b.latitude != null && b.longitude != null)
+      ? calcDistanceKm(userLocation.latitude, userLocation.longitude, b.latitude, b.longitude)
+      : 9999;
+    return distA - distB;
+  });
 
-  const openCount   = availableGyms.filter(g => getDist(g.id).open).length;
-  const closestDist = availableGyms.length > 0 ? getDist(availableGyms[0].id).dist : '—';
+  const openCount = availableGyms.length;
+  const closestDist = (() => {
+    const g = availableGyms[0];
+    if (!g || !userLocation || g.latitude == null || g.longitude == null) return '—';
+    return formatDistance(calcDistanceKm(userLocation.latitude, userLocation.longitude, g.latitude, g.longitude));
+  })();
 
   function openGymDetail(gymId: string) {
     setGymDetailId(gymId);
@@ -299,9 +325,32 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
 
             {/* ── Available at ── */}
             <Text style={s.sectionTitle}>보유 헬스장</Text>
+
+            {/* 지도 */}
+            {gymsWithCoords.length > 0 && (
+              <View style={{ borderRadius: R.card, overflow: 'hidden', marginBottom: 12, borderWidth: 1, borderColor: C.border }}>
+                <GymMapView
+                  gyms={gymsWithCoords}
+                  userLocation={userLocation}
+                  selectedGymId={mapSelectedId}
+                  height={220}
+                  onSelectGym={gym => {
+                    if (mapSelectedId === gym.id) {
+                      openGymDetail(gym.id);
+                      setMapSelectedId(null);
+                    } else {
+                      setMapSelectedId(gym.id);
+                    }
+                  }}
+                />
+              </View>
+            )}
+
             <View style={s.gymList}>
               {availableGyms.map((gym, i) => {
-                const meta = getDist(gym.id);
+                const distLabel = userLocation && gym.latitude != null && gym.longitude != null
+                  ? formatDistance(calcDistanceKm(userLocation.latitude, userLocation.longitude, gym.latitude, gym.longitude))
+                  : '';
                 return (
                   <React.Fragment key={gym.id}>
                     {i > 0 && <View style={s.divider} />}
@@ -310,7 +359,7 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
                       activeOpacity={0.75}
                       onPress={() => openGymDetail(gym.id)}
                     >
-                      <View style={[s.gymDot, { backgroundColor: meta.open ? C.accent : C.textDim }]} />
+                      <View style={[s.gymDot, { backgroundColor: C.accent }]} />
                       <View style={{ flex: 1 }}>
                         <Text style={s.gymRowName}>{gym.name}</Text>
                         <View style={s.gymRowMeta}>
@@ -319,15 +368,15 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
                         </View>
                       </View>
                       <View style={{ alignItems: 'flex-end', gap: 5 }}>
-                        <View style={[s.openBadge, { backgroundColor: meta.open ? C.accentBg : C.border }]}>
-                          <Text style={[s.openBadgeText, { color: meta.open ? C.accent : C.textSub }]}>
-                            {meta.open ? '영업 중' : '영업 종료'}
-                          </Text>
+                        <View style={[s.openBadge, { backgroundColor: C.accentBg }]}>
+                          <Text style={[s.openBadgeText, { color: C.accent }]}>영업 중</Text>
                         </View>
-                        <View style={s.distBadge}>
-                          <Ionicons name="navigate-outline" size={10} color={C.accent} />
-                          <Text style={s.distText}>{meta.dist}</Text>
-                        </View>
+                        {distLabel ? (
+                          <View style={s.distBadge}>
+                            <Ionicons name="navigate-outline" size={10} color={C.accent} />
+                            <Text style={s.distText}>{distLabel}</Text>
+                          </View>
+                        ) : null}
                       </View>
                     </TouchableOpacity>
                   </React.Fragment>
