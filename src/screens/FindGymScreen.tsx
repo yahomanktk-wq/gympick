@@ -936,14 +936,14 @@ const s = StyleSheet.create({
   filterRow:      { paddingHorizontal: 16, gap: 8, paddingBottom: 4 },
   filterChip:     {
     paddingHorizontal: 16,
-    paddingVertical:   10,
+    paddingVertical:   6,
     borderRadius:      R.pill,
     backgroundColor:   C.surface,
-    minHeight:         40,
+    minHeight:         32,
     justifyContent:    'center',
     alignItems:        'center',
   },
-  filterChipText: { fontSize: 14, fontWeight: '600', color: C.textSub },
+  filterChipText: { fontSize: 13, fontWeight: '600', color: C.textSub },
 
   filterSummaryRow: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
