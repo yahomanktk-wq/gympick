@@ -282,11 +282,15 @@ export default function FindGymScreen() {
   // --- Derived filter options
 
   // Muscle chips built dynamically from actual machine data — always matches what's in the DB
+  const MUSCLE_ORDER = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Glutes', 'Other'];
+
   const muscleOptions = useMemo(() => {
     const unique = [...new Set(
       allMachines.map(m => m.targetMuscle).filter(Boolean)
-    )].sort();
-    return ['All', ...unique];
+    )];
+    const ordered = MUSCLE_ORDER.filter(m => unique.includes(m));
+    const rest = unique.filter(m => !MUSCLE_ORDER.includes(m)).sort();
+    return ['All', ...ordered, ...rest];
   }, [allMachines]);
 
   const brands = useMemo(() => {

@@ -14,7 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T } from '../../theme';
 import { Machine } from '../../data';
-import { getMachineComments, MachineComment } from '../../data/gymDetails';
+import { MachineComment } from '../../data/gymDetails';
 import GymDetailModal from './GymDetailModal';
 import { isFavoriteMachine, addFavoriteMachine, removeFavoriteMachine } from '../../data/favoritesStore';
 import { useAuth } from '../../context/AuthContext';
@@ -119,8 +119,7 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
 
   if (!machine) return null;
 
-  const mockReviews = getMachineComments(machine.id);
-  const allReviews  = [...userReviews, ...mockReviews];
+  const allReviews  = [...userReviews];
   const isFavorited = isFav;
 
   function handleToggleFavorite() {
@@ -391,7 +390,7 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
         </SafeAreaView>
       </Modal>
 
-      {/* Gym detail */}
+      {/* Gym detail — Modal 바깥에 렌더링 (iOS Modal 중첩 문제 해결) */}
       <GymDetailModal
         visible={gymDetailVisible}
         gymId={gymDetailId}

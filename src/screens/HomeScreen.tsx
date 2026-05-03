@@ -17,7 +17,7 @@ import { C, R, T } from '../theme';
 import { btnHeight, cardPadH, cardPadV, iconSize, screenPad } from '../theme/responsive';
 import GymDetailModal from './flow/GymDetailModal';
 import { useAuth } from '../context/AuthContext';
-import { MOCK_SESSIONS } from '../data/workoutSessions';
+
 import { WorkoutLog, WorkoutFeedPost } from '../data/types';
 import { fetchWorkoutLogs } from '../lib/db';
 import { MOCK_FEED_POSTS } from '../data/workoutFeed';
@@ -127,14 +127,14 @@ export default function HomeScreen() {
   const nav = useNavigation<any>();
   const [gymDetailVisible, setGymDetailVisible] = useState(false);
   const [gymDetailId,      setGymDetailId]      = useState<string | null>(null);
-  const [sessions,         setSessions]          = useState<WorkoutLog[]>(MOCK_SESSIONS);
+  const [sessions,         setSessions]          = useState<WorkoutLog[]>([]);
 
   useFocusEffect(
     useCallback(() => {
       if (!user) return;
       fetchWorkoutLogs(user.id)
-        .then(logs => setSessions(logs.length > 0 ? logs : MOCK_SESSIONS))
-        .catch(() => setSessions(MOCK_SESSIONS));
+        .then(logs => setSessions(logs))
+        .catch(() => setSessions([]));
     }, [user?.id])
   );
 
