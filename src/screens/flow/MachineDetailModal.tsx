@@ -72,11 +72,12 @@ interface Props {
   onClose:           () => void;
   favorites?:        Set<string>;  // kept for backward compat, ignored (global store used)
   onToggleFavorite?: (id: string) => void;
+  onSelectGym?:      (gymId: string) => void;
 }
 
 // --- Component
 
-export default function MachineDetailModal({ visible, machine, onClose, onToggleFavorite }: Props) {
+export default function MachineDetailModal({ visible, machine, onClose, onToggleFavorite, onSelectGym }: Props) {
   const { user } = useAuth();
   const nav = useNavigation<any>();
   const [isFav,             setIsFav]             = useState(false);
@@ -174,8 +175,12 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
   })();
 
   function openGymDetail(gymId: string) {
-    setGymDetailId(gymId);
-    setGymDetailVisible(true);
+    if (onSelectGym) {
+      onSelectGym(gymId);
+    } else {
+      setGymDetailId(gymId);
+      setGymDetailVisible(true);
+    }
   }
 
   return (

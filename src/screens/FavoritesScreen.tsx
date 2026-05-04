@@ -276,6 +276,12 @@ export default function FavoritesScreen({ onClose }: { onClose: () => void }) {
         visible={!!selectedMachine}
         machine={selectedMachine}
         onClose={() => setSelectedMachine(null)}
+        onSelectGym={(gymId) => {
+          setSelectedMachine(null);
+          setTimeout(() => {
+            setGymDetailId(gymId);
+          }, 350);
+        }}
       />
     </SafeAreaView>
   );

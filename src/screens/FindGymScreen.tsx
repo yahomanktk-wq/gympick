@@ -808,6 +808,13 @@ export default function FindGymScreen() {
         onClose={() => setDetailMachine(null)}
         favorites={favorites}
         onToggleFavorite={toggleFavorite}
+        onSelectGym={(gymId) => {
+          setDetailMachine(null);
+          setTimeout(() => {
+            setGymDetailId(gymId);
+            setGymDetailVisible(true);
+          }, 350);
+        }}
       />
 
       <GymDetailModal
