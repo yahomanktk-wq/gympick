@@ -385,7 +385,9 @@ export async function fetchWorkoutLogs(userId: string): Promise<WorkoutLog[]> {
         photoUri:     photoMap.get(session.id)?.photoUri,
       };
     });
-    return [...getNewSessions(userId), ...assembled];
+    const assembledIds = new Set(assembled.map(s => s.id));
+    const newSessions  = getNewSessions(userId).filter(s => !assembledIds.has(s.id));
+    return [...newSessions, ...assembled];
   } catch (err) {
     if (__DEV__) console.warn('[db/workouts] fetchWorkoutLogs error, using mock:', err);
     return [...getNewSessions(userId), ...MOCK_SESSIONS];

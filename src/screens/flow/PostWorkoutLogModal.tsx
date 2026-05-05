@@ -21,6 +21,7 @@ import ArmsIcon       from '../../assets/muscle-icons/arms.svg';
 import LegsIcon       from '../../assets/muscle-icons/legs.svg';
 import GlutesIcon     from '../../assets/muscle-icons/glutes.svg';
 import * as MediaLibrary from 'expo-media-library';
+import * as ImagePicker from 'expo-image-picker';
 import { captureRef } from 'react-native-view-shot';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T } from '../../theme';
@@ -214,7 +215,7 @@ function MuscleCard({ name, sub, SvgIcon, selected, onToggle }: {
           <Ionicons name="checkmark" size={12} color={C.bg} />
         </View>
       )}
-      <SvgIcon width={40} height={40} color="#C8FF57" />
+      <SvgIcon width={60} height={60} color="#C8FF57" />
       <Text style={[s.muscleCardName, selected && { color: col.fg }]}>{name}</Text>
       <Text style={s.muscleCardSub}>{sub}</Text>
     </TouchableOpacity>
@@ -1273,6 +1274,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   } | null>(null);
   // Overlay
   const [selectedColor,      setSelectedColor]      = useState('#ffffff');
+  const [isSaving,           setIsSaving]           = useState(false);
   // Template loading
   const [showTemplates,       setShowTemplates]       = useState(false);
   const [templates,           setTemplates]           = useState<WorkoutTemplate[]>([]);
@@ -1515,8 +1517,9 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
 
   async function handleSaveWorkout(passedCompositeUri?: string) {
     if (!gym) return;
+    setIsSaving(true);
     const effectiveCompositeUri = passedCompositeUri ?? compositeUri;
-    const sessionId = `local-${Date.now()}`;
+    const sessionId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const supabaseConfigured = !!(process.env.EXPO_PUBLIC_SUPABASE_URL);
 
     // 사진 업로드 (Supabase Storage)
@@ -1639,6 +1642,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
       }
     }
 
+    setIsSaving(false);
     setStep('done');
   }
 
@@ -1872,6 +1876,15 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     >
       <View style={{ flex: 1, backgroundColor: C.bg }}>
         {renderStep()}
+
+        {/* 저장 중 로딩 팝업 */}
+        {isSaving && (
+          <View style={s.savingOverlay}>
+            <View style={s.savingCard}>
+              <Text style={s.savingText}>운동일지를 저장 중 입니다.</Text>
+            </View>
+          </View>
+        )}
 
         {/* PR Celebration overlay */}
         {prCelebration && (
@@ -2228,6 +2241,26 @@ const s = StyleSheet.create({
   },
   overlayOptionEmoji: {
     fontSize: 14,
+  },
+  savingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 999,
+  },
+  savingCard: {
+    backgroundColor: C.surface,
+    borderRadius: R.card,
+    paddingHorizontal: 32,
+    paddingVertical: 24,
+    alignItems: 'center',
+    gap: 12,
+  },
+  savingText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: C.text,
   },
   prOverlay:     { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center', zIndex: 99 },
   prOverlayCard: { backgroundColor: C.surface, borderRadius: R.card, padding: 32, alignItems: 'center', marginHorizontal: 32, borderWidth: 1, borderColor: C.accent + '40' },
