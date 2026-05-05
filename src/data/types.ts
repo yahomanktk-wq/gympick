@@ -26,12 +26,13 @@ export interface Profile {
 // --- gyms
 
 export interface Gym {
-  id:          string;
-  name:        string;
-  location:    string;
-  description: string;
-  latitude?:   number | null;
-  longitude?:  number | null;
+  id:             string;
+  name:           string;
+  location:       string;
+  addressDetail?: string | null;
+  description:    string;
+  latitude?:      number | null;
+  longitude?:     number | null;
 }
 
 // --- machines
