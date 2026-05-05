@@ -358,7 +358,7 @@ function SessionDetailModal({
                     </View>
                     <ScrollView
                       showsVerticalScrollIndicator={false}
-                      style={{ maxHeight: DET_PHOTO_H * 0.45 }}
+                      style={{ maxHeight: DET_PHOTO_H_DEFAULT * 0.45 }}
                       nestedScrollEnabled
                     >
                       {machines.map(m => {

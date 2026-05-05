@@ -14,7 +14,12 @@ import {
   Image,
   InteractionManager,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
+import ChestIcon     from '../../assets/muscle-icons/chest.svg';
+import BackIcon       from '../../assets/muscle-icons/back.svg';
+import ShouldersIcon  from '../../assets/muscle-icons/shoulders.svg';
+import ArmsIcon       from '../../assets/muscle-icons/arms.svg';
+import LegsIcon       from '../../assets/muscle-icons/legs.svg';
+import GlutesIcon     from '../../assets/muscle-icons/glutes.svg';
 import * as MediaLibrary from 'expo-media-library';
 import { captureRef } from 'react-native-view-shot';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,7 +33,7 @@ import { recordPR } from '../../data/prStore';
 import { useAuth } from '../../context/AuthContext';
 import { calculateXP, addXP } from '../../lib/machineLevelUtils';
 import { getMachineLevelData, updateMachineLevelData } from '../../data/machineLevelStore';
-import { insertWorkoutSession, insertWorkoutEntry, insertWorkoutSet } from '../../lib/db/workouts';
+import { insertWorkoutSession, insertWorkoutEntry, insertWorkoutSet, insertWorkoutPhoto } from '../../lib/db/workouts';
 import { uploadWorkoutPhoto } from '../../lib/photoStorage';
 import { saveMachineLevelData } from '../../lib/db/machineLevels';
 import { insertFeedPost } from '../../lib/db/feedPosts';
@@ -48,7 +53,7 @@ import { fetchGymsWithMachines } from '../../lib/db/gyms';
 // --- Types
 
 type Step = 'muscle-select' | 'gym-select' | 'routine-reference' | 'today-list' | 'exercise-select' | 'log-sets' | 'photo' | 'done';
-type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+
 
 interface SetEntry { weight: number; reps: number; }
 
@@ -116,13 +121,15 @@ function mp(muscle: string) {
 
 // --- Muscle group definitions
 
-const MUSCLE_GROUPS: { name: string; sub: string; icon: IoniconName }[] = [
-  { name: 'Chest',          sub: 'Pectorals',                  icon: 'body-outline'    },
-  { name: 'Back',           sub: 'Lats & Rhomboids',           icon: 'barbell-outline' },
-  { name: 'Shoulders',      sub: 'Deltoids',                   icon: 'person-outline'  },
-  { name: 'Arms',           sub: 'Biceps & Triceps',           icon: 'fitness-outline' },
-  { name: 'Legs',           sub: 'Quads & Hamstrings',         icon: 'walk-outline'    },
-  { name: 'Hip (Glutes)',   sub: 'Glutes & Hip Abductors',     icon: 'body-outline'    },
+type SvgComponent = React.FC<{ width?: number; height?: number; color?: string }>;
+
+const MUSCLE_GROUPS: { name: string; sub: string; SvgIcon: SvgComponent }[] = [
+  { name: 'Chest',        sub: 'Pectorals',              SvgIcon: ChestIcon     },
+  { name: 'Back',         sub: 'Lats & Rhomboids',       SvgIcon: BackIcon      },
+  { name: 'Shoulders',    sub: 'Deltoids',               SvgIcon: ShouldersIcon },
+  { name: 'Arms',         sub: 'Biceps & Triceps',       SvgIcon: ArmsIcon      },
+  { name: 'Legs',         sub: 'Quads & Hamstrings',     SvgIcon: LegsIcon      },
+  { name: 'Hip (Glutes)', sub: 'Glutes & Hip Abductors', SvgIcon: GlutesIcon    },
 ];
 
 // --- Shared atoms
@@ -186,8 +193,8 @@ function Stepper({ value, onChange, step = 1, min = 0 }: {
 
 // --- Step 1: Muscle Select - card grid UI
 
-function MuscleCard({ name, sub, icon, selected, onToggle }: {
-  name: string; sub: string; icon: IoniconName;
+function MuscleCard({ name, sub, SvgIcon, selected, onToggle }: {
+  name: string; sub: string; SvgIcon: SvgComponent;
   selected: boolean; onToggle: () => void;
 }) {
   const col = mp(name);
@@ -207,9 +214,7 @@ function MuscleCard({ name, sub, icon, selected, onToggle }: {
           <Ionicons name="checkmark" size={12} color={C.bg} />
         </View>
       )}
-      <View style={[s.muscleCardCircle, { backgroundColor: selected ? col.fg + '22' : C.surfaceHigh }]}>
-        <Ionicons name={icon} size={32} color={selected ? col.fg : C.textSub} />
-      </View>
+      <SvgIcon width={40} height={40} color="#C8FF57" />
       <Text style={[s.muscleCardName, selected && { color: col.fg }]}>{name}</Text>
       <Text style={s.muscleCardSub}>{sub}</Text>
     </TouchableOpacity>
@@ -234,7 +239,7 @@ function MuscleSelectStep({ selected, onToggle, onNext, onBack, onClose }: {
           {MUSCLE_GROUPS.map(g => (
             <MuscleCard
               key={g.name}
-              name={g.name} sub={g.sub} icon={g.icon}
+              name={g.name} sub={g.sub} SvgIcon={g.SvgIcon}
               selected={selected.has(g.name)}
               onToggle={() => onToggle(g.name)}
             />
@@ -1588,6 +1593,32 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
         }
       } catch (err) {
         if (__DEV__) console.warn('[PostWorkoutLog] Supabase write failed:', err);
+      }
+
+      // 오운완 사진 DB 저장
+      if (finalPhotoUrl && user) {
+        try {
+          await insertWorkoutPhoto({
+            sessionId:   sessionId,
+            userId:      user.id,
+            capturedAt:  new Date().toISOString(),
+            textColor:   '#ffffff',
+            aspectRatio: '9:16',
+          });
+
+          // composite_uri 업데이트 (insertWorkoutPhoto는 기본 컬럼만 저장하므로 별도 update)
+          const { supabase } = await import('../../lib/supabase');
+          await supabase
+            .from('workout_photos')
+            .update({
+              composite_uri: finalPhotoUrl,
+              photo_uri:     photoUri ?? null,
+            })
+            .eq('session_id', sessionId)
+            .eq('user_id', user.id);
+        } catch (err) {
+          if (__DEV__) console.warn('[PostWorkoutLog] insertWorkoutPhoto failed:', err);
+        }
       }
 
       // 오운완 피드 포스트 저장
