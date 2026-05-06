@@ -23,30 +23,6 @@ import { fetchWorkoutLogs } from '../lib/db';
 import { MOCK_FEED_POSTS } from '../data/workoutFeed';
 import { filterActivePosts, convertSessionToFeedPost } from '../lib/feedUtils';
 
-// --- Mock data
-
-// Most recent workout mock data
-const LAST_SESSION = {
-  gym:     'IronHub Fitness',
-  date:    'Wed, Mar 5 · 10:30 AM',
-  muscles: ['Chest', 'Back'],
-  exercises: 3,
-  sets:    10,
-  volume:  '8.7t',
-};
-
-
-const LAST_MACHINES = [
-  { name: 'Chest Press',   weight: 70, reps: 10, sets: 4, muscle: 'Chest' },
-  { name: 'Incline Press', weight: 60, reps: 8,  sets: 3, muscle: 'Chest' },
-  { name: 'Cable Machine', weight: 55, reps: 12, sets: 3, muscle: 'Back'  },
-];
-
-const MUSCLE_FG: Record<string, string> = {
-  Chest: '#5ba4ff', Back: '#b36bff', Legs: '#ff7c47',
-  Shoulders: '#ffd166', Arms: '#3dd68c', Core: '#06d6a0', 'Full Body': '#a8dadc',
-};
-
 // --- Helpers
 
 function getThisWeekStart(): Date {
@@ -184,6 +160,62 @@ export default function HomeScreen() {
     });
   }, []);
 
+  const lastSession = useMemo(() => {
+    if (!sessions.length) return null;
+    return [...sessions].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    )[0];
+  }, [sessions]);
+
+  const lastGymName = lastSession?.gymName ?? '';
+
+  const lastDateStr = useMemo(() => {
+    if (!lastSession) return '';
+    const d = new Date(lastSession.date);
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const hh = d.getHours();
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const ampm = hh >= 12 ? 'PM' : 'AM';
+    const h12 = hh % 12 === 0 ? 12 : hh % 12;
+    return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()} · ${h12}:${mm} ${ampm}`;
+  }, [lastSession]);
+
+  const lastMuscles = useMemo(() => {
+    if (!lastSession?.machines?.length) return [];
+    return Array.from(
+      new Set(lastSession.machines.map(m => m.targetMuscle).filter(Boolean))
+    );
+  }, [lastSession]);
+
+  const lastExerciseCount = lastSession?.machines?.length ?? 0;
+
+  const lastSetCount = useMemo(() => {
+    if (!lastSession?.machines?.length) return 0;
+    return lastSession.machines.reduce((sum, m) => sum + m.sets, 0);
+  }, [lastSession]);
+
+  const lastVolume = useMemo(() => {
+    if (!lastSession?.machines?.length) return '0';
+    const total = lastSession.machines.reduce((sum, m) => {
+      return sum + m.weight * m.reps * m.sets;
+    }, 0);
+    if (total >= 1000) return `${(total / 1000).toFixed(1)}t`;
+    return `${total}`;
+  }, [lastSession]);
+
+  const lastMachineRows = useMemo(() => {
+    if (!lastSession?.machines?.length) return [];
+    return lastSession.machines.slice(0, 5).map(m => ({
+      name:   m.machineName,
+      weight: m.weight,
+      reps:   m.reps,
+      sets:   m.sets,
+      muscle: m.targetMuscle,
+    }));
+  }, [lastSession]);
+
   function openNearby()          { nav.navigate('FindGym'); }
   function openGym(id: string)   { setGymDetailId(id); setGymDetailVisible(true); }
 
@@ -320,7 +352,7 @@ export default function HomeScreen() {
         )}
 
         {/* ── Last Session Summary ── */}
-        {user ? (
+        {user && lastSession && (
           <TouchableOpacity
             style={st.recentCard}
             activeOpacity={0.88}
@@ -328,30 +360,31 @@ export default function HomeScreen() {
           >
             <Text style={st.recentEye}>마지막 운동</Text>
             <Text style={st.recentMuscleTitle} numberOfLines={1}>
-              {LAST_SESSION.muscles.join(' + ')}
+              {lastMuscles.length > 0 ? lastMuscles.join(' + ') : '운동 기록 없음'}
             </Text>
-            <Text style={st.recentGymSub} numberOfLines={1}>{LAST_SESSION.gym}</Text>
-            <Text style={st.recentDate}>{LAST_SESSION.date}</Text>
+            <Text style={st.recentGymSub} numberOfLines={1}>{lastGymName}</Text>
+            <Text style={st.recentDate}>{lastDateStr}</Text>
 
             {/* Stats */}
             <View style={st.recentStats}>
               <View style={st.recentStat}>
-                <Text style={st.recentStatVal}>{LAST_SESSION.exercises}</Text>
+                <Text style={st.recentStatVal}>{lastExerciseCount}</Text>
                 <Text style={st.recentStatLab}>운동</Text>
               </View>
               <View style={st.recentDiv} />
               <View style={st.recentStat}>
-                <Text style={st.recentStatVal}>{LAST_SESSION.sets}</Text>
+                <Text style={st.recentStatVal}>{lastSetCount}</Text>
                 <Text style={st.recentStatLab}>세트</Text>
               </View>
               <View style={st.recentDiv} />
               <View style={st.recentStat}>
-                <Text style={st.recentStatVal}>{LAST_SESSION.volume}</Text>
+                <Text style={st.recentStatVal}>{lastVolume}</Text>
                 <Text style={st.recentStatLab}>볼륨</Text>
               </View>
             </View>
           </TouchableOpacity>
-        ) : (
+        )}
+        {!user && (
           <TouchableOpacity
             style={st.recentCard}
             activeOpacity={0.88}
@@ -425,31 +458,31 @@ export default function HomeScreen() {
         )}
 
         {/* ── Last Session ── */}
-        {user && <View style={st.sectionRow}>
+        {user && lastSession && <View style={st.sectionRow}>
           <Text style={st.sectionTitle}>마지막 운동</Text>
           <TouchableOpacity onPress={() => nav.navigate('Journal')}>
             <Text style={st.seeAll}>기록 보기</Text>
           </TouchableOpacity>
         </View>}
-        {user && <View style={st.sessionCard}>
+        {user && lastSession && <View style={st.sessionCard}>
           {/* Session header */}
           <View style={st.sessionHead}>
             <View style={{ flex: 1 }}>
-              <Text style={st.sessionGym}>IronHub Fitness</Text>
-              <Text style={st.sessionDate}>Wed, Mar 5 · 10:30 AM</Text>
+              <Text style={st.sessionGym}>{lastGymName}</Text>
+              <Text style={st.sessionDate}>{lastDateStr}</Text>
             </View>
           </View>
 
           <View style={st.divider} />
 
           {/* Exercise rows */}
-          {LAST_MACHINES.map((m, i) => (
+          {lastMachineRows.map((m, i) => (
             <React.Fragment key={m.name}>
               <View style={st.exRow}>
                 <Text style={st.exName} numberOfLines={1}>{m.name}</Text>
                 <Text style={st.exMeta}>{m.sets}×{m.reps} · {m.weight} kg</Text>
               </View>
-              {i < LAST_MACHINES.length - 1 && <View style={st.exDivider} />}
+              {i < lastMachineRows.length - 1 && <View style={st.exDivider} />}
             </React.Fragment>
           ))}
 
