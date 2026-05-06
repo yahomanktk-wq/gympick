@@ -2,6 +2,68 @@ import { supabase } from '../supabase';
 import { MachineRankingEntry } from '../../data/types';
 import { MOCK_MACHINE_RANKINGS } from '../../data/machineRankingStore';
 
+export interface RankingEntry {
+  machineId:    string;
+  machineName:  string;
+  machineBrand: string;
+  targetMuscle: string;
+  usageCount:   number;
+  rank:         number;
+}
+
+export interface RankingResult {
+  entries:    RankingEntry[];
+  totalCount: number;
+  updatedAt:  string;
+}
+
+export async function fetchWeeklyRankings(): Promise<RankingResult> {
+  const updatedAt = new Date().toISOString();
+
+  try {
+    const { data, error } = await supabase
+      .from('machine_weekly_ranking')
+      .select('machine_id, machine_name, machine_brand, target_muscle, usage_count');
+
+    if (error) {
+      if (__DEV__) console.warn('[rankings] Supabase error:', error.message);
+      return { entries: [], totalCount: 0, updatedAt };
+    }
+
+    if (!data || data.length === 0) {
+      return { entries: [], totalCount: 0, updatedAt };
+    }
+
+    const totalCount = data.reduce((sum, row) => sum + (Number(row.usage_count) || 0), 0);
+
+    const muscleGroups = new Map<string, typeof data>();
+    for (const row of data) {
+      const muscle = (row.target_muscle ?? 'OTHER').toUpperCase();
+      if (!muscleGroups.has(muscle)) muscleGroups.set(muscle, []);
+      muscleGroups.get(muscle)!.push(row);
+    }
+
+    const entries: RankingEntry[] = [];
+    for (const [muscle, rows] of muscleGroups.entries()) {
+      rows.slice(0, 10).forEach((row, idx) => {
+        entries.push({
+          machineId:    row.machine_id    ?? '',
+          machineName:  row.machine_name  ?? '',
+          machineBrand: row.machine_brand ?? '',
+          targetMuscle: muscle,
+          usageCount:   Number(row.usage_count) || 0,
+          rank:         idx + 1,
+        });
+      });
+    }
+
+    return { entries, totalCount, updatedAt };
+  } catch (e) {
+    if (__DEV__) console.warn('[rankings] unexpected error:', e);
+    return { entries: [], totalCount: 0, updatedAt };
+  }
+}
+
 interface UsageRow {
   machine_id:    string;
   machine_name:  string;

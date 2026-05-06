@@ -29,8 +29,9 @@ import { submitGymRegistrationRequest } from '../lib/db/gymRegistrationRequests'
 import { fetchMachines, fetchGymsWithMachines } from '../lib/db';
 import { useFetch } from '../lib/useFetch';
 import { MachineWithGyms, GymWithMachines } from '../data/types';
-import { getRankingByMuscle, getLastUpdatedAt } from '../data/machineRankingStore';
+import { fetchWeeklyRankings, type RankingEntry, type RankingResult } from '../lib/db/rankings';
 import MachineRankingCard from '../components/MachineRankingCard';
+import { MachineRankingEntry } from '../data/types';
 import { FAVORITE_MACHINES } from '../data/machineReviews';
 import { getGymFavorites } from '../data/gymFavoriteStore';
 import { getAllAdminGyms } from '../data/adminGymStore';
@@ -232,6 +233,11 @@ export default function FindGymScreen() {
   const [gymViewMode,   setGymViewMode]   = useState<'list' | 'map'>('list');
   const [mapSelectedId, setMapSelectedId] = useState<string | null>(null);
 
+  const [rankingResult, setRankingResult] = useState<RankingResult>({
+    entries: [], totalCount: 0, updatedAt: new Date().toISOString(),
+  });
+  const [rankingLoading, setRankingLoading] = useState(true);
+
   const route = useRoute<any>();
 
   useEffect(() => {
@@ -239,6 +245,14 @@ export default function FindGymScreen() {
       setActiveTab('gym');
       setGymViewMode('map');
     }
+  }, []);
+
+  useEffect(() => {
+    setRankingLoading(true);
+    fetchWeeklyRankings()
+      .then(result => setRankingResult(result))
+      .catch(() => setRankingResult({ entries: [], totalCount: 0, updatedAt: new Date().toISOString() }))
+      .finally(() => setRankingLoading(false));
   }, []);
 
   // GPS 위치 요청
@@ -308,6 +322,23 @@ export default function FindGymScreen() {
     const stillValid = brands.some(b => b.toLowerCase() === activeBrand.toLowerCase());
     if (!stillValid) setActiveBrand('All');
   }, [brands, activeBrand]);
+
+  const rankingByMuscle = useMemo(() => {
+    return rankingResult.entries.filter(
+      e => e.targetMuscle.toUpperCase() === rankingMuscle.toUpperCase()
+    );
+  }, [rankingResult.entries, rankingMuscle]);
+
+  const rankingInsufficient = !rankingLoading && rankingResult.totalCount < 100;
+
+  const rankingUpdatedText = useMemo(() => {
+    const d = new Date(rankingResult.updatedAt);
+    const m = d.getMonth() + 1;
+    const day = d.getDate();
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${m}/${day} ${hh}:${mm}`;
+  }, [rankingResult.updatedAt]);
 
   function toggleFavorite(id: string) {
     setFavorites(prev => {
@@ -578,48 +609,76 @@ export default function FindGymScreen() {
                     </TouchableOpacity>
                   </View>
 
-                  {/* Muscle selector chips */}
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={s.rankingChipRow}
-                  >
-                    {RANKING_MUSCLES.map(muscle => {
-                      const active = muscle === rankingMuscle;
-                      return (
-                        <TouchableOpacity
-                          key={muscle}
-                          style={[s.rankingChip, active && s.rankingChipActive]}
-                          onPress={() => setRankingMuscle(muscle)}
-                          activeOpacity={0.75}
+                  {rankingLoading ? (
+                    <View style={s.rankingEmptyBox}>
+                      <Text style={s.rankingEmptyText}>랭킹 불러오는 중...</Text>
+                    </View>
+                  ) : rankingInsufficient ? (
+                    <View style={s.rankingEmptyBox}>
+                      <Ionicons name="bar-chart-outline" size={28} color={C.textDim} style={{ marginBottom: 8 }} />
+                      <Text style={s.rankingEmptyTitle}>데이터를 수집 중이에요</Text>
+                      <Text style={s.rankingEmptyText}>운동 기록이 쌓이면 인기 머신 랭킹을 보여드릴게요 💪</Text>
+                    </View>
+                  ) : (
+                    <>
+                      {/* Muscle selector chips */}
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={s.rankingChipRow}
+                      >
+                        {RANKING_MUSCLES.map(muscle => {
+                          const active = muscle === rankingMuscle;
+                          return (
+                            <TouchableOpacity
+                              key={muscle}
+                              style={[s.rankingChip, active && s.rankingChipActive]}
+                              onPress={() => setRankingMuscle(muscle)}
+                              activeOpacity={0.75}
+                            >
+                              <Text style={[s.rankingChipText, active && s.rankingChipTextActive]}>
+                                {muscle}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </ScrollView>
+
+                      {/* Ranking cards */}
+                      {rankingByMuscle.length === 0 ? (
+                        <View style={s.rankingEmptyBox}>
+                          <Text style={s.rankingEmptyText}>이번 주 {rankingMuscle} 기록이 없어요</Text>
+                        </View>
+                      ) : (
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={s.rankingCardRow}
                         >
-                          <Text style={[s.rankingChipText, active && s.rankingChipTextActive]}>
-                            {muscle}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
+                          {rankingByMuscle.map(entry => (
+                            <MachineRankingCard
+                              key={entry.machineId}
+                              entry={{
+                                rank:        entry.rank,
+                                machineId:   entry.machineId,
+                                machineName: entry.machineName,
+                                brandName:   entry.machineBrand,
+                                muscle:      entry.targetMuscle,
+                                usageCount:  entry.usageCount,
+                                usageChange: 'same',
+                              } as MachineRankingEntry}
+                              onPress={() => nav.navigate('MachineRanking')}
+                            />
+                          ))}
+                        </ScrollView>
+                      )}
 
-                  {/* Ranking cards */}
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={s.rankingCardRow}
-                  >
-                    {getRankingByMuscle(rankingMuscle).map(entry => (
-                      <MachineRankingCard
-                        key={entry.machineId}
-                        entry={entry}
-                        onPress={() => nav.navigate('MachineRanking')}
-                      />
-                    ))}
-                  </ScrollView>
-
-                  {/* Last updated */}
-                  <Text style={s.rankingUpdatedText}>
-                    1시간마다 업데이트 · 최근 갱신: {getLastUpdatedAt()}
-                  </Text>
+                      {/* Last updated */}
+                      <Text style={s.rankingUpdatedText}>
+                        1시간마다 업데이트 · 최근 갱신: {rankingUpdatedText}
+                      </Text>
+                    </>
+                  )}
                 </View>
               )}
 
@@ -1110,6 +1169,31 @@ const s = StyleSheet.create({
     color:      C.textDim,
     marginTop:  8,
     marginBottom: 16,
+  },
+  rankingEmptyBox: {
+    alignItems:      'center',
+    justifyContent:  'center',
+    paddingVertical: 32,
+    paddingHorizontal: 20,
+    marginHorizontal: 4,
+    backgroundColor: C.surface,
+    borderRadius:    R.card,
+    borderWidth:     1,
+    borderColor:     C.border,
+    marginBottom:    8,
+  },
+  rankingEmptyTitle: {
+    fontSize:   14,
+    fontWeight: '700',
+    color:      C.textSub,
+    marginBottom: 6,
+    textAlign:  'center',
+  },
+  rankingEmptyText: {
+    fontSize:   12,
+    color:      C.textDim,
+    textAlign:  'center',
+    lineHeight: 18,
   },
 
   viewToggleRow: {
