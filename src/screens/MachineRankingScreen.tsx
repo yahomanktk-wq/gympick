@@ -13,7 +13,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { C, R, T } from '../theme';
 import { screenPad } from '../theme/responsive';
-import { getLastUpdatedAt } from '../data/machineRankingStore';
 import { fetchAllRankings, fetchRankingByMuscle } from '../lib/db';
 import { MachineRankingEntry, Machine } from '../data/types';
 import MachineRankingCard from '../components/MachineRankingCard';
@@ -52,10 +51,18 @@ function NavHeader({ onBack }: { onBack: () => void }) {
   );
 }
 
-function UpdatedLabel() {
+function UpdatedLabel({ updatedAt }: { updatedAt: string }) {
+  const label = (() => {
+    const d = new Date(updatedAt);
+    const m  = d.getMonth() + 1;
+    const dd = d.getDate();
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${m}/${dd} ${hh}:${mm}`;
+  })();
   return (
     <Text style={s.updatedLabel}>
-      최근 갱신: {getLastUpdatedAt()} · 1시간마다 업데이트
+      최근 갱신: {label} · 1시간마다 업데이트
     </Text>
   );
 }
@@ -199,8 +206,9 @@ export default function MachineRankingScreen() {
   const [activeTab,     setActiveTab]     = useState<TabValue>('ALL');
   const [detailMachine, setDetailMachine] = useState<Machine | null>(null);
   const [modalVisible,  setModalVisible]  = useState(false);
-  const [rankings,      setRankings]      = useState<MachineRankingEntry[]>([]);
-  const [loading,       setLoading]       = useState(true);
+  const [rankings,  setRankings]  = useState<MachineRankingEntry[]>([]);
+  const [loading,   setLoading]   = useState(true);
+  const [updatedAt, setUpdatedAt] = useState(() => new Date().toISOString());
 
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -208,7 +216,10 @@ export default function MachineRankingScreen() {
       try {
         setLoading(true);
         const data = await fetchAllRankings();
-        if (active) setRankings(data);
+        if (active) {
+          setRankings(data);
+          setUpdatedAt(new Date().toISOString());
+        }
       } catch {
         if (active) setRankings([]);
       } finally {
@@ -249,7 +260,7 @@ export default function MachineRankingScreen() {
       <NavHeader onBack={() => nav.goBack()} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
-        <UpdatedLabel />
+        <UpdatedLabel updatedAt={updatedAt} />
 
         {/* Tab bar */}
         <TabBar active={activeTab} onSelect={setActiveTab} />
