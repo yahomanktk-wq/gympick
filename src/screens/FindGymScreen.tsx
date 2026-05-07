@@ -764,7 +764,20 @@ export default function FindGymScreen() {
 
       {/* Ranking tab */}
       {activeTab === 'ranking' && (
-        <RankingTab data={rankingData} loading={rankingLoading} />
+        <RankingTab
+          data={rankingData}
+          loading={rankingLoading}
+          onPressMachine={(machineId, machineName, machineBrand, targetMuscle) => {
+            const found = allMachines.find(m => m.id === machineId);
+            if (found) {
+              setDetailMachine(found);
+            }
+          }}
+          onPressGym={(gymId) => {
+            setGymDetailId(gymId);
+            setGymDetailVisible(true);
+          }}
+        />
       )}
 
       {/* Modals */}

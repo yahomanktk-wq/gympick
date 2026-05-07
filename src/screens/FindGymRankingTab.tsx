@@ -43,9 +43,9 @@ function RankingEmpty({ icon, title, sub }: { icon: any; title: string; sub: str
 
 // ── Weekly Ranking Row ───────────────────────────────────────────────────────
 
-function WeeklyRow({ entry }: { entry: WeeklyRankingEntry }) {
+function WeeklyRow({ entry, onPress }: { entry: WeeklyRankingEntry; onPress: () => void }) {
   return (
-    <View style={rs.rankRow}>
+    <TouchableOpacity style={rs.rankRow} onPress={onPress} activeOpacity={0.75}>
       <Text style={rs.medal}>{MEDAL[entry.rank] ?? `${entry.rank}`}</Text>
       <View style={{ flex: 1 }}>
         <Text style={rs.rankName} numberOfLines={1}>{entry.machineName}</Text>
@@ -55,15 +55,15 @@ function WeeklyRow({ entry }: { entry: WeeklyRankingEntry }) {
         <Text style={rs.rankScore}>{entry.setCount.toLocaleString()}</Text>
         <Text style={rs.rankScoreLabel}>세트</Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
 // ── Favorite Ranking Row ─────────────────────────────────────────────────────
 
-function FavoriteRow({ entry }: { entry: FavoriteRankingEntry }) {
+function FavoriteRow({ entry, onPress }: { entry: FavoriteRankingEntry; onPress: () => void }) {
   return (
-    <View style={rs.rankRow}>
+    <TouchableOpacity style={rs.rankRow} onPress={onPress} activeOpacity={0.75}>
       <Text style={rs.medal}>{MEDAL[entry.rank] ?? `${entry.rank}`}</Text>
       <View style={{ flex: 1 }}>
         <Text style={rs.rankName} numberOfLines={1}>{entry.machineName}</Text>
@@ -73,15 +73,15 @@ function FavoriteRow({ entry }: { entry: FavoriteRankingEntry }) {
         <Text style={rs.rankScore}>{entry.favoriteCount.toLocaleString()}</Text>
         <Text style={rs.rankScoreLabel}>즐겨찾기</Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
 // ── Gym Ranking Row ──────────────────────────────────────────────────────────
 
-function GymRow({ entry }: { entry: GymRankingEntry }) {
+function GymRow({ entry, onPress }: { entry: GymRankingEntry; onPress: () => void }) {
   return (
-    <View style={rs.rankRow}>
+    <TouchableOpacity style={rs.rankRow} onPress={onPress} activeOpacity={0.75}>
       <Text style={rs.medal}>{MEDAL[entry.rank] ?? `${entry.rank}`}</Text>
       <View style={{ flex: 1 }}>
         <Text style={rs.rankName} numberOfLines={1}>{entry.gymName}</Text>
@@ -93,7 +93,8 @@ function GymRow({ entry }: { entry: GymRankingEntry }) {
           <Text style={rs.rankScoreLabel}>📝 {entry.reviewCount}</Text>
         </View>
       </View>
-    </View>
+      <Ionicons name="chevron-forward" size={14} color={C.textDim} />
+    </TouchableOpacity>
   );
 }
 
@@ -118,11 +119,13 @@ function SectionHeader({ icon, title, sub }: { icon: any; title: string; sub?: s
 // ── Main RankingTab ──────────────────────────────────────────────────────────
 
 interface RankingTabProps {
-  data:    RankingTabData | null;
-  loading: boolean;
+  data:           RankingTabData | null;
+  loading:        boolean;
+  onPressMachine: (machineId: string, machineName: string, machineBrand: string, targetMuscle: string) => void;
+  onPressGym:     (gymId: string) => void;
 }
 
-export function RankingTab({ data, loading }: RankingTabProps) {
+export function RankingTab({ data, loading, onPressMachine, onPressGym }: RankingTabProps) {
   const [weeklyMuscle, setWeeklyMuscle] = useState('CHEST');
 
   if (loading) {
@@ -200,7 +203,16 @@ export function RankingTab({ data, loading }: RankingTabProps) {
               />
             ) : (
               weeklyByMuscle.slice(0, 10).map(entry => (
-                <WeeklyRow key={entry.machineId} entry={entry} />
+                <WeeklyRow
+                  key={entry.machineId}
+                  entry={entry}
+                  onPress={() => onPressMachine(
+                    entry.machineId,
+                    entry.machineName,
+                    entry.machineBrand,
+                    entry.targetMuscle,
+                  )}
+                />
               ))
             )}
           </>
@@ -223,7 +235,16 @@ export function RankingTab({ data, loading }: RankingTabProps) {
           />
         ) : (
           data.favorites.slice(0, 10).map(entry => (
-            <FavoriteRow key={entry.machineId} entry={entry} />
+            <FavoriteRow
+              key={entry.machineId}
+              entry={entry}
+              onPress={() => onPressMachine(
+                entry.machineId,
+                entry.machineName,
+                entry.machineBrand,
+                entry.targetMuscle,
+              )}
+            />
           ))
         )}
       </SectionCard>
@@ -244,7 +265,11 @@ export function RankingTab({ data, loading }: RankingTabProps) {
           />
         ) : (
           data.gyms.slice(0, 10).map(entry => (
-            <GymRow key={entry.gymId} entry={entry} />
+            <GymRow
+              key={entry.gymId}
+              entry={entry}
+              onPress={() => onPressGym(entry.gymId)}
+            />
           ))
         )}
       </SectionCard>
