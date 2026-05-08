@@ -1,0 +1,298 @@
+import { supabase } from '../supabase';
+
+export type PeriodType = 'week' | 'month' | 'custom';
+
+export interface MachineStat {
+  machineId:    string;
+  machineName:  string;
+  machineBrand: string;
+  targetMuscle: string;
+  usageCount:   number;
+}
+
+export interface DailyUsage {
+  date:  string;  // 'YYYY-MM-DD'
+  count: number;
+}
+
+export async function fetchMachineUsageStats(
+  gymId:     string,
+  startDate: string,
+  endDate:   string,
+): Promise<MachineStat[]> {
+  try {
+    const { data, error } = await supabase
+      .from('workout_entries')
+      .select(`
+        machine_id,
+        machine_name,
+        machine_brand,
+        target_muscle,
+        workout_sessions!inner(gym_id, date)
+      `)
+      .eq('workout_sessions.gym_id', gymId)
+      .gte('workout_sessions.date', startDate)
+      .lte('workout_sessions.date', endDate + 'T23:59:59');
+
+    if (error || !data) {
+      if (__DEV__) console.warn('[gymStats] fetchMachineUsageStats error:', error?.message);
+      return [];
+    }
+
+    const map: Record<string, MachineStat> = {};
+    for (const row of data) {
+      const id = row.machine_id;
+      if (!map[id]) {
+        map[id] = {
+          machineId:    id,
+          machineName:  row.machine_name,
+          machineBrand: row.machine_brand,
+          targetMuscle: row.target_muscle,
+          usageCount:   0,
+        };
+      }
+      map[id].usageCount += 1;
+    }
+
+    return Object.values(map).sort((a, b) => b.usageCount - a.usageCount);
+  } catch (e) {
+    if (__DEV__) console.warn('[gymStats] fetchMachineUsageStats exception:', e);
+    return [];
+  }
+}
+
+export async function fetchDailyUsageStats(
+  gymId:     string,
+  startDate: string,
+  endDate:   string,
+): Promise<DailyUsage[]> {
+  try {
+    const { data, error } = await supabase
+      .from('workout_sessions')
+      .select('date')
+      .eq('gym_id', gymId)
+      .gte('date', startDate)
+      .lte('date', endDate + 'T23:59:59');
+
+    if (error || !data) return [];
+
+    const map: Record<string, number> = {};
+    for (const row of data) {
+      const dateKey = row.date.slice(0, 10);
+      map[dateKey] = (map[dateKey] ?? 0) + 1;
+    }
+
+    const result: DailyUsage[] = [];
+    const cur = new Date(startDate);
+    const end = new Date(endDate);
+    while (cur <= end) {
+      const key = cur.toISOString().slice(0, 10);
+      result.push({ date: key, count: map[key] ?? 0 });
+      cur.setDate(cur.getDate() + 1);
+    }
+    return result;
+  } catch (e) {
+    if (__DEV__) console.warn('[gymStats] fetchDailyUsageStats exception:', e);
+    return [];
+  }
+}
+
+export async function fetchTopMachinesByMuscle(
+  gymId:     string,
+  startDate: string,
+  endDate:   string,
+): Promise<Record<string, MachineStat[]>> {
+  const all = await fetchMachineUsageStats(gymId, startDate, endDate);
+
+  const byMuscle: Record<string, MachineStat[]> = {};
+  for (const stat of all) {
+    const muscle = stat.targetMuscle || 'Other';
+    if (!byMuscle[muscle]) byMuscle[muscle] = [];
+    if (byMuscle[muscle].length < 10) {
+      byMuscle[muscle].push(stat);
+    }
+  }
+  return byMuscle;
+}
+
+export interface PeakTimeStats {
+  byHour:      Record<number, number>;
+  byDayOfWeek: Record<number, number>;
+}
+
+export interface MachineAvgStats {
+  machineId:    string;
+  machineName:  string;
+  machineBrand: string;
+  targetMuscle: string;
+  avgSets:      number;
+  avgWeight:    number;
+  usageCount:   number;
+}
+
+export async function fetchPeakTimeStats(
+  gymId:     string,
+  startDate: string,
+  endDate:   string,
+): Promise<PeakTimeStats> {
+  try {
+    const { data, error } = await supabase
+      .from('workout_sessions')
+      .select('date')
+      .eq('gym_id', gymId)
+      .gte('date', startDate)
+      .lte('date', endDate + 'T23:59:59');
+
+    if (error || !data) return { byHour: {}, byDayOfWeek: {} };
+
+    const byHour:      Record<number, number> = {};
+    const byDayOfWeek: Record<number, number> = {};
+
+    for (const row of data) {
+      const d   = new Date(row.date);
+      const h   = d.getHours();
+      const dow = d.getDay();
+      byHour[h]        = (byHour[h]        ?? 0) + 1;
+      byDayOfWeek[dow] = (byDayOfWeek[dow] ?? 0) + 1;
+    }
+
+    return { byHour, byDayOfWeek };
+  } catch (e) {
+    if (__DEV__) console.warn('[gymStats] fetchPeakTimeStats:', e);
+    return { byHour: {}, byDayOfWeek: {} };
+  }
+}
+
+export async function fetchMachineActivationRate(
+  gymId:         string,
+  totalMachines: number,
+  startDate:     string,
+  endDate:       string,
+): Promise<{ activatedCount: number; totalCount: number; rate: number }> {
+  try {
+    const { data, error } = await supabase
+      .from('workout_entries')
+      .select('machine_id, workout_sessions!inner(gym_id, date)')
+      .eq('workout_sessions.gym_id', gymId)
+      .gte('workout_sessions.date', startDate)
+      .lte('workout_sessions.date', endDate + 'T23:59:59');
+
+    if (error || !data) return { activatedCount: 0, totalCount: totalMachines, rate: 0 };
+
+    const uniqueIds      = new Set(data.map(r => r.machine_id));
+    const activatedCount = uniqueIds.size;
+    const rate           = totalMachines > 0 ? Math.round((activatedCount / totalMachines) * 100) : 0;
+
+    return { activatedCount, totalCount: totalMachines, rate };
+  } catch (e) {
+    if (__DEV__) console.warn('[gymStats] fetchMachineActivationRate:', e);
+    return { activatedCount: 0, totalCount: totalMachines, rate: 0 };
+  }
+}
+
+export async function fetchRetentionStats(
+  gymId: string,
+): Promise<{ thisMonth: number; lastMonth: number; retentionRate: number }> {
+  try {
+    const now       = new Date();
+    const thisStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+    const thisEnd   = now.toISOString().slice(0, 10);
+    const lastStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10);
+    const lastEnd   = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10);
+
+    const [thisData, lastData] = await Promise.all([
+      supabase.from('workout_sessions').select('user_id').eq('gym_id', gymId)
+        .gte('date', thisStart).lte('date', thisEnd + 'T23:59:59'),
+      supabase.from('workout_sessions').select('user_id').eq('gym_id', gymId)
+        .gte('date', lastStart).lte('date', lastEnd + 'T23:59:59'),
+    ]);
+
+    const thisUsers = new Set((thisData.data ?? []).map(r => r.user_id));
+    const lastUsers = new Set((lastData.data ?? []).map(r => r.user_id));
+
+    let returnedCount = 0;
+    for (const uid of lastUsers) {
+      if (thisUsers.has(uid)) returnedCount++;
+    }
+
+    const retentionRate = lastUsers.size > 0
+      ? Math.round((returnedCount / lastUsers.size) * 100)
+      : 0;
+
+    return { thisMonth: thisUsers.size, lastMonth: lastUsers.size, retentionRate };
+  } catch (e) {
+    if (__DEV__) console.warn('[gymStats] fetchRetentionStats:', e);
+    return { thisMonth: 0, lastMonth: 0, retentionRate: 0 };
+  }
+}
+
+export async function fetchMachineAvgStats(
+  gymId:     string,
+  startDate: string,
+  endDate:   string,
+): Promise<MachineAvgStats[]> {
+  try {
+    const { data, error } = await supabase
+      .from('workout_entries')
+      .select(`
+        machine_id,
+        machine_name,
+        machine_brand,
+        target_muscle,
+        workout_sessions!inner(gym_id, date),
+        workout_sets(weight, reps)
+      `)
+      .eq('workout_sessions.gym_id', gymId)
+      .gte('workout_sessions.date', startDate)
+      .lte('workout_sessions.date', endDate + 'T23:59:59');
+
+    if (error || !data) return [];
+
+    const map: Record<string, {
+      machineName:  string;
+      machineBrand: string;
+      targetMuscle: string;
+      totalSets:    number;
+      totalWeight:  number;
+      setCount:     number;
+      entryCount:   number;
+    }> = {};
+
+    for (const row of data) {
+      const id = row.machine_id;
+      if (!map[id]) {
+        map[id] = {
+          machineName:  row.machine_name,
+          machineBrand: row.machine_brand,
+          targetMuscle: row.target_muscle,
+          totalSets:    0,
+          totalWeight:  0,
+          setCount:     0,
+          entryCount:   0,
+        };
+      }
+      const sets = (row.workout_sets ?? []) as { weight: number; reps: number }[];
+      map[id].totalSets  += sets.length;
+      map[id].entryCount += 1;
+      for (const s of sets) {
+        if (s.weight > 0) {
+          map[id].totalWeight += s.weight;
+          map[id].setCount    += 1;
+        }
+      }
+    }
+
+    return Object.entries(map).map(([machineId, v]) => ({
+      machineId,
+      machineName:  v.machineName,
+      machineBrand: v.machineBrand,
+      targetMuscle: v.targetMuscle,
+      avgSets:      v.entryCount > 0 ? Math.round(v.totalSets  / v.entryCount * 10) / 10 : 0,
+      avgWeight:    v.setCount   > 0 ? Math.round(v.totalWeight / v.setCount   * 10) / 10 : 0,
+      usageCount:   v.entryCount,
+    })).sort((a, b) => b.usageCount - a.usageCount);
+  } catch (e) {
+    if (__DEV__) console.warn('[gymStats] fetchMachineAvgStats:', e);
+    return [];
+  }
+}

@@ -17,6 +17,7 @@ export interface AuthUser {
   managedGymIds: string[];
   gymId?: string;
   profileImageUrl?: string;
+  weightUnit?: 'kg' | 'lbs';
 }
 
 interface AuthContextValue {
@@ -33,6 +34,7 @@ interface AuthContextValue {
   switchRole:         (role: UserRole) => void;
   updateNickname:     (nickname: string) => Promise<{ error: string | null }>;
   updateProfileImage: (url: string) => void;
+  updateWeightUnit:   (unit: 'kg' | 'lbs') => void;
 }
 
 // --- Mock users
@@ -154,6 +156,7 @@ const AuthContext = createContext<AuthContextValue>({
   switchRole:         () => {},
   updateNickname:     async () => ({ error: null }),
   updateProfileImage: () => {},
+  updateWeightUnit:   () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -288,6 +291,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(prev => prev ? { ...prev, profileImageUrl: url } : prev);
   };
 
+  const updateWeightUnit = (unit: 'kg' | 'lbs') => {
+    setUser(prev => prev ? { ...prev, weightUnit: unit } : prev);
+  };
+
   const signInGoogle = async (): Promise<{ error: string | null }> => {
     try {
       if (!supabaseConfigured) {
@@ -415,6 +422,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       switchRole:         role => setUser(MOCK_USERS[role]),
       updateNickname,
       updateProfileImage,
+      updateWeightUnit,
     }}>
       {children}
     </AuthContext.Provider>

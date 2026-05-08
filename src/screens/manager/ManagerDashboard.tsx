@@ -35,10 +35,11 @@ import { FREE_WEIGHTS } from '../../data/freeWeights';
 import { submitGymRegistrationRequest } from '../../lib/db/gymRegistrationRequests';
 import { fetchGymMachineIds, saveGymMachineIds } from '../../lib/db/gymMachines';
 import { geocodeAddress } from '../../lib/geocoding';
+import GymStatsView from './GymStatsView';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-type ManagerView = 'home' | 'register' | 'edit' | 'machines' | 'manage';
+type ManagerView = 'home' | 'register' | 'edit' | 'machines' | 'manage' | 'stats';
 type ManagerTab  = 'routine' | 'notice' | 'request';
 
 interface GymForm {
@@ -301,6 +302,7 @@ interface HomeViewProps {
   onOpenEdit: (gym: ManagedGym) => void;
   onOpenMachines: (gym: ManagedGym) => void;
   onOpenManage: (gym: ManagedGym, tab?: ManagerTab) => void;
+  onOpenStats: (gym: ManagedGym) => void;
   onRegister: () => void;
 }
 
@@ -387,7 +389,7 @@ interface ManageViewProps {
 
 const STEP_LABELS = ['기본 정보', '연락처 정보', '검토'];
 
-function HomeView({ gyms, onOpenEdit, onOpenMachines, onOpenManage, onRegister }: HomeViewProps) {
+function HomeView({ gyms, onOpenEdit, onOpenMachines, onOpenManage, onOpenStats, onRegister }: HomeViewProps) {
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
       <View style={styles.homeSummary}>
@@ -434,6 +436,14 @@ function HomeView({ gyms, onOpenEdit, onOpenMachines, onOpenManage, onRegister }
           <TouchableOpacity style={[styles.gymActionBtn, { marginTop: 8 }]} onPress={() => onOpenManage(gym)} activeOpacity={0.8}>
             <Ionicons name="grid-outline" size={14} color={C.accent} />
             <Text style={styles.gymActionBtnText}>관리 센터 (루틴·공지·요청)</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.gymActionBtn, { marginTop: 8, backgroundColor: C.accentBg, borderColor: C.accent + '40' }]}
+            onPress={() => onOpenStats(gym)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="bar-chart-outline" size={14} color={C.accent} />
+            <Text style={[styles.gymActionBtnText, { color: C.accent }]}>이용 통계</Text>
           </TouchableOpacity>
         </View>
       ))}
@@ -1166,6 +1176,11 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
     originalMachineIds.current = [...ids];
   }, [push]);
 
+  const openStats = useCallback((gym: ManagedGym) => {
+    setSelectedGym(gym);
+    push('stats');
+  }, [push]);
+
   const openManage = useCallback((gym: ManagedGym, tab: ManagerTab = 'routine') => {
     setSelectedGym(gym);
     setActiveManagerTab(tab);
@@ -1351,6 +1366,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
     edit:     { title: selectedGym?.name ?? '정보 수정', subtitle: '프로필 수정' },
     machines: { title: selectedGym?.name ?? '머신 관리', subtitle: `${gymMachineIds.length}개 선택됨` },
     manage:   { title: selectedGym?.name ?? '관리 센터', subtitle: '루틴 · 공지 · 요청' },
+    stats:    { title: selectedGym?.name ?? '이용 통계', subtitle: '머신별 통계' },
   };
 
   const meta = VIEW_META[currentView] ?? { title: '매니저', subtitle: undefined };
@@ -1398,6 +1414,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
           onOpenEdit={openEdit}
           onOpenMachines={openMachines}
           onOpenManage={openManage}
+          onOpenStats={openStats}
           onRegister={onRegister}
         />
       )}
@@ -1479,6 +1496,13 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
             </View>
           )}
         </View>
+      )}
+      {currentView === 'stats' && selectedGym && (
+        <GymStatsView
+          gymId={selectedGym.id}
+          gymName={selectedGym.name}
+          totalMachines={gymMachineIds.length}
+        />
       )}
       {currentView === 'manage' && (
         <ManageView
