@@ -86,9 +86,18 @@ function HoursTable({ hours }: { hours: DayHours[] }) {
 }
 
 function HoursText({ hours }: { hours: string }) {
+  // "월 09:00~22:00, 화 09:00~22:00" 형식을 줄바꿈으로 분리
+  const lines = hours.split(',').map(s => s.trim()).filter(Boolean);
   return (
-    <View style={{ padding: 16 }}>
-      <Text style={s.infoText}>{hours}</Text>
+    <View style={{ padding: 16, gap: 8 }}>
+      {lines.map((line, i) => (
+        <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={[s.infoText, { fontWeight: '600', minWidth: 20 }]}>
+            {line.slice(0, 1)}
+          </Text>
+          <Text style={s.infoText}>{line.slice(1).trim()}</Text>
+        </View>
+      ))}
     </View>
   );
 }

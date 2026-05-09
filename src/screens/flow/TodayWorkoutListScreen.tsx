@@ -320,8 +320,13 @@ export default function TodayWorkoutListScreen({
           </View>
         ) : (
           orderedIds.map((id, i) => {
-            const machine = resolveMachine(id);
-            if (!machine) return null;
+            const machine = resolveMachine(id) ?? {
+              id,
+              name:         extraMachineInfo?.[id]?.name ?? id,
+              brand:        extraMachineInfo?.[id]?.brand ?? '알 수 없음',
+              targetMuscle: extraMachineInfo?.[id]?.targetMuscle ?? '',
+              category:     '',
+            } as Machine;
             return (
               <MachineListRow
                 key={id}

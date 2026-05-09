@@ -37,7 +37,7 @@ import { fetchGymMachineIds, saveGymMachineIds } from '../../lib/db/gymMachines'
 import { geocodeAddress } from '../../lib/geocoding';
 import GymStatsView from './GymStatsView';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -1428,23 +1428,26 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
     async function upload(uri: string) {
       if (!user || !selectedGym) return;
       try {
-        const photoId    = `gym_photo_${Date.now()}`;
-        const fileName   = `gym-photos/${selectedGym.id}/${photoId}.jpg`;
-        const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? 'https://okrouzqqvfioodfieljv.supabase.co';
-        const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
-        const uploadUrl   = `${supabaseUrl}/storage/v1/object/workout-photos/${fileName}`;
-        const result      = await FileSystem.uploadAsync(uploadUrl, uri, {
-          httpMethod:  'POST',
-          uploadType:  FileSystem.FileSystemUploadType.BINARY_CONTENT,
-          headers: {
-            'Authorization': `Bearer ${supabaseKey}`,
-            'Content-Type':  'image/jpeg',
-            'x-upsert':      'true',
-          },
+        const photoId  = `gym_photo_${Date.now()}`;
+        const fileName = `${user.id}/gym-${selectedGym.id}-${photoId}.jpg`;
+
+        // base64로 변환 후 Supabase SDK로 업로드
+        const base64 = await FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.Base64,
         });
-        if (result.status !== 200) {
-          if (__DEV__) console.warn('[handleAddPhoto] 업로드 실패:', result.body);
-          Alert.alert('업로드 실패', '사진 업로드에 실패했습니다. 다시 시도해주세요.');
+        const byteArray = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+
+        const { supabase } = await import('../../lib/supabase');
+        const { error } = await supabase.storage
+          .from('workout-photos')
+          .upload(fileName, byteArray, {
+            contentType: 'image/jpeg',
+            upsert: true,
+          });
+
+        if (error) {
+          if (__DEV__) console.warn('[handleAddPhoto] 업로드 실패:', error.message);
+          Alert.alert('업로드 실패', '사진 업로드에 실패했습니다: ' + error.message);
           return;
         }
         setPhotos(prev => [...prev, photoId]);
