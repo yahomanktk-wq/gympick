@@ -36,6 +36,7 @@ import { submitGymRegistrationRequest } from '../../lib/db/gymRegistrationReques
 import { fetchGymMachineIds, saveGymMachineIds } from '../../lib/db/gymMachines';
 import { geocodeAddress } from '../../lib/geocoding';
 import GymStatsView from './GymStatsView';
+import * as ImagePicker from 'expo-image-picker';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -332,6 +333,7 @@ interface EditViewProps {
   photos: string[];
   setPhotos: React.Dispatch<React.SetStateAction<string[]>>;
   onSave: () => void;
+  onAddPhoto: () => void;
 }
 
 interface MachinesViewProps {
@@ -564,7 +566,7 @@ function RegisterView({
 
 function EditView({
   editForm, onChangeEditField, editHours, updateEditDay,
-  editNotices, toggleEditNotice, photos, setPhotos, onSave,
+  editNotices, toggleEditNotice, photos, setPhotos, onSave, onAddPhoto,
 }: EditViewProps) {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -593,7 +595,7 @@ function EditView({
                 </TouchableOpacity>
               </View>
             ))}
-            <TouchableOpacity style={[styles.photoTile, styles.photoUploadBtn, { width: PHOTO_SIZE, height: PHOTO_SIZE }]} onPress={() => Alert.alert('사진 업로드', '실제 앱에서는 카메라 또는 앨범을 엽니다.')} activeOpacity={0.75}>
+            <TouchableOpacity style={[styles.photoTile, styles.photoUploadBtn, { width: PHOTO_SIZE, height: PHOTO_SIZE }]} onPress={onAddPhoto} activeOpacity={0.75}>
               <Ionicons name="camera-outline" size={22} color={C.textSub} />
               <Text style={styles.photoUploadText}>사진 추가</Text>
             </TouchableOpacity>
@@ -1181,10 +1183,39 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
     push('stats');
   }, [push]);
 
+  async function loadRoutines(gymId: string) {
+    const { supabase } = await import('../../lib/supabase');
+    const { data, error } = await supabase
+      .from('gym_routines')
+      .select('id, gym_id, name, body_part, machine_ids, created_at')
+      .eq('gym_id', gymId)
+      .order('created_at', { ascending: true });
+
+    if (error || !data) {
+      setGymRoutines(makeMockRoutines(gymId));
+      return;
+    }
+
+    setGymRoutines(data.map(r => {
+      const machineIds: string[] = r.machine_ids ?? [];
+      return {
+        id:        r.id,
+        gymId:     r.gym_id,
+        name:      r.name,
+        bodyPart:  r.body_part,
+        machines:  machineIds.map(id => {
+          const m = MACHINES.find(x => x.id === id);
+          return m ? { id: m.id, name: m.name, brand: m.brand, targetMuscle: m.targetMuscle, category: m.category } : { id, name: id, brand: '', targetMuscle: '', category: '' };
+        }),
+        createdAt: r.created_at,
+      };
+    }));
+  }
+
   const openManage = useCallback((gym: ManagedGym, tab: ManagerTab = 'routine') => {
     setSelectedGym(gym);
     setActiveManagerTab(tab);
-    setGymRoutines(makeMockRoutines(gym.id));
+    loadRoutines(gym.id);
     setAnnouncements(getAnnouncements(gym.id));
     const reqs = getRequestsByGymId(gym.id);
     setRequests(reqs);
@@ -1303,24 +1334,70 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
     setRoutineModalVisible(true);
   }, []);
 
-  const saveRoutine = useCallback(() => {
+  const saveRoutine = useCallback(async () => {
     if (!routineName.trim()) { Alert.alert('입력 오류', '루틴 이름을 입력해 주세요.'); return; }
-    const machines = [...routineSelectedIds].map(id => {
+    if (routineSelectedIds.size === 0 || !selectedGym) return;
+
+    const machineIds = [...routineSelectedIds];
+    const machines   = machineIds.map(id => {
       const m = MACHINES.find(x => x.id === id);
       return m ? { id: m.id, name: m.name, brand: m.brand, targetMuscle: m.targetMuscle, category: m.category } : { id, name: id, brand: '', targetMuscle: '', category: '' };
     });
+
+    const { supabase } = await import('../../lib/supabase');
+
     if (editingRoutineId) {
-      setGymRoutines(prev => prev.map(r => r.id === editingRoutineId ? { ...r, name: routineName.trim(), bodyPart: routineBodyPart, machines } : r));
+      const { error } = await supabase
+        .from('gym_routines')
+        .update({
+          name:        routineName.trim(),
+          body_part:   routineBodyPart,
+          machine_ids: machineIds,
+          updated_at:  new Date().toISOString(),
+        })
+        .eq('id', editingRoutineId);
+
+      if (error) { Alert.alert('오류', '루틴 수정에 실패했습니다: ' + error.message); return; }
+      setGymRoutines(prev =>
+        prev.map(r => r.id === editingRoutineId
+          ? { ...r, name: routineName.trim(), bodyPart: routineBodyPart, machines }
+          : r
+        )
+      );
     } else {
-      setGymRoutines(prev => [{ id: uid(), gymId: selectedGym?.id ?? '', name: routineName.trim(), bodyPart: routineBodyPart, machines, createdAt: new Date().toISOString() }, ...prev]);
+      const newId = uid();
+      const { error } = await supabase
+        .from('gym_routines')
+        .insert({
+          id:          newId,
+          gym_id:      selectedGym.id,
+          name:        routineName.trim(),
+          body_part:   routineBodyPart,
+          machine_ids: machineIds,
+          created_at:  new Date().toISOString(),
+        });
+
+      if (error) { Alert.alert('오류', '루틴 저장에 실패했습니다: ' + error.message); return; }
+      setGymRoutines(prev => [
+        { id: newId, gymId: selectedGym.id, name: routineName.trim(), bodyPart: routineBodyPart, machines, createdAt: new Date().toISOString() },
+        ...prev,
+      ]);
     }
+
     setRoutineModalVisible(false);
+    setRoutineName(''); setRoutineBodyPart('전체'); setRoutineSelectedIds(new Set()); setEditingRoutineId(null);
   }, [routineName, routineSelectedIds, editingRoutineId, routineBodyPart, selectedGym]);
 
   const deleteRoutine = useCallback((id: string) =>
     Alert.alert('루틴 삭제', '이 루틴을 삭제할까요?', [
       { text: '취소', style: 'cancel' },
-      { text: '삭제', style: 'destructive', onPress: () => setGymRoutines(prev => prev.filter(r => r.id !== id)) },
+      {
+        text: '삭제', style: 'destructive', onPress: async () => {
+          const { supabase } = await import('../../lib/supabase');
+          await supabase.from('gym_routines').delete().eq('id', id);
+          setGymRoutines(prev => prev.filter(r => r.id !== id));
+        },
+      },
     ]), []);
 
   // ─── Announcement tab helpers ─────────────────────────────────────────────
@@ -1344,19 +1421,78 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
     setReadIds(prev => new Set([...prev, id]));
   }, []);
 
-  // ─── Save edits ───────────────────────────────────────────────────────────
+  // ─── Photo upload ─────────────────────────────────────────────────────────
 
-  const saveEdits = useCallback(() =>
-    Alert.alert('수정 내용 제출', '수정 사항은 관리자 검토 후 반영됩니다.', [
-      { text: '취소', style: 'cancel' },
+  const handleAddPhoto = useCallback(async () => {
+    async function upload(uri: string) {
+      if (!user || !selectedGym) return;
+      const photoId  = `gym_photo_${Date.now()}`;
+      const fileName = `gym-photos/${selectedGym.id}/${photoId}.jpg`;
+      const { supabase } = await import('../../lib/supabase');
+      const response     = await fetch(uri);
+      const blob         = await response.blob();
+      const arrayBuffer  = await blob.arrayBuffer();
+      const { error }    = await supabase.storage
+        .from('workout-photos')
+        .upload(fileName, arrayBuffer, { contentType: 'image/jpeg', upsert: true });
+      if (!error) {
+        setPhotos(prev => [...prev, photoId]);
+      } else {
+        Alert.alert('업로드 실패', error.message);
+      }
+    }
+
+    Alert.alert('사진 추가', '사진을 선택하세요', [
       {
-        text: '제출',
-        onPress: () => {
-          setGyms(prev => prev.map(g => g.id === selectedGym?.id ? { ...g, ...editForm, hours: serializeHours(editHours) } : g));
-          Alert.alert('수정 제출 완료', '관리자가 곧 검토할 예정입니다.', [{ text: '확인', onPress: pop }]);
+        text: '카메라로 찍기',
+        onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') { Alert.alert('권한 필요', '카메라 접근 권한이 필요합니다.'); return; }
+          const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.85 });
+          if (!result.canceled && result.assets[0]) await upload(result.assets[0].uri);
         },
       },
-    ]), [selectedGym, editForm, editHours, serializeHours, pop]);
+      {
+        text: '앨범에서 선택',
+        onPress: async () => {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== 'granted') { Alert.alert('권한 필요', '사진 라이브러리 접근 권한이 필요합니다.'); return; }
+          const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.85 });
+          if (!result.canceled && result.assets[0]) await upload(result.assets[0].uri);
+        },
+      },
+      { text: '취소', style: 'cancel' },
+    ]);
+  }, [user, selectedGym]);
+
+  // ─── Save edits ───────────────────────────────────────────────────────────
+
+  const saveEdits = useCallback(async () => {
+    if (!selectedGym) return;
+    const updatedHours = serializeHours(editHours);
+    const { supabase }  = await import('../../lib/supabase');
+    const { error }     = await supabase
+      .from('gyms')
+      .update({
+        name:        editForm.name.trim(),
+        location:    editForm.location.trim(),
+        description: editForm.description.trim(),
+        phone:       editForm.phone.trim(),
+        website:     editForm.website.trim(),
+        hours:       updatedHours,
+      })
+      .eq('id', selectedGym.id);
+
+    if (error) {
+      Alert.alert('저장 실패', '정보 수정에 실패했습니다: ' + error.message);
+      return;
+    }
+
+    setGyms(prev => prev.map(g =>
+      g.id === selectedGym.id ? { ...g, ...editForm, hours: updatedHours } : g
+    ));
+    Alert.alert('수정 완료', '헬스장 정보가 수정되었습니다.', [{ text: '확인', onPress: pop }]);
+  }, [selectedGym, editForm, editHours, serializeHours, pop]);
 
   // ─── View meta ────────────────────────────────────────────────────────────
 
@@ -1446,6 +1582,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
           photos={photos}
           setPhotos={setPhotos}
           onSave={saveEdits}
+          onAddPhoto={handleAddPhoto}
         />
       )}
       {currentView === 'machines' && (

@@ -33,6 +33,9 @@ export interface Gym {
   description:    string;
   latitude?:      number | null;
   longitude?:     number | null;
+  hours?:         string | null;
+  phone?:         string | null;
+  website?:       string | null;
 }
 
 // --- machines
