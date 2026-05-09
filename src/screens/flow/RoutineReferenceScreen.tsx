@@ -11,7 +11,7 @@
  * onSelectMachineIds([])  → Start Fresh (빈 리스트)
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -25,7 +25,6 @@ import { C, R, T } from '../../theme';
 import { WorkoutLog } from '../../data/types';
 import { MACHINES } from '../../data';
 import {
-  getGymRoutines,
   getCommunityRoutines,
   GymRoutine,
   CommunityRoutine,
@@ -258,13 +257,38 @@ export default function RoutineReferenceScreen({
       .slice(0, 5); // show up to 5 recent
   }, [pastSessions, gymId, selectedMuscles]);
 
-  const gymRoutines = useMemo(
-    () =>
-      selectedMuscles.length === 1
-        ? getGymRoutines(gymId, selectedMuscles[0])
-        : getGymRoutines(gymId),
-    [gymId, selectedMuscles],
-  );
+  const [gymRoutines, setGymRoutines] = useState<GymRoutine[]>([]);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const { supabase } = await import('../../lib/supabase');
+        const { data, error } = await supabase
+          .from('gym_routines')
+          .select('id, gym_id, name, body_part, machine_ids, created_at')
+          .eq('gym_id', gymId)
+          .order('created_at', { ascending: true });
+
+        if (error || !data) return;
+
+        const filtered = selectedMuscles.length === 1
+          ? data.filter(r => r.body_part === selectedMuscles[0] || r.body_part === '전체')
+          : data;
+
+        setGymRoutines(filtered.map(r => ({
+          id:          r.id as string,
+          gymId:       r.gym_id as string,
+          name:        r.name as string,
+          bodyPart:    r.body_part as string,
+          machineIds:  (r.machine_ids ?? []) as string[],
+          authorLabel: '',
+        })));
+      } catch (e) {
+        if (__DEV__) console.warn('[RoutineReferenceScreen] gym_routines fetch error:', e);
+      }
+    }
+    load();
+  }, [gymId, selectedMuscles]);
 
   const communityRoutines = useMemo(
     () =>

@@ -37,6 +37,7 @@ import { fetchGymMachineIds, saveGymMachineIds } from '../../lib/db/gymMachines'
 import { geocodeAddress } from '../../lib/geocoding';
 import GymStatsView from './GymStatsView';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -1426,19 +1427,31 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
   const handleAddPhoto = useCallback(async () => {
     async function upload(uri: string) {
       if (!user || !selectedGym) return;
-      const photoId  = `gym_photo_${Date.now()}`;
-      const fileName = `gym-photos/${selectedGym.id}/${photoId}.jpg`;
-      const { supabase } = await import('../../lib/supabase');
-      const response     = await fetch(uri);
-      const blob         = await response.blob();
-      const arrayBuffer  = await blob.arrayBuffer();
-      const { error }    = await supabase.storage
-        .from('workout-photos')
-        .upload(fileName, arrayBuffer, { contentType: 'image/jpeg', upsert: true });
-      if (!error) {
+      try {
+        const photoId    = `gym_photo_${Date.now()}`;
+        const fileName   = `gym-photos/${selectedGym.id}/${photoId}.jpg`;
+        const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? 'https://okrouzqqvfioodfieljv.supabase.co';
+        const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+        const uploadUrl   = `${supabaseUrl}/storage/v1/object/workout-photos/${fileName}`;
+        const result      = await FileSystem.uploadAsync(uploadUrl, uri, {
+          httpMethod:  'POST',
+          uploadType:  FileSystem.FileSystemUploadType.BINARY_CONTENT,
+          headers: {
+            'Authorization': `Bearer ${supabaseKey}`,
+            'Content-Type':  'image/jpeg',
+            'x-upsert':      'true',
+          },
+        });
+        if (result.status !== 200) {
+          if (__DEV__) console.warn('[handleAddPhoto] 업로드 실패:', result.body);
+          Alert.alert('업로드 실패', '사진 업로드에 실패했습니다. 다시 시도해주세요.');
+          return;
+        }
         setPhotos(prev => [...prev, photoId]);
-      } else {
-        Alert.alert('업로드 실패', error.message);
+        Alert.alert('업로드 완료', '사진이 업로드되었습니다.');
+      } catch (e) {
+        if (__DEV__) console.warn('[handleAddPhoto] 오류:', e);
+        Alert.alert('업로드 실패', '사진 업로드 중 오류가 발생했습니다.');
       }
     }
 
@@ -1471,20 +1484,28 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
     if (!selectedGym) return;
     const updatedHours = serializeHours(editHours);
     const { supabase }  = await import('../../lib/supabase');
-    const { error }     = await supabase
+
+    const updatePayload = {
+      name:        (editForm.name        ?? '').trim(),
+      location:    (editForm.location    ?? '').trim(),
+      description: (editForm.description ?? '').trim(),
+      phone:       (editForm.phone       ?? '').trim(),
+      website:     (editForm.website     ?? '').trim(),
+      hours:       updatedHours || null,
+    };
+
+    if (__DEV__) console.log('[saveEdits] payload:', updatePayload, 'gymId:', selectedGym.id);
+
+    const { data, error } = await supabase
       .from('gyms')
-      .update({
-        name:        editForm.name.trim(),
-        location:    editForm.location.trim(),
-        description: editForm.description.trim(),
-        phone:       editForm.phone.trim(),
-        website:     editForm.website.trim(),
-        hours:       updatedHours,
-      })
-      .eq('id', selectedGym.id);
+      .update(updatePayload)
+      .eq('id', selectedGym.id)
+      .select();
+
+    if (__DEV__) console.log('[saveEdits] result:', data, error);
 
     if (error) {
-      Alert.alert('저장 실패', '정보 수정에 실패했습니다: ' + error.message);
+      Alert.alert('저장 실패', `정보 수정에 실패했습니다.\n${error.message}\n코드: ${error.code}`);
       return;
     }
 

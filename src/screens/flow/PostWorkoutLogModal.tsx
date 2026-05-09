@@ -540,7 +540,16 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
                   <MachineCardBorder width={MACHINE_CARD_W2}>
                     <MachineCard machine={m} variant="grid" width={MACHINE_CARD_W2} />
                   </MachineCardBorder>
-                  {localSelectedId === m.id && (
+                  {preloadedIds.has(m.id) && (
+                    <View style={s.cardOrderOverlay}>
+                      <View style={s.cardOrderBadge}>
+                        <Text style={s.cardOrderText}>
+                          {[...preloadedIds].indexOf(m.id) + 1}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                  {!preloadedIds.has(m.id) && localSelectedId === m.id && (
                     <View style={s.cardSelectedOverlay}>
                       <View style={s.cardSelectedBadge}>
                         <Ionicons name="checkmark" size={14} color={C.bg} />
@@ -579,7 +588,16 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
                       width={MACHINE_CARD_W2}
                     />
                   </MachineCardBorder>
-                  {localSelectedId === fw.id && (
+                  {preloadedIds.has(fw.id) && (
+                    <View style={s.cardOrderOverlay}>
+                      <View style={s.cardOrderBadge}>
+                        <Text style={s.cardOrderText}>
+                          {[...preloadedIds].indexOf(fw.id) + 1}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                  {!preloadedIds.has(fw.id) && localSelectedId === fw.id && (
                     <View style={s.cardSelectedOverlay}>
                       <View style={s.cardSelectedBadge}>
                         <Ionicons name="checkmark" size={14} color={C.bg} />
@@ -1278,7 +1296,8 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   // Template loading
   const [showTemplates,       setShowTemplates]       = useState(false);
   const [templates,           setTemplates]           = useState<WorkoutTemplate[]>([]);
-  const [preloadedIds,        setPreloadedIds]        = useState<Set<string>>(new Set());
+  const [preloadedIdsOrdered, setPreloadedIdsOrdered] = useState<string[]>([]);
+  const preloadedIds = useMemo(() => new Set(preloadedIdsOrdered), [preloadedIdsOrdered]);
   const [routineMachineIds,   setRoutineMachineIds]   = useState<string[]>([]);
   const [routineReadOnly,     setRoutineReadOnly]     = useState(false);
   const [routineExtraInfo,    setRoutineExtraInfo]    = useState<MachineExtraInfo | undefined>(undefined);
@@ -1325,7 +1344,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
       setSelectedColor('#ffffff');
       setShowTemplates(false);
       setTemplates(getTemplates());
-      setPreloadedIds(new Set());
+      setPreloadedIdsOrdered([]);
       setRoutineMachineIds([]);
       setRoutineReadOnly(false);
     }
@@ -1343,7 +1362,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     // Pre-load muscles from the template
     setSelectedMuscles(new Set(tpl.muscles));
     // Mark template exercises as pre-loaded (visible but not yet logged)
-    setPreloadedIds(new Set(tpl.exerciseIds));
+    setPreloadedIdsOrdered(tpl.exerciseIds);
     setShowTemplates(false);
   }
 
@@ -1771,10 +1790,9 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             pastSessions={sessions}
             onSelectMachineIds={(ids, extraInfo) => {
               if (ids.length === 0) {
-                // Start Fresh: skip today-list, go directly to machine selection
                 setStep('exercise-select');
               } else {
-                // Routine-based: show pre-populated read-only list
+                setPreloadedIdsOrdered(ids);
                 setRoutineMachineIds(ids);
                 setRoutineReadOnly(true);
                 setRoutineExtraInfo(extraInfo);
@@ -1794,7 +1812,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             readOnly={routineReadOnly}
             extraMachineInfo={routineExtraInfo}
             onConfirm={(ids) => {
-              setPreloadedIds(new Set(ids));
+              setPreloadedIdsOrdered(ids);
               setStep('exercise-select');
             }}
             onBack={goBack}
@@ -1935,6 +1953,12 @@ const s = StyleSheet.create({
 
   // Machine card 2-column grid for exercise select
   machineCardGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  cardOrderOverlay: { position: 'absolute', top: 8, left: 8 },
+  cardOrderBadge: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center',
+  },
+  cardOrderText: { fontSize: 13, fontWeight: '900', color: C.bg },
   cardSelectedOverlay: { position: 'absolute', top: 8, right: 8 },
   cardSelectedBadge: {
     width: 28, height: 28, borderRadius: 14,

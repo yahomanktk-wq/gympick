@@ -85,6 +85,14 @@ function HoursTable({ hours }: { hours: DayHours[] }) {
   );
 }
 
+function HoursText({ hours }: { hours: string }) {
+  return (
+    <View style={{ padding: 16 }}>
+      <Text style={s.infoText}>{hours}</Text>
+    </View>
+  );
+}
+
 // --- Props
 
 interface Props {
@@ -286,13 +294,25 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
               </View>
             </View>
 
+            {/* ── 헬스장 소개 ── */}
+            {gym.description ? (
+              <>
+                <Text style={s.sectionTitle}>헬스장 소개</Text>
+                <View style={s.card}>
+                  <Text style={[s.infoText, { padding: 16, lineHeight: 22 }]}>
+                    {gym.description}
+                  </Text>
+                </View>
+              </>
+            ) : null}
+
             {/* ── Info card ── */}
             <View style={s.infoCard}>
               <View style={s.infoRow}>
                 <View style={s.infoIcon}>
                   <Ionicons name="call-outline" size={14} color={C.accent} />
                 </View>
-                <Text style={s.infoText}>{details?.phone || '정보 없음'}</Text>
+                <Text style={s.infoText}>{gym.phone || details?.phone || '정보 없음'}</Text>
               </View>
               <View style={[s.infoRow, { marginTop: 12 }]}>
                 <View style={s.infoIcon}>
@@ -305,7 +325,9 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
             {/* ── Operating hours ── */}
             <Text style={s.sectionTitle}>영업 시간</Text>
             <View style={s.card}>
-              {details?.hours ? (
+              {gym.hours ? (
+                <HoursText hours={gym.hours} />
+              ) : details?.hours ? (
                 <HoursTable hours={details.hours} />
               ) : (
                 <Text style={[s.infoText, { padding: 16 }]}>운영시간 정보 없음</Text>
