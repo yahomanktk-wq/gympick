@@ -216,7 +216,7 @@ export default function HomeScreen() {
     }));
   }, [lastSession]);
 
-  function openNearby()          { nav.navigate('FindGym'); }
+  function openNearby()          { nav.navigate('FindGym', { initialTab: 'gym', viewMode: 'map' }); }
   function openGym(id: string)   { setGymDetailId(id); setGymDetailVisible(true); }
 
   return (
@@ -477,7 +477,7 @@ export default function HomeScreen() {
 
           {/* Exercise rows */}
           {lastMachineRows.map((m, i) => (
-            <React.Fragment key={m.name}>
+            <React.Fragment key={`${m.name}-${i}`}>
               <View style={st.exRow}>
                 <Text style={st.exName} numberOfLines={1}>{m.name}</Text>
                 <Text style={st.exMeta}>{m.sets}×{m.reps} · {m.weight} kg</Text>
