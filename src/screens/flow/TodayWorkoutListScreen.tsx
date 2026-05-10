@@ -12,7 +12,7 @@
  * 세트/중량은 절대 자동 입력되지 않음 — 머신 순서만 관리.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -211,8 +211,8 @@ function AddMachineRow({
 // Main component
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Global fallback map for all known machines (covers cases where machineId is not in current gym)
-const ALL_MACHINES_MAP: Record<string, Machine> = Object.fromEntries(
+// 로컬 fallback (Supabase 로드 전 사용)
+const LOCAL_MACHINES_MAP: Record<string, Machine> = Object.fromEntries(
   MACHINES.map((m) => [m.id, m]),
 );
 
@@ -226,9 +226,26 @@ export default function TodayWorkoutListScreen({
   onBack,
   onClose,
 }: TodayWorkoutListScreenProps) {
-  const [orderedIds, setOrderedIds] = useState<string[]>(initialMachineIds);
-  const [addExpanded, setAddExpanded] = useState(false);
-  const [muscleFilter, setMuscleFilter] = useState<string | null>(null);
+  const [orderedIds,        setOrderedIds]        = useState<string[]>(initialMachineIds);
+  const [addExpanded,       setAddExpanded]       = useState(false);
+  const [muscleFilter,      setMuscleFilter]      = useState<string | null>(null);
+  const [dynamicMachineMap, setDynamicMachineMap] = useState<Record<string, Machine>>(LOCAL_MACHINES_MAP);
+
+  // Supabase에서 전체 머신(프리웨이트 포함) 로드 → fw37 등 처리
+  useEffect(() => {
+    async function load() {
+      try {
+        const { fetchMachines } = await import('../../lib/db/machines');
+        const all = await fetchMachines();
+        if (all.length > 0) {
+          setDynamicMachineMap(Object.fromEntries(all.map(m => [m.id, m as Machine])));
+        }
+      } catch (e) {
+        if (__DEV__) console.warn('[TodayWorkoutListScreen] fetchMachines error:', e);
+      }
+    }
+    load();
+  }, []);
 
   // Build a lookup map for fast access
   const machineMap = useMemo(
@@ -236,10 +253,10 @@ export default function TodayWorkoutListScreen({
     [gymMachines],
   );
 
-  // Resolve a machine by ID: gym map → global MACHINES map → extraMachineInfo
+  // Resolve: 헬스장 머신 → Supabase 전체 머신(프리웨이트 포함) → extraMachineInfo
   function resolveMachine(id: string): Machine | null {
-    if (machineMap[id]) return machineMap[id];
-    if (ALL_MACHINES_MAP[id]) return ALL_MACHINES_MAP[id];
+    if (machineMap[id])        return machineMap[id];
+    if (dynamicMachineMap[id]) return dynamicMachineMap[id];
     const extra = extraMachineInfo?.[id];
     if (extra) return { id, name: extra.name, brand: extra.brand, targetMuscle: extra.targetMuscle, category: 'Unknown' } as Machine;
     return null;
