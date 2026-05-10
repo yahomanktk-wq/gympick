@@ -5,6 +5,8 @@ import * as WebBrowser from 'expo-web-browser';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { UserRole } from '../data/types';
 import { supabase } from '../lib/supabase';
+import { fetchGymFavorites } from '../lib/db/gymFavorites';
+import { initGymFavorites } from '../data/gymFavoriteStore';
 
 // --- Types
 
@@ -175,6 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         const profileData = await fetchProfileData(session.user.id);
         setUser(mapSupabaseUser(session.user, profileData));
+        fetchGymFavorites(session.user.id).then(ids => initGymFavorites(ids));
       } else {
         setUser(null);
       }
@@ -185,6 +188,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         fetchProfileData(session.user!.id).then(profileData => {
           setUser(mapSupabaseUser(session.user!, profileData));
+          fetchGymFavorites(session.user!.id).then(ids => initGymFavorites(ids));
         });
       } else {
         setUser(null);
@@ -203,6 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: '이메일 또는 비밀번호가 올바르지 않습니다.' };
       }
       setUser(entry.user);
+      initGymFavorites([]);
       return { error: null };
     }
 
@@ -215,6 +220,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await ensureProfileExists(data.user);
       const profileData = await fetchProfileData(data.user.id);
       setUser(mapSupabaseUser(data.user, profileData));
+      const gymFavIds = await fetchGymFavorites(data.user.id);
+      initGymFavorites(gymFavIds);
     }
     return { error: null };
   };
@@ -265,6 +272,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (supabaseConfigured) {
       await supabase.auth.signOut();
     }
+    initGymFavorites([]);
     setUser(null);
   };
 
@@ -306,6 +314,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role:          'user',
           managedGymIds: [],
         });
+        initGymFavorites([]);
         return { error: null };
       }
 
@@ -343,6 +352,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             await ensureProfileExists(sessionData.user);
             const profileData = await fetchProfileData(sessionData.user.id);
             setUser(mapSupabaseUser(sessionData.user, profileData));
+            const gymFavIds = await fetchGymFavorites(sessionData.user.id);
+            initGymFavorites(gymFavIds);
           }
           return { error: null };
         }
@@ -387,6 +398,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role:          'user',
           managedGymIds: [],
         });
+        initGymFavorites([]);
         return { error: null };
       }
 
@@ -400,6 +412,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await ensureProfileExists(data.user);
         const profileData = await fetchProfileData(data.user.id);
         setUser(mapSupabaseUser(data.user, profileData));
+        const gymFavIds = await fetchGymFavorites(data.user.id);
+        initGymFavorites(gymFavIds);
       }
       return { error: null };
     } catch (e: any) {

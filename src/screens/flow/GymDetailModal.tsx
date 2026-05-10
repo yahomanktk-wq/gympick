@@ -24,6 +24,7 @@ import { GymWithMachines } from '../../data/types';
 import { GYM_DETAILS, DayHours } from '../../data/gymDetails';
 import MachineDetailModal from './MachineDetailModal';
 import { isGymFavorite, toggleGymFavorite } from '../../data/gymFavoriteStore';
+import { addGymFavoriteDB, removeGymFavoriteDB } from '../../lib/db/gymFavorites';
 import GymCommunityTab from './community/GymCommunityTab';
 import MachineCard from '../../components/MachineCard';
 import MachineCardBorder from '../../components/MachineCardBorder';
@@ -191,7 +192,16 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
           <TouchableOpacity
             style={s.navBtn}
             activeOpacity={0.7}
-            onPress={() => { if (!user) { onClose(); nav.navigate('Profile'); return; } const next = toggleGymFavorite(gym.id); setIsFav(next); }}
+            onPress={async () => {
+              if (!user) { onClose(); nav.navigate('Profile'); return; }
+              const next = toggleGymFavorite(gym.id);
+              setIsFav(next);
+              if (next) {
+                await addGymFavoriteDB(user.id, gym.id);
+              } else {
+                await removeGymFavoriteDB(user.id, gym.id);
+              }
+            }}
           >
             <Ionicons
               name={isFav ? 'bookmark' : 'bookmark-outline'}

@@ -16,6 +16,7 @@ import { C, R } from '../theme';
 import { MACHINES } from '../data';
 import { getFavoriteMachineIds, removeFavoriteMachine } from '../data/favoritesStore';
 import { getGymFavorites, removeGymFavorite } from '../data/gymFavoriteStore';
+import { useAuth } from '../context/AuthContext';
 import GymDetailModal     from './flow/GymDetailModal';
 import MachineDetailModal from './flow/MachineDetailModal';
 import MachineCard       from '../components/MachineCard';
@@ -87,8 +88,13 @@ function FilterPills<T extends string>({
 // --- Screen
 
 export default function FavoritesScreen({ onClose }: { onClose: () => void }) {
-  // Gym favorites from store
+  const { user } = useAuth();
+  // Gym favorites from store — re-read when user changes (after login/logout)
   const [favoriteGymIds,    setFavoriteGymIds]    = useState<string[]>(() => getGymFavorites());
+
+  useEffect(() => {
+    setFavoriteGymIds(getGymFavorites());
+  }, [user?.id]);
   const [removedMachineIds, setRemovedMachineIds] = useState<Set<string>>(new Set());
   const [userLocation,      setUserLocation]      = useState<{ latitude: number; longitude: number } | null>(null);
 

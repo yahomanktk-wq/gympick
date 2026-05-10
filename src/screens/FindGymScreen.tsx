@@ -218,7 +218,11 @@ export default function FindGymScreen() {
     () => new Set(FAVORITE_MACHINES.map(f => f.machineId))
   );
   const [activeTab,         setActiveTab]         = useState<'machine' | 'gym' | 'favorite' | 'ranking'>('machine');
-  const [gymFavoriteIds] = useState<string[]>(() => getGymFavorites());
+  const [gymFavoriteIds, setGymFavoriteIds] = useState<string[]>(() => getGymFavorites());
+
+  useEffect(() => {
+    setGymFavoriteIds(getGymFavorites());
+  }, [user?.id]);
   const [olympicVisible,    setOlympicVisible]    = useState(false);
   const [showGymRequestModal, setShowGymRequestModal] = useState(false);
   const [reqGymName,   setReqGymName]   = useState('');
