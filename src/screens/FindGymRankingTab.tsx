@@ -88,10 +88,7 @@ function GymRow({ entry, onPress }: { entry: GymRankingEntry; onPress: () => voi
         <Text style={rs.rankSub} numberOfLines={1}>{entry.location}</Text>
       </View>
       <View style={rs.rankScoreBox}>
-        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-          <Text style={rs.rankScoreLabel}>❤️ {entry.favoriteCount}</Text>
-          <Text style={rs.rankScoreLabel}>📝 {entry.reviewCount}</Text>
-        </View>
+        <Text style={rs.rankScoreLabel}>❤️ {entry.favoriteCount}</Text>
       </View>
       <Ionicons name="chevron-forward" size={14} color={C.textDim} />
     </TouchableOpacity>
