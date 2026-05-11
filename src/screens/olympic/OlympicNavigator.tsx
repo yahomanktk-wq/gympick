@@ -27,6 +27,7 @@ interface Props {
 export default function OlympicNavigator({ visible, onClose }: Props) {
   const [page,           setPage]           = useState<Page>('home');
   const [bodyPart,       setBodyPart]       = useState<string>('Chest');
+  const [olympicCategory, setOlympicCategory] = useState<string>('전체');
   const [tournamentSize, setTournamentSize] = useState<number>(8);
   const [gymId]                             = useState<string | null>(null);
   const [winner,         setWinner]         = useState<Machine | null>(null);
@@ -48,7 +49,7 @@ export default function OlympicNavigator({ visible, onClose }: Props) {
       case 'home':
         return (
           <OlympicHomeScreen
-            onSelectBodyPart={(bp, size) => { setBodyPart(bp); setTournamentSize(size); setPage('battle'); }}
+            onSelectBodyPart={(bp, category, size) => { setBodyPart(bp); setOlympicCategory(category); setTournamentSize(size); setPage('battle'); }}
             onViewRankings={() => setPage('ranking')}
             onClose={handleClose}
           />
@@ -99,6 +100,7 @@ export default function OlympicNavigator({ visible, onClose }: Props) {
         return (
           <OlympicBattleScreen
             bodyPart={bodyPart}
+            category={olympicCategory}
             gymId={gymId}
             tournamentSize={tournamentSize}
             onComplete={(w, votes) => {

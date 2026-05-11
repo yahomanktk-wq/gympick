@@ -1,22 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Modal,
   TouchableOpacity, SafeAreaView, StatusBar, Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T } from '../../theme';
+import { supabase } from '../../lib/supabase';
+import ChestIcon     from '../../assets/muscle-icons/chest.svg';
+import BackIcon      from '../../assets/muscle-icons/back.svg';
+import ShouldersIcon from '../../assets/muscle-icons/shoulders.svg';
+import ArmsIcon      from '../../assets/muscle-icons/arms.svg';
+import LegsIcon      from '../../assets/muscle-icons/legs.svg';
+import GlutesIcon    from '../../assets/muscle-icons/glutes.svg';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const CARD_W = Math.floor((SCREEN_W - 48) / 2);
+const MUSCLE_CARD_W = Math.floor((SCREEN_W - 44) / 2);
 
-type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+type SvgComponent = React.FC<{ width?: number; height?: number; color?: string }>;
 
-const BODY_PARTS: { name: string; icon: IoniconName; color: string; bg: string }[] = [
-  { name: 'Chest',     icon: 'body-outline',    color: '#5ba4ff', bg: '#5ba4ff18' },
-  { name: 'Back',      icon: 'barbell-outline', color: '#cc5de8', bg: '#cc5de818' },
-  { name: 'Legs',      icon: 'walk-outline',    color: '#ff922b', bg: '#ff922b18' },
-  { name: 'Shoulders', icon: 'person-outline',  color: '#ffd166', bg: '#ffd16618' },
-  { name: 'Arms',      icon: 'fitness-outline', color: '#3dd68c', bg: '#3dd68c18' },
+const MUSCLE_COLORS: Record<string, { fg: string; bg: string }> = {
+  Chest:     { fg: '#5ba4ff', bg: '#5ba4ff18' },
+  Back:      { fg: '#cc5de8', bg: '#cc5de818' },
+  Legs:      { fg: '#ff922b', bg: '#ff922b18' },
+  Shoulders: { fg: '#ffd166', bg: '#ffd16618' },
+  Arms:      { fg: '#3dd68c', bg: '#3dd68c18' },
+  Glutes:    { fg: '#ff9ecd', bg: '#ff9ecd18' },
+};
+
+function mp(muscle: string) {
+  return MUSCLE_COLORS[muscle] ?? { fg: '#aaa', bg: '#aaa18' };
+}
+
+const BODY_PARTS: { name: string; sub: string; SvgIcon: SvgComponent }[] = [
+  { name: 'Chest',     sub: 'Pectorals',         SvgIcon: ChestIcon     },
+  { name: 'Back',      sub: 'Lats & Rhomboids',  SvgIcon: BackIcon      },
+  { name: 'Shoulders', sub: 'Deltoids',           SvgIcon: ShouldersIcon },
+  { name: 'Arms',      sub: 'Biceps & Triceps',   SvgIcon: ArmsIcon      },
+  { name: 'Legs',      sub: 'Quads & Hamstrings', SvgIcon: LegsIcon      },
+  { name: 'Glutes',    sub: 'Glutes & Hip',       SvgIcon: GlutesIcon    },
 ];
 
 const SIZE_OPTIONS: { label: string; size: number; sub: string }[] = [
@@ -26,24 +47,88 @@ const SIZE_OPTIONS: { label: string; size: number; sub: string }[] = [
 ];
 
 interface Props {
-  onSelectBodyPart: (bodyPart: string, tournamentSize: number) => void;
+  onSelectBodyPart: (bodyPart: string, category: string, tournamentSize: number) => void;
   onViewRankings: () => void;
   onClose: () => void;
 }
 
+function OlympicMuscleCard({ name, sub, SvgIcon, onPress }: {
+  name: string; sub: string; SvgIcon: SvgComponent; onPress: () => void;
+}) {
+  const col = mp(name);
+  return (
+    <TouchableOpacity
+      style={[s.muscleCard, { width: MUSCLE_CARD_W, borderColor: col.fg + '40', backgroundColor: col.bg }]}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
+      <SvgIcon width={60} height={60} color={col.fg} />
+      <Text style={[s.muscleCardName, { color: col.fg }]}>{name}</Text>
+      <Text style={s.muscleCardSub}>{sub}</Text>
+      <View style={s.muscleCardArrow}>
+        <Ionicons name="chevron-forward" size={14} color={col.fg} />
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 export default function OlympicHomeScreen({ onSelectBodyPart, onViewRankings, onClose }: Props) {
-  const [selectedBodyPart, setSelectedBodyPart] = useState<string | null>(null);
-  const [sizeSheetVisible,  setSizeSheetVisible] = useState(false);
+  const [selectedBodyPart,     setSelectedBodyPart]     = useState<string | null>(null);
+  const [categorySheetVisible, setCategorySheetVisible] = useState(false);
+  const [sizeSheetVisible,     setSizeSheetVisible]     = useState(false);
+  const [categories,           setCategories]           = useState<string[]>([]);
+  const [selectedCategory,     setSelectedCategory]     = useState<string | null>(null);
+  const [categoriesLoading,    setCategoriesLoading]    = useState(false);
+
+  const fetchCategories = useCallback(async (bodyPart: string) => {
+    setCategoriesLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('machines')
+        .select('category')
+        .or(`target_muscle.ilike.${bodyPart}`)
+        .not('category', 'is', null)
+        .neq('category', '');
+
+      if (error) throw error;
+
+      const raw = (data ?? []).map((r: { category: string }) => r.category);
+      const all = new Set<string>();
+      raw.forEach(cat => {
+        cat.split(',').forEach(part => {
+          const trimmed = part.trim();
+          if (trimmed && !trimmed.includes('_Etc') && trimmed !== 'Free Weight') {
+            all.add(trimmed);
+          }
+        });
+      });
+
+      setCategories(['전체', ...Array.from(all).sort()]);
+    } catch (e) {
+      if (__DEV__) console.warn('[OlympicHomeScreen] fetchCategories 오류:', e);
+      setCategories(['전체']);
+    } finally {
+      setCategoriesLoading(false);
+    }
+  }, []);
 
   function handleBodyPartPress(name: string) {
     setSelectedBodyPart(name);
+    setSelectedCategory(null);
+    fetchCategories(name);
+    setCategorySheetVisible(true);
+  }
+
+  function handleCategorySelect(category: string) {
+    setSelectedCategory(category);
+    setCategorySheetVisible(false);
     setSizeSheetVisible(true);
   }
 
   function handleSizeSelect(size: number) {
     setSizeSheetVisible(false);
-    if (selectedBodyPart) {
-      onSelectBodyPart(selectedBodyPart, size);
+    if (selectedBodyPart && selectedCategory !== null) {
+      onSelectBodyPart(selectedBodyPart, selectedCategory, size);
     }
   }
 
@@ -80,20 +165,13 @@ export default function OlympicHomeScreen({ onSelectBodyPart, onViewRankings, on
         <Text style={s.sectionLabel}>부위 선택</Text>
         <View style={s.grid}>
           {BODY_PARTS.map((bp) => (
-            <TouchableOpacity
+            <OlympicMuscleCard
               key={bp.name}
-              style={[s.bpCard, { width: CARD_W, borderColor: bp.color + '40', backgroundColor: bp.bg }]}
+              name={bp.name}
+              sub={bp.sub}
+              SvgIcon={bp.SvgIcon}
               onPress={() => handleBodyPartPress(bp.name)}
-              activeOpacity={0.8}
-            >
-              <View style={[s.bpIconWrap, { backgroundColor: bp.color + '22' }]}>
-                <Ionicons name={bp.icon} size={32} color={bp.color} />
-              </View>
-              <Text style={[s.bpName, { color: bp.color }]}>{bp.name}</Text>
-              <View style={s.bpArrow}>
-                <Ionicons name="chevron-forward" size={14} color={bp.color} />
-              </View>
-            </TouchableOpacity>
+            />
           ))}
         </View>
 
@@ -105,6 +183,53 @@ export default function OlympicHomeScreen({ onSelectBodyPart, onViewRankings, on
 
         <View style={{ height: 32 }} />
       </ScrollView>
+
+      {/* Category 선택 바텀시트 */}
+      <Modal
+        visible={categorySheetVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCategorySheetVisible(false)}
+      >
+        <TouchableOpacity
+          style={s.sheetDim}
+          activeOpacity={1}
+          onPress={() => setCategorySheetVisible(false)}
+        />
+        <View style={s.sheet}>
+          <View style={s.sheetHeader}>
+            <Text style={s.sheetTitle}>
+              {selectedBodyPart} — 카테고리 선택
+            </Text>
+            <TouchableOpacity onPress={() => setCategorySheetVisible(false)} activeOpacity={0.7}>
+              <Ionicons name="close" size={20} color={C.textSub} />
+            </TouchableOpacity>
+          </View>
+          <View style={s.sheetDivider} />
+          {categoriesLoading ? (
+            <View style={{ paddingVertical: 32, alignItems: 'center' }}>
+              <Text style={{ color: C.textDim, fontSize: 13 }}>불러오는 중...</Text>
+            </View>
+          ) : (
+            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+              {categories.map((cat, idx) => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[s.sheetRow, idx < categories.length - 1 && s.sheetRowBorder]}
+                  onPress={() => handleCategorySelect(cat)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={s.sheetRowLabel}>{cat}</Text>
+                  {cat === '전체' && (
+                    <Text style={s.sheetRowSub}>전체 {selectedBodyPart} 머신</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+              <View style={{ height: 24 }} />
+            </ScrollView>
+          )}
+        </View>
+      </Modal>
 
       {/* 대회 규모 선택 바텀시트 */}
       <Modal
@@ -171,14 +296,30 @@ const s = StyleSheet.create({
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 },
 
-  bpCard: {
-    borderRadius: R.card, borderWidth: 1,
-    padding: 16, alignItems: 'center', gap: 10,
+  muscleCard: {
+    borderRadius: R.card,
+    borderWidth: 1.5,
+    padding: 18,
+    alignItems: 'center',
+    gap: 8,
     position: 'relative',
   },
-  bpIconWrap: { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center' },
-  bpName:     { fontSize: 15, fontWeight: '800', letterSpacing: 0.2 },
-  bpArrow:    { position: 'absolute', top: 10, right: 10 },
+  muscleCardName: {
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  muscleCardSub: {
+    fontSize: 11,
+    color: C.textSub,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  muscleCardArrow: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+  },
 
   rankBtn: {
     backgroundColor: C.accent, borderRadius: R.btn, height: 52,
@@ -186,7 +327,6 @@ const s = StyleSheet.create({
   },
   rankBtnText: { ...T.body, color: C.bg, fontWeight: '800' },
 
-  // Bottom sheet
   sheetDim: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',

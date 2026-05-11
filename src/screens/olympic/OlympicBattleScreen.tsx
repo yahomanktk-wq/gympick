@@ -44,6 +44,7 @@ function getRoundLabel(poolSize: number): '128강' | '64강' | '32강' | '16강'
 
 interface Props {
   bodyPart: string;
+  category: string;
   gymId: string | null;
   tournamentSize: number;
   onComplete: (winner: Machine, allVotes: OlympicVote[]) => void;
@@ -51,13 +52,20 @@ interface Props {
   onClose: () => void;
 }
 
-export default function OlympicBattleScreen({ bodyPart, gymId, tournamentSize, onComplete, onBack, onClose }: Props) {
+export default function OlympicBattleScreen({ bodyPart, category, gymId, tournamentSize, onComplete, onBack, onClose }: Props) {
   const accentColor = MUSCLE_COLORS[bodyPart] ?? C.accent;
 
   const initialPool = useMemo(() => {
-    const all = MACHINES.filter((m) => m.targetMuscle === bodyPart && m.id);
+    const all = MACHINES.filter((m) => {
+      const muscleMatch = m.targetMuscle?.toLowerCase() === bodyPart.toLowerCase();
+      if (!muscleMatch) return false;
+      if (!m.id) return false;
+      if (category === '전체') return true;
+      const machineCats = (m.category ?? '').split(',').map((c: string) => c.trim());
+      return machineCats.includes(category);
+    });
     return shuffle(all).slice(0, tournamentSize);
-  }, [bodyPart, tournamentSize]);
+  }, [bodyPart, category, tournamentSize]);
 
   const [pool,         setPool]         = useState<Machine[]>(initialPool);
   const [battleIndex,  setBattleIndex]  = useState(0);
@@ -140,7 +148,9 @@ export default function OlympicBattleScreen({ bodyPart, gymId, tournamentSize, o
         </TouchableOpacity>
         <View style={s.navCenter}>
           <Text style={[s.roundLabel, { color: accentColor }]}>{roundLabel}</Text>
-          <Text style={s.battleSub}>{battleIndex + 1}경기 / {totalBattles}경기</Text>
+          <Text style={s.battleSub}>
+            {bodyPart}{category !== '전체' ? ` · ${category}` : ''} · {battleIndex + 1}/{totalBattles}경기
+          </Text>
         </View>
         <TouchableOpacity style={s.navBtn} onPress={onClose} activeOpacity={0.7}>
           <Ionicons name="close" size={20} color={C.textSub} />
