@@ -127,7 +127,45 @@ export default function OlympicBattleScreen({ bodyPart, category, gymId, tournam
     }, 500);
   }, [selectedId, winners, battleIndex, totalBattles, sessionVotes, roundLabel, bodyPart, gymId, onComplete]);
 
-  // Edge case: odd machine or pool < 2
+  // 필터 후 머신이 2개 미만이면 에러 화면
+  if (initialPool.length < 2) {
+    return (
+      <SafeAreaView style={s.safe}>
+        <StatusBar barStyle="light-content" />
+        <View style={s.nav}>
+          <TouchableOpacity style={s.navBtn} onPress={onBack} activeOpacity={0.7}>
+            <Ionicons name="chevron-back" size={20} color={C.text} />
+          </TouchableOpacity>
+          <View style={s.navCenter}>
+            <Text style={[s.roundLabel, { color: accentColor }]}>{bodyPart}</Text>
+          </View>
+          <TouchableOpacity style={s.navBtn} onPress={onClose} activeOpacity={0.7}>
+            <Ionicons name="close" size={20} color={C.textSub} />
+          </TouchableOpacity>
+        </View>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 16 }}>
+          <Ionicons name="barbell-outline" size={48} color={C.textDim} />
+          <Text style={{ fontSize: 18, fontWeight: '800', color: C.text, textAlign: 'center' }}>
+            머신이 부족해요
+          </Text>
+          <Text style={{ fontSize: 14, color: C.textSub, textAlign: 'center', lineHeight: 22 }}>
+            {bodyPart} · {category} 카테고리에{'\n'}
+            배틀 가능한 머신이 2개 미만이에요.{'\n'}
+            다른 카테고리를 선택해보세요.
+          </Text>
+          <TouchableOpacity
+            style={{ marginTop: 8, backgroundColor: accentColor, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 14 }}
+            onPress={onBack}
+            activeOpacity={0.85}
+          >
+            <Text style={{ color: C.bg, fontWeight: '800', fontSize: 15 }}>카테고리 다시 선택</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // 라운드 진행 중 홀수 발생 엣지케이스
   if (!currentPair || pool.length < 2) {
     const last = pool[0] ?? winners[0];
     if (last) setTimeout(() => onComplete(last, sessionVotes), 0);
