@@ -96,3 +96,5 @@ export async function fetchRankingTabData(): Promise<RankingTabData> {
 
   return { weekly, weeklyTotal, favorites, gyms, updatedAt };
 }
+
+export type { OlympicRankingEntry } from './olympicRankings';

@@ -30,6 +30,7 @@ import { fetchMachines, fetchGymsWithMachines } from '../lib/db';
 import { useFetch } from '../lib/useFetch';
 import { MachineWithGyms, GymWithMachines } from '../data/types';
 import { fetchRankingTabData, type RankingTabData } from '../lib/db/rankingQueries';
+import { fetchOlympicRankings, type OlympicRankingEntry } from '../lib/db/olympicRankings';
 import { RankingTab } from './FindGymRankingTab';
 import { FAVORITE_MACHINES } from '../data/machineReviews';
 import { getGymFavorites } from '../data/gymFavoriteStore';
@@ -235,6 +236,8 @@ export default function FindGymScreen() {
 
   const [rankingData,    setRankingData]    = useState<RankingTabData | null>(null);
   const [rankingLoading, setRankingLoading] = useState(false);
+  const [olympicRankings, setOlympicRankings] = useState<OlympicRankingEntry[]>([]);
+  const [olympicLoading,  setOlympicLoading]  = useState(false);
 
   const route = useRoute<any>();
 
@@ -253,6 +256,15 @@ export default function FindGymScreen() {
       .then(data => setRankingData(data))
       .catch(() => setRankingData(null))
       .finally(() => setRankingLoading(false));
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== 'ranking') return;
+    if (olympicRankings.length > 0) return;
+    setOlympicLoading(true);
+    fetchOlympicRankings()
+      .then(setOlympicRankings)
+      .finally(() => setOlympicLoading(false));
   }, [activeTab]);
 
   // GPS 위치 요청
@@ -771,6 +783,8 @@ export default function FindGymScreen() {
         <RankingTab
           data={rankingData}
           loading={rankingLoading}
+          olympicRankings={olympicRankings}
+          olympicLoading={olympicLoading}
           onPressMachine={(machineId, machineName, machineBrand, targetMuscle) => {
             const found = allMachines.find(m => m.id === machineId);
             if (found) {

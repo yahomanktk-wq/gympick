@@ -10,6 +10,8 @@ import { Machine } from '../../data/types';
 import { MACHINES } from '../../data';
 import { saveVote, OlympicVote } from '../../data/olympicStore';
 import OlympicTradingCard from './OlympicTradingCard';
+import { saveVoteToSupabase } from '../../lib/db/olympicRankings';
+import { useAuth } from '../../context/AuthContext';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -53,6 +55,7 @@ interface Props {
 }
 
 export default function OlympicBattleScreen({ bodyPart, category, gymId, tournamentSize, onComplete, onBack, onClose }: Props) {
+  const { user } = useAuth();
   const accentColor = MUSCLE_COLORS[bodyPart] ?? C.accent;
 
   const initialPool = useMemo(() => {
@@ -101,6 +104,15 @@ export default function OlympicBattleScreen({ bodyPart, category, gymId, tournam
       createdAt:  new Date().toISOString(),
     };
     saveVote(vote);
+    saveVoteToSupabase({
+      userId:     user?.id ?? null,
+      machineId:  winner.id,
+      opponentId: loser.id,
+      bodyPart,
+      category:   category ?? '전체',
+      round:      roundLabel,
+      gymId,
+    });
     const newVotes = [...sessionVotes, vote];
     setSessionVotes(newVotes);
 

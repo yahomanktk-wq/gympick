@@ -10,6 +10,7 @@ import type {
   GymRankingEntry,
   RankingTabData,
 } from '../lib/db/rankingQueries';
+import type { OlympicRankingEntry } from '../lib/db/olympicRankings';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -95,6 +96,38 @@ function GymRow({ entry, onPress }: { entry: GymRankingEntry; onPress: () => voi
   );
 }
 
+// ── Olympic Ranking Row ──────────────────────────────────────────────────────
+
+const OLYMPIC_MUSCLE_COLORS: Record<string, string> = {
+  Chest: '#5ba4ff', Back: '#cc5de8', Legs: '#ff922b',
+  Shoulders: '#ffd166', Arms: '#3dd68c', Glutes: '#ff9ecd',
+};
+
+function OlympicRankingRow({ entry, onPress }: { entry: OlympicRankingEntry; onPress: () => void }) {
+  const bpColor = OLYMPIC_MUSCLE_COLORS[entry.bodyPart] ?? C.accent;
+  return (
+    <TouchableOpacity style={rs.rankRow} onPress={onPress} activeOpacity={0.75}>
+      <Text style={rs.medal}>{MEDAL[entry.rank] ?? `${entry.rank}`}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={rs.rankName} numberOfLines={1}>{entry.machineName}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+          <Text style={rs.rankSub}>{entry.machineBrand}</Text>
+          <View style={{ backgroundColor: bpColor + '20', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 1 }}>
+            <Text style={{ fontSize: 9, fontWeight: '700', color: bpColor }}>{entry.bodyPart}</Text>
+          </View>
+          {entry.category && entry.category !== '전체' && (
+            <Text style={[rs.rankSub, { fontSize: 9 }]}>{entry.category}</Text>
+          )}
+        </View>
+      </View>
+      <View style={rs.rankScoreBox}>
+        <Text style={[rs.rankScore, { color: bpColor }]}>{entry.winRate}%</Text>
+        <Text style={rs.rankScoreLabel}>{entry.winCount}승 {entry.loseCount}패</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 // ── Section Card ─────────────────────────────────────────────────────────────
 
 function SectionCard({ children }: { children: React.ReactNode }) {
@@ -116,13 +149,15 @@ function SectionHeader({ icon, title, sub }: { icon: any; title: string; sub?: s
 // ── Main RankingTab ──────────────────────────────────────────────────────────
 
 interface RankingTabProps {
-  data:           RankingTabData | null;
-  loading:        boolean;
-  onPressMachine: (machineId: string, machineName: string, machineBrand: string, targetMuscle: string) => void;
-  onPressGym:     (gymId: string) => void;
+  data:            RankingTabData | null;
+  loading:         boolean;
+  olympicRankings: OlympicRankingEntry[];
+  olympicLoading:  boolean;
+  onPressMachine:  (machineId: string, machineName: string, machineBrand: string, targetMuscle: string) => void;
+  onPressGym:      (gymId: string) => void;
 }
 
-export function RankingTab({ data, loading, onPressMachine, onPressGym }: RankingTabProps) {
+export function RankingTab({ data, loading, olympicRankings, olympicLoading, onPressMachine, onPressGym }: RankingTabProps) {
   const [weeklyMuscle, setWeeklyMuscle] = useState('CHEST');
 
   if (loading) {
@@ -266,6 +301,40 @@ export function RankingTab({ data, loading, onPressMachine, onPressGym }: Rankin
               key={entry.gymId}
               entry={entry}
               onPress={() => onPressGym(entry.gymId)}
+            />
+          ))
+        )}
+      </SectionCard>
+
+      {/* ── 4. 머신 올림픽 랭킹 ── */}
+      <SectionCard>
+        <SectionHeader
+          icon="trophy"
+          title="머신 올림픽 랭킹"
+          sub="유저 투표로 만들어진 머신 선호도 랭킹"
+        />
+
+        {olympicLoading ? (
+          <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+            <ActivityIndicator size="small" color={C.accent} />
+          </View>
+        ) : olympicRankings.length === 0 ? (
+          <RankingEmpty
+            icon="trophy-outline"
+            title="아직 투표 데이터가 없어요"
+            sub="머신 올림픽에 참여하면 랭킹이 만들어져요 🏆"
+          />
+        ) : (
+          olympicRankings.slice(0, 10).map(entry => (
+            <OlympicRankingRow
+              key={entry.machineId}
+              entry={entry}
+              onPress={() => onPressMachine(
+                entry.machineId,
+                entry.machineName,
+                entry.machineBrand,
+                entry.bodyPart,
+              )}
             />
           ))
         )}
