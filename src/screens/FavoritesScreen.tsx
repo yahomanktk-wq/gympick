@@ -16,6 +16,9 @@ import { C, R } from '../theme';
 import { MACHINES } from '../data';
 import { getFavoriteMachineIds, removeFavoriteMachine } from '../data/favoritesStore';
 import { getGymFavorites, removeGymFavorite } from '../data/gymFavoriteStore';
+import { fetchGymFavorites, removeGymFavoriteDB } from '../lib/db/gymFavorites';
+import { fetchGymWithMachines } from '../lib/db/gyms';
+import { GymWithMachines } from '../data/types';
 import { useAuth } from '../context/AuthContext';
 import GymDetailModal     from './flow/GymDetailModal';
 import MachineDetailModal from './flow/MachineDetailModal';
@@ -24,14 +27,6 @@ import MachineCardBorder from '../components/MachineCardBorder';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W = (SCREEN_W - 32 - 8) / 2;
-
-// --- Mock data
-
-const MOCK_GYM_DATA: Record<string, { name: string; location: string; dist: string; machines: number }> = {
-  g01: { name: 'IronHub Fitness',  location: 'Downtown',  dist: '0.3 km', machines: 18 },
-  g04: { name: 'MaxLift Arena',    location: 'Midtown',   dist: '0.9 km', machines: 24 },
-  g05: { name: 'FlexPoint Club',   location: 'West Side', dist: '1.4 km', machines: 15 },
-};
 
 const MUSCLE_COLORS: Record<string, { fg: string; bg: string }> = {
   Chest:       { fg: '#5ba4ff', bg: '#5ba4ff18' },
@@ -89,11 +84,30 @@ function FilterPills<T extends string>({
 
 export default function FavoritesScreen({ onClose }: { onClose: () => void }) {
   const { user } = useAuth();
-  // Gym favorites from store — re-read when user changes (after login/logout)
-  const [favoriteGymIds,    setFavoriteGymIds]    = useState<string[]>(() => getGymFavorites());
+  const [favoriteGymIds,    setFavoriteGymIds]    = useState<string[]>([]);
+  const [favoriteGyms,      setFavoriteGyms]      = useState<GymWithMachines[]>([]);
+  const [gymsLoading,       setGymsLoading]       = useState(false);
 
   useEffect(() => {
-    setFavoriteGymIds(getGymFavorites());
+    if (!user?.id) {
+      setFavoriteGymIds([]);
+      setFavoriteGyms([]);
+      return;
+    }
+    async function loadFavoriteGyms() {
+      setGymsLoading(true);
+      try {
+        const ids = await fetchGymFavorites(user!.id);
+        setFavoriteGymIds(ids);
+        const gyms = await Promise.all(ids.map(id => fetchGymWithMachines(id)));
+        setFavoriteGyms(gyms.filter((g): g is GymWithMachines => g !== null));
+      } catch (e) {
+        if (__DEV__) console.warn('[FavoritesScreen] loadFavoriteGyms 오류:', e);
+      } finally {
+        setGymsLoading(false);
+      }
+    }
+    loadFavoriteGyms();
   }, [user?.id]);
   const [removedMachineIds, setRemovedMachineIds] = useState<Set<string>>(new Set());
   const [userLocation,      setUserLocation]      = useState<{ latitude: number; longitude: number } | null>(null);
@@ -142,6 +156,12 @@ export default function FavoritesScreen({ onClose }: { onClose: () => void }) {
   function removeGym(id: string) {
     removeGymFavorite(id);
     setFavoriteGymIds(prev => prev.filter(gid => gid !== id));
+    setFavoriteGyms(prev => prev.filter(g => g.id !== id));
+    if (user?.id) {
+      removeGymFavoriteDB(user.id, id).catch(e => {
+        if (__DEV__) console.warn('[FavoritesScreen] removeGym DB 오류:', e);
+      });
+    }
   }
 
   function removeMachine(id: string) {
@@ -175,40 +195,40 @@ export default function FavoritesScreen({ onClose }: { onClose: () => void }) {
 
         {/* ── Favorite Gyms ── */}
         <Text style={st.sectionLabel}>즐겨찾기 헬스장</Text>
-        {favoriteGymIds.length === 0 ? (
+        {gymsLoading ? (
+          <View style={st.emptyState}>
+            <Text style={st.emptyText}>불러오는 중...</Text>
+          </View>
+        ) : favoriteGyms.length === 0 ? (
           <View style={st.emptyState}>
             <Ionicons name="business-outline" size={36} color={C.textDim} />
             <Text style={st.emptyText}>즐겨찾기한 헬스장이 없어요</Text>
           </View>
         ) : (
           <View style={st.card}>
-            {favoriteGymIds.map((id, i) => {
-              const gym = MOCK_GYM_DATA[id];
-              if (!gym) return null;
-              return (
-                <React.Fragment key={id}>
-                  {i > 0 && <View style={st.divider} />}
+            {favoriteGyms.map((gym, i) => (
+              <React.Fragment key={gym.id}>
+                {i > 0 && <View style={st.divider} />}
+                <TouchableOpacity
+                  style={st.gymRow}
+                  activeOpacity={0.75}
+                  onPress={() => setGymDetailId(gym.id)}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={st.gymName}>{gym.name}</Text>
+                    <Text style={st.gymSub}>{gym.location}</Text>
+                  </View>
+                  <Text style={st.gymMachines}>{gym.machines.length} 머신</Text>
                   <TouchableOpacity
-                    style={st.gymRow}
-                    activeOpacity={0.75}
-                    onPress={() => setGymDetailId(id)}
+                    style={st.removeBtn}
+                    onPress={() => removeGym(gym.id)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
-                    <View style={{ flex: 1 }}>
-                      <Text style={st.gymName}>{gym.name}</Text>
-                      <Text style={st.gymSub}>{`${gym.location} · ${gym.dist}`}</Text>
-                    </View>
-                    <Text style={st.gymMachines}>{gym.machines} 머신</Text>
-                    <TouchableOpacity
-                      style={st.removeBtn}
-                      onPress={() => removeGym(id)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Ionicons name="bookmark" size={16} color={C.accent} />
-                    </TouchableOpacity>
+                    <Ionicons name="bookmark" size={16} color={C.accent} />
                   </TouchableOpacity>
-                </React.Fragment>
-              );
-            })}
+                </TouchableOpacity>
+              </React.Fragment>
+            ))}
           </View>
         )}
 
