@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, SafeAreaView, StatusBar,
@@ -10,12 +10,12 @@ import { getRankings, OlympicRank } from '../../data/olympicStore';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
-const BODY_PARTS = ['ALL', 'Chest', 'Back', 'Legs', 'Shoulders', 'Arms'] as const;
+const BODY_PARTS = ['ALL', 'Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Glutes'] as const;
 type BodyPartFilter = (typeof BODY_PARTS)[number];
 
 const MUSCLE_COLORS: Record<string, string> = {
   Chest: '#5ba4ff', Back: '#cc5de8', Legs: '#ff922b',
-  Shoulders: '#ffd166', Arms: '#3dd68c',
+  Shoulders: '#ffd166', Arms: '#3dd68c', Glutes: '#ff9ecd',
 };
 
 const MEDAL: Record<number, { icon: IoniconName; color: string }> = {
@@ -46,11 +46,37 @@ interface Props {
 
 export default function OlympicRankingScreen({ gymId, onBack, onClose }: Props) {
   const [activeBodyPart, setActiveBodyPart] = useState<BodyPartFilter>('ALL');
+  const [activeCat,      setActiveCat]      = useState<string>('ALL');
   const [scope, setScope] = useState<'global' | 'gym'>('global');
+
+  const categories = useMemo(() => {
+    if (activeBodyPart === 'ALL') return [];
+    const cats = new Set<string>();
+    MACHINES.forEach(m => {
+      if (m.targetMuscle !== activeBodyPart) return;
+      if (!m.category || m.category.trim() === '') return;
+      m.category.split(',').forEach(c => {
+        const trimmed = c.trim();
+        if (
+          trimmed &&
+          !trimmed.includes('_Etc') &&
+          trimmed !== 'Free Weight' &&
+          trimmed !== 'Etc'
+        ) {
+          cats.add(trimmed);
+        }
+      });
+    });
+    return Array.from(cats).sort();
+  }, [activeBodyPart]);
+
+  useEffect(() => {
+    setActiveCat('ALL');
+  }, [activeBodyPart]);
 
   const ranks = useMemo(() => {
     const bodyParts = activeBodyPart === 'ALL'
-      ? ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms']
+      ? ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Glutes']
       : [activeBodyPart];
 
     const combined: OlympicRank[] = [];
@@ -68,8 +94,17 @@ export default function OlympicRankingScreen({ gymId, onBack, onClose }: Props) 
       }, {}),
     ).sort((a, b) => b.winRate - a.winRate || b.winCount - a.winCount);
 
-    return enrichRanks(deduped);
-  }, [activeBodyPart]);
+    const enriched = enrichRanks(deduped);
+
+    if (activeCat === 'ALL' || activeBodyPart === 'ALL') return enriched;
+
+    return enriched.filter(rank => {
+      const machine = MACHINES.find(m => m.id === rank.machineId);
+      if (!machine?.category) return false;
+      const machineCats = machine.category.split(',').map((c: string) => c.trim());
+      return machineCats.includes(activeCat);
+    });
+  }, [activeBodyPart, activeCat]);
 
   const accentForBodyPart = activeBodyPart !== 'ALL' ? (MUSCLE_COLORS[activeBodyPart] ?? C.accent) : C.accent;
 
@@ -114,12 +149,60 @@ export default function OlympicRankingScreen({ gymId, onBack, onClose }: Props) 
               key={bp}
               style={[s.filterChip, active && { backgroundColor: color + '18', borderColor: color + '50' }]}
               onPress={() => setActiveBodyPart(bp)}
+              activeOpacity={0.75}
             >
-              <Text style={[s.filterChipText, active && { color }]}>{bp}</Text>
+              <Text style={[s.filterChipText, active && { color }]} numberOfLines={1}>{bp}</Text>
             </TouchableOpacity>
           );
         })}
       </ScrollView>
+
+      {/* Category filter */}
+      {activeBodyPart !== 'ALL' && categories.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.catFilterRow}
+        >
+          <TouchableOpacity
+            style={[
+              s.catChip,
+              activeCat === 'ALL' && {
+                backgroundColor: (MUSCLE_COLORS[activeBodyPart] ?? C.accent) + '18',
+                borderColor: (MUSCLE_COLORS[activeBodyPart] ?? C.accent) + '50',
+              },
+            ]}
+            onPress={() => setActiveCat('ALL')}
+            activeOpacity={0.75}
+          >
+            <Text style={[
+              s.catChipText,
+              activeCat === 'ALL' && { color: MUSCLE_COLORS[activeBodyPart] ?? C.accent },
+            ]} numberOfLines={1}>
+              전체
+            </Text>
+          </TouchableOpacity>
+          {categories.map(cat => {
+            const active = activeCat === cat;
+            const color = MUSCLE_COLORS[activeBodyPart] ?? C.accent;
+            return (
+              <TouchableOpacity
+                key={cat}
+                style={[
+                  s.catChip,
+                  active && { backgroundColor: color + '18', borderColor: color + '50' },
+                ]}
+                onPress={() => setActiveCat(cat)}
+                activeOpacity={0.75}
+              >
+                <Text style={[s.catChipText, active && { color }]} numberOfLines={1}>
+                  {cat}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
 
       {/* Ranking list */}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
@@ -199,11 +282,41 @@ const s = StyleSheet.create({
 
   filterRow: { paddingHorizontal: 12, paddingBottom: 12, gap: 6 },
   filterChip: {
-    paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: R.pill, backgroundColor: C.surface,
-    borderWidth: StyleSheet.hairlineWidth, borderColor: C.border,
+    height: 32,
+    paddingHorizontal: 14,
+    borderRadius: R.pill,
+    backgroundColor: C.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: C.border,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  filterChipText: { ...T.label, color: C.textSub },
+  filterChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: C.textSub,
+  },
+
+  catFilterRow: {
+    paddingHorizontal: 12,
+    paddingBottom: 10,
+    gap: 6,
+  },
+  catChip: {
+    height: 28,
+    paddingHorizontal: 12,
+    borderRadius: R.pill,
+    backgroundColor: C.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: C.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  catChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: C.textSub,
+  },
 
   listPad: { paddingHorizontal: 16 },
 
