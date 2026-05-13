@@ -98,3 +98,27 @@ export async function fetchFeedPostsByGym(gymId: string): Promise<WorkoutFeedPos
   }
   return data.map(rowToPost);
 }
+
+/** 유저의 특정 날짜 오운완 피드 삭제 */
+export async function deleteFeedPostBySession(
+  userId: string,
+  sessionDate: string,
+): Promise<void> {
+  try {
+    const dayStart = new Date(sessionDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(sessionDate);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    await supabase
+      .from('workout_feed_posts')
+      .delete()
+      .eq('user_id', userId)
+      .gte('created_at', dayStart.toISOString())
+      .lte('created_at', dayEnd.toISOString());
+
+    if (__DEV__) console.log('[feedPosts] deleteFeedPostBySession 완료');
+  } catch (e) {
+    if (__DEV__) console.warn('[feedPosts] deleteFeedPostBySession 오류:', e);
+  }
+}

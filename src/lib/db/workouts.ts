@@ -479,3 +479,26 @@ export async function insertWorkoutPhoto(
   if (error || !data) throw new Error(error?.message ?? 'insertWorkoutPhoto failed');
   return rowToPhoto(data);
 }
+
+/** 운동 세션 및 연결 데이터 삭제 */
+export async function deleteWorkoutSession(sessionId: string): Promise<void> {
+  try {
+    const { data: entries } = await supabase
+      .from('workout_entries')
+      .select('id')
+      .eq('session_id', sessionId);
+
+    if (entries?.length) {
+      const entryIds = entries.map((e: { id: string }) => e.id);
+      await supabase.from('workout_sets').delete().in('entry_id', entryIds);
+      await supabase.from('workout_entries').delete().in('id', entryIds);
+    }
+
+    await supabase.from('workout_sessions').delete().eq('id', sessionId);
+
+    if (__DEV__) console.log('[workouts] deleteWorkoutSession 완료:', sessionId);
+  } catch (e) {
+    if (__DEV__) console.warn('[workouts] deleteWorkoutSession 오류:', e);
+    throw e;
+  }
+}

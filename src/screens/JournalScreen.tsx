@@ -12,7 +12,6 @@ import {
   Image,
   ActivityIndicator,
   Alert,
-  Share,
 } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import { captureRef } from 'react-native-view-shot';
@@ -24,6 +23,8 @@ import { C, R, T } from '../theme';
 import { WorkoutLog, Machine } from '../data/types';
 import { getSessionPRMachines } from '../data/workoutSessions';
 import { fetchWorkoutLogs } from '../lib/db';
+import { deleteWorkoutSession } from '../lib/db/workouts';
+import { deleteFeedPostBySession } from '../lib/db/feedPosts';
 import { useFetch } from '../lib/useFetch';
 import { useAuth } from '../context/AuthContext';
 import PostWorkoutLogModal from './flow/PostWorkoutLogModal';
@@ -116,10 +117,10 @@ const RETRO_DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일'];
 
 function RetroWeeklyGrid({
   sessions,
-  onSelectSession,
+  onSelectDay,
 }: {
   sessions: WorkoutLog[];
-  onSelectSession: (s: WorkoutLog) => void;
+  onSelectDay: (daySessions: WorkoutLog[]) => void;
 }) {
   const today     = useMemo(() => new Date(), []);
   const numWeeks  = computeNumWeeks(sessions);
@@ -170,7 +171,10 @@ function RetroWeeklyGrid({
                       isFuture && rg.dayCellFuture,
                     ]}
                     activeOpacity={session ? 0.75 : 1}
-                    onPress={() => session && onSelectSession(session)}
+                    onPress={() => {
+                      const daySessions = sessions.filter(s => isSameDay(new Date(s.date), day));
+                      if (daySessions.length > 0) onSelectDay(daySessions);
+                    }}
                   >
                     {photoSrc ? (
                       <>
@@ -205,95 +209,76 @@ function RetroWeeklyGrid({
 // --- Session Detail Modal
 
 function SessionDetailModal({
-  session,
+  sessions,
   prMachines,
   onClose,
   onOpenMachine,
+  onDelete,
 }: {
-  session:       WorkoutLog | null;
+  sessions:      WorkoutLog[];
   prMachines:    Set<string>;
   onClose:       () => void;
   onOpenMachine: (machineId: string, machineName: string, machineBrand: string, targetMuscle?: string) => void;
+  onDelete:      (sessionId: string) => Promise<void>;
 }) {
-  const nav      = useNavigation<any>();
-  const photoRef    = useRef<View>(null);
-  const routineCardRef = useRef<View>(null);
-  const [photoHeight, setPhotoHeight] = useState(DET_PHOTO_H_DEFAULT);
+  const photoRefs      = useRef<Record<string, View | null>>({});
+  const routineCardRefs = useRef<Record<string, View | null>>({});
+  const [photoHeights, setPhotoHeights] = useState<Record<string, number>>({});
 
-  // 이미지 로드 시 실제 비율로 높이 동적 조정
-  const photoUri = session?.compositeUri ?? session?.photoUri;
   useEffect(() => {
-    if (!photoUri) {
-      setPhotoHeight(DET_PHOTO_H_DEFAULT);
-      return;
-    }
-    try {
-      Image.getSize(
-        photoUri,
-        (w, h) => {
-          if (w > 0 && h > 0) {
-            const ratio = h / w;
-            setPhotoHeight(Math.round(DET_PHOTO_W * ratio));
-          } else {
-            setPhotoHeight(DET_PHOTO_H_DEFAULT);
-          }
-        },
-        () => setPhotoHeight(DET_PHOTO_H_DEFAULT),
-      );
-    } catch {
-      setPhotoHeight(DET_PHOTO_H_DEFAULT);
-    }
-  }, [photoUri]);
+    sessions.forEach(session => {
+      const uri = session.compositeUri ?? session.photoUri;
+      if (!uri) {
+        setPhotoHeights(prev => ({ ...prev, [session.id]: DET_PHOTO_H_DEFAULT }));
+        return;
+      }
+      try {
+        Image.getSize(
+          uri,
+          (w, h) => {
+            if (w > 0 && h > 0) {
+              setPhotoHeights(prev => ({ ...prev, [session.id]: Math.round(DET_PHOTO_W * (h / w)) }));
+            } else {
+              setPhotoHeights(prev => ({ ...prev, [session.id]: DET_PHOTO_H_DEFAULT }));
+            }
+          },
+          () => setPhotoHeights(prev => ({ ...prev, [session.id]: DET_PHOTO_H_DEFAULT })),
+        );
+      } catch {
+        setPhotoHeights(prev => ({ ...prev, [session.id]: DET_PHOTO_H_DEFAULT }));
+      }
+    });
+  }, [sessions]);
 
-  if (!session) return null;
+  if (sessions.length === 0) return null;
 
-  const vol       = sessionVolume(session);
-  const machines  = session.machines ?? [];
-  const totalSets = machines.reduce((a, m) => a + m.sets, 0);
-  const muscles   = [...new Set(machines.map(m => m.targetMuscle))];
-
-  const dateStr = new Date(session.date).toLocaleDateString('en-US', {
+  const firstSession = sessions[0];
+  const dateStr = new Date(firstSession.date).toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
   });
-  const timeStr = new Date(session.date).toLocaleTimeString('en-US', {
-    hour: '2-digit', minute: '2-digit',
-  });
 
-  const muscleCounts = machines.reduce<Record<string, number>>((acc, m) => {
-    acc[m.targetMuscle] = (acc[m.targetMuscle] ?? 0) + 1; return acc;
-  }, {});
-  const sortedMuscles = Object.entries(muscleCounts)
-    .sort(([, a], [, b]) => b - a)
-    .map(([m]) => m.toUpperCase());
-  const muscleTitle = sortedMuscles.length > 1
-    ? sortedMuscles.slice(0, 2).join(' + ')
-    : `${sortedMuscles[0] ?? 'WORKOUT'} DAY`;
-
-  async function handleSave() {
-    if (!session) return;
+  async function handleSave(session: WorkoutLog) {
     const { status } = await MediaLibrary.requestPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('권한 필요', '사진 저장을 위해 사진 라이브러리 접근 권한이 필요합니다.');
       return;
     }
     try {
-      // 1장: 인증샷 저장
       if (session.compositeUri) {
         await MediaLibrary.saveToLibraryAsync(session.compositeUri);
       } else if (session.photoUri) {
-        const uri = await captureRef(photoRef, { format: 'png', quality: 0.95, result: 'tmpfile' });
-        await MediaLibrary.saveToLibraryAsync(uri);
+        const pNode = photoRefs.current[session.id];
+        if (pNode) {
+          const uri = await captureRef(pNode, { format: 'png', quality: 0.95, result: 'tmpfile' });
+          await MediaLibrary.saveToLibraryAsync(uri);
+        }
       }
-
-      // 2장: 루틴카드 캡처 및 저장
-      if (routineCardRef.current) {
+      const rcNode = routineCardRefs.current[session.id];
+      if (rcNode) {
         await new Promise(resolve => requestAnimationFrame(resolve));
-        const routineUri = await captureRef(routineCardRef, {
-          format: 'png', quality: 0.95, result: 'tmpfile',
-        });
+        const routineUri = await captureRef(rcNode, { format: 'png', quality: 0.95, result: 'tmpfile' });
         await MediaLibrary.saveToLibraryAsync(routineUri);
       }
-
       Alert.alert('저장 완료', '인증샷과 운동 루틴 카드가 저장되었습니다.');
     } catch (e) {
       if (__DEV__) console.warn('[JournalScreen] handleSave 오류:', e);
@@ -301,21 +286,25 @@ function SessionDetailModal({
     }
   }
 
-  async function handleShare() {
-    if (!session) return;
-    const uri = session.compositeUri ?? session.photoUri;
-    if (uri) {
-      await Share.share({
-        url: uri,
-        message: `GymPick 운동 기록 - ${session.gymName}`,
-        title: 'GymPick 오운완',
-      });
-    } else {
-      const muscleStr = muscles.join(', ');
-      await Share.share({
-        message: `GymPick 운동 기록\n헬스장: ${session.gymName}\n날짜: ${dateStr}\n운동부위: ${muscleStr}\n총 세트: ${totalSets}세트`,
-      });
-    }
+  async function handleDelete(session: WorkoutLog) {
+    Alert.alert(
+      '운동일지 삭제',
+      '이 운동일지를 삭제하면 오늘의 오운완에서도 함께 삭제됩니다. 계속할까요?',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '삭제',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await onDelete(session.id);
+            } catch (e) {
+              Alert.alert('삭제 실패', '다시 시도해 주세요.');
+            }
+          },
+        },
+      ],
+    );
   }
 
   return (
@@ -323,8 +312,8 @@ function SessionDetailModal({
       <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
         <View style={det.header}>
           <View style={{ flex: 1 }}>
-            <Text style={det.gymName} numberOfLines={1}>{session.gymName}</Text>
-            <Text style={det.dateLine}>{dateStr}  {timeStr}</Text>
+            <Text style={det.gymName} numberOfLines={1}>{firstSession.gymName}</Text>
+            <Text style={det.dateLine}>{dateStr}</Text>
           </View>
           <TouchableOpacity style={det.closeBtn} onPress={onClose} activeOpacity={0.7}>
             <Ionicons name="close" size={20} color={C.textSub} />
@@ -332,207 +321,228 @@ function SessionDetailModal({
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 48 }}>
+          {sessions.map((session, idx) => {
+            const vol        = sessionVolume(session);
+            const machines   = session.machines ?? [];
+            const totalSets  = machines.reduce((a, m) => a + m.sets, 0);
+            const muscles    = [...new Set(machines.map(m => m.targetMuscle))];
+            const photoUri   = session.compositeUri ?? session.photoUri;
+            const photoHeight = photoHeights[session.id] ?? DET_PHOTO_H_DEFAULT;
 
-          {/* 오운완 사진 - 실제 비율로 동적 높이 */}
-          <View ref={photoRef} style={[det.photoCard, { height: photoHeight }]}>
-            {(session.compositeUri ?? session.photoUri) ? (
-              <ExpoImage
-                source={{ uri: (session.compositeUri ?? session.photoUri)! }}
-                style={StyleSheet.absoluteFill}
-                contentFit="contain"
-                onError={() => {}}
-              />
-            ) : (
-              <View style={det.photoBg} />
-            )}
+            const muscleCounts = machines.reduce<Record<string, number>>((acc, m) => {
+              acc[m.targetMuscle] = (acc[m.targetMuscle] ?? 0) + 1; return acc;
+            }, {});
+            const sortedMuscles = Object.entries(muscleCounts)
+              .sort(([, a], [, b]) => b - a)
+              .map(([m]) => m.toUpperCase());
+            const muscleTitle = sortedMuscles.length > 1
+              ? sortedMuscles.slice(0, 2).join(' + ')
+              : `${sortedMuscles[0] ?? 'WORKOUT'} DAY`;
 
-            {!session.compositeUri && (
-              <>
-                <View style={[det.photoLogoLeftWrap, { transform: [{ rotate: '90deg' }] }]}>
-                  <GymPickLogo color="#ffffff" width={64} />
-                </View>
+            return (
+              <View key={session.id}>
+                {idx > 0 && <View style={det.sessionDivider} />}
 
-                <View style={[det.photoLogoRightWrap, { transform: [{ rotate: '270deg' }] }]}>
-                  <GymPickLogo color="#ffffff" width={64} />
-                </View>
+                {/* 오운완 사진 */}
+                <View
+                  ref={(ref) => { photoRefs.current[session.id] = ref as View | null; }}
+                  style={[det.photoCard, { height: photoHeight }]}
+                >
+                  {photoUri ? (
+                    <ExpoImage
+                      source={{ uri: photoUri }}
+                      style={StyleSheet.absoluteFill}
+                      contentFit="contain"
+                      onError={() => {}}
+                    />
+                  ) : (
+                    <View style={det.photoBg} />
+                  )}
 
-                <View style={det.photoOverlay}>
-                  <View style={{ gap: 8 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Text style={det.photoMuscleTitle}>{muscleTitle}</Text>
-                      {prMachines.size > 0 && (
-                        <View style={det.photoPRBadge}>
-                          <Text style={det.photoPRTxt}>NEW PR</Text>
+                  {!session.compositeUri && (
+                    <>
+                      <View style={[det.photoLogoLeftWrap, { transform: [{ rotate: '90deg' }] }]}>
+                        <GymPickLogo color="#ffffff" width={64} />
+                      </View>
+                      <View style={[det.photoLogoRightWrap, { transform: [{ rotate: '270deg' }] }]}>
+                        <GymPickLogo color="#ffffff" width={64} />
+                      </View>
+                      <View style={det.photoOverlay}>
+                        <View style={{ gap: 8 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Text style={det.photoMuscleTitle}>{muscleTitle}</Text>
+                            {prMachines.size > 0 && (
+                              <View style={det.photoPRBadge}>
+                                <Text style={det.photoPRTxt}>NEW PR</Text>
+                              </View>
+                            )}
+                          </View>
+                          <ScrollView
+                            showsVerticalScrollIndicator={false}
+                            style={{ maxHeight: DET_PHOTO_H_DEFAULT * 0.45 }}
+                            nestedScrollEnabled
+                          >
+                            {machines.map(m => {
+                              const brandTag = `[${m.machineBrand.toUpperCase().replace(/ /g, '_')}]`;
+                              const namePart = m.machineName.toUpperCase().replace(/ /g, '_');
+                              return (
+                                <View key={m.machineId} style={{ gap: 1, marginBottom: 6 }}>
+                                  <Text style={det.photoExName} numberOfLines={1}>{brandTag}_{namePart}</Text>
+                                  {Array.from({ length: Math.min(m.sets, 4) }).map((_, si) => (
+                                    <Text key={si} style={det.photoExSet}>
+                                      {m.weight > 0 ? `${m.weight}kg` : '--'} x {m.reps}
+                                    </Text>
+                                  ))}
+                                </View>
+                              );
+                            })}
+                          </ScrollView>
                         </View>
-                      )}
-                    </View>
-                    <ScrollView
-                      showsVerticalScrollIndicator={false}
-                      style={{ maxHeight: DET_PHOTO_H_DEFAULT * 0.45 }}
-                      nestedScrollEnabled
-                    >
-                      {machines.map(m => {
-                        const brandTag = `[${m.machineBrand.toUpperCase().replace(/ /g, '_')}]`;
-                        const namePart = m.machineName.toUpperCase().replace(/ /g, '_');
-                        return (
-                          <View key={m.machineId} style={{ gap: 1, marginBottom: 6 }}>
-                            <Text style={det.photoExName} numberOfLines={1}>{brandTag}_{namePart}</Text>
-                            {Array.from({ length: Math.min(m.sets, 4) }).map((_, si) => (
-                              <Text key={si} style={det.photoExSet}>
-                                {m.weight > 0 ? `${m.weight}kg` : '--'} x {m.reps}
+                        <View />
+                      </View>
+                    </>
+                  )}
+                </View>
+
+                {/* 이미지 저장 + 삭제 버튼 */}
+                <View style={{ flexDirection: 'row', gap: 10, paddingVertical: 12 }}>
+                  <TouchableOpacity
+                    style={[det.photoActionBtn, { flex: 1 }]}
+                    onPress={() => handleSave(session)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="download-outline" size={16} color={C.text} />
+                    <Text style={det.photoActionTxt}>이미지 저장</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[det.photoActionBtn, { flex: 1, borderColor: C.danger + '60' }]}
+                    onPress={() => handleDelete(session)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="trash-outline" size={16} color={C.danger} />
+                    <Text style={[det.photoActionTxt, { color: C.danger }]}>삭제</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* 운동 노트 */}
+                {machines.some(m => m.note) && (
+                  <View style={det.noteSection}>
+                    <Text style={det.sectionTitle}>운동 노트</Text>
+                    {machines
+                      .filter(m => m.note)
+                      .map(m => (
+                        <View key={m.machineId} style={det.noteSectionItem}>
+                          <Text style={det.noteSectionMachine}>{m.machineName}</Text>
+                          <Text style={det.noteSectionText}>{m.note}</Text>
+                        </View>
+                      ))
+                    }
+                  </View>
+                )}
+
+                {/* Stats */}
+                <View style={det.statsRow}>
+                  {[
+                    { val: machines.length, lab: '운동' },
+                    { val: totalSets,       lab: '세트' },
+                    { val: vol > 0 ? (vol / 1000).toFixed(1) : '--', lab: '볼륨' },
+                  ].map((item, i, arr) => (
+                    <React.Fragment key={item.lab}>
+                      <View style={det.stat}>
+                        <Text style={det.statVal}>{item.val}</Text>
+                        <Text style={det.statLab}>{item.lab}</Text>
+                      </View>
+                      {i < arr.length - 1 && <View style={det.statDiv} />}
+                    </React.Fragment>
+                  ))}
+                </View>
+
+                {/* 운동 루틴 + 타겟부위 칩 */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <Text style={[det.sectionTitle, { marginBottom: 0 }]}>운동 루틴</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, justifyContent: 'flex-end', flex: 1, marginLeft: 8 }}>
+                    {muscles.map(m => {
+                      const col = mp(m);
+                      return (
+                        <View key={m} style={[det.muscleChip, { backgroundColor: col.bg, borderColor: col.fg + '40' }]}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: col.fg }}>{m}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                {/* 루틴 카드 */}
+                <View
+                  ref={(ref) => { routineCardRefs.current[session.id] = ref as View | null; }}
+                  collapsable={false}
+                  style={det.routineCard}
+                >
+                  <View style={det.routineCardHeader}>
+                    <Text style={det.routineCardGymName} numberOfLines={1}>{session.gymName}</Text>
+                    <Text style={det.routineCardDate}>{new Date(session.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</Text>
+                  </View>
+                  <View style={det.routineDivider} />
+                  {machines.map((m, i) => {
+                    const isPR      = prMachines.has(m.machineId);
+                    const brandKey  = m.machineBrand.toUpperCase().replace(/\s+/g, '_');
+                    const brandLogo = brandLogos[brandKey];
+                    const imageUrl  = `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${m.machineId}.webp`;
+                    return (
+                      <React.Fragment key={m.machineId}>
+                        {i > 0 && <View style={det.routineDivider} />}
+                        <View style={[det.routineRow, isPR && det.routineRowPR]}>
+                          <TouchableOpacity
+                            style={det.routineImgWrap}
+                            activeOpacity={0.8}
+                            onPress={() => onOpenMachine(m.machineId, m.machineName, m.machineBrand, m.targetMuscle)}
+                          >
+                            <ExpoImage
+                              source={{ uri: imageUrl }}
+                              style={{ width: '100%', height: '100%', backgroundColor: '#FFFFFF' }}
+                              contentFit="contain"
+                            />
+                          </TouchableOpacity>
+                          <View style={det.routineInfo}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                              <Text style={det.routineMachineName} numberOfLines={2}>{m.machineName}</Text>
+                              {isPR && (
+                                <View style={det.exPRBadge}>
+                                  <Text style={det.exPRTxt}>PR</Text>
+                                </View>
+                              )}
+                            </View>
+                            {brandLogo ? (
+                              <ExpoImage
+                                source={brandLogo}
+                                style={det.routineBrandLogo}
+                                contentFit="contain"
+                              />
+                            ) : (
+                              <Text style={det.routineBrandText}>{m.machineBrand}</Text>
+                            )}
+                          </View>
+                          <View style={det.routineSets}>
+                            {Array.from({ length: Math.min(m.sets, 6) }).map((_, si) => (
+                              <Text key={si} style={det.routineSetLine}>
+                                {m.weight > 0 ? `${m.weight}kg` : '--'} × {m.reps}
                               </Text>
                             ))}
+                            {m.sets > 6 && (
+                              <Text style={det.routineSetMore}>+{m.sets - 6}세트</Text>
+                            )}
                           </View>
-                        );
-                      })}
-                    </ScrollView>
+                        </View>
+                      </React.Fragment>
+                    );
+                  })}
+                  <View style={det.routineCardFooter}>
+                    <GymPickLogo color="#AAAAAA" width={60} height={6} />
                   </View>
-
-                  <View />
                 </View>
-              </>
-            )}
-          </View>
-
-          {/* Save / Share buttons */}
-          <View style={det.photoActionRow}>
-            <TouchableOpacity style={det.photoActionBtn} onPress={handleSave} activeOpacity={0.8}>
-              <Ionicons name="download-outline" size={16} color={C.text} />
-              <Text style={det.photoActionTxt}>이미지 저장</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={det.photoActionBtn} onPress={handleShare} activeOpacity={0.8}>
-              <Ionicons name="share-outline" size={16} color={C.text} />
-              <Text style={det.photoActionTxt}>공유하기</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* 운동 노트 */}
-          {machines.some(m => m.note) && (
-            <View style={det.noteSection}>
-              <Text style={det.sectionTitle}>운동 노트</Text>
-              {machines
-                .filter(m => m.note)
-                .map(m => (
-                  <View key={m.machineId} style={det.noteSectionItem}>
-                    <Text style={det.noteSectionMachine}>{m.machineName}</Text>
-                    <Text style={det.noteSectionText}>{m.note}</Text>
-                  </View>
-                ))
-              }
-            </View>
-          )}
-
-          {/* Stats */}
-          <View style={det.statsRow}>
-            {[
-              { val: machines.length, lab: '운동' },
-              { val: totalSets,               lab: '세트'      },
-              { val: vol > 0 ? (vol / 1000).toFixed(1) : '--', lab: '볼륨' },
-            ].map((item, i, arr) => (
-              <React.Fragment key={item.lab}>
-                <View style={det.stat}>
-                  <Text style={det.statVal}>{item.val}</Text>
-                  <Text style={det.statLab}>{item.lab}</Text>
-                </View>
-                {i < arr.length - 1 && <View style={det.statDiv} />}
-              </React.Fragment>
-            ))}
-          </View>
-
-          {/* 운동 루틴 + 타겟부위 칩 한 줄 */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <Text style={[det.sectionTitle, { marginBottom: 0 }]}>운동 루틴</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, justifyContent: 'flex-end', flex: 1, marginLeft: 8 }}>
-              {muscles.map(m => {
-                const col = mp(m);
-                return (
-                  <View key={m} style={[det.muscleChip, { backgroundColor: col.bg, borderColor: col.fg + '40' }]}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: col.fg }}>{m}</Text>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-          <View
-            ref={routineCardRef}
-            collapsable={false}
-            style={det.routineCard}
-          >
-            {/* 헤더: 헬스장명 + 날짜 */}
-            <View style={det.routineCardHeader}>
-              <Text style={det.routineCardGymName} numberOfLines={1}>{session.gymName}</Text>
-              <Text style={det.routineCardDate}>{dateStr}</Text>
-            </View>
-            <View style={det.routineDivider} />
-            {machines.map((m, i) => {
-              const isPR      = prMachines.has(m.machineId);
-              const brandKey  = m.machineBrand.toUpperCase().replace(/\s+/g, '_');
-              const brandLogo = brandLogos[brandKey];
-              const imageUrl  = `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${m.machineId}.webp`;
-
-              return (
-                <React.Fragment key={m.machineId}>
-                  {i > 0 && <View style={det.routineDivider} />}
-                  <View style={[det.routineRow, isPR && det.routineRowPR]}>
-
-                    {/* 좌측: 머신 이미지 */}
-                    <TouchableOpacity
-                      style={det.routineImgWrap}
-                      activeOpacity={0.8}
-                      onPress={() => onOpenMachine(m.machineId, m.machineName, m.machineBrand, m.targetMuscle)}
-                    >
-                      <ExpoImage
-                        source={{ uri: imageUrl }}
-                        style={{ width: '100%', height: '100%', backgroundColor: '#FFFFFF' }}
-                        contentFit="contain"
-                      />
-                    </TouchableOpacity>
-
-                    {/* 중간: 머신명 + 제조사 로고 */}
-                    <View style={det.routineInfo}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-                        <Text style={det.routineMachineName} numberOfLines={2}>{m.machineName}</Text>
-                        {isPR && (
-                          <View style={det.exPRBadge}>
-                            <Text style={det.exPRTxt}>PR</Text>
-                          </View>
-                        )}
-                      </View>
-                      {brandLogo ? (
-                        <ExpoImage
-                          source={brandLogo}
-                          style={det.routineBrandLogo}
-                          contentFit="contain"
-                        />
-                      ) : (
-                        <Text style={det.routineBrandText}>{m.machineBrand}</Text>
-                      )}
-                    </View>
-
-                    {/* 우측: 세트 목록 */}
-                    <View style={det.routineSets}>
-                      {Array.from({ length: Math.min(m.sets, 6) }).map((_, si) => (
-                        <Text
-                          key={si}
-                          style={det.routineSetLine}
-                        >
-                          {m.weight > 0 ? `${m.weight}kg` : '--'} × {m.reps}
-                        </Text>
-                      ))}
-                      {m.sets > 6 && (
-                        <Text style={det.routineSetMore}>+{m.sets - 6}세트</Text>
-                      )}
-                    </View>
-
-                  </View>
-                </React.Fragment>
-              );
-            })}
-            {/* 푸터 */}
-            <View style={det.routineCardFooter}>
-              <GymPickLogo color="#AAAAAA" width={60} height={6} />
-            </View>
-          </View>
+              </View>
+            );
+          })}
         </ScrollView>
       </SafeAreaView>
     </Modal>
@@ -562,7 +572,7 @@ export default function JournalScreen() {
   );
 
   const [logVisible,           setLogVisible]           = useState(false);
-  const [detailSession,        setDetailSession]        = useState<WorkoutLog | null>(null);
+  const [detailSessions,       setDetailSessions]       = useState<WorkoutLog[]>([]);
   const [detailMachine,        setDetailMachine]        = useState<Machine | null>(null);
   const [machineDetailVisible, setMachineDetailVisible] = useState(false);
 
@@ -570,7 +580,12 @@ export default function JournalScreen() {
     const openSessionId = route.params?.openSessionId;
     if (openSessionId && sessions.length > 0) {
       const target = sessions.find((s: WorkoutLog) => s.id === openSessionId);
-      if (target) setDetailSession(target);
+      if (target) {
+        const daySessions = sessions.filter((s: WorkoutLog) =>
+          isSameDay(new Date(s.date), new Date(target.date))
+        );
+        setDetailSessions(daySessions);
+      }
     }
   }, [route.params?.openSessionId, sessions]);
 
@@ -640,7 +655,7 @@ export default function JournalScreen() {
             {/* Retro weekly grid */}
             <RetroWeeklyGrid
               sessions={sessions}
-              onSelectSession={setDetailSession}
+              onSelectDay={(daySessions) => setDetailSessions(daySessions)}
             />
 
             {sessions.length === 0 && (
@@ -663,9 +678,9 @@ export default function JournalScreen() {
             onClose={(saved) => { setLogVisible(false); if (saved) refetch(); }}
           />
           <SessionDetailModal
-            session={detailSession}
-            prMachines={detailSession ? (sessionPRMap[detailSession.id] ?? new Set()) : new Set()}
-            onClose={() => setDetailSession(null)}
+            sessions={detailSessions}
+            prMachines={detailSessions.length > 0 ? (sessionPRMap[detailSessions[0].id] ?? new Set()) : new Set()}
+            onClose={() => setDetailSessions([])}
             onOpenMachine={(machineId, machineName, machineBrand, targetMuscle) => {
               setDetailMachine({
                 id:           machineId,
@@ -676,8 +691,18 @@ export default function JournalScreen() {
                 category:     '',
                 exerciseKind: 'machine',
               });
-              setDetailSession(null);
+              setDetailSessions([]);
               setTimeout(() => setMachineDetailVisible(true), 400);
+            }}
+            onDelete={async (sessionId) => {
+              const session = detailSessions.find(s => s.id === sessionId);
+              await deleteWorkoutSession(sessionId);
+              if (session && user?.id) {
+                await deleteFeedPostBySession(user.id, session.date);
+              }
+              const remaining = detailSessions.filter(s => s.id !== sessionId);
+              setDetailSessions(remaining);
+              refetch();
             }}
           />
           <MachineDetailModal
@@ -868,8 +893,9 @@ const det = StyleSheet.create({
   routineSetMore:    { fontSize: 10, color: '#666666', marginTop: 2 },
 
   photoActionRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  photoActionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: C.surface, borderRadius: R.inner, paddingVertical: 12 },
+  photoActionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: C.surface, borderRadius: R.inner, paddingVertical: 12, borderWidth: 1, borderColor: C.border },
   photoActionTxt: { fontSize: 13, fontWeight: '700', color: C.text },
+  sessionDivider: { height: 8, backgroundColor: C.surfaceHigh, marginVertical: 8 },
 });
 
 // --- Screen styles
