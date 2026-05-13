@@ -21,6 +21,7 @@ import { filterActivePosts, filterByGym, filterByDistance, toggleReaction, conve
 import { fetchActiveFeedPosts, fetchMyLatestGymId, fetchFeedPostsByGym } from '../lib/db/feedPosts';
 import { fetchWorkoutLogs } from '../lib/db/workouts';
 import { useAuth } from '../context/AuthContext';
+import GymDetailModal from './flow/GymDetailModal';
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
@@ -178,10 +179,12 @@ function FeedDetailModal({
   post,
   onClose,
   onReact,
+  onPressGym,
 }: {
-  post:    WorkoutFeedPost;
-  onClose: () => void;
-  onReact: (postId: string, key: keyof WorkoutFeedPost['reactions']) => void;
+  post:       WorkoutFeedPost;
+  onClose:    () => void;
+  onReact:    (postId: string, key: keyof WorkoutFeedPost['reactions']) => void;
+  onPressGym: (gymId: string) => void;
 }) {
   const displayUri = post.compositeUri ?? post.photoUri;
   const MODAL_W    = Dimensions.get('window').width;
@@ -205,7 +208,14 @@ function FeedDetailModal({
             <Text style={{ fontSize: 15, fontWeight: '800', color: C.text }}>
               {post.nickname}
             </Text>
-            <Text style={{ fontSize: 12, color: C.textSub }}>{post.gymName}</Text>
+            <TouchableOpacity onPress={() => onPressGym(post.gymId)} activeOpacity={0.75}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Ionicons name="location-outline" size={12} color={C.accent} />
+                <Text style={{ fontSize: 12, color: C.accent, fontWeight: '600' }}>
+                  {post.gymName}
+                </Text>
+              </View>
+            </TouchableOpacity>
           </View>
           <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
             <Ionicons name="close" size={22} color={C.textSub} />
@@ -300,6 +310,7 @@ export default function WorkoutFeedScreen() {
   const [myGymName,    setMyGymName]    = useState<string>('내 헬스장');
   const [muscleFilter, setMuscleFilter] = useState<MuscleFilter>('전체');
   const [detailPost,   setDetailPost]   = useState<WorkoutFeedPost | null>(null);
+  const [gymDetailId,  setGymDetailId]  = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -464,8 +475,18 @@ export default function WorkoutFeedScreen() {
             handleReact(postId, key);
             setDetailPost(prev => prev ? { ...prev, ...toggleReaction(prev, key) } : prev);
           }}
+          onPressGym={(gymId) => {
+            setDetailPost(null);
+            setTimeout(() => setGymDetailId(gymId), 350);
+          }}
         />
       )}
+
+      <GymDetailModal
+        visible={!!gymDetailId}
+        gymId={gymDetailId}
+        onClose={() => setGymDetailId(null)}
+      />
     </SafeAreaView>
   );
 }

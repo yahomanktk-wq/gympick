@@ -912,7 +912,7 @@ const TEXT_COLORS = [
 
 // --- Step 5: Photo
 
-function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname, onColorChange, onCapture, onCompositeUri, onRoutineUri, onSave, onBack, onClose }: {
+function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname, onColorChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose }: {
   gym: GymWithMachines;
   exercises: ExerciseInfo[];
   logs: Record<string, SetEntry[]>;
@@ -921,8 +921,8 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
   nickname?: string;
   onColorChange: (color: string) => void;
   onCapture: (aspect: [number, number]) => void;
-  onCompositeUri: (uri: string) => void;
-  onRoutineUri: (uri: string) => void;
+  onCompositeUri:    (uri: string) => void;
+  onRoutineCardUri?: (uri: string) => void;
   onSave: (captured?: string) => void;
   onBack: () => void;
   onClose: () => void;
@@ -998,7 +998,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
           format: 'png', quality: 0.95, result: 'tmpfile',
         });
         await MediaLibrary.saveToLibraryAsync(routineUri);
-        onRoutineUri(routineUri);
+        onRoutineCardUri?.(routineUri);
       }
 
       Alert.alert('저장 완료', '인증샷과 운동 루틴 카드가 저장되었습니다.');
@@ -1271,6 +1271,14 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
               if (overlayRef.current) {
                 captured = await captureRef(overlayRef, { format: 'png', quality: 0.95, result: 'tmpfile' });
                 onCompositeUri(captured);
+              }
+              // 루틴카드 캡처
+              if (routineCardRef.current) {
+                await new Promise(resolve => requestAnimationFrame(resolve));
+                const routineUri = await captureRef(routineCardRef, {
+                  format: 'png', quality: 0.95, result: 'tmpfile',
+                });
+                onRoutineCardUri?.(routineUri);
               }
             } catch (_) {}
           }
@@ -2027,7 +2035,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             onColorChange={setSelectedColor}
             onCapture={(aspect) => handleCapture(aspect)}
             onCompositeUri={(uri) => setCompositeUri(uri)}
-            onRoutineUri={(uri) => setRoutineCardUri(uri)}
+            onRoutineCardUri={(uri) => setRoutineCardUri(uri)}
             onSave={requestSaveWorkout}
             onBack={goBack}
             onClose={() => onClose(false)}
