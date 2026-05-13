@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   ScrollView,
   Modal,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -18,10 +19,12 @@ import { C, R } from '../theme';
 import { WorkoutFeedPost, WorkoutLog } from '../data/types';
 const MOCK_FEED_POSTS: WorkoutFeedPost[] = [];
 import { filterActivePosts, filterByGym, filterByDistance, toggleReaction, convertSessionToFeedPost } from '../lib/feedUtils';
-import { fetchActiveFeedPosts, fetchMyLatestGymId, fetchFeedPostsByGym } from '../lib/db/feedPosts';
+import { fetchActiveFeedPosts, fetchMyLatestGymId, fetchFeedPostsByGym, fetchWorkoutSessionById } from '../lib/db/feedPosts';
 import { fetchWorkoutLogs } from '../lib/db/workouts';
 import { useAuth } from '../context/AuthContext';
 import GymDetailModal from './flow/GymDetailModal';
+import MachineDetailModal from './flow/MachineDetailModal';
+import { MACHINES } from '../data';
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
@@ -180,14 +183,26 @@ function FeedDetailModal({
   onClose,
   onReact,
   onPressGym,
+  onPressMachine,
 }: {
-  post:       WorkoutFeedPost;
-  onClose:    () => void;
-  onReact:    (postId: string, key: keyof WorkoutFeedPost['reactions']) => void;
-  onPressGym: (gymId: string) => void;
+  post:           WorkoutFeedPost;
+  onClose:        () => void;
+  onReact:        (postId: string, key: keyof WorkoutFeedPost['reactions']) => void;
+  onPressGym:     (gymId: string) => void;
+  onPressMachine: (machineId: string) => void;
 }) {
   const displayUri = post.compositeUri ?? post.photoUri;
   const MODAL_W    = Dimensions.get('window').width;
+  const [sessionData,    setSessionData]    = useState<any>(null);
+  const [sessionLoading, setSessionLoading] = useState(false);
+
+  useEffect(() => {
+    if (!post.sessionId) return;
+    setSessionLoading(true);
+    fetchWorkoutSessionById(post.sessionId)
+      .then(setSessionData)
+      .finally(() => setSessionLoading(false));
+  }, [post.sessionId]);
 
   return (
     <Modal
@@ -204,7 +219,7 @@ function FeedDetailModal({
           paddingHorizontal: 16, paddingVertical: 12,
           borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border,
         }}>
-          <View>
+          <View style={{ gap: 6 }}>
             <Text style={{ fontSize: 15, fontWeight: '800', color: C.text }}>
               {post.nickname}
             </Text>
@@ -262,36 +277,119 @@ function FeedDetailModal({
             })}
           </View>
 
-          {/* 루틴 카드 이미지 */}
-          {post.routineCardUri ? (
-            <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
-              <Text style={{
-                fontSize: 12, fontWeight: '700', color: C.textDim,
-                letterSpacing: 0.8, marginBottom: 10,
-              }}>운동 루틴</Text>
-              <Image
-                source={{ uri: post.routineCardUri }}
-                style={{ width: MODAL_W - 32, aspectRatio: 1, borderRadius: R.card }}
-                contentFit="contain"
-              />
-            </View>
-          ) : (
-            <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
-              <Text style={{ fontSize: 12, fontWeight: '700', color: C.textDim, letterSpacing: 0.8, marginBottom: 8 }}>
-                운동 부위
-              </Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                {[...new Set(post.muscles)].map((m, idx) => (
-                  <View key={`${m}-${idx}`} style={{
-                    backgroundColor: C.accentBg, borderRadius: R.pill,
-                    paddingHorizontal: 10, paddingVertical: 4,
-                  }}>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: C.accent }}>{m}</Text>
-                  </View>
-                ))}
+          {/* 운동 루틴 섹션 */}
+          <View style={{ paddingTop: 16 }}>
+            <Text style={{
+              fontSize: 12, fontWeight: '700', color: C.textDim,
+              letterSpacing: 0.8, marginBottom: 10, paddingHorizontal: 16,
+            }}>운동 루틴</Text>
+
+            {sessionLoading ? (
+              <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color={C.accent} />
               </View>
-            </View>
-          )}
+            ) : sessionData ? (
+              <View style={{
+                marginHorizontal: 16,
+                backgroundColor: '#FFFFFF',
+                borderRadius: R.card,
+                borderWidth: 2,
+                borderColor: C.border,
+                overflow: 'hidden',
+              }}>
+                {/* 헬스장 헤더 */}
+                <TouchableOpacity
+                  style={{
+                    paddingHorizontal: 16, paddingVertical: 12,
+                    borderBottomWidth: StyleSheet.hairlineWidth,
+                    borderBottomColor: '#E5E5E5',
+                    flexDirection: 'row', alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                  onPress={() => onPressGym(post.gymId)}
+                  activeOpacity={0.75}
+                >
+                  <View>
+                    <Text style={{ fontSize: 15, fontWeight: '900', color: '#111111', marginBottom: 2 }}>
+                      {sessionData.gymName}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: '#888888' }}>
+                      {new Date(sessionData.date).toLocaleString('ko-KR', {
+                        year: 'numeric', month: '2-digit', day: '2-digit',
+                        hour: '2-digit', minute: '2-digit',
+                      })}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={C.accent} />
+                </TouchableOpacity>
+
+                {/* 머신 목록 */}
+                {sessionData.machines.map((m: any, idx: number) => {
+                  const imageUrl = `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${m.machineId}.webp`;
+                  const allSets  = m.allSets ?? [];
+                  return (
+                    <TouchableOpacity
+                      key={`${m.machineId}-${idx}`}
+                      style={{
+                        flexDirection: 'row', alignItems: 'center',
+                        padding: 12, gap: 10,
+                        borderTopWidth: idx > 0 ? StyleSheet.hairlineWidth : 0,
+                        borderTopColor: '#E5E5E5',
+                      }}
+                      onPress={() => onPressMachine(m.machineId)}
+                      activeOpacity={0.75}
+                    >
+                      <View style={{
+                        width: 56, height: 56, borderRadius: 8,
+                        overflow: 'hidden', backgroundColor: '#F5F5F5',
+                        borderWidth: 1, borderColor: '#E5E5E5',
+                      }}>
+                        <Image
+                          source={{ uri: imageUrl }}
+                          style={{ width: '100%', height: '100%' }}
+                          contentFit="contain"
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#111111', marginBottom: 4 }} numberOfLines={2}>
+                          {m.machineName.toUpperCase()}
+                        </Text>
+                        <Text style={{ fontSize: 10, color: '#666666' }}>{m.machineBrand}</Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        {allSets.slice(0, 4).map((s: any, si: number) => (
+                          <Text key={si} style={{ fontSize: 11, fontWeight: '600', color: '#111111', lineHeight: 18 }}>
+                            {s.weight > 0 ? `${s.weight}kg` : '--'} × {s.reps}
+                          </Text>
+                        ))}
+                        {allSets.length > 4 && (
+                          <Text style={{ fontSize: 10, color: '#888888' }}>+{allSets.length - 4}세트</Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+
+                {/* 푸터 */}
+                <View style={{ paddingHorizontal: 16, paddingVertical: 8, alignItems: 'flex-end', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E5E5E5' }}>
+                  <Text style={{ fontSize: 9, fontWeight: '700', color: '#AAAAAA', letterSpacing: 1 }}>GymPick</Text>
+                </View>
+              </View>
+            ) : (
+              <View style={{ paddingHorizontal: 16 }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                  {[...new Set(post.muscles)].map((m, idx) => (
+                    <View key={`${m}-${idx}`} style={{
+                      backgroundColor: C.accentBg, borderRadius: R.pill,
+                      paddingHorizontal: 10, paddingVertical: 4,
+                    }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: C.accent }}>{m}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+          </View>
 
         </ScrollView>
       </SafeAreaView>
@@ -309,8 +407,9 @@ export default function WorkoutFeedScreen() {
   const [myGymId,      setMyGymId]      = useState<string | null>(null);
   const [myGymName,    setMyGymName]    = useState<string>('내 헬스장');
   const [muscleFilter, setMuscleFilter] = useState<MuscleFilter>('전체');
-  const [detailPost,   setDetailPost]   = useState<WorkoutFeedPost | null>(null);
-  const [gymDetailId,  setGymDetailId]  = useState<string | null>(null);
+  const [detailPost,       setDetailPost]       = useState<WorkoutFeedPost | null>(null);
+  const [gymDetailId,      setGymDetailId]      = useState<string | null>(null);
+  const [machineDetailItem, setMachineDetailItem] = useState<any>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -346,16 +445,25 @@ export default function WorkoutFeedScreen() {
           if (recent?.gymName && active) setMyGymName(recent.gymName);
         }
 
-        const myPosts = recentSessions
-          .map(session => convertSessionToFeedPost(
-            session,
-            user.id,
-            user?.nickname ?? user?.name ?? 'me',
-            latestGymId ?? 'g01',
-          ))
-          .filter((p): p is WorkoutFeedPost => p !== null);
-
         const [serverPosts] = await Promise.all([fetchActiveFeedPosts()]);
+
+        // 내 게시물: serverPosts에서 가져옴 (routineCardUri 포함)
+        // serverPosts가 없으면 로컬 세션으로 fallback
+        const serverMyPosts = serverPosts
+          .filter(p => p.userId === myUserId)
+          .map(p => ({ ...p, isMyPost: true }));
+
+        const myPosts = serverMyPosts.length > 0
+          ? serverMyPosts
+          : recentSessions
+              .map(session => convertSessionToFeedPost(
+                session,
+                user.id,
+                user?.nickname ?? user?.name ?? 'me',
+                latestGymId ?? 'g01',
+              ))
+              .filter((p): p is WorkoutFeedPost => p !== null);
+
         const otherPosts = (serverPosts.length === 0
           ? filterActivePosts(MOCK_FEED_POSTS)
           : serverPosts
@@ -415,7 +523,8 @@ export default function WorkoutFeedScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 10, gap: 6 }}
+        style={{ height: 40, marginBottom: 4 }}
+        contentContainerStyle={{ paddingHorizontal: 16, gap: 6, alignItems: 'center' }}
       >
         {MUSCLE_FILTERS.map((m, idx) => {
           const active = muscleFilter === m;
@@ -479,6 +588,13 @@ export default function WorkoutFeedScreen() {
             setDetailPost(null);
             setTimeout(() => setGymDetailId(gymId), 350);
           }}
+          onPressMachine={(machineId) => {
+            const machine = MACHINES.find(m => m.id === machineId);
+            if (machine) {
+              setDetailPost(null);
+              setTimeout(() => setMachineDetailItem(machine), 350);
+            }
+          }}
         />
       )}
 
@@ -486,6 +602,16 @@ export default function WorkoutFeedScreen() {
         visible={!!gymDetailId}
         gymId={gymDetailId}
         onClose={() => setGymDetailId(null)}
+      />
+
+      <MachineDetailModal
+        visible={!!machineDetailItem}
+        machine={machineDetailItem}
+        onClose={() => setMachineDetailItem(null)}
+        onSelectGym={(gymId) => {
+          setMachineDetailItem(null);
+          setTimeout(() => setGymDetailId(gymId), 350);
+        }}
       />
     </SafeAreaView>
   );

@@ -245,6 +245,7 @@ export type WorkoutFeedPost = {
   photoUri:     string;           // 오운완 사진 URI (원본)
   compositeUri?: string;          // 오버레이 합성 사진 URI (있으면 우선 표시)
   routineCardUri?: string;        // 루틴카드 이미지 URI
+  sessionId?:  string;            // 연결된 workout_session id
   muscles:     string[];         // 운동 부위 (예: ['CHEST', 'BACK'])
   createdAt:   string;           // ISO 8601
   isPublic:    boolean;

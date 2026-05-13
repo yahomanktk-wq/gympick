@@ -1829,6 +1829,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
           photoUri:       finalPhotoUrl ?? photoUri ?? effectiveCompositeUri ?? '',
           compositeUri:   finalPhotoUrl ?? effectiveCompositeUri ?? undefined,
           routineCardUri: finalRoutineCardUrl ?? passedRoutineCardUri ?? routineCardUri ?? undefined,
+          sessionId:      sessionId,
           muscles:        Array.from(selectedMuscles),
           isPublic:       true,
         }).catch(err => {

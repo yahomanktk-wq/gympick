@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import { WorkoutFeedPost } from '../../data/types';
+import { WorkoutFeedPost, WorkoutLog } from '../../data/types';
 
 function rowToPost(r: any): WorkoutFeedPost {
   return {
@@ -11,6 +11,7 @@ function rowToPost(r: any): WorkoutFeedPost {
     photoUri:       r.photo_uri,
     compositeUri:   r.composite_uri ?? undefined,
     routineCardUri: r.routine_card_uri ?? undefined,
+    sessionId:      r.session_id ?? undefined,
     muscles:        r.muscles ?? [],
     createdAt:      r.created_at,
     isPublic:       r.is_public,
@@ -40,7 +41,7 @@ export async function fetchActiveFeedPosts(): Promise<WorkoutFeedPost[]> {
 export async function insertFeedPost(
   post: Pick<WorkoutFeedPost,
     'id' | 'userId' | 'nickname' | 'gymId' | 'gymName' |
-    'photoUri' | 'compositeUri' | 'routineCardUri' | 'muscles' | 'isPublic'
+    'photoUri' | 'compositeUri' | 'routineCardUri' | 'sessionId' | 'muscles' | 'isPublic'
   >,
 ): Promise<void> {
   const { error } = await supabase
@@ -54,6 +55,7 @@ export async function insertFeedPost(
       photo_uri:        post.photoUri,
       composite_uri:    post.compositeUri ?? null,
       routine_card_uri: post.routineCardUri ?? null,
+      session_id:       post.sessionId ?? null,
       muscles:          post.muscles,
       is_public:        post.isPublic,
     });
@@ -164,5 +166,62 @@ export async function updateFeedPostPublic(
   } catch (e) {
     if (__DEV__) console.warn('[feedPosts] updateFeedPostPublic 오류:', e);
     throw e;
+  }
+}
+
+/** session_id로 운동 세션 전체 데이터 fetch */
+export async function fetchWorkoutSessionById(sessionId: string): Promise<WorkoutLog | null> {
+  try {
+    const { data: session, error } = await supabase
+      .from('workout_sessions')
+      .select('id, gym_id, date, notes')
+      .eq('id', sessionId)
+      .single();
+
+    if (error || !session) return null;
+
+    const { data: entries } = await supabase
+      .from('workout_entries')
+      .select(`
+        id, machine_id, machine_name, machine_brand, target_muscle, exercise_kind, sort_order,
+        workout_sets ( set_number, weight, reps, is_pr )
+      `)
+      .eq('session_id', sessionId)
+      .order('sort_order');
+
+    const { data: gym } = await supabase
+      .from('gyms')
+      .select('name, location')
+      .eq('id', session.gym_id)
+      .single();
+
+    const machines = (entries ?? []).map((e: any) => {
+      const sets = (e.workout_sets ?? []).sort((a: any, b: any) => a.set_number - b.set_number);
+      const best = sets.reduce((b: any, s: any) => (!b || s.weight > b.weight ? s : b), null);
+      return {
+        machineId:    e.machine_id,
+        machineName:  e.machine_name,
+        machineBrand: e.machine_brand,
+        targetMuscle: e.target_muscle,
+        exerciseKind: e.exercise_kind,
+        weight:       best?.weight ?? 0,
+        reps:         best?.reps ?? 0,
+        sets:         sets.length,
+        allSets:      sets,
+      };
+    });
+
+    return {
+      id:          session.id,
+      gymId:       session.gym_id,
+      gymName:     gym?.name ?? '',
+      gymLocation: gym?.location ?? '',
+      date:        session.date,
+      machines,
+      hasPhoto:    false,
+    };
+  } catch (e) {
+    if (__DEV__) console.warn('[feedPosts] fetchWorkoutSessionById 오류:', e);
+    return null;
   }
 }
