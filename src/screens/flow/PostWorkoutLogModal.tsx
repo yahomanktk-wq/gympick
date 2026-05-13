@@ -923,7 +923,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
   onCapture: (aspect: [number, number]) => void;
   onCompositeUri:    (uri: string) => void;
   onRoutineCardUri?: (uri: string) => void;
-  onSave: (captured?: string) => void;
+  onSave: (captured?: string, routineCardUri?: string) => void;
   onBack: () => void;
   onClose: () => void;
 }) {
@@ -1264,6 +1264,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
       <View style={s.ctaBar}>
         <TouchableOpacity style={s.ctaBtn} activeOpacity={0.85} onPress={async () => {
           let captured: string | undefined;
+          let capturedRoutineUri: string | undefined;
           if (photoTaken && overlayRef.current) {
             try {
               await new Promise(resolve => requestAnimationFrame(resolve));
@@ -1272,17 +1273,16 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
                 captured = await captureRef(overlayRef, { format: 'png', quality: 0.95, result: 'tmpfile' });
                 onCompositeUri(captured);
               }
-              // 루틴카드 캡처
               if (routineCardRef.current) {
                 await new Promise(resolve => requestAnimationFrame(resolve));
-                const routineUri = await captureRef(routineCardRef, {
+                capturedRoutineUri = await captureRef(routineCardRef, {
                   format: 'png', quality: 0.95, result: 'tmpfile',
                 });
-                onRoutineCardUri?.(routineUri);
+                onRoutineCardUri?.(capturedRoutineUri);
               }
             } catch (_) {}
           }
-          onSave(captured);
+          onSave(captured, capturedRoutineUri);
         }}>
           <Ionicons name="checkmark-done" size={18} color={C.bg} />
           <Text style={s.ctaTxt}>운동 저장</Text>
@@ -1703,7 +1703,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     }
   }
 
-  async function handleSaveWorkout(passedCompositeUri?: string) {
+  async function handleSaveWorkout(passedCompositeUri?: string, passedRoutineCardUri?: string) {
     if (!gym) return;
     setIsSaving(true);
     const effectiveCompositeUri = passedCompositeUri ?? compositeUri;
@@ -1822,7 +1822,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
           gymName:        gym.name,
           photoUri:       finalPhotoUrl ?? photoUri ?? effectiveCompositeUri ?? '',
           compositeUri:   finalPhotoUrl ?? effectiveCompositeUri ?? undefined,
-          routineCardUri: routineCardUri ?? undefined,
+          routineCardUri: passedRoutineCardUri ?? routineCardUri ?? undefined,
           muscles:        Array.from(selectedMuscles),
           isPublic:       true,
         }).catch(err => {
@@ -1836,13 +1836,13 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   }
 
   /** Called by WorkoutPhotoStep's "운동 저장" button */
-  async function requestSaveWorkout(socialCapturedUri?: string) {
+  async function requestSaveWorkout(socialCapturedUri?: string, capturedRoutineUri?: string) {
     if (socialCapturedUri) {
       setCompositeUri(socialCapturedUri);
-      await handleSaveWorkout(socialCapturedUri);
+      await handleSaveWorkout(socialCapturedUri, capturedRoutineUri);
       return;
     }
-    await handleSaveWorkout(undefined);
+    await handleSaveWorkout(undefined, capturedRoutineUri);
   }
 
   async function handleCapture(aspect: [number, number] = [3, 4]) {
