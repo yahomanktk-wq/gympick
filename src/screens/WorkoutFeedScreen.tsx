@@ -19,7 +19,7 @@ import { WorkoutFeedPost, WorkoutLog } from '../data/types';
 const MOCK_FEED_POSTS: WorkoutFeedPost[] = [];
 import { filterActivePosts, filterByGym, filterByDistance, toggleReaction, convertSessionToFeedPost } from '../lib/feedUtils';
 import { fetchActiveFeedPosts, fetchMyLatestGymId, fetchFeedPostsByGym } from '../lib/db/feedPosts';
-import { getNewSessions } from '../data/sessionStore';
+import { fetchWorkoutLogs } from '../lib/db/workouts';
 import { useAuth } from '../context/AuthContext';
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
@@ -306,14 +306,22 @@ export default function WorkoutFeedScreen() {
       let active = true;
 
       async function loadPosts() {
-        const myUserId = user?.id ?? 'guest';
-        const mySessions: WorkoutLog[] = getNewSessions(myUserId);
+        if (!user?.id) {
+          if (active) setPosts([]);
+          return;
+        }
+        const myUserId = user.id;
+        const mySessions: WorkoutLog[] = await fetchWorkoutLogs(user.id).catch(() => []);
+
+        // 24시간 이내 세션만 필터링
+        const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+        const recentSessions = mySessions.filter(
+          s => new Date(s.date).getTime() >= cutoff
+        );
 
         // 가장 최근 운동한 헬스장 ID fetch
         let latestGymId: string | null = null;
-        if (user?.id) {
-          latestGymId = await fetchMyLatestGymId(user.id);
-        }
+        latestGymId = await fetchMyLatestGymId(user.id);
         if (!latestGymId && mySessions.length > 0) {
           const sorted = [...mySessions].sort(
             (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -327,10 +335,10 @@ export default function WorkoutFeedScreen() {
           if (recent?.gymName && active) setMyGymName(recent.gymName);
         }
 
-        const myPosts = mySessions
+        const myPosts = recentSessions
           .map(session => convertSessionToFeedPost(
             session,
-            myUserId,
+            user.id,
             user?.nickname ?? user?.name ?? 'me',
             latestGymId ?? 'g01',
           ))
