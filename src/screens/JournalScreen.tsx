@@ -24,7 +24,7 @@ import { WorkoutLog, Machine } from '../data/types';
 import { getSessionPRMachines } from '../data/workoutSessions';
 import { fetchWorkoutLogs } from '../lib/db';
 import { deleteWorkoutSession } from '../lib/db/workouts';
-import { deleteFeedPostBySession } from '../lib/db/feedPosts';
+import { deleteFeedPostBySession, fetchFeedPostPublicStatus, updateFeedPostPublic } from '../lib/db/feedPosts';
 import { useFetch } from '../lib/useFetch';
 import { useAuth } from '../context/AuthContext';
 import PostWorkoutLogModal from './flow/PostWorkoutLogModal';
@@ -214,16 +214,29 @@ function SessionDetailModal({
   onClose,
   onOpenMachine,
   onDelete,
+  userId,
 }: {
   sessions:      WorkoutLog[];
   prMachines:    Set<string>;
   onClose:       () => void;
   onOpenMachine: (machineId: string, machineName: string, machineBrand: string, targetMuscle?: string) => void;
   onDelete:      (sessionId: string) => Promise<void>;
+  userId:        string | null;
 }) {
   const photoRefs      = useRef<Record<string, View | null>>({});
   const routineCardRefs = useRef<Record<string, View | null>>({});
   const [photoHeights, setPhotoHeights] = useState<Record<string, number>>({});
+  const [publicStatusMap, setPublicStatusMap] = useState<
+    Record<string, { postId: string; isPublic: boolean } | null>
+  >({});
+
+  useEffect(() => {
+    if (!userId) return;
+    sessions.forEach(async (session) => {
+      const status = await fetchFeedPostPublicStatus(userId, session.date);
+      setPublicStatusMap(prev => ({ ...prev, [session.id]: status }));
+    });
+  }, [sessions, userId]);
 
   useEffect(() => {
     sessions.forEach(session => {
@@ -305,6 +318,21 @@ function SessionDetailModal({
         },
       ],
     );
+  }
+
+  async function handleTogglePublic(session: WorkoutLog) {
+    const status = publicStatusMap[session.id];
+    if (!status) return;
+    try {
+      const newIsPublic = !status.isPublic;
+      await updateFeedPostPublic(status.postId, newIsPublic);
+      setPublicStatusMap(prev => ({
+        ...prev,
+        [session.id]: { ...status, isPublic: newIsPublic },
+      }));
+    } catch {
+      Alert.alert('오류', '공개 여부 변경에 실패했습니다.');
+    }
   }
 
   return (
@@ -404,16 +432,43 @@ function SessionDetailModal({
                   )}
                 </View>
 
-                {/* 이미지 저장 + 삭제 버튼 */}
-                <View style={{ flexDirection: 'row', gap: 10, paddingVertical: 12 }}>
+                {/* 이미지 저장 + 공개/비공개 + 삭제 버튼 */}
+                <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 12 }}>
                   <TouchableOpacity
                     style={[det.photoActionBtn, { flex: 1 }]}
                     onPress={() => handleSave(session)}
                     activeOpacity={0.8}
                   >
                     <Ionicons name="download-outline" size={16} color={C.text} />
-                    <Text style={det.photoActionTxt}>이미지 저장</Text>
+                    <Text style={det.photoActionTxt}>저장</Text>
                   </TouchableOpacity>
+
+                  {publicStatusMap[session.id] !== undefined && publicStatusMap[session.id] !== null && (
+                    <TouchableOpacity
+                      style={[
+                        det.photoActionBtn,
+                        { flex: 1 },
+                        publicStatusMap[session.id]?.isPublic
+                          ? { borderColor: C.accent + '60', backgroundColor: C.accentBg }
+                          : { borderColor: C.border },
+                      ]}
+                      onPress={() => handleTogglePublic(session)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons
+                        name={publicStatusMap[session.id]?.isPublic ? 'eye-outline' : 'eye-off-outline'}
+                        size={16}
+                        color={publicStatusMap[session.id]?.isPublic ? C.accent : C.textSub}
+                      />
+                      <Text style={[
+                        det.photoActionTxt,
+                        { color: publicStatusMap[session.id]?.isPublic ? C.accent : C.textSub },
+                      ]}>
+                        {publicStatusMap[session.id]?.isPublic ? '공개중' : '비공개'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
                   <TouchableOpacity
                     style={[det.photoActionBtn, { flex: 1, borderColor: C.danger + '60' }]}
                     onPress={() => handleDelete(session)}
@@ -704,6 +759,7 @@ export default function JournalScreen() {
               setDetailSessions(remaining);
               refetch();
             }}
+            userId={user?.id ?? null}
           />
           <MachineDetailModal
             visible={machineDetailVisible}

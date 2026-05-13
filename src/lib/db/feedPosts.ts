@@ -122,3 +122,47 @@ export async function deleteFeedPostBySession(
     if (__DEV__) console.warn('[feedPosts] deleteFeedPostBySession 오류:', e);
   }
 }
+
+/** 해당 유저+날짜의 피드 게시물 공개 여부 조회 */
+export async function fetchFeedPostPublicStatus(
+  userId: string,
+  sessionDate: string,
+): Promise<{ id: string; isPublic: boolean } | null> {
+  try {
+    const dayStart = new Date(sessionDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(sessionDate);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const { data, error } = await supabase
+      .from('workout_feed_posts')
+      .select('id, is_public')
+      .eq('user_id', userId)
+      .gte('created_at', dayStart.toISOString())
+      .lte('created_at', dayEnd.toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error || !data) return null;
+    return { id: data.id, isPublic: data.is_public };
+  } catch {
+    return null;
+  }
+}
+
+/** 피드 게시물 공개 여부 토글 */
+export async function updateFeedPostPublic(
+  postId: string,
+  isPublic: boolean,
+): Promise<void> {
+  try {
+    await supabase
+      .from('workout_feed_posts')
+      .update({ is_public: isPublic })
+      .eq('id', postId);
+  } catch (e) {
+    if (__DEV__) console.warn('[feedPosts] updateFeedPostPublic 오류:', e);
+    throw e;
+  }
+}
