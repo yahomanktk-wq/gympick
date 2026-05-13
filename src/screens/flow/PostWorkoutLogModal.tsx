@@ -923,7 +923,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
   onCapture: (aspect: [number, number]) => void;
   onCompositeUri:    (uri: string) => void;
   onRoutineCardUri?: (uri: string) => void;
-  onSave: (captured?: string, routineCardUri?: string) => void;
+  onSave: (captured?: string, capturedRoutineUri?: string) => void;
   onBack: () => void;
   onClose: () => void;
 }) {
@@ -1273,6 +1273,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
                 captured = await captureRef(overlayRef, { format: 'png', quality: 0.95, result: 'tmpfile' });
                 onCompositeUri(captured);
               }
+              // 루틴카드 캡처
               if (routineCardRef.current) {
                 await new Promise(resolve => requestAnimationFrame(resolve));
                 capturedRoutineUri = await captureRef(routineCardRef, {
