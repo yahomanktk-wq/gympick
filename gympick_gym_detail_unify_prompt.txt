@@ -1,0 +1,294 @@
+Apply the following changes to the GymPick app.
+Complete without stopping to ask for confirmation.
+Only report back when 100% complete.
+
+CORE RULES
+- Do not break existing navigation structure
+- Keep existing color system (C, R, T theme)
+- Do not modify workout logging flow
+
+==================================================
+TASK 1: Replace GymFlowModal with GymDetailModal everywhere
+==================================================
+
+GOAL:
+All gym detail pages must use GymDetailModal (Korean, tab-based).
+Currently HomeScreen and FindGymScreen use GymFlowModal (English, no tabs).
+Replace all GymFlowModal usages with GymDetailModal.
+
+Step 1: Open src/screens/HomeScreen.tsx
+  Find this import:
+    import GymFlowModal from './flow/GymFlowModal'
+  Replace with:
+    import GymDetailModal from './flow/GymDetailModal'
+
+  Find the state variables:
+    const [flowVisible, setFlowVisible] = useState(false)
+    const [flowGymId, setFlowGymId] = useState<string | undefined>(undefined)
+  Replace with:
+    const [gymDetailVisible, setGymDetailVisible] = useState(false)
+    const [gymDetailId, setGymDetailId] = useState<string | null>(null)
+
+  Find functions:
+    function openNearby() { setFlowGymId(undefined); setFlowVisible(true) }
+    function openGym(id: string) { setFlowGymId(id); setFlowVisible(true) }
+  Replace with:
+    function openNearby() { setGymDetailId(null); setGymDetailVisible(true) }
+    function openGym(id: string) { setGymDetailId(id); setGymDetailVisible(true) }
+
+  Find the GymFlowModal render:
+    <GymFlowModal
+      visible={flowVisible}
+      onClose={() => setFlowVisible(false)}
+      initialGymId={flowGymId}
+    />
+  Replace with:
+    <GymDetailModal
+      visible={gymDetailVisible}
+      gymId={gymDetailId}
+      onClose={() => setGymDetailVisible(false)}
+    />
+
+Step 2: Open src/screens/FindGymScreen.tsx
+  Find this import:
+    import GymFlowModal from './flow/GymFlowModal'
+  Replace with:
+    import GymDetailModal from './flow/GymDetailModal'
+
+  Find state variables:
+    const [gymFlowId, setGymFlowId] = useState<string | undefined>(undefined)
+    const [gymFlowVisible, setGymFlowVisible] = useState(false)
+  Replace with:
+    const [gymDetailId, setGymDetailId] = useState<string | null>(null)
+    const [gymDetailVisible, setGymDetailVisible] = useState(false)
+
+  Find the gym card onPress:
+    onPress={() => {
+      setGymFlowId(gym.id)
+      setGymFlowVisible(true)
+    }}
+  Replace with:
+    onPress={() => {
+      setGymDetailId(gym.id)
+      setGymDetailVisible(true)
+    }}
+
+  Find the GymFlowModal render:
+    <GymFlowModal
+      visible={gymFlowVisible}
+      onClose={() => setGymFlowVisible(false)}
+      initialGymId={gymFlowId}
+    />
+  Replace with:
+    <GymDetailModal
+      visible={gymDetailVisible}
+      gymId={gymDetailId}
+      onClose={() => setGymDetailVisible(false)}
+    />
+
+Step 3: Check all other files that import GymFlowModal.
+  Search the entire codebase for any remaining GymFlowModal imports or usages.
+  Replace each one with GymDetailModal following the same pattern above.
+
+==================================================
+TASK 2: Enhance GymDetailModal to include full machine list tab
+==================================================
+
+Currently GymDetailModal has two tabs: 정보 / 커뮤니티
+Add a third tab: 머신
+
+Step 1: Open src/screens/flow/GymDetailModal.tsx
+
+Step 2: Find the tab bar and add 머신 tab:
+  Current tabs: ['정보', '커뮤니티']
+  New tabs: ['머신', '정보', '커뮤니티']
+
+  Update the tab state type and default:
+    type GymTab = '머신' | '정보' | '커뮤니티'
+    const [tab, setTab] = useState<GymTab>('머신')
+
+Step 3: Add 머신 tab content.
+  Show all machines for the gym in a 2-column grid using MachineCard.
+
+  Add filter state:
+    const [machineMuscleFilter, setMachineMuscleFilter] = useState('전체')
+    const [machineBrandFilter, setMachineBrandFilter] = useState('전체')
+    const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
+
+  Get gym machines from the existing gym data:
+    import { MACHINES } from '../../data/machines'
+    import { GYM_MACHINES } from '../../data/gymMachines'
+
+    const gymMachineIds = useMemo(() =>
+      GYM_MACHINES
+        .filter(gm => gm.gymId === gymId)
+        .map(gm => gm.machineId),
+      [gymId]
+    )
+
+    const gymMachines = useMemo(() =>
+      MACHINES.filter(m => gymMachineIds.includes(m.id)),
+      [gymMachineIds]
+    )
+
+  Get user favorites:
+    import { getUserFavorites } from '../../data/machineReviews'
+    const favoriteMachineIds = getUserFavorites('u1')
+
+  Build filter options dynamically:
+    const muscleOptions = useMemo(() => {
+      const unique = [...new Set(gymMachines.map(m => m.targetMuscle).filter(Boolean))].sort()
+      return ['전체', ...unique]
+    }, [gymMachines])
+
+    const brandOptions = useMemo(() => {
+      const unique = [...new Set(gymMachines.map(m => m.brand).filter(Boolean))].sort()
+      return ['전체', ...unique]
+    }, [gymMachines])
+
+  Filter machines:
+    const filteredMachines = useMemo(() => {
+      return gymMachines.filter(m => {
+        const muscleOk = machineMuscleFilter === '전체' ||
+          m.targetMuscle?.toLowerCase() === machineMuscleFilter.toLowerCase()
+        const brandOk = machineBrandFilter === '전체' ||
+          m.brand?.toLowerCase() === machineBrandFilter.toLowerCase()
+        const favOk = !showFavoritesOnly || favoriteMachineIds.includes(m.id)
+        return muscleOk && brandOk && favOk
+      })
+    }, [gymMachines, machineMuscleFilter, machineBrandFilter, showFavoritesOnly])
+
+  Render machine tab UI:
+    <ScrollView>
+      {/* 즐겨찾기 필터 토글 */}
+      <View style={favFilterRow}>
+        <TouchableOpacity
+          style={[favChip, !showFavoritesOnly && favChipActive]}
+          onPress={() => setShowFavoritesOnly(false)}
+        >
+          <Text>전체</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[favChip, showFavoritesOnly && favChipActive]}
+          onPress={() => setShowFavoritesOnly(true)}
+        >
+          <Ionicons name="heart" size={13} color={showFavoritesOnly ? '#000' : C.textSub} />
+          <Text>즐겨찾기</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* 타겟부위 필터 */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        {muscleOptions.map(opt => (
+          <TouchableOpacity
+            key={opt}
+            style={[filterChip, machineMuscleFilter === opt && filterChipActive]}
+            onPress={() => setMachineMuscleFilter(opt)}
+          >
+            <Text>{opt}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      {/* 브랜드 필터 */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        {brandOptions.map(opt => (
+          <TouchableOpacity
+            key={opt}
+            style={[filterChip, machineBrandFilter === opt && filterChipActive]}
+            onPress={() => setMachineBrandFilter(opt)}
+          >
+            <Text>{opt}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      {/* 머신 카드 그리드 */}
+      {filteredMachines.length === 0 ? (
+        <View style={emptyState}>
+          <Text>조건에 맞는 머신이 없어요</Text>
+        </View>
+      ) : (
+        <View style={machineGrid}>
+          {filteredMachines.map(machine => (
+            <TouchableOpacity
+              key={machine.id}
+              onPress={() => {
+                setSelectedMachine(machine)
+                setMachineDetailVisible(true)
+              }}
+            >
+              <MachineCard machine={machine} variant="grid" width={CARD_W} />
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+    </ScrollView>
+
+  Add machine detail modal inside GymDetailModal:
+    import MachineDetailModal from './MachineDetailModal'
+    const [selectedMachine, setSelectedMachine] = useState(null)
+    const [machineDetailVisible, setMachineDetailVisible] = useState(false)
+
+    <MachineDetailModal
+      visible={machineDetailVisible}
+      machine={selectedMachine}
+      onClose={() => setMachineDetailVisible(false)}
+    />
+
+  Grid card width:
+    import { Dimensions } from 'react-native'
+    const SCREEN_W = Dimensions.get('window').width
+    const CARD_W = (SCREEN_W - 32 - 8) / 2
+
+  Add styles:
+    favFilterRow: flexDirection row, gap 8, padding 12 16, marginBottom 4
+    favChip: flexDirection row, alignItems center, gap 4,
+             paddingHorizontal 14, paddingVertical 8,
+             borderRadius R.pill, backgroundColor C.surface,
+             borderWidth 1, borderColor C.border
+    favChipActive: backgroundColor C.accent, borderColor C.accent
+    filterChip: paddingHorizontal 12, paddingVertical 7,
+                borderRadius R.pill, backgroundColor C.surface,
+                marginHorizontal 4
+    filterChipActive: backgroundColor C.accentBg, borderColor C.accent
+    machineGrid: flexDirection row, flexWrap wrap, gap 8,
+                 paddingHorizontal 16, paddingBottom 32
+    emptyState: alignItems center, paddingVertical 48
+
+==================================================
+TASK 3: Make sure GymDetailModal handles gymId properly
+==================================================
+
+GymDetailModal currently receives gymId as string | null.
+When called from HomeScreen with null (openNearby), show a gym list first.
+
+Step 1: Check current GymDetailModal behavior when gymId is null.
+  If it already shows a gym list → keep as is.
+  If it crashes or shows blank → add a fallback:
+
+    if (!gymId) {
+      // Show nearby gym list
+      return <NearbyGymList onSelect={(id) => setInternalGymId(id)} />
+    }
+
+  Or simply: when gymId is null, don't open the modal at all.
+  Update HomeScreen openNearby to navigate to FindGymScreen instead:
+    function openNearby() {
+      navigation.navigate('Find')
+    }
+
+  This is the simplest approach — "더 보기" button goes to Find Gym tab.
+
+==================================================
+FINAL INSTRUCTION
+==================================================
+
+Do not stop. Do not ask questions. Do not ask for confirmation.
+Complete all 3 tasks fully.
+When done, report:
+  1. Every file modified
+  2. Confirmation that HomeScreen and FindGymScreen now use GymDetailModal
+  3. Confirmation that 머신 tab is added to GymDetailModal with filters
+  4. Confirmation that 즐겨찾기 filter works in 머신 tab
+  5. Any issues encountered and how they were resolved

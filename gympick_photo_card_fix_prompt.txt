@@ -1,0 +1,172 @@
+Fix the workout photo card in JournalScreen SessionDetailModal to match
+the WorkoutPhotoStep card in PostWorkoutLogModal.
+Complete without stopping to ask for confirmation.
+Only report back when 100% complete.
+
+==================================================
+FIX: SessionDetailModal photo card does not match WorkoutPhotoStep card
+==================================================
+
+ROOT CAUSE (confirmed from code review):
+Two separate implementations exist for the workout photo card:
+  A. PostWorkoutLogModal.tsx → WorkoutPhotoStep (correct, reference design)
+  B. JournalScreen.tsx → SessionDetailModal (outdated, different design)
+
+Key differences to fix in B (JournalScreen SessionDetailModal):
+  1. Ratio: 4:5 → should be 9:16
+  2. Logo: <Text>GYM PICK</Text> → should be <GymPickLogo> SVG component
+  3. Username: hardcoded 'gympick_user' → should use real user nickname
+  4. Machine count: max 3 → should show all (with scroll)
+  5. Sets display: repeated m.sets times → should show actual per-set data
+  6. Text color: always white → should match the reference design (white default)
+  7. Background: solid dark → keep as is (dark background is fine)
+
+FIX:
+
+Step 1: Open src/screens/JournalScreen.tsx
+
+Step 2: Find SessionDetailModal function (around line 361).
+Find the photo card section (det.photoCard, det.photoBg, etc.)
+
+Step 3: Fix the photo card dimensions.
+Find the constants at the top of JournalScreen.tsx:
+  const DET_PHOTO_W = SCREEN_W - 32
+  const DET_PHOTO_H = Math.round(DET_PHOTO_W * 5 / 4)  ← 4:5 ratio
+
+Change to 9:16 ratio:
+  const DET_PHOTO_W = SCREEN_W - 32
+  const DET_PHOTO_H = Math.round(DET_PHOTO_W * 16 / 9)  ← 9:16 ratio
+
+Step 4: Fix the logo.
+Import GymPickLogo at the top of JournalScreen.tsx:
+  import GymPickLogo from '../components/GymPickLogo'
+
+Find these two logo blocks inside the photo card:
+  <View style={det.photoLogoLeftWrap}>
+    <Text style={[det.photoLogoSide, { transform: [{ rotate: '90deg' }] }]}>GYM PICK</Text>
+  </View>
+  <View style={det.photoLogoRightWrap}>
+    <Text style={[det.photoLogoSide, { transform: [{ rotate: '270deg' }] }]}>GYM PICK</Text>
+  </View>
+
+Replace both with GymPickLogo SVG:
+  <View style={[det.photoLogoLeftWrap, { transform: [{ rotate: '90deg' }] }]}>
+    <GymPickLogo color="#ffffff" width={64} />
+  </View>
+  <View style={[det.photoLogoRightWrap, { transform: [{ rotate: '270deg' }] }]}>
+    <GymPickLogo color="#ffffff" width={64} />
+  </View>
+
+Also update det.photoLogoLeftWrap and det.photoLogoRightWrap styles
+to center the logo properly (same as PostWorkoutLogModal):
+  photoLogoLeftWrap: {
+    position: 'absolute',
+    left: 0, top: 0, bottom: 0,
+    width: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
+  }
+  photoLogoRightWrap: {
+    position: 'absolute',
+    right: 0, top: 0, bottom: 0,
+    width: 22,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingBottom: 32,
+    zIndex: 2,
+  }
+
+Step 5: Fix the username.
+SessionDetailModal currently receives a session prop but not user.
+Add useAuth() to get the current user:
+  const { user } = useAuth()
+
+Find this hardcoded line:
+  <Text style={det.photoUsername}>gympick_user</Text>
+
+Replace with:
+  <Text style={det.photoUsername}>
+    {user?.nickname ?? user?.name ?? 'gympick_user'}
+  </Text>
+
+Step 6: Fix machine list - show all machines with scroll (not just 3).
+Find this line:
+  {session.machines.slice(0, 3).map(m => {
+
+Remove the slice limit:
+  {session.machines.map(m => {
+
+Wrap the machine list in a ScrollView:
+  <ScrollView
+    showsVerticalScrollIndicator={false}
+    style={{ maxHeight: DET_PHOTO_H * 0.45 }}
+    nestedScrollEnabled
+  >
+    {session.machines.map(m => {
+      const brandTag = `[${m.machineBrand.toUpperCase().replace(/ /g, '_')}]`
+      const namePart = m.machineName.toUpperCase().replace(/ /g, '_')
+      return (
+        <View key={m.machineId} style={{ gap: 1, marginBottom: 6 }}>
+          <Text style={det.photoExName} numberOfLines={1}>
+            {brandTag}_{namePart}
+          </Text>
+          {/* Show actual set data if available */}
+          {Array.from({ length: Math.min(m.sets, 4) }).map((_, si) => (
+            <Text key={si} style={det.photoExSet}>
+              {m.weight > 0 ? `${m.weight}kg` : '--'} x {m.reps}
+            </Text>
+          ))}
+        </View>
+      )
+    })}
+  </ScrollView>
+
+Step 7: Fix muscle title format.
+Currently shows only primary muscle: "CHEST DAY"
+Update to show all muscles like WorkoutPhotoStep: "CHEST + BACK" or "CHEST DAY"
+
+Find the muscleTitle calculation (around line 392):
+  const muscleCounts = session.machines.reduce<Record<string, number>>((acc, m) => {
+    acc[m.targetMuscle] = (acc[m.targetMuscle] ?? 0) + 1; return acc;
+  }, {});
+  const primaryMuscle = Object.entries(muscleCounts).sort(([, a], [, b]) => b - a)[0]?.[0] ?? 'WORKOUT'
+  const muscleTitle = `${primaryMuscle.toUpperCase()} DAY`
+
+Replace with multi-muscle format:
+  const muscleCounts = session.machines.reduce<Record<string, number>>((acc, m) => {
+    acc[m.targetMuscle] = (acc[m.targetMuscle] ?? 0) + 1; return acc;
+  }, {})
+  const sortedMuscles = Object.entries(muscleCounts)
+    .sort(([, a], [, b]) => b - a)
+    .map(([m]) => m.toUpperCase())
+  const muscleTitle = sortedMuscles.length > 1
+    ? sortedMuscles.slice(0, 2).join(' + ')
+    : `${sortedMuscles[0] ?? 'WORKOUT'} DAY`
+
+Step 8: Make sure useAuth is imported in JournalScreen.tsx.
+Check the imports at the top - if not already imported:
+  import { useAuth } from '../context/AuthContext'
+
+Step 9: After all changes, verify the photo card in SessionDetailModal
+visually matches the WorkoutPhotoStep card:
+  - 9:16 ratio ✅
+  - SVG GymPickLogo on both sides ✅
+  - Real user nickname ✅
+  - All machines with scroll ✅
+  - Multi-muscle title format ✅
+  - Dark background ✅
+  - White text ✅
+
+==================================================
+FINAL INSTRUCTION
+==================================================
+
+Do not stop. Do not ask questions. Fix completely.
+When done, report:
+  1. Every line changed in JournalScreen.tsx
+  2. Confirmation that ratio is now 9:16
+  3. Confirmation that SVG logo is used
+  4. Confirmation that real username is shown
+  5. Confirmation that all machines are shown with scroll
+  6. Confirmation that muscle title format matches WorkoutPhotoStep

@@ -1,0 +1,115 @@
+Fix the following filter behavior in src/screens/FindGymScreen.tsx.
+Complete without stopping to ask for confirmation.
+Only report back when 100% complete.
+
+==================================================
+FIX: Filter - show only brands that match selected muscle
+==================================================
+
+ROOT CAUSE (confirmed from code review):
+The brand filter list always shows ALL brands regardless of which muscle is selected.
+When user selects muscle "Back" then brand "Life Fitness",
+if Life Fitness has no Back machines, result is 0 and user thinks filter is broken.
+
+The fix: brand filter options must dynamically update based on activeMuscle.
+Only show brands that have at least one machine matching the currently selected muscle.
+
+CURRENT CODE (wrong):
+  const brands = useMemo(
+    () => ['All', ...[...new Set(allMachines.map(m => m.brand))].sort()],
+    [allMachines],
+  );
+
+This always builds brands from ALL machines, ignoring activeMuscle.
+
+NEW CODE (correct):
+  const brands = useMemo(() => {
+    const sourceMachines = activeMuscle === 'All'
+      ? allMachines
+      : allMachines.filter(m =>
+          m.targetMuscle?.toLowerCase() === activeMuscle.toLowerCase()
+        )
+    const uniqueBrands = [...new Set(sourceMachines.map(m => m.brand))].sort()
+    return ['All', ...uniqueBrands]
+  }, [allMachines, activeMuscle])
+
+This means:
+  - When activeMuscle === 'All': show all brands (same as before)
+  - When activeMuscle === 'Back': show only brands that have at least one Back machine
+
+Step 2: When activeMuscle changes, check if activeBrand is still valid.
+  If the currently selected brand is no longer in the new brands list,
+  reset activeBrand to 'All':
+
+  Add a useEffect:
+    useEffect(() => {
+      if (activeBrand === 'All') return
+      const stillValid = brands.some(
+        b => b.toLowerCase() === activeBrand.toLowerCase()
+      )
+      if (!stillValid) setActiveBrand('All')
+    }, [brands, activeBrand])
+
+  This prevents the case where user has "Life Fitness" selected,
+  switches muscle to "Back", Life Fitness disappears from brand list,
+  but the filter still applies Life Fitness invisibly.
+
+Step 3: Also update filteredMachines to use the same
+  case-insensitive comparison that is already in place:
+    const muscleOk = activeMuscle === 'All' ||
+      m.targetMuscle?.toLowerCase() === activeMuscle.toLowerCase()
+    const brandOk = activeBrand === 'All' ||
+      m.brand?.toLowerCase() === activeBrand.toLowerCase()
+
+  This is already correct per the investigation — no change needed here.
+
+Step 4: Add a count indicator to each filter section so users
+  know how many results match:
+
+  In the SectionHead component for Machines, show the filtered count:
+    <SectionHead title="머신" count={filteredMachines.length} />
+
+  This already exists — just make sure it reflects filteredMachines.length
+  not allMachines.length.
+
+Step 5: When both activeMuscle and activeBrand are active,
+  show an active filter summary bar below the filter chips:
+
+  {hasFilters && (
+    <View style={filterSummaryRow}>
+      <Ionicons name="options-outline" size={13} color={C.accent} />
+      <Text style={filterSummaryText}>
+        {[
+          activeMuscle !== 'All' && activeMuscle,
+          activeBrand !== 'All' && activeBrand,
+          keyword.trim() && `"${keyword.trim()}"`,
+        ].filter(Boolean).join(' + ')}
+      </Text>
+      <Text style={filterSummaryCount}>
+        {filteredMachines.length}개
+      </Text>
+    </View>
+  )}
+
+  Styles:
+    filterSummaryRow:
+      flexDirection row, alignItems center, gap 6,
+      paddingHorizontal 16, paddingVertical 8,
+      backgroundColor C.accentBg,
+      marginBottom 4
+
+    filterSummaryText:
+      flex 1, fontSize 12, fontWeight 600, color C.accent
+
+    filterSummaryCount:
+      fontSize 12, fontWeight 800, color C.accent
+
+==================================================
+FINAL INSTRUCTION
+==================================================
+
+Do not stop. Do not ask questions. Fix completely.
+When done, report:
+  1. Exact change made to brands useMemo
+  2. Confirmation that useEffect resets activeBrand when it becomes invalid
+  3. Confirmation that brand list now only shows brands matching selected muscle

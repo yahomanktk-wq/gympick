@@ -1,0 +1,586 @@
+Apply the following changes to the GymPick app.
+Complete everything without stopping to ask for confirmation.
+Do not pause between tasks.
+If you encounter ambiguity, make the best decision and continue.
+Only report back when everything is 100% complete.
+
+CORE RULES (never break these)
+- Do not modify the workout logging philosophy: sets are always recorded AFTER performing the exercise
+- Do not modify MachineCard.tsx component file itself
+- Keep existing color system (C, R, T theme)
+- Do not break existing navigation structure
+- Minimize changes to files not listed below
+
+==================================================
+CHANGE 1: Bottom tab menu Korean localization
+==================================================
+
+Find the bottom tab navigator file.
+It is likely in src/navigation/ or App.tsx or a file named TabNavigator or BottomTabs.
+
+Change the tab label text as follows:
+  Home      → 홈
+  Find      → 검색
+  Log       → 기록하기
+  Journal   → 운동일지
+  Profile   → 프로필
+
+If the labels are defined as strings in the navigator, change those strings.
+If the labels are defined inside screen options or tabBarLabel, change those.
+Do not change the icon names or icon styles.
+Do not change the route names used for navigation.navigate() calls — only change the visible label text.
+
+==================================================
+CHANGE 2: Home screen - Big 3 PR section rename
+==================================================
+
+Open src/screens/HomeScreen.tsx.
+Find the section titled "Big 3 PR".
+Change the section title text from "Big 3 PR" to "3대 운동 PR".
+Also change the hint text "Your best lifts" to "나의 최고 기록".
+Do not change any logic or styles.
+
+==================================================
+CHANGE 3: Workout logging flow redesign
+==================================================
+
+This is the most important and complex change.
+Read the entire PostWorkoutLogModal.tsx carefully before making any changes.
+
+CURRENT FLOW (what exists now):
+  Step 1: Select gym
+  Step 2: Select body part
+  Step 3: Select machines (list or some other UI)
+  Step 4: Log sets per machine
+  Step 5: Complete
+
+NEW FLOW (what we want):
+
+The flow must be split based on which option the user chooses after selecting gym and body part.
+
+--- PATH A: 새 루틴 작성하기 (New Routine) ---
+
+After selecting gym + body part, user taps "새 루틴 작성하기".
+
+Step A1: Machine Selection Screen
+  Show all machines available in the selected gym that match the selected body part.
+  Display each machine as a sports trading card (see SPORTS CARD SPEC below).
+  Machines are NOT pre-selected. User taps a card to select one machine.
+  Only ONE machine can be selected at a time on this screen.
+  There is no "add all" button.
+  At the bottom: "이 머신으로 운동 시작" button (disabled if no machine selected).
+
+Step A2: Set Logging Screen (for the selected machine)
+  Show the selected machine name and brand at the top.
+  Show set input rows (weight kg + reps).
+  User can add multiple sets.
+  "저장하고 다음 머신" button at the bottom.
+  Also "운동 종료" button to finish the entire session.
+
+Step A3: After tapping "저장하고 다음 머신":
+  Save the sets for this machine.
+  Go back to Step A1 (Machine Selection Screen).
+  The machine that was just logged should be visually marked as "완료" 
+  (show a checkmark badge on its card or a different border color using C.accent).
+  User selects the next machine.
+  Repeat until user taps "운동 종료".
+
+Step A4: On "운동 종료":
+  Show workout summary screen.
+  Ask "이 루틴을 저장할까요?" with Yes/No buttons.
+  If Yes: show text input for routine name, then save routine (machine list only, no sets/weights).
+  If No: skip saving routine.
+  Then proceed to workout completion flow (existing photo/share screen if it exists).
+
+--- PATH B: 이전 운동일지 참고하기 ---
+
+After selecting gym + body part, user taps "이전 운동일지 참고하기".
+
+Step B1: Show list of past workout logs from the same gym and same body part.
+  Each item shows: date, list of machine names used.
+  User taps one to select it as reference.
+
+Step B2: Machine List Screen (pre-populated)
+  Show the machines from the selected past log.
+  Each machine displayed as sports trading card (see SPORTS CARD SPEC below).
+  All machines are shown but none are checked yet.
+  User can also add more machines or remove machines from the list.
+  "운동 시작" button at the bottom.
+
+Step B3: Set Logging - one machine at a time
+  Show the first machine in the list.
+  Show set input rows (weight kg + reps).
+  Show previous best record for this machine if available (참고용 표시만, not auto-filled).
+  "저장하고 다음 머신" button.
+  "운동 종료" button.
+
+Step B4: After each save, move to next machine in the list automatically.
+  When all machines are done, or user taps "운동 종료", show completion screen.
+
+--- PATH C: 헬스장 추천 루틴 ---
+
+After selecting gym + body part, user taps "헬스장 추천 루틴".
+
+Step C1: Show list of gym-recommended routines for this gym and body part.
+  Each item shows: routine name, machine list preview.
+  Use mock data if no real data exists.
+  Example mock routine:
+    Name: "파워 가슴 루틴"
+    Machines: Chest Press, Incline Press, Cable Fly
+
+Step C2: User taps a routine to select it.
+  Show machine list pre-populated from the routine.
+  Each machine displayed as sports trading card.
+  User can add or remove machines.
+  "운동 시작" button.
+
+Step C3 onwards: Same as Path B Step B3 and B4.
+  One machine at a time, set logging, save and move to next.
+
+--- PATH D: 다른 유저 루틴 ---
+
+After selecting gym + body part, user taps "다른 유저 루틴".
+
+Step D1: Show list of routines shared by other users in the same gym.
+  Each item shows: routine name (or anonymous user label), machine list preview.
+  Use mock data if no real data exists.
+  Example mock routine:
+    Name: "익명 회원의 루틴"
+    Machines: Lat Pulldown, Seated Row, Cable Row
+
+Step D2: User taps a routine to select it.
+  Show machine list pre-populated.
+  Each machine displayed as sports trading card.
+  User can add or remove machines.
+  "운동 시작" button.
+
+Step D3 onwards: Same as Path B Step B3 and B4.
+
+--- ROUTE REFERENCE SCREEN (common entry point for B, C, D) ---
+
+After selecting gym + body part, show a screen with 4 options as tappable cards:
+
+  Card 1: 새 루틴 작성하기
+    Icon: add-circle-outline
+    Description: 이 헬스장 머신으로 직접 루틴을 만들어요
+
+  Card 2: 이전 운동일지 참고하기
+    Icon: time-outline
+    Description: 지난 운동 기록을 참고해요
+
+  Card 3: 헬스장 추천 루틴
+    Icon: star-outline
+    Description: 헬스장이 추천하는 루틴이에요
+
+  Card 4: 다른 유저 루틴
+    Icon: people-outline
+    Description: 같은 헬스장 회원들의 루틴이에요
+
+  Also a "건너뛰기" (skip) button at the bottom that goes directly to machine selection (Path A Step A1).
+
+--- SPORTS CARD SPEC for machine selection screens ---
+
+When showing machines as selectable cards in the machine selection screens,
+use the same visual layout as the existing MachineCard component.
+Do NOT modify MachineCard.tsx itself.
+Instead, create a new component called SelectableMachineCard in src/components/SelectableMachineCard.tsx.
+
+SelectableMachineCard props:
+  machine: { id, name, brand, targetMuscle, category }
+  selected: boolean
+  completed: boolean (for Path A - already logged machines)
+  onSelect: () => void
+
+Visual spec:
+  Base layout: identical to MachineCard (white background, black border, 9:16 ratio, top zone + image zone + info band + footer)
+  Use GymPickLogo, brandLogos, getBrandCopyrightStatus same as MachineCard.
+  
+  When selected=true:
+    Border color changes to C.accent (lime green)
+    Border width: 3
+    Show checkmark overlay in top-right corner: small circle with C.accent background and white checkmark icon
+
+  When completed=true (Path A only):
+    Show "완료" badge on the card
+    Border color: C.accent with reduced opacity (C.accent + '80')
+    Show green checkmark icon in top-right corner
+
+  When neither: normal MachineCard appearance
+
+  The entire card is a TouchableOpacity calling onSelect.
+  No separate "선택" button.
+
+Grid layout for machine selection:
+  2 columns, gap 8, paddingHorizontal 16
+  Same as existing machineGrid in FindGymScreen
+
+--- SET LOGGING SCREEN SPEC ---
+
+When logging sets for a single machine, show:
+
+  Top section:
+    Machine name (large, bold)
+    Brand name (smaller, C.textSub)
+    Target muscle pill badge
+
+  Previous best section (if data exists):
+    Label: "이전 최고 기록"
+    Show the best set from past logs for this machine
+    Style: C.textDim, smaller font, labeled as 참고용
+
+  Set rows:
+    Each set row: set number | weight input (kg) | reps input
+    Default values: weight 0, reps 0
+    "세트 추가" button to add another row
+    Minimum 1 set row shown
+
+  Bottom buttons:
+    "저장하고 다음 머신" - saves sets and returns to machine selection
+    "운동 종료" - ends entire session
+
+  PR detection:
+    If the logged weight x reps exceeds previous best, show "🎉 신기록!" badge
+
+==================================================
+CHANGE 4: Find Gym screen - filter bug fix + scroll reset
+==================================================
+
+BUG FIX - Filter not working correctly:
+
+Open src/screens/FindGymScreen.tsx and src/lib/db.ts (or wherever mock data is defined).
+
+The filter logic in FindGymScreen uses:
+  activeMuscle === 'All' || m.targetMuscle === activeMuscle
+  activeBrand === 'All' || m.brand === activeBrand
+
+This requires exact string matching. Fix as follows:
+
+Step 1: Open the mock data source (db.ts or machines.ts fallback).
+  Verify every machine object has these exact field names: id, name, brand, targetMuscle, category.
+  Verify targetMuscle values exactly match: 'Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core', 'Full Body', 'Glutes'
+  Fix any mismatches (e.g. 'chest' → 'Chest', 'CHEST' → 'Chest').
+
+Step 2: In FindGymScreen.tsx filteredMachines useMemo, add case-insensitive comparison as safety:
+  Change:
+    m.targetMuscle === activeMuscle
+  To:
+    m.targetMuscle?.toLowerCase() === activeMuscle.toLowerCase()
+  
+  Change:
+    m.brand === activeBrand
+  To:
+    m.brand?.toLowerCase() === activeBrand.toLowerCase()
+
+Step 3: Also fix filteredGyms so it correctly reflects filtered machines.
+
+SCROLL RESET on filter clear:
+
+Step 1: Add a ref to the ScrollView in FindGymScreen:
+  const scrollRef = useRef<ScrollView>(null)
+
+Step 2: In the clearAll function, after resetting filter states, add:
+  scrollRef.current?.scrollTo({ y: 0, animated: true })
+
+Step 3: Attach the ref to the ScrollView:
+  <ScrollView ref={scrollRef} ...>
+
+==================================================
+CHANGE 5: Favorites screen - machine cards as sports cards
+==================================================
+
+Open src/screens/FavoritesScreen.tsx.
+
+Currently favorite machines are shown as text rows in a list.
+Change this to display them as sports trading cards in a 2-column grid.
+
+Step 1: Import SelectableMachineCard from src/components/SelectableMachineCard.tsx
+  (created in CHANGE 3 above).
+  Use it with selected=false and completed=false (non-interactive display mode).
+  
+  Actually, for favorites we need a wrapper since we need the remove button.
+  Create a FavoriteMachineCard wrapper that:
+    - Renders SelectableMachineCard (or the same MachineCard visual layout)
+    - Adds a remove button as an absolute-positioned overlay in the top-right corner
+      (a small circular button with heart-filled icon in #ff4d6d color)
+      Position: top 8, right 8, backgroundColor rgba(0,0,0,0.6), borderRadius pill, padding 6
+    - onPress on the card opens MachineDetailModal
+    - onPress on the remove button calls removeMachine(id)
+
+Step 2: Replace the existing machine list (card with rows) with a 2-column grid:
+  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16 }}>
+    {filteredMachines.map(m => (
+      <FavoriteMachineCard
+        key={m.id}
+        machine={m}
+        onPress={() => setSelectedMachine(m)}
+        onRemove={() => removeMachine(m.id)}
+      />
+    ))}
+  </View>
+
+Step 3: Remove the old card/list style for machines. Keep the gym favorites list as is (text rows are fine for gyms).
+
+Step 4: The card width should be:
+  const CARD_W = (Dimensions.get('window').width - 32 - 8) / 2
+  Each card should have width={CARD_W}.
+
+==================================================
+CHANGE 6: Gym detail screen - full machine list button
+==================================================
+
+Open the GymDetailModal or GymDetailScreen file (likely src/screens/flow/GymDetailModal.tsx).
+
+In the Machines tab:
+  Currently shows a preview of machines.
+  Add a "전체 머신 보기" button below the machine preview list.
+
+Step 1: Add the button:
+  <TouchableOpacity
+    style={fullMachineBtn}
+    onPress={() => setShowAllMachines(true)}
+  >
+    <Text>전체 머신 보기</Text>
+    <Ionicons name="chevron-forward" size={14} color={C.accent} />
+  </TouchableOpacity>
+
+Step 2: Create a new screen/modal: src/screens/flow/GymAllMachinesScreen.tsx
+
+This screen receives:
+  gymId: string
+  gymName: string
+  machines: machine array
+
+Layout:
+  Header: "{gymName} 머신" title + close button
+  
+  Filter row 1: target muscle filter pills
+    Options: 전체 / Chest / Back / Legs / Shoulders / Arms / Core
+    Active pill: C.accent background
+  
+  Filter row 2: brand filter pills (dynamically built from the gym's machines)
+    Options: 전체 + all unique brands in the gym's machines
+  
+  Machine grid: 2 columns, sports card layout
+    Use SelectableMachineCard with selected=false, completed=false
+    Tapping a card opens MachineDetailModal for that machine
+  
+  Filter logic:
+    const filteredMachines = machines.filter(m => {
+      const muscleOk = activeMusclFilter === '전체' || m.targetMuscle === activeMuscleFilter
+      const brandOk = activeBrandFilter === '전체' || m.brand === activeBrandFilter
+      return muscleOk && brandOk
+    })
+
+Step 3: Show GymAllMachinesScreen as a modal (Modal component with animationType="slide").
+  Add state: const [showAllMachines, setShowAllMachines] = useState(false)
+  Pass the gym's machines array to it.
+
+==================================================
+CHANGE 7: Machine detail page - tab Korean localization
+==================================================
+
+Find the machine detail page/modal (likely src/screens/flow/MachineDetailModal.tsx or similar).
+
+Find the tab menu items and translate them:
+  "About"      → "머신 정보"
+  "Reviews"    → "리뷰"
+  "Gyms"       → "보유 헬스장"
+  "Info"       → "정보"
+  Any other English tab labels → translate to Korean
+
+Also translate any other UI text in this file:
+  "Add to Favorites"    → "즐겨찾기 추가"
+  "Remove from Favorites" → "즐겨찾기 해제"
+  "No reviews yet"      → "아직 리뷰가 없어요"
+  "No gyms found"       → "보유 헬스장 정보가 없어요"
+  "Write a review"      → "리뷰 작성"
+  "Machine Brand"       → "브랜드"
+  "Target Muscle"       → "타겟 부위"
+  "Category"            → "카테고리"
+
+==================================================
+CHANGE 8: MachineCard visual improvements
+==================================================
+
+Open src/components/MachineCard.tsx.
+
+Apply the following visual changes:
+
+1. Brand logo size increase:
+  Change brandBox width from 110 to 140
+  Change brandBox height from 36 to 48
+  Change brandLogo maxWidth from 90 to 120
+  Change brandLogo maxHeight from 28 to 40
+  Change brandLogo width from 90 to 120
+  Change brandLogo height from 28 to 40
+
+2. Info band (dark section) - make brighter:
+  Change backgroundColor from 'rgba(45,45,55,0.85)' to 'rgba(80,80,95,0.90)'
+
+3. Copyright blur overlay text - make bigger:
+  Change blurText fontSize from 12 to 16
+  Change blurText lineHeight from 18 to 24
+  Change blurText fontWeight from '600' to '700'
+  Also increase the lock icon size from 22 to 28
+
+4. Footer copyright text - show full text with line wrap:
+  Change copyright style:
+    Remove numberOfLines={1} from the Text component (allow multi-line)
+    Change fontSize from 10 to 9
+    Add flexWrap: 'wrap'
+    Add flexShrink: 1
+  Change FOOTER_H constant from 38 to 56 (to accommodate 2 lines of text)
+  Change BAND_BOTTOM from FOOTER_H + 10 to FOOTER_H + 10 (recalculates automatically)
+
+==================================================
+CHANGE 9: Korean localization - remaining UI text
+==================================================
+
+Apply the following translations across the app.
+
+In src/screens/HomeScreen.tsx:
+  'Good morning' → '좋은 아침이에요'
+  'Good afternoon' → '안녕하세요'
+  'Good evening' → '좋은 저녁이에요'
+  'Welcome to GymPick' → 'GymPick에 오신 걸 환영해요'
+  'Browse gyms, machines, and training ideas.' → '헬스장과 머신을 탐색해보세요.'
+  'Log in to save workouts and track your progress.' → '로그인하고 운동을 기록해보세요.'
+  'LAST SESSION' → '마지막 운동'
+  'Your workout history will appear here.' → '운동 기록이 여기에 표시됩니다.'
+  'Log in to start tracking your sessions.' → '로그인하고 운동을 기록해보세요.'
+  'exercises' → '운동'
+  'sets' → '세트'
+  'volume' → '볼륨'
+  'YOUR HISTORY' → '운동 기록'
+  'Day Streak' → '일 연속'
+  'Keep it up!' → '계속 유지하세요!'
+  'Your streak will start when you log your first workout.' → '첫 운동을 기록하면 연속 기록이 시작돼요.'
+  'Nearby Gyms' → '주변 헬스장'
+  'Find more' → '더 보기'
+  'Last Session' → '마지막 운동'
+  'View log' → '기록 보기'
+  'View Full Log' → '전체 기록 보기'
+  'machines' (as label) → '머신'
+
+In src/screens/LogWorkoutScreen.tsx:
+  'Log a Workout' → '운동 기록하기'
+  'Record what you performed after your session is done' → '운동을 마친 후 수행한 내용을 기록하세요'
+  'Select muscle groups you trained' → '운동한 부위를 선택하세요'
+  'Pick the gym — filtered by muscle' → '헬스장을 선택하세요'
+  'Choose machines & free-weight exercises' → '사용한 머신을 선택하세요'
+  'Log sets with weight + reps presets' → '세트, 무게, 횟수를 기록하세요'
+  '4:5 portrait photo with workout overlay' → '운동 완료 카드를 생성하세요'
+  'Start Logging' → '기록 시작'
+
+In src/screens/JournalScreen.tsx:
+  'Journal' → '운동일지'
+  'sessions' → '운동'
+  'this week' → '이번 주'
+  'Log' (button) → '기록'
+  'No workouts logged yet.' → '아직 기록된 운동이 없어요.'
+  'Log in to start tracking your workouts.' → '로그인하고 운동을 기록해보세요.'
+  'No workouts yet' → '운동 기록이 없어요'
+  'Tap "Log" to record your first session.' → '"기록" 버튼을 눌러 첫 운동을 기록해보세요.'
+  'Sessions' (section title) → '운동 기록'
+  'Most Used' → '자주 쓴 머신'
+  'Top Brand' → '선호 브랜드'
+  'This Week' → '이번 주'
+  'Frequency' → '운동 빈도'
+  'Sessions per week' → '주간 운동 횟수'
+  'Tonnes' → '총 볼륨'
+  'Login' (button) → '로그인'
+  'uses' → '회'
+  'No data' → '데이터 없음'
+  '3w ago' → '3주 전'
+  '2w ago' → '2주 전'
+  'Last wk' → '지난 주'
+  'This wk' → '이번 주'
+
+In src/screens/PRHistoryScreen.tsx:
+  'PR History' → 'PR 기록'
+  'All' → '전체'
+  'No PR history yet.' → '아직 PR 기록이 없어요.'
+  'Your PR history will appear here as you keep logging workouts.' → '운동을 기록하면 PR 기록이 여기에 표시돼요.'
+  'Recently Set' → '🎉 최근 PR'
+  'Log more workouts to see your progress chart.' → '더 많은 운동을 기록하면 차트가 표시돼요.'
+
+In src/screens/FavoritesScreen.tsx:
+  'Favorites' → '즐겨찾기'
+  'GYMS' → '헬스장'
+  'MACHINES' → '머신'
+  'No favorite gyms yet' → '즐겨찾기한 헬스장이 없어요'
+  'No favorite machines yet' → '즐겨찾기한 머신이 없어요'
+  'TARGET MUSCLE' → '타겟 부위'
+  'BRAND' → '브랜드'
+  'No machines match the selected filters.' → '선택한 필터에 맞는 머신이 없어요.'
+  'machines' → '머신'
+  'All' → '전체'
+
+In src/screens/CameraScreen.tsx:
+  'Scan Machine' → '머신 스캔'
+  'Point your camera at gym equipment' → '카메라를 머신에 향하게 하세요'
+  'MACHINE IDENTIFIED' → '머신 인식 완료'
+  'Confidence' → '인식률'
+  'Log to Workout' → '운동에 추가'
+  'Scan Again' → '다시 스캔'
+  'Scanning…' → '스캔 중...'
+  'Machine found' → '머신 인식됨'
+  'Ready to scan' → '스캔 준비 완료'
+  'No camera in simulator' → '시뮬레이터에서는 카메라를 사용할 수 없어요'
+  'Tap Scan to see a demo result' → '스캔 버튼을 눌러 데모를 확인하세요'
+  'Recent Scans' → '최근 스캔'
+
+In src/screens/FindGymScreen.tsx:
+  'Find Gym' → '헬스장 검색'
+  'Discover by machine, muscle, or brand' → '머신, 부위, 브랜드로 검색하세요'
+  'Clear' → '초기화'
+  'TARGET MUSCLE' → '타겟 부위'
+  'BRAND' → '브랜드'
+  'Popular Machines' → '인기 머신'
+  'My Favorites' → '즐겨찾기'
+  'Machines' (section) → '머신'
+  'Gyms' (section) → '헬스장'
+  'No machines match. Try adjusting filters.' → '조건에 맞는 머신이 없어요. 필터를 조정해보세요.'
+  'No gyms match. Try adjusting filters.' → '조건에 맞는 헬스장이 없어요. 필터를 조정해보세요.'
+  'Loading...' → '불러오는 중...'
+  'Open' → '영업 중'
+  'Closed' → '영업 종료'
+  'machines' (count label) → '머신'
+  'matching machine' / 'matching machines' → '매칭 머신'
+
+==================================================
+NEW FILE SUMMARY
+==================================================
+
+Files to CREATE:
+  src/components/SelectableMachineCard.tsx
+  src/screens/flow/GymAllMachinesScreen.tsx
+
+Files to MODIFY:
+  src/navigation/ (tab navigator) - tab labels
+  src/screens/HomeScreen.tsx - Big 3 rename + Korean text
+  src/screens/LogWorkoutScreen.tsx - Korean text
+  src/screens/JournalScreen.tsx - Korean text
+  src/screens/PRHistoryScreen.tsx - Korean text
+  src/screens/FavoritesScreen.tsx - machine grid cards + Korean text
+  src/screens/CameraScreen.tsx - Korean text
+  src/screens/FindGymScreen.tsx - filter bug fix + scroll reset + Olympic banner move + Korean text
+  src/screens/flow/PostWorkoutLogModal.tsx - full workout flow redesign
+  src/screens/flow/GymDetailModal.tsx - add full machine list button
+  src/screens/flow/MachineDetailModal.tsx - tab Korean localization
+  src/components/MachineCard.tsx - visual improvements
+
+==================================================
+FINAL INSTRUCTION
+==================================================
+
+Do not stop.
+Do not ask questions.
+Do not ask for confirmation at any point.
+Complete every single change listed above.
+If a file does not exist, skip that change and continue.
+If a change conflicts with existing code, make the best decision and continue.
+When everything is done, report a summary of:
+  1. Every file created or modified
+  2. Brief description of what changed in each file
+  3. Any changes that were skipped and why

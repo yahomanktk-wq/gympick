@@ -1,0 +1,117 @@
+Fix the following bug in GymPick app.
+Complete without stopping to ask for confirmation.
+Only report back when 100% complete.
+
+==================================================
+BUG FIX: Routine selection shows all gym machines instead of only routine machines
+==================================================
+
+ROOT CAUSE (confirmed from code review):
+In PostWorkoutLogModal.tsx, the ExerciseSelectStep renders machines like this:
+
+  const machines = gym.machines.filter(m => matchesMuscle(m.targetMuscle))
+
+This always shows ALL machines in the gym that match the selected muscle.
+The preloadedIds variable (which holds the routine's machine IDs) is only
+used for visual highlighting (exCardPreloaded style), NOT for filtering.
+
+So when a user selects "이전 운동일지 참고하기", "헬스장 추천 루틴", or "다른 유저 루틴",
+the machine selection screen still shows all gym machines instead of only
+the machines from the selected routine.
+
+FIX:
+
+Step 1: Open src/screens/flow/PostWorkoutLogModal.tsx
+
+Step 2: Find the ExerciseSelectStep component or the 'exercise-select' case in the step renderer.
+Find this exact line (or similar):
+  const machines = gym.machines.filter(m => matchesMuscle(m.targetMuscle))
+
+Step 3: Add a filter that restricts to preloadedIds when they exist.
+Change the machines variable to:
+
+  const hasPreloaded = preloadedIds.size > 0
+  const machines = gym.machines.filter(m => {
+    if (!matchesMuscle(m.targetMuscle)) return false
+    if (hasPreloaded) return preloadedIds.has(m.id)
+    return true
+  })
+
+This means:
+  - No routine selected (Start Fresh / 새 루틴 작성하기):
+    preloadedIds is empty → show all gym machines matching muscle ✅
+  - Routine selected (이전 운동일지 / 헬스장 추천 / 다른 유저):
+    preloadedIds has IDs → show ONLY those machines ✅
+
+Step 4: Also handle the case where a routine machine is NOT in gym.machines.
+Some routine machines might not be in the current gym's machine list.
+In that case, resolve them from ALL_MACHINES_MAP or extraMachineInfo.
+
+Change the machines variable further:
+
+  const hasPreloaded = preloadedIds.size > 0
+
+  let machines: Machine[]
+  if (hasPreloaded) {
+    // Show only routine machines, regardless of whether they're in this gym
+    machines = [...preloadedIds]
+      .map(id => {
+        // First try gym machines
+        const gymMachine = gym.machines.find(m => m.id === id)
+        if (gymMachine) return gymMachine
+        // Then try global machines catalog
+        const globalMachine = ALL_MACHINES_MAP?.[id] ?? MACHINES.find(m => m.id === id)
+        if (globalMachine) return globalMachine
+        // Finally try extraMachineInfo
+        const extra = routineExtraInfo?.[id]
+        if (extra) return {
+          id,
+          name: extra.machineName ?? id,
+          brand: extra.machineBrand ?? '',
+          targetMuscle: extra.targetMuscle ?? '',
+          category: '',
+          gymIds: [],
+        }
+        return null
+      })
+      .filter(Boolean) as Machine[]
+  } else {
+    machines = gym.machines.filter(m => matchesMuscle(m.targetMuscle))
+  }
+
+If ALL_MACHINES_MAP is not already imported, import MACHINES from the data file
+and build a lookup map:
+  const ALL_MACHINES_MAP = useMemo(() =>
+    Object.fromEntries(MACHINES.map(m => [m.id, m])),
+    []
+  )
+
+Or if it already exists somewhere, use that.
+
+Step 5: Make sure the "운동 종료" button still works correctly.
+  - The "운동 종료" button should only be on the machine selection screen (exercise-select step)
+  - NOT on the set logging screen (log-sets step)
+  - Verify this is still the case after the fix
+
+Step 6: Also check the "새 루틴 작성하기" path.
+  When user chooses "새 루틴 작성하기" (Start Fresh):
+    onSelectMachineIds([]) → preloadedIds is empty Set → shows all gym machines ✅
+  This path must continue to work correctly after the fix.
+  Confirm that when preloadedIds.size === 0, all gym machines matching the muscle are shown.
+
+Step 7: Test these scenarios mentally after the fix:
+  A. Start Fresh → exercise-select shows all gym Back machines ✅
+  B. 이전 운동일지 참고 (3 Back machines) → exercise-select shows only those 3 machines ✅
+  C. 헬스장 추천 루틴 (4 Chest machines) → exercise-select shows only those 4 machines ✅
+  D. 다른 유저 루틴 (2 Shoulder machines) → exercise-select shows only those 2 machines ✅
+
+==================================================
+FINAL INSTRUCTION
+==================================================
+
+Do not stop. Do not ask questions. Fix completely.
+When done, report:
+  1. Exact file and line numbers changed
+  2. Confirmation that hasPreloaded logic filters machines correctly
+  3. Confirmation that Start Fresh path still shows all gym machines
+  4. Confirmation that routine paths show only routine machines

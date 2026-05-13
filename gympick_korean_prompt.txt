@@ -1,0 +1,227 @@
+Localize the GymPick app UI into Korean for Korean users.
+Complete all steps without stopping to ask for confirmation.
+Do not pause between steps. Implement everything from start to finish.
+If you encounter ambiguity, make the best decision and continue.
+Only report back when everything is 100% complete.
+
+LOCALIZATION RULES (never break these)
+- Keep all proper nouns in English: GymPick, Life Fitness, Hammer Strength, Technogym, Matrix, Arsenal, Chest Press, Lat Pulldown, Squat, Bench Press, Deadlift, Big 3, PR, and all other brand names and machine names
+- Keep all body part names in English: CHEST, BACK, LEGS, SHOULDERS, ARMS, CORE
+- Keep all unit labels in English: kg, reps, sets, km
+- Keep tab bar labels in English: Home, Find, Log, Journal, Profile
+- Translate all UI labels, button text, descriptions, placeholder text, section headers, empty state messages, and instructional text into Korean
+- Do not change any logic, styles, or component structure
+- Do not modify MachineCard.tsx
+- Do not modify workout logging flow logic
+- Keep existing color system and layout exactly as is
+
+FILES TO LOCALIZE
+
+1. src/screens/HomeScreen.tsx
+   - 'Good morning' → '좋은 아침이에요'
+   - 'Good afternoon' → '안녕하세요'
+   - 'Good evening' → '좋은 저녁이에요'
+   - 'Welcome to GymPick' → 'GymPick에 오신 걸 환영해요'
+   - 'Browse gyms, machines, and training ideas.' → '헬스장과 머신을 탐색해보세요.'
+   - 'Log in to save workouts and track your progress.' → '로그인하고 운동을 기록해보세요.'
+   - 'LAST SESSION' → '마지막 운동'
+   - 'Your workout history will appear here.' → '운동 기록이 여기에 표시됩니다.'
+   - 'Log in to start tracking your sessions.' → '로그인하고 운동을 기록해보세요.'
+   - 'exercises' → '운동'
+   - 'sets' → '세트'
+   - 'volume' → '볼륨'
+   - 'Your best lifts' → '나의 최고 기록'
+   - 'YOUR HISTORY' → '운동 기록'
+   - 'Day Streak' → '일 연속'
+   - 'Keep it up!' → '계속 유지하세요!'
+   - 'Your streak will start when you log your first workout.' → '첫 운동을 기록하면 연속 기록이 시작돼요.'
+   - 'Nearby Gyms' → '주변 헬스장'
+   - 'Find more' → '더 보기'
+   - 'machines' → '머신'
+   - 'Last Session' → '마지막 운동'
+   - 'View log' → '기록 보기'
+   - 'View Full Log' → '전체 기록 보기'
+
+2. src/screens/LogWorkoutScreen.tsx
+   - 'Log a Workout' → '운동 기록하기'
+   - 'Record what you performed after your session is done' → '운동을 마친 후 수행한 내용을 기록하세요'
+   - 'Select muscle groups you trained' → '운동한 부위를 선택하세요'
+   - 'Pick the gym — filtered by muscle' → '헬스장을 선택하세요'
+   - 'Choose machines & free-weight exercises' → '사용한 머신을 선택하세요'
+   - 'Log sets with weight + reps presets' → '세트, 무게, 횟수를 기록하세요'
+   - '4:5 portrait photo with workout overlay' → '운동 완료 카드 사진을 생성하세요'
+   - 'Start Logging' → '기록 시작'
+
+3. src/screens/PRHistoryScreen.tsx
+   - 'PR History' → 'PR 기록'
+   - 'All' → '전체'
+   - 'No PR history yet.' → '아직 PR 기록이 없어요.'
+   - 'Your PR history will appear here as you keep logging workouts.' → '운동을 기록하면 PR 기록이 여기에 표시돼요.'
+   - 'Recently Set' → '🎉 최근 PR'
+   - 'Log more workouts to see your progress chart.' → '더 많은 운동을 기록하면 차트가 표시돼요.'
+
+4. src/screens/FavoritesScreen.tsx
+   - 'Favorites' → '즐겨찾기'
+   - 'GYMS' → '헬스장'
+   - 'MACHINES' → '머신'
+   - 'No favorite gyms yet' → '즐겨찾기한 헬스장이 없어요'
+   - 'No favorite machines yet' → '즐겨찾기한 머신이 없어요'
+   - 'TARGET MUSCLE' → '타겟 부위'
+   - 'BRAND' → '브랜드'
+   - 'No machines match the selected filters.' → '선택한 필터에 맞는 머신이 없어요.'
+   - 'machines' → '머신'
+
+5. src/screens/CameraScreen.tsx
+   - 'Scan Machine' → '머신 스캔'
+   - 'Point your camera at gym equipment' → '카메라를 머신에 향하게 하세요'
+   - 'MACHINE IDENTIFIED' → '머신 인식 완료'
+   - 'Confidence' → '인식률'
+   - 'BRAND' → '브랜드'
+   - 'MUSCLE' → '부위'
+   - 'CATEGORY' → '카테고리'
+   - 'GYM' → '헬스장'
+   - 'Log to Workout' → '운동에 추가'
+   - 'Scan Again' → '다시 스캔'
+   - 'Scanning…' → '스캔 중...'
+   - 'Machine found' → '머신 인식됨'
+   - 'Ready to scan' → '스캔 준비 완료'
+   - 'No camera in simulator' → '시뮬레이터에서는 카메라를 사용할 수 없어요'
+   - 'Tap Scan to see a demo result' → '스캔 버튼을 눌러 데모를 확인하세요'
+   - 'Recent Scans' → '최근 스캔'
+   - 'Scan Machine' (button) → '머신 스캔'
+
+6. src/screens/FindGymScreen.tsx
+   Translate all UI labels, button text, section headers, empty states, and placeholder text.
+   Common strings to translate:
+   - 'Find Gym' → '헬스장 찾기'
+   - 'Search' placeholder → '헬스장, 머신, 브랜드 검색...'
+   - 'Nearby' → '주변'
+   - 'All Gyms' → '전체 헬스장'
+   - 'No gyms found' → '헬스장을 찾을 수 없어요'
+   - 'machines' → '머신'
+   - 'Clear' → '초기화'
+   - 'Filter' → '필터'
+
+7. src/screens/JournalScreen.tsx
+   Translate all UI labels, button text, section headers, empty states, and placeholder text.
+   Common strings to translate:
+   - 'Journal' → '운동일지'
+   - 'Workout Journal' → '운동일지'
+   - 'No workouts logged yet' → '아직 기록된 운동이 없어요'
+   - 'Start logging your workouts' → '운동을 기록해보세요'
+   - 'exercises' → '운동'
+   - 'sets' → '세트'
+   - 'volume' → '볼륨'
+   - 'View' → '보기'
+   - 'Delete' → '삭제'
+   - 'Filter' → '필터'
+   - 'All' → '전체'
+
+8. src/screens/ProfileScreen.tsx
+   Translate all UI labels, button text, section headers, and descriptions.
+   Common strings to translate:
+   - 'Profile' → '프로필'
+   - 'Log In' → '로그인'
+   - 'Sign Up' → '회원가입'
+   - 'Log Out' → '로그아웃'
+   - 'Settings' → '설정'
+   - 'Edit Profile' → '프로필 수정'
+   - 'Workout History' → '운동 기록'
+   - 'Favorites' → '즐겨찾기'
+   - 'PR History' → 'PR 기록'
+   - 'Total Workouts' → '총 운동 횟수'
+   - 'This Month' → '이번 달'
+   - 'Streak' → '연속 기록'
+   - 'days' → '일'
+   - 'workouts' → '운동'
+
+ALSO LOCALIZE (if these files exist in the project)
+- src/screens/flow/PostWorkoutLogModal.tsx
+  - 'Where did you work out?' → '어디서 운동했나요?'
+  - 'What did you train?' → '어떤 부위를 운동했나요?'
+  - 'Select Machine' → '머신 선택'
+  - 'Add Set' → '세트 추가'
+  - 'Save Workout' → '운동 저장'
+  - 'Finish' → '완료'
+  - 'Cancel' → '취소'
+  - 'Back' → '이전'
+  - 'Next' → '다음'
+  - 'Done' → '완료'
+  - 'Skip' → '건너뛰기'
+  - 'Popular' → '인기순'
+  - 'Recent' → '최근'
+  - 'All machines' → '전체 머신'
+  - 'No machines found' → '머신을 찾을 수 없어요'
+  - 'Search machines...' → '머신 검색...'
+  - 'reps' → '회'
+  - 'sets' → '세트'
+  - 'weight' → '무게'
+  - 'Previous best' → '이전 최고 기록'
+  - 'New PR!' → '신기록!'
+  - 'Share to gym' → '헬스장에 공유'
+  - 'Keep private' → '비공개'
+  - 'Workout complete!' → '운동 완료!'
+
+- src/screens/flow/GymDetailModal.tsx
+  - 'Machines' → '머신'
+  - 'Reviews' → '리뷰'
+  - 'Community' → '커뮤니티'
+  - 'Announcements' → '공지사항'
+  - 'Send Request' → '요청 보내기'
+  - 'No announcements yet' → '아직 공지사항이 없어요'
+  - 'Write your request...' → '요청 내용을 입력하세요...'
+  - 'Submit' → '전송'
+  - 'Request sent!' → '요청이 전송됐어요!'
+  - 'Favorite' → '즐겨찾기'
+  - 'See all machines' → '전체 머신 보기'
+  - 'No reviews yet' → '아직 리뷰가 없어요'
+
+- src/screens/olympic/OlympicHomeScreen.tsx (if exists)
+  - 'Machine Olympic' → '머신 올림픽'
+  - 'Vote for your favorite machines' → '가장 좋아하는 머신에 투표하세요'
+  - 'Rankings' → '랭킹'
+  - 'Start' → '시작'
+
+- src/screens/olympic/OlympicBattleScreen.tsx (if exists)
+  - '8강' → '8강' (keep as is)
+  - '4강' → '4강' (keep as is)
+  - '결승' → '결승' (keep as is)
+  - 'VS' → 'VS' (keep as is)
+
+- src/screens/olympic/OlympicResultScreen.tsx (if exists)
+  - '오늘의 챔피언' → '오늘의 챔피언' (keep as is)
+  - 'View Rankings' → '랭킹 보기'
+  - 'Add to Favorites' → '즐겨찾기에 추가'
+  - 'Log Workout' → '운동 기록하기'
+  - 'Play Again' → '다시 하기'
+  - 'Home' → '홈으로'
+
+- src/screens/olympic/OlympicRankingScreen.tsx (if exists)
+  - 'Machine Rankings' → '머신 랭킹'
+  - 'My Gym' → '내 헬스장'
+  - 'Global' → '전체'
+  - 'Win Rate' → '승률'
+  - 'Wins' → '승'
+  - 'Losses' → '패'
+
+AUTH SCREENS (if they exist)
+- src/screens/auth/AuthFlow.tsx or similar
+  - 'Welcome' → '환영해요'
+  - 'Login' → '로그인'
+  - 'Sign up' → '회원가입'
+  - 'Email' → '이메일'
+  - 'Password' → '비밀번호'
+  - 'Nickname' → '닉네임'
+  - 'Continue' → '계속'
+  - 'Already have an account?' → '이미 계정이 있으신가요?'
+  - "Don't have an account?" → '계정이 없으신가요?'
+  - 'Enter your email' → '이메일을 입력하세요'
+  - 'Enter your password' → '비밀번호를 입력하세요'
+  - 'Enter your nickname' → '닉네임을 입력하세요'
+
+FINAL INSTRUCTION
+Do not stop. Do not ask questions. Do not ask for confirmation.
+Scan every file listed above.
+Translate all matching English UI strings to Korean as specified.
+Do not translate proper nouns, brand names, machine names, body part labels, or unit labels.
+When all files are done, report a summary of every file modified.

@@ -1,0 +1,90 @@
+Fix the following critical bug in GymPick app.
+Complete without stopping to ask for confirmation.
+Only report back when 100% complete.
+
+==================================================
+BUG FIX: Duplicate machine IDs causing React rendering to skip filter updates
+==================================================
+
+ROOT CAUSE (confirmed from console logs):
+src/data/machines.ts contains machines with duplicate IDs.
+Examples found in logs:
+  'nautilus_back_10' — appears 2+ times
+  'nautilus_back_11' — appears 2+ times
+
+When React renders a list with duplicate keys, it reuses the previous render
+for duplicate-keyed items and skips updates — this is why filter changes
+appear to have no effect even though filteredMachines is correctly computed.
+
+FIX:
+
+Step 1: Find ALL duplicate IDs in src/data/machines.ts.
+Run this analysis:
+  - Read the entire MACHINES array
+  - Find all id values that appear more than once
+  - Report how many duplicates exist
+
+Step 2: For each duplicate ID, make the IDs unique by appending a suffix.
+Strategy: keep the first occurrence as-is, rename subsequent occurrences.
+
+Example:
+  BEFORE:
+    { id: 'nautilus_back_10', name: 'Nautilus Back Extension', ... }
+    { id: 'nautilus_back_10', name: 'Nautilus Pullover', ... }  ← duplicate
+
+  AFTER:
+    { id: 'nautilus_back_10', name: 'Nautilus Back Extension', ... }
+    { id: 'nautilus_back_10_b', name: 'Nautilus Pullover', ... }  ← renamed
+
+Step 3: Apply this fix programmatically.
+Since there may be many duplicates, add a deduplication step at the end of machines.ts.
+
+If MACHINES is exported as a plain const array, rename it to RAW_MACHINES
+and add this processing at the bottom:
+
+  const seenIds = new Map<string, number>()
+
+  export const MACHINES: Machine[] = RAW_MACHINES.map(m => {
+    if (!m.id) {
+      const count = (seenIds.get('__blank__') ?? 0) + 1
+      seenIds.set('__blank__', count)
+      return {
+        ...m,
+        id: `${m.brand.toLowerCase().replace(/[\s/]+/g, '_')}_${m.targetMuscle.toLowerCase()}_auto_${count}`
+      }
+    }
+    const count = (seenIds.get(m.id) ?? 0) + 1
+    seenIds.set(m.id, count)
+    if (count === 1) return m
+    return { ...m, id: `${m.id}_${String.fromCharCode(96 + count)}` }
+  })
+
+This generates:
+  First occurrence of 'nautilus_back_10' → 'nautilus_back_10' (unchanged)
+  Second occurrence → 'nautilus_back_10_b'
+  Third occurrence → 'nautilus_back_10_c'
+  Blank IDs → 'brand_muscle_auto_1', 'brand_muscle_auto_2', etc.
+
+Step 4: After applying the fix, verify:
+  - No two machines share the same id
+  - Total machine count is preserved (still 1985)
+  - The deduplication does not break any existing references to machine IDs
+    in gymMachines.ts, managedGymStore.ts, or other data files
+
+Step 5: Remove the console.logs that were added for debugging.
+  Find and remove these lines from src/screens/FindGymScreen.tsx:
+    console.log('FindGymScreen render - activeMuscle:' ...)
+    console.log('brands recomputing' ...)
+    console.log('filteredMachines recomputing' ...)
+
+==================================================
+FINAL INSTRUCTION
+==================================================
+
+Do not stop. Do not ask questions. Fix completely.
+When done, report:
+  1. How many duplicate IDs were found
+  2. How many blank IDs were found
+  3. Confirmation that all IDs are now unique
+  4. Confirmation that console.logs are removed
+  5. Confirmation that total machine count is preserved

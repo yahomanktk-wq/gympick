@@ -1,0 +1,542 @@
+Apply the following fixes and new features to the GymPick app.
+Complete everything without stopping to ask for confirmation.
+Do not pause between tasks.
+If you encounter ambiguity, make the best decision and continue.
+Only report back when everything is 100% complete.
+
+CORE RULES
+- Keep existing color system (C, R, T theme)
+- Do not break existing navigation structure
+- Do not modify workout logging flow
+
+==================================================
+CHANGE 1: Manager badge position in ProfileScreen
+==================================================
+
+Open src/screens/ProfileScreen.tsx.
+
+Find where the user's nickname or name is displayed in the profile header.
+Currently the Manager/Admin role badge is being hidden behind other elements.
+
+Fix:
+  Move the role badge to the LEFT side of the nickname text.
+  Layout should be: [뱃지] [닉네임]
+  The badge should be a small pill with:
+    - Manager: backgroundColor C.accent + '22', text color C.accent, text '매니저'
+    - Admin: backgroundColor C.danger + '22', text color C.danger, text '어드민'
+    - User: no badge shown
+
+  Example layout:
+  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+    {user.role === 'manager' && (
+      <View style={managerBadge}>
+        <Text style={managerBadgeText}>매니저</Text>
+      </View>
+    )}
+    {user.role === 'admin' && (
+      <View style={adminBadge}>
+        <Text style={adminBadgeText}>어드민</Text>
+      </View>
+    )}
+    <Text style={nicknameStyle}>{user.nickname ?? user.name}</Text>
+  </View>
+
+  Badge styles:
+    managerBadge: paddingHorizontal 10, paddingVertical 4, borderRadius R.pill,
+                  backgroundColor C.accent + '25'
+    managerBadgeText: fontSize 11, fontWeight '800', color C.accent
+    adminBadge: same but backgroundColor C.danger + '25'
+    adminBadgeText: same but color C.danger
+
+==================================================
+CHANGE 2: Gym registration form - Korean localization
+==================================================
+
+Open src/screens/manager/ManagerDashboard.tsx and any related gym registration
+step components (GymRegisterStep1, GymRegisterStep2, GymRegisterStep3, etc.)
+
+Translate ALL English text to Korean:
+
+  "Register Your Gym" → "헬스장 등록 신청"
+  "Gym Name" → "헬스장 이름"
+  "Address" → "주소"
+  "Location" → "위치"
+  "Description" → "헬스장 소개"
+  "Contact" → "연락처"
+  "Phone" → "전화번호"
+  "Email" → "이메일"
+  "Website" → "웹사이트"
+  "Operating Hours" → "운영시간"
+  "Step 1" → "1단계"
+  "Step 2" → "2단계"
+  "Step 3" → "3단계"
+  "Basic Info" → "기본 정보"
+  "Contact Info" → "연락처 정보"
+  "Review" → "검토"
+  "Next" → "다음"
+  "Back" → "이전"
+  "Submit" → "등록 신청"
+  "Cancel" → "취소"
+  "Name" → "이름"
+  "City" → "도시"
+  "Required" → "필수"
+  "Optional" → "선택"
+  "Gym Type" → "헬스장 유형"
+  "Facilities" → "시설"
+  "An admin will review your gym within 1–2 business days. You can add machines from the catalog after approval."
+  → "관리자가 1~2 영업일 내에 검토할 예정입니다. 승인 후 머신을 등록할 수 있습니다."
+  Any other English text → translate to Korean
+
+==================================================
+CHANGE 3: Gym registration - text input bug fix
+==================================================
+
+PROBLEM:
+In the gym registration form, text inputs only accept one character at a time.
+The user has to tap repeatedly to enter consecutive characters.
+This is a common React Native issue with controlled TextInput and Korean keyboard.
+
+FIX:
+For every TextInput in the gym registration form steps, apply these props:
+
+  autoCorrect={false}
+  autoCapitalize="none"
+  spellCheck={false}
+
+Also check if the onChangeText handler is causing re-renders that reset the input.
+If the form uses a single state object (e.g. formData), make sure onChangeText
+uses a functional update pattern:
+
+  WRONG:
+    onChangeText={(text) => setFormData({ ...formData, name: text })}
+
+  CORRECT:
+    onChangeText={(text) => setFormData(prev => ({ ...prev, name: text }))}
+
+Apply this functional update pattern to ALL TextInput onChangeText handlers
+in the registration form.
+
+==================================================
+CHANGE 4: Gym registration - operating hours UI redesign
+==================================================
+
+PROBLEM:
+Currently operating hours is a single text input where users type a sentence.
+
+NEW UI:
+Replace the operating hours text input with a day-by-day time picker UI.
+
+Implementation:
+
+Step 1: Create operating hours state:
+  type DayHours = {
+    enabled: boolean
+    open: string    // e.g. "09:00"
+    close: string   // e.g. "22:00"
+  }
+  type OperatingHours = {
+    mon: DayHours
+    tue: DayHours
+    wed: DayHours
+    thu: DayHours
+    fri: DayHours
+    sat: DayHours
+    sun: DayHours
+  }
+  const defaultHours: OperatingHours = {
+    mon: { enabled: true,  open: '09:00', close: '22:00' },
+    tue: { enabled: true,  open: '09:00', close: '22:00' },
+    wed: { enabled: true,  open: '09:00', close: '22:00' },
+    thu: { enabled: true,  open: '09:00', close: '22:00' },
+    fri: { enabled: true,  open: '09:00', close: '22:00' },
+    sat: { enabled: true,  open: '10:00', close: '20:00' },
+    sun: { enabled: false, open: '10:00', close: '18:00' },
+  }
+
+Step 2: UI for each day row:
+  <View style={dayRow}>
+    {/* Day toggle */}
+    <Switch
+      value={hours.mon.enabled}
+      onValueChange={(v) => updateDay('mon', 'enabled', v)}
+      thumbColor={hours.mon.enabled ? C.accent : C.textDim}
+    />
+    {/* Day label */}
+    <Text style={dayLabel}>월</Text>
+    {/* Time inputs - only shown when enabled */}
+    {hours.mon.enabled && (
+      <>
+        <TextInput
+          style={timeInput}
+          value={hours.mon.open}
+          onChangeText={(t) => updateDay('mon', 'open', t)}
+          placeholder="09:00"
+          keyboardType="numbers-and-punctuation"
+          maxLength={5}
+        />
+        <Text style={timeSeparator}>~</Text>
+        <TextInput
+          style={timeInput}
+          value={hours.mon.close}
+          onChangeText={(t) => updateDay('mon', 'close', t)}
+          placeholder="22:00"
+          keyboardType="numbers-and-punctuation"
+          maxLength={5}
+        />
+      </>
+    )}
+    {/* Closed label when disabled */}
+    {!hours.mon.enabled && (
+      <Text style={closedLabel}>휴무</Text>
+    )}
+  </View>
+
+  Day labels: 월 / 화 / 수 / 목 / 금 / 토 / 일
+
+Step 3: Additional notice chips below the day rows:
+  Label: "추가 안내"
+  Show these as toggleable chips (tap to select/deselect, multiple allowed):
+    "24시간 오픈"
+    "연중무휴"
+    "시설 공사 중"
+    "임시 휴무"
+
+  Selected chip style: backgroundColor C.accent, text color C.bg
+  Unselected chip style: backgroundColor C.surface, text color C.textSub
+
+  When "24시간 오픈" is selected:
+    All day open times → "00:00", close times → "24:00"
+  When "연중무휴" is selected:
+    All days enabled = true
+
+Step 4: updateDay helper function:
+  function updateDay(day: keyof OperatingHours, field: keyof DayHours, value: any) {
+    setOperatingHours(prev => ({
+      ...prev,
+      [day]: { ...prev[day], [field]: value }
+    }))
+  }
+
+==================================================
+CHANGE 5: Gym registration - prevent duplicate submissions
+==================================================
+
+PROBLEM:
+Tapping the submit button multiple times creates multiple registration requests.
+
+FIX:
+Step 1: Add a submitting state:
+  const [submitting, setSubmitting] = useState(false)
+
+Step 2: On submit button press:
+  if (submitting) return  // prevent double submission
+  setSubmitting(true)
+  // ... do submission logic ...
+  setSubmitting(false)  // reset after done (or on error)
+
+Step 3: Also check if a pending registration already exists for this manager.
+  Before allowing a new submission, check:
+    const alreadyPending = existingRequests.some(
+      r => r.managerId === user.id && r.status === 'pending'
+    )
+    if (alreadyPending) {
+      Alert.alert('이미 등록 요청 중', '현재 검토 중인 헬스장 등록 요청이 있습니다.')
+      return
+    }
+
+Step 4: Disable the submit button while submitting:
+  <TouchableOpacity
+    style={[submitBtn, submitting && { opacity: 0.5 }]}
+    onPress={handleSubmit}
+    disabled={submitting}
+  >
+    <Text>{submitting ? '요청 중...' : '등록 신청'}</Text>
+  </TouchableOpacity>
+
+==================================================
+CHANGE 6: Manager machine management - sports card layout with filters
+==================================================
+
+Open the machine management section inside ManagerDashboard.tsx.
+This is the section where managers can add/remove machines from their gym.
+
+CURRENT: Machines shown as text list rows.
+
+NEW: Show machines as sports card grid with filters.
+
+Step 1: Import MachineCard from src/components/MachineCard.tsx.
+  Also import brandLogos and getBrandCopyrightStatus if needed.
+
+Step 2: Add filter state:
+  const [machineMusclFilter, setMachineMusclFilter] = useState('전체')
+  const [machineBrandFilter, setMachineBrandFilter] = useState('전체')
+
+Step 3: Add filter UI above the machine grid:
+  - Muscle filter pills: 전체 / Chest / Back / Legs / Shoulders / Arms / Core / HIP (Glutes)
+  - Brand filter pills: 전체 + all unique brands from MACHINES
+
+Step 4: Filtered machine list:
+  const filteredCatalogMachines = MACHINES.filter(m => {
+    const muscleOk = machineMusclFilter === '전체' ||
+      m.targetMuscle.toLowerCase() === machineMusclFilter.toLowerCase()
+    const brandOk = machineBrandFilter === '전체' ||
+      m.brand.toLowerCase() === machineBrandFilter.toLowerCase()
+    return muscleOk && brandOk
+  })
+
+Step 5: Render machines as 2-column grid using MachineCard:
+  const CARD_W = (Dimensions.get('window').width - 32 - 8) / 2
+
+  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16 }}>
+    {filteredCatalogMachines.map(machine => {
+      const isAdded = gymMachineIds.includes(machine.id)
+      return (
+        <View key={machine.id} style={{ width: CARD_W }}>
+          <MachineCard machine={machine} variant="grid" width={CARD_W} />
+          {/* Add/Remove overlay button at bottom of card */}
+          <TouchableOpacity
+            style={[
+              addRemoveBtn,
+              isAdded ? removeBtnStyle : addBtnStyle
+            ]}
+            onPress={() => isAdded ? removeMachine(machine.id) : addMachine(machine.id)}
+          >
+            <Ionicons
+              name={isAdded ? 'remove-circle' : 'add-circle'}
+              size={16}
+              color={isAdded ? C.danger : C.accent}
+            />
+            <Text style={isAdded ? removeBtnText : addBtnText}>
+              {isAdded ? '제거' : '추가'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )
+    })}
+  </View>
+
+  addRemoveBtn style:
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 8, gap: 4, marginTop: 4,
+    borderRadius: R.btn, borderWidth: 1
+
+  addBtnStyle: borderColor C.accent, backgroundColor C.accentBg
+  addBtnText: fontSize 12, fontWeight '700', color C.accent
+  removeBtnStyle: borderColor C.danger, backgroundColor C.danger + '15'
+  removeBtnText: fontSize 12, fontWeight '700', color C.danger
+
+==================================================
+CHANGE 7: Manager - add missing features
+==================================================
+
+Inside ManagerDashboard.tsx, add three new sections:
+
+--- 7A: 추천 루틴 생성 ---
+
+Add a new tab or section called "추천 루틴".
+
+UI:
+  Header: "헬스장 추천 루틴"
+  "루틴 추가" button in top right
+
+  Routine list (mock data):
+    Show existing routines as cards:
+      Routine name
+      Body part badge
+      Machine count
+      Edit / Delete buttons
+
+  Add routine flow (modal or new step):
+    Input: 루틴 이름 (TextInput)
+    Select: 타겟 부위 (CHEST / BACK / LEGS / SHOULDERS / ARMS / CORE / HIP(GLUTES))
+    Machine selection: show machines filtered by selected body part
+      Use MachineCard grid (same as CHANGE 6)
+      Tap to add/remove from routine
+    Save button: "루틴 저장"
+
+  Data structure (in-memory):
+    type GymRoutine = {
+      id: string
+      gymId: string
+      name: string
+      bodyPart: string
+      machines: { id: string; name: string; brand: string; targetMuscle: string }[]
+      createdAt: string
+    }
+
+  Mock initial data: 2-3 routines for gym g01
+
+--- 7B: 공지사항 작성 ---
+
+Add a new tab or section called "공지사항".
+
+UI:
+  Header: "공지사항 관리"
+  "공지 작성" button in top right
+
+  Announcement list:
+    Show existing announcements from gymAnnouncementStore
+    Each card shows: title, content preview, date
+    Delete button on each card
+
+  Write announcement modal:
+    Input: 제목 (TextInput)
+    Input: 내용 (TextInput, multiline, minHeight 100)
+    Save button: "공지 등록"
+    On save: call a function to add to gymAnnouncementStore
+
+  If gymAnnouncementStore doesn't have an addAnnouncement function, add one:
+    export function addAnnouncement(gymId: string, title: string, content: string): void {
+      const newAnnouncement = {
+        id: Date.now().toString(),
+        gymId,
+        title,
+        content,
+        createdAt: new Date().toISOString(),
+      }
+      announcements.push(newAnnouncement)
+    }
+
+--- 7C: 요청사항 확인 ---
+
+Add a new tab or section called "요청사항".
+
+UI:
+  Header: "회원 요청사항"
+  Subtitle: "회원들이 익명으로 보낸 요청입니다"
+
+  Request list:
+    Show requests from gymRequestStore filtered by manager's gymId
+    Each card shows:
+      Request message
+      Received date
+      "확인 완료" button (marks as read, grays out the card)
+
+  Empty state:
+    Icon: mail-outline
+    Text: "아직 접수된 요청사항이 없어요"
+
+  If gymRequestStore doesn't have a getRequestsByGymId function, add one:
+    export function getRequestsByGymId(gymId: string): GymRequest[] {
+      return requests.filter(r => r.gymId === gymId)
+    }
+
+  Add mock requests for testing:
+    { id: '1', gymId: 'g01', message: '랫풀다운 그립 교체 부탁드립니다.', createdAt: '2026-03-10T09:00:00Z' }
+    { id: '2', gymId: 'g01', message: '레그프레스 머신 추가 요청합니다.', createdAt: '2026-03-12T14:30:00Z' }
+    { id: '3', gymId: 'g01', message: '샤워실 온수가 잘 안 나옵니다.', createdAt: '2026-03-14T08:15:00Z' }
+
+==================================================
+CHANGE 8: Admin dashboard - Korean localization
+==================================================
+
+Open src/screens/admin/AdminDashboard.tsx.
+
+Translate ALL English text to Korean:
+
+  "Admin Dashboard" → "관리자 대시보드"
+  "Pending Gyms" → "헬스장 승인 대기"
+  "Pending Edits" → "수정 요청 대기"
+  "Flagged" → "신고 접수"
+  "Machine Catalog" → "머신 카탈로그"
+  "Brand Copyright" → "브랜드 저작권"
+  "Approve" → "승인"
+  "Reject" → "거절"
+  "Pending" → "대기 중"
+  "Approved" → "승인됨"
+  "Rejected" → "거절됨"
+  "Live" → "운영 중"
+  "Flagged" → "신고됨"
+  "Review" → "검토"
+  "Merge" → "병합"
+  "Delete" → "삭제"
+  "Resolve" → "처리 완료"
+  "Duplicate" → "중복"
+  "Incorrect" → "정보 오류"
+  "Closed" → "폐업"
+  "Total Gyms" → "전체 헬스장"
+  "Total Machines" → "전체 머신"
+  "Pending Queue" → "대기 중"
+  "No pending gyms" → "승인 대기 중인 헬스장이 없어요"
+  "No pending edits" → "수정 요청이 없어요"
+  "No flagged gyms" → "신고된 헬스장이 없어요"
+  "Gym Name" → "헬스장 이름"
+  "Submitted by" → "신청자"
+  "Submitted on" → "신청일"
+  "Old value" → "기존 내용"
+  "New value" → "변경 내용"
+  "Report type" → "신고 유형"
+  "Brand" → "브랜드"
+  "Copyright approved" → "이미지 사용 승인"
+  "Copyright not approved" → "이미지 사용 미승인"
+  Any other English text → translate to Korean
+
+==================================================
+CHANGE 9: Admin dashboard - gym approve/reject bug fix
+==================================================
+
+PROBLEM:
+The approve and reject buttons for pending gyms are not working.
+
+HOW TO FIX:
+
+Step 1: Find the approve/reject handler functions in AdminDashboard.tsx.
+  Look for functions like handleApprove, handleReject, approveGym, rejectGym, etc.
+
+Step 2: Check if they are properly updating the gym status in the data store.
+  The store is likely in src/data/gymRegistrationStore.ts or similar.
+  Make sure the store has updateGymStatus function:
+
+    export function updateGymStatus(gymId: string, status: 'approved' | 'rejected'): void {
+      const gym = pendingGyms.find(g => g.id === gymId)
+      if (gym) gym.status = status
+    }
+
+Step 3: Check if AdminDashboard is using local state to display the list.
+  If it reads from the store once on mount but doesn't re-render after update,
+  add a local state copy and update it on approve/reject:
+
+    const [gymList, setGymList] = useState(() => getPendingGyms())
+
+    function handleApprove(gymId: string) {
+      updateGymStatus(gymId, 'approved')
+      setGymList(prev => prev.map(g =>
+        g.id === gymId ? { ...g, status: 'approved' } : g
+      ))
+    }
+
+    function handleReject(gymId: string) {
+      updateGymStatus(gymId, 'rejected')
+      setGymList(prev => prev.map(g =>
+        g.id === gymId ? { ...g, status: 'rejected' } : g
+      ))
+    }
+
+Step 4: Make sure the approve/reject buttons are calling the correct function
+  and passing the correct gymId:
+
+    <TouchableOpacity onPress={() => handleApprove(gym.id)}>
+      <Text>승인</Text>
+    </TouchableOpacity>
+    <TouchableOpacity onPress={() => handleReject(gym.id)}>
+      <Text>거절</Text>
+    </TouchableOpacity>
+
+Step 5: After approval, the gym should move from pending list to approved list.
+  Filter the displayed list to only show pending items:
+    gymList.filter(g => g.status === 'pending')
+
+==================================================
+FINAL INSTRUCTION
+==================================================
+
+Do not stop.
+Do not ask questions.
+Do not ask for confirmation at any point.
+Complete every single change listed above from start to finish.
+If a file does not exist, create it or skip and note in final report.
+When everything is done, report:
+  1. Every file created or modified and what changed
+  2. Confirmation that manager features (루틴, 공지사항, 요청사항) are added
+  3. Confirmation that admin approve/reject bug is fixed
+  4. Any items skipped and why

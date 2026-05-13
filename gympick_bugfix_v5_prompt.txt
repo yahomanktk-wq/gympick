@@ -1,0 +1,98 @@
+Fix the following confirmed bug in GymPick app.
+Complete without stopping to ask for confirmation.
+Only report back when 100% complete.
+
+==================================================
+BUG FIX: Manager machine management "보유 중" filter shows wrong count
+==================================================
+
+ROOT CAUSE (confirmed):
+managedGymStore.ts is seeded with stale machine IDs in old format ('m01', 'm02', etc.)
+that do not match any machine in the MACHINES array (which uses 'brand_muscle_number' format).
+
+The correct machine IDs per gym already exist in gymMachines.ts as a join table.
+
+FIX:
+
+Step 1: Open src/data/managedGymStore.ts
+
+Find the hardcoded machineIds in the initial managedGyms array:
+  { id: 'g01', ..., machineIds: ['m01', 'm02', 'm03', 'm04', 'm05'] }
+  { id: 'g02', ..., machineIds: ['m06', 'm07', 'm08'] }
+
+Step 2: Open src/data/gymMachines.ts
+Find the getGymMachineIds function and GYM_MACHINES join table.
+Note the real machine IDs for g01 and g02.
+
+From the investigation:
+  g01 real machineIds: ['arsenal_back_1', 'hammer_strength_chest_1', 'body_master_chest_1', 'cybex_arm_10', 'atlantis_shoulder_6', 'gym80_leg_14']
+  g02 real machineIds: ['body_master_back_1', 'body_master_chest_2', 'cybex_arm_11', 'precor_shoulder_5', 'gymleco_leg_4']
+
+Step 3: In managedGymStore.ts, replace the hardcoded IDs with real ones.
+
+Option A (preferred): Import getGymMachineIds from gymMachines.ts
+and use it to initialize the machineIds lazily:
+
+  import { getGymMachineIds as getGymMachineIdsFromJoinTable } from './gymMachines'
+
+  const managedGyms: ManagedGymRecord[] = [
+    { id: 'g01', ..., machineIds: [] },
+    { id: 'g02', ..., machineIds: [] },
+  ]
+
+  export function getGymMachineIds(gymId: string): string[] {
+    const record = managedGyms.find(g => g.id === gymId)
+    if (!record) return getGymMachineIdsFromJoinTable(gymId)
+    if (record.machineIds.length === 0) {
+      // Initialize from join table on first access
+      record.machineIds = getGymMachineIdsFromJoinTable(gymId)
+    }
+    return [...record.machineIds]
+  }
+
+Option B (simpler): Just hardcode the real IDs directly:
+
+  const managedGyms: ManagedGymRecord[] = [
+    {
+      id: 'g01',
+      machineIds: [
+        'arsenal_back_1',
+        'hammer_strength_chest_1',
+        'body_master_chest_1',
+        'cybex_arm_10',
+        'atlantis_shoulder_6',
+        'gym80_leg_14',
+      ],
+    },
+    {
+      id: 'g02',
+      machineIds: [
+        'body_master_back_1',
+        'body_master_chest_2',
+        'cybex_arm_11',
+        'precor_shoulder_5',
+        'gymleco_leg_4',
+      ],
+    },
+  ]
+
+Use whichever option causes fewer changes. Option A is better long-term.
+
+Step 4: Verify the fix by checking:
+  - getGymMachineIds('g01') returns real machine IDs that exist in MACHINES array
+  - When manager opens machine management for g01, gymMachineIds contains these real IDs
+  - "보유 중" filter shows the correct machines
+  - The count shown in the header matches what "보유 중" filter shows
+
+Step 5: Also check if any other data files (mockAdmin.ts, gyms.ts, etc.)
+  have machine IDs in the old 'm01' format and fix them to use real IDs from MACHINES.
+
+==================================================
+FINAL INSTRUCTION
+==================================================
+
+Do not stop. Do not ask questions. Fix the bug completely.
+When done, report:
+  1. Which files were modified
+  2. What the old machineIds were vs the new ones
+  3. Confirmation that "보유 중" filter now shows correct machines

@@ -1,0 +1,470 @@
+Apply the following fixes and feature changes to the GymPick app.
+Complete everything without stopping to ask for confirmation.
+Do not pause between tasks.
+If you encounter ambiguity, make the best decision and continue.
+Only report back when everything is 100% complete.
+
+CORE RULES
+- Keep existing color system (C, R, T theme)
+- Do not break existing navigation structure
+- Do not modify workout logging flow
+
+==================================================
+BUG FIX 1: Text input only accepts one character at a time
+==================================================
+
+PROBLEM:
+In the gym registration form (ManagerDashboard.tsx and related step components),
+TextInput fields only accept one character at a time.
+The user must tap repeatedly to enter consecutive characters.
+This is caused by improper state update pattern causing re-renders.
+
+FIX:
+Step 1: Find every TextInput in the gym registration form steps.
+
+Step 2: For every onChangeText handler that updates a state object, change to functional update:
+  WRONG:
+    onChangeText={(text) => setFormData({ ...formData, gymName: text })}
+  CORRECT:
+    onChangeText={(text) => setFormData(prev => ({ ...prev, gymName: text }))}
+
+Step 3: Add these props to every TextInput in the registration form:
+  autoCorrect={false}
+  autoCapitalize="none"
+  spellCheck={false}
+
+Step 4: If the form uses useCallback or useMemo for handlers, make sure
+  the dependency arrays are correct and not causing unnecessary re-renders.
+
+Step 5: Also check if the parent component re-renders on every keystroke
+  due to state being lifted too high. If so, consider using useRef for
+  intermediate input values and only syncing to state on blur or submit.
+
+==================================================
+CHANGE 1: Gym registration completion message
+==================================================
+
+After the user submits the gym registration form (Step 3 submit button),
+instead of or in addition to the current Alert, show a proper completion screen.
+
+Show a success screen with:
+  - Large checkmark icon (checkmark-circle, size 64, color C.accent)
+  - Title: "등록 요청이 완료되었습니다!"
+  - Message: "1~2 영업일 내 검토 후 안내드리겠습니다."
+  - Sub message: "승인 후 머신 등록이 가능합니다."
+  - Button: "확인" → closes the registration flow and returns to manager dashboard
+
+Implementation:
+  Add a new step to the registration flow: step 'complete'
+  When submit is successful, set the current step to 'complete'
+  Render the completion screen for this step.
+  Do not use Alert.alert for the completion message.
+
+==================================================
+CHANGE 2: Machine card selection UX - tap to add/remove with checkmark
+==================================================
+
+In the ManagerDashboard machine management section,
+currently there is a separate "추가" button next to or below each machine card.
+
+NEW UX:
+  - Remove the separate "추가" / "제거" buttons entirely
+  - The entire MachineCard is tappable
+  - Tapping an unselected card → adds the machine to the gym
+  - Tapping an already-added card → removes the machine from the gym
+  - Added machines show a checkmark overlay badge in the top-right corner of the card
+
+Checkmark overlay spec:
+  Position: absolute, top 8, right 8
+  Background: C.accent (lime green)
+  Shape: circle, width 28, height 28, borderRadius 14
+  Icon: Ionicons 'checkmark' size 16, color '#000000'
+  Shadow: small elevation for visibility
+
+Implementation:
+  <View style={{ position: 'relative', width: CARD_W }}>
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onPress={() => toggleMachine(machine.id)}
+    >
+      <MachineCard machine={machine} variant="grid" width={CARD_W} />
+    </TouchableOpacity>
+    {isAdded && (
+      <View style={checkmarkOverlay}>
+        <Ionicons name="checkmark" size={16} color="#000000" />
+      </View>
+    )}
+  </View>
+
+  checkmarkOverlay style:
+    position: 'absolute'
+    top: 8
+    right: 8
+    width: 28
+    height: 28
+    borderRadius: 14
+    backgroundColor: C.accent
+    alignItems: 'center'
+    justifyContent: 'center'
+    elevation: 4
+    shadowColor: '#000'
+    shadowOpacity: 0.3
+    shadowRadius: 4
+    shadowOffset: { width: 0, height: 2 }
+
+  toggleMachine function:
+    function toggleMachine(machineId: string) {
+      setGymMachineIds(prev =>
+        prev.includes(machineId)
+          ? prev.filter(id => id !== machineId)
+          : [...prev, machineId]
+      )
+    }
+
+==================================================
+CHANGE 3: Manager dashboard - combine 추천루틴 / 공지사항 / 요청사항 into one tabbed page
+==================================================
+
+In ManagerDashboard.tsx, replace the current separate sections or screens
+for 추천루틴, 공지사항, and 요청사항 with a single tabbed page.
+
+Tab structure:
+  Tab 1: 추천 루틴
+  Tab 2: 공지사항
+  Tab 3: 요청사항
+
+Implementation:
+
+Step 1: Add tab state:
+  const [activeManagerTab, setActiveManagerTab] = useState<'routine' | 'notice' | 'request'>('routine')
+
+Step 2: Tab bar UI:
+  <View style={tabBar}>
+    {[
+      { key: 'routine', label: '추천 루틴' },
+      { key: 'notice',  label: '공지사항' },
+      { key: 'request', label: '요청사항' },
+    ].map(tab => (
+      <TouchableOpacity
+        key={tab.key}
+        style={[tabBtn, activeManagerTab === tab.key && tabBtnActive]}
+        onPress={() => setActiveManagerTab(tab.key as any)}
+      >
+        <Text style={[tabBtnText, activeManagerTab === tab.key && tabBtnTextActive]}>
+          {tab.label}
+        </Text>
+      </TouchableOpacity>
+    ))}
+  </View>
+
+  tabBar: flexDirection row, borderBottomWidth 1, borderColor C.border
+  tabBtn: flex 1, paddingVertical 12, alignItems center
+  tabBtnActive: borderBottomWidth 2, borderBottomColor C.accent
+  tabBtnText: fontSize 14, fontWeight 600, color C.textSub
+  tabBtnTextActive: color C.accent, fontWeight 800
+
+Step 3: Tab content rendering:
+  {activeManagerTab === 'routine' && <RoutineTab gymId={selectedGymId} />}
+  {activeManagerTab === 'notice' && <NoticeTab gymId={selectedGymId} />}
+  {activeManagerTab === 'request' && <RequestTab gymId={selectedGymId} />}
+
+--- RoutineTab component ---
+
+Props: gymId: string
+
+UI:
+  Header row: "헬스장 추천 루틴" title + "루틴 추가" button (right side)
+  
+  Routine list:
+    Each routine card shows:
+      Routine name (bold)
+      Body part badge (colored pill)
+      Machine count text: "머신 {count}개"
+      Delete button (trash icon, right side)
+    
+    On tap: expand to show machine list inside the card
+  
+  Empty state:
+    Icon: list-outline
+    Text: "등록된 추천 루틴이 없어요"
+    Sub: '"루틴 추가" 버튼을 눌러 루틴을 만들어보세요'
+
+  Add routine modal (shown when "루틴 추가" tapped):
+    Title: "추천 루틴 추가"
+    Input: 루틴 이름 (TextInput, placeholder "루틴 이름을 입력하세요")
+    Body part selector:
+      Row of chips: CHEST / BACK / LEGS / SHOULDERS / ARMS / CORE / HIP(GLUTES)
+      Tap to select one
+    Machine selection:
+      Show machines filtered by selected body part
+      Use MachineCard grid (2 columns, CARD_W each)
+      Tap card to add with checkmark overlay (same as CHANGE 2)
+    Save button: "루틴 저장" (disabled if no name or no machines selected)
+    Cancel button: "취소"
+
+  Data:
+    type GymRoutine = {
+      id: string
+      gymId: string
+      name: string
+      bodyPart: string
+      machines: { id: string; name: string; brand: string; targetMuscle: string; category: string }[]
+      createdAt: string
+    }
+    
+    In-memory store with mock data:
+      const gymRoutines: GymRoutine[] = [
+        {
+          id: 'r1',
+          gymId: 'g01',
+          name: '파워 가슴 루틴',
+          bodyPart: 'Chest',
+          machines: (import 3 Chest machines from MACHINES),
+          createdAt: '2026-03-01T09:00:00Z',
+        },
+        {
+          id: 'r2',
+          gymId: 'g01',
+          name: '등 집중 루틴',
+          bodyPart: 'Back',
+          machines: (import 3 Back machines from MACHINES),
+          createdAt: '2026-03-05T10:00:00Z',
+        },
+      ]
+    
+    Functions:
+      getRoutinesByGymId(gymId: string): GymRoutine[]
+      addRoutine(routine: GymRoutine): void
+      deleteRoutine(routineId: string): void
+
+--- NoticeTab component ---
+
+Props: gymId: string
+
+UI:
+  Header row: "공지사항" title + "공지 작성" button (right side)
+  
+  Notice list:
+    Each notice card shows:
+      Title (bold, fontSize 15)
+      Content preview (2 lines, color C.textSub)
+      Date (right aligned, color C.textDim, fontSize 11)
+      Delete button (trash icon)
+    Divider between items
+  
+  Empty state:
+    Icon: megaphone-outline
+    Text: "등록된 공지사항이 없어요"
+
+  Write notice modal:
+    Title: "공지 작성"
+    Input: 제목 (TextInput, placeholder "공지 제목")
+    Input: 내용 (TextInput, multiline, minHeight 120, placeholder "공지 내용을 입력하세요")
+    Post button: "공지 등록"
+    Cancel: "취소"
+    On save: add to gymAnnouncementStore
+
+  Make sure gymAnnouncementStore.ts has:
+    export function addAnnouncement(gymId: string, title: string, content: string): void {
+      announcements.push({
+        id: Date.now().toString(),
+        gymId,
+        title,
+        content,
+        createdAt: new Date().toISOString(),
+      })
+    }
+    export function deleteAnnouncement(id: string): void {
+      const idx = announcements.findIndex(a => a.id === id)
+      if (idx !== -1) announcements.splice(idx, 1)
+    }
+    export function getAnnouncementsByGymId(gymId: string): GymAnnouncement[] {
+      return announcements.filter(a => a.gymId === gymId)
+    }
+
+  Add mock announcements for gym g01:
+    { id: 'a1', gymId: 'g01', title: '신규 머신 입고 안내', content: '2층에 Hammer Strength 체스트프레스 머신이 새로 입고되었습니다.', createdAt: '2026-03-10T09:00:00Z' }
+    { id: 'a2', gymId: 'g01', title: '3월 운영시간 변경 안내', content: '3월 한 달간 토요일 운영시간이 오전 9시~오후 6시로 변경됩니다.', createdAt: '2026-03-08T08:00:00Z' }
+
+--- RequestTab component ---
+
+Props: gymId: string
+
+UI:
+  Header: "회원 요청사항"
+  Subtitle: "회원들이 익명으로 보낸 요청입니다"
+  
+  Request list:
+    Each request card:
+      Message text (fontSize 14, color C.text)
+      Received date (fontSize 11, color C.textDim)
+      "확인 완료" button → marks as read (grays out card, button disappears)
+    
+    Unread requests shown first
+    Read requests shown below with opacity 0.5
+  
+  Empty state:
+    Icon: mail-outline
+    Text: "아직 접수된 요청사항이 없어요"
+
+  Make sure gymRequestStore.ts has:
+    export function getRequestsByGymId(gymId: string): GymRequest[] {
+      return requests.filter(r => r.gymId === gymId)
+    }
+    export function markRequestAsRead(id: string): void {
+      const req = requests.find(r => r.id === id)
+      if (req) (req as any).read = true
+    }
+
+  Add mock requests for g01:
+    { id: 'req1', gymId: 'g01', message: '랫풀다운 그립 교체 부탁드립니다.', createdAt: '2026-03-14T09:00:00Z', read: false }
+    { id: 'req2', gymId: 'g01', message: '레그프레스 머신 한 대 더 있으면 좋겠습니다.', createdAt: '2026-03-13T14:30:00Z', read: false }
+    { id: 'req3', gymId: 'g01', message: '샤워실 온수가 잘 안 나옵니다.', createdAt: '2026-03-12T08:15:00Z', read: false }
+
+==================================================
+BUG FIX 2: Admin dashboard approve/reject/edit buttons not working
+==================================================
+
+PROBLEM:
+In AdminDashboard.tsx, the following buttons are not working:
+  - Gym approve button
+  - Gym reject button
+  - Edit request approve/reject button
+
+ROOT CAUSE (likely):
+  A) The handler functions exist but are not connected to the buttons
+  B) The state is not being updated after button press (no re-render)
+  C) The gymId or requestId being passed is undefined or incorrect
+
+HOW TO FIX:
+
+Step 1: Open src/screens/admin/AdminDashboard.tsx
+
+Step 2: Find the pending gyms list section.
+  Check the approve and reject button onPress handlers.
+  Make sure they receive the correct gym id and call the right function.
+
+Step 3: Create or fix the gym status store.
+  In src/data/gymRegistrationStore.ts (or create it if missing):
+
+    type GymStatus = 'pending' | 'approved' | 'rejected'
+    
+    interface PendingGym {
+      id: string
+      name: string
+      location: string
+      managerId: string
+      managerName: string
+      submittedAt: string
+      status: GymStatus
+    }
+    
+    let pendingGyms: PendingGym[] = [
+      { id: 'pg1', name: 'PowerFit 강남점', location: '서울 강남구', managerId: 'u2', managerName: 'Jordan Kim', submittedAt: '2026-03-10T09:00:00Z', status: 'pending' },
+      { id: 'pg2', name: 'IronZone 홍대점', location: '서울 마포구', managerId: 'u4', managerName: 'Chris Oh', submittedAt: '2026-03-12T14:00:00Z', status: 'pending' },
+      { id: 'pg3', name: 'FlexGym 분당점', location: '경기 성남시', managerId: 'u5', managerName: 'Min Park', submittedAt: '2026-03-13T11:00:00Z', status: 'pending' },
+    ]
+    
+    export function getPendingGyms(): PendingGym[] {
+      return pendingGyms.filter(g => g.status === 'pending')
+    }
+    
+    export function getAllGymsForAdmin(): PendingGym[] {
+      return [...pendingGyms]
+    }
+    
+    export function updateGymStatus(gymId: string, status: GymStatus): void {
+      const gym = pendingGyms.find(g => g.id === gymId)
+      if (gym) gym.status = status
+    }
+
+Step 4: In AdminDashboard.tsx, use local state to display and update the list:
+
+    const [gymList, setGymList] = useState<PendingGym[]>(() => getAllGymsForAdmin())
+    
+    function handleApproveGym(gymId: string) {
+      updateGymStatus(gymId, 'approved')
+      setGymList(prev => prev.map(g =>
+        g.id === gymId ? { ...g, status: 'approved' } : g
+      ))
+    }
+    
+    function handleRejectGym(gymId: string) {
+      updateGymStatus(gymId, 'rejected')
+      setGymList(prev => prev.map(g =>
+        g.id === gymId ? { ...g, status: 'rejected' } : g
+      ))
+    }
+
+Step 5: Fix the edit request approve/reject in the same way:
+
+    type EditRequest = {
+      id: string
+      gymId: string
+      gymName: string
+      field: string
+      oldValue: string
+      newValue: string
+      status: 'pending' | 'approved' | 'rejected'
+      submittedAt: string
+    }
+    
+    let editRequests: EditRequest[] = [
+      { id: 'er1', gymId: 'g01', gymName: 'IronHub Fitness', field: '운영시간', oldValue: '09:00~22:00', newValue: '06:00~24:00', status: 'pending', submittedAt: '2026-03-11T10:00:00Z' },
+      { id: 'er2', gymId: 'g04', gymName: 'MaxLift Arena', field: '전화번호', oldValue: '02-1234-5678', newValue: '02-9876-5432', status: 'pending', submittedAt: '2026-03-13T15:00:00Z' },
+    ]
+    
+    export function getPendingEditRequests(): EditRequest[] {
+      return editRequests.filter(r => r.status === 'pending')
+    }
+    
+    export function updateEditRequestStatus(requestId: string, status: 'approved' | 'rejected'): void {
+      const req = editRequests.find(r => r.id === requestId)
+      if (req) req.status = status
+    }
+    
+    In AdminDashboard:
+    const [editList, setEditList] = useState<EditRequest[]>(() => getPendingEditRequests())
+    
+    function handleApproveEdit(requestId: string) {
+      updateEditRequestStatus(requestId, 'approved')
+      setEditList(prev => prev.filter(r => r.id !== requestId))
+    }
+    
+    function handleRejectEdit(requestId: string) {
+      updateEditRequestStatus(requestId, 'rejected')
+      setEditList(prev => prev.filter(r => r.id !== requestId))
+    }
+
+Step 6: Make sure every approve/reject button passes the correct id:
+    <TouchableOpacity onPress={() => handleApproveGym(gym.id)}>
+      <Text>승인</Text>
+    </TouchableOpacity>
+    <TouchableOpacity onPress={() => handleRejectGym(gym.id)}>
+      <Text>거절</Text>
+    </TouchableOpacity>
+
+Step 7: After approving/rejecting, show visual feedback:
+  Change the gym card to show status badge:
+    승인됨: green badge
+    거절됨: red badge
+    대기 중: yellow badge
+  Hide the approve/reject buttons after a decision is made (status !== 'pending').
+
+==================================================
+FINAL INSTRUCTION
+==================================================
+
+Do not stop.
+Do not ask questions.
+Do not ask for confirmation at any point.
+Complete every single change from start to finish.
+If a file does not exist, create it.
+When everything is done, report:
+  1. Every file created or modified
+  2. Confirmation that text input bug is fixed
+  3. Confirmation that completion message shows after registration
+  4. Confirmation that machine card tap toggles add/remove with checkmark
+  5. Confirmation that 추천루틴/공지사항/요청사항 are in one tabbed page
+  6. Confirmation that admin approve/reject buttons work
+  7. Any items skipped and why

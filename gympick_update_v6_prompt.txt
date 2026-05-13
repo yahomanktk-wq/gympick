@@ -1,0 +1,127 @@
+Fix the following bug in the GymPick app.
+Complete everything without stopping to ask for confirmation.
+Do not pause. Only report back when 100% complete.
+
+CORE RULES
+- Do not modify the workout logging philosophy
+- Keep existing color system (C, R, T theme)
+- Do not break existing navigation structure
+
+==================================================
+BUG FIX: Machine selection screen shows all gym machines
+instead of only routine machines
+==================================================
+
+PROBLEM:
+When the user selects one of these options:
+  - 이전 운동일지 참고하기
+  - 헬스장 추천 루틴
+  - 다른 유저 루틴
+
+The flow is:
+  Step 1: Select routine option
+  Step 2: "Today's Routine" screen (shows the machine list from the selected routine)
+  Step 3: Machine selection screen
+
+On Step 3 (machine selection screen), ALL machines in the gym are being shown
+instead of ONLY the machines that belong to the selected routine.
+
+EXPECTED BEHAVIOR:
+Step 3 must show ONLY the machines that were in the selected routine.
+No other machines should appear.
+The user cannot add more machines on this screen for these three paths.
+The user can only tap a machine from the routine list to select it and log sets.
+
+ROOT CAUSE (likely):
+The machine selection screen is reusing the same component as "새 루틴 작성하기" path,
+which loads ALL machines from the gym filtered by body part.
+For the three routine reference paths, the machine list should be
+pre-filtered to only the routine's machines, not all gym machines.
+
+HOW TO FIX:
+
+Step 1: Open src/screens/flow/PostWorkoutLogModal.tsx and find all related step files.
+
+Step 2: Find the state variable that holds the current machine list for the session.
+  It might be called: machineList, sessionMachines, selectedMachines, routineMachines, etc.
+
+Step 3: Find where the machine selection screen (Step 3) gets its machine list to display.
+  It likely reads from either:
+    A) A global "all gym machines filtered by body part" query
+    B) The session machine list state
+
+Step 4: For the three routine reference paths (이전 운동일지 / 헬스장 추천 루틴 / 다른 유저 루틴):
+  When the user taps "운동 시작" on the Today's Routine screen,
+  pass the routine's machine list to the machine selection screen
+  so that screen shows ONLY those machines.
+
+  Add a prop or flag to the machine selection screen:
+    restrictToMachines?: Machine[] — if provided, only show these machines, do not load gym machines
+
+  Implementation:
+    If restrictToMachines is provided and non-empty:
+      Display only the machines in restrictToMachines
+      Do NOT call fetchMachines() or load gym machines
+      Do NOT show "머신 추가" button
+    If restrictToMachines is not provided (새 루틴 작성하기 path):
+      Show all gym machines filtered by body part (existing behavior)
+      Show "운동 종료" button
+
+Step 5: Make sure the machine objects passed from Today's Routine to the machine selection screen
+  have all required fields: id, name, brand, targetMuscle, category.
+  If any field is missing, fill it in before passing.
+
+Step 6: Verify the three paths work correctly:
+  이전 운동일지 참고하기:
+    machine list = machines from the selected past workout log
+    mapped to: { id: machineId, name: machineName, brand: machineBrand, targetMuscle: targetMuscle }
+
+  헬스장 추천 루틴:
+    machine list = machines array from the selected gym routine object
+    each item must have: id, name, brand, targetMuscle
+
+  다른 유저 루틴:
+    machine list = machines array from the selected user routine object
+    each item must have: id, name, brand, targetMuscle
+
+Step 7: If mock data for gym routines or user routines is missing machine detail fields,
+  update the mock data to include full machine objects.
+  Look up real machine ids from src/data/machines.ts and use them.
+
+  Example fix for gym routine mock data:
+    import { MACHINES } from '../data'
+
+    const chestMachines = MACHINES.filter(m => m.targetMuscle === 'Chest').slice(0, 3)
+
+    const GYM_ROUTINES = [
+      {
+        id: 'gym_routine_chest_1',
+        name: '파워 가슴 루틴',
+        bodyPart: 'Chest',
+        gymId: 'g01',
+        machines: chestMachines.map(m => ({
+          id: m.id,
+          name: m.name,
+          brand: m.brand,
+          targetMuscle: m.targetMuscle,
+          category: m.category,
+        }))
+      }
+    ]
+
+  Do the same for user routine mock data.
+
+==================================================
+FINAL INSTRUCTION
+==================================================
+
+Do not stop.
+Do not ask questions.
+Do not ask for confirmation.
+Fix the bug completely.
+When done, report:
+  1. Which files were modified
+  2. What was the root cause
+  3. How the fix was applied
+  4. Confirmation that routine paths now show only routine machines
+  5. Confirmation that 새 루틴 작성하기 path still shows all gym machines

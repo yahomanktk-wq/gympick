@@ -1,0 +1,113 @@
+Fix the following rendering issue in src/screens/FindGymScreen.tsx.
+Complete without stopping to ask for confirmation.
+Only report back when 100% complete.
+
+==================================================
+FIX: Filter results show unfiltered sections alongside filtered results
+==================================================
+
+ROOT CAUSE (confirmed from code review):
+There are 3 machine rendering sections:
+  A. Popular Machines → uses rankedMachines (unfiltered, top 5) — only shown when !hasFilters ✅
+  B. Favorites → uses favoriteMachines (unfiltered) — shown regardless of filter state ❌
+  C. Machines → uses filteredMachines (correctly filtered) ✅
+
+When filters are active:
+  - Section A correctly hides (has !hasFilters guard) ✅
+  - Section B still shows all favorited machines regardless of filter ❌
+  - Section C shows correct filtered results ✅
+
+This means when user selects muscle "Back":
+  - Favorites section shows ALL favorited machines (including Chest/Legs etc.)
+  - Machines section shows only Back machines
+  - User sees both sections mixed together → looks like filter is not working
+
+FIX:
+
+Step 1: Apply filter to favoriteMachines when filters are active.
+
+CURRENT (wrong):
+  const favoriteMachines = useMemo(
+    () => allMachines.filter(m => favorites.has(m.id)),
+    [favorites, allMachines],
+  )
+
+NEW (correct — filter favorites by active muscle/brand/keyword too):
+  const favoriteMachines = useMemo(() => {
+    return allMachines.filter(m => {
+      if (!favorites.has(m.id)) return false
+      if (activeMuscle !== 'All' &&
+          m.targetMuscle?.toLowerCase() !== activeMuscle.toLowerCase()) return false
+      if (activeBrand !== 'All' &&
+          m.brand?.toLowerCase() !== activeBrand.toLowerCase()) return false
+      const kw = keyword.trim().toLowerCase()
+      if (kw && !m.name.toLowerCase().includes(kw) &&
+          !m.category.toLowerCase().includes(kw)) return false
+      return true
+    })
+  }, [allMachines, favorites, activeMuscle, activeBrand, keyword])
+
+Step 2: Hide the Favorites section when filters are active AND no favorites match.
+  The section already hides when favoriteMachines.length === 0,
+  so step 1 naturally handles this — if no favorites match the filter, section disappears.
+
+Step 3: Also hide the Favorites section entirely when hasFilters is true
+  to keep the UI clean and show only filtered results in one place:
+
+  Change the Favorites section condition:
+  FROM:
+    {!isLoading && favoriteMachines.length > 0 && (
+
+  TO:
+    {!isLoading && !hasFilters && favoriteMachines.length > 0 && (
+
+  This way:
+    - No filters active → show Popular Machines + Favorites + All Machines (current behavior)
+    - Filters active → show ONLY filtered Machines section (clean single result set)
+
+Step 4: When filters ARE active, show a single clean result section.
+  Make sure the Machines section header changes when filters are active:
+
+  Change:
+    {!isLoading && <SectionHead title="머신" count={filteredMachines.length} />}
+
+  To:
+    {!isLoading && (
+      <SectionHead
+        title={hasFilters ? "검색 결과" : "머신"}
+        count={filteredMachines.length}
+      />
+    )}
+
+Step 5: Also make sure filteredMachines excludes favorites that were
+  shown in the Favorites section when !hasFilters.
+  ONLY when hasFilters is false, to avoid showing same machine twice:
+
+  Actually this is NOT needed since Section B hides when hasFilters is true (step 3).
+  When filters are active, only Section C (filteredMachines) shows — no duplication.
+
+Step 6: Verify the final behavior:
+
+  NO filters active:
+    ✅ Olympic banner visible
+    ✅ Popular Machines (top 5) visible
+    ✅ Favorites section visible (if any)
+    ✅ All Machines section visible (all 1985)
+
+  Filters active (e.g. muscle = Back):
+    ❌ Olympic banner hidden
+    ❌ Popular Machines hidden
+    ❌ Favorites section hidden
+    ✅ "검색 결과" section shows only Back machines
+    ✅ Active filter summary bar shows "Back · N개"
+
+==================================================
+FINAL INSTRUCTION
+==================================================
+
+Do not stop. Do not ask questions. Fix completely.
+When done, report:
+  1. Exact change made to favoriteMachines useMemo
+  2. Exact change made to Favorites section render condition
+  3. Confirmation that when filters active, only filteredMachines section shows
+  4. Confirmation that when no filters, all sections show as before

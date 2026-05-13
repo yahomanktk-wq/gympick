@@ -1,0 +1,294 @@
+Apply the following bug fixes and feature changes to the GymPick app.
+Complete everything without stopping to ask for confirmation.
+Do not pause between tasks.
+If you encounter ambiguity, make the best decision and continue.
+Only report back when everything is 100% complete.
+
+CORE RULES (never break these)
+- Do not modify the workout logging philosophy: sets are always recorded AFTER performing the exercise
+- Keep existing color system (C, R, T theme)
+- Do not break existing navigation structure
+- Minimize changes to files not listed below
+
+==================================================
+BUG FIX 1: Workout journal not showing saved workouts
+==================================================
+
+PROBLEM:
+After saving a workout in PostWorkoutLogModal, JournalScreen still shows
+"아직 기록된 운동이 없어요" (no workouts found).
+This is a data store mismatch — the modal saves to one place, the screen reads from another.
+
+HOW TO FIX:
+
+Step 1: Open src/screens/flow/PostWorkoutLogModal.tsx
+  Find the function that runs when the user finishes logging (the save/complete handler).
+  Find exactly where the WorkoutLog object is created and saved.
+  Note which store or array it writes to (e.g. workoutSessionStore, MOCK_SESSIONS, localSessions, etc.)
+
+Step 2: Open src/lib/db.ts
+  Find the fetchWorkoutLogs function.
+  Note which store or array it reads from.
+
+Step 3: If the two stores are different:
+  Change PostWorkoutLogModal to write to the same store that fetchWorkoutLogs reads from.
+  OR change fetchWorkoutLogs to also read from the store that PostWorkoutLogModal writes to.
+  Choose whichever causes fewer changes.
+
+Step 4: Make sure the WorkoutLog object saved by PostWorkoutLogModal matches the WorkoutLog type
+  defined in src/data/types.ts exactly.
+  Check all required fields: id, userId, gymId, gymName, date, machines array, etc.
+  Generate a unique id using Date.now().toString() or similar if no uuid library exists.
+
+Step 5: In JournalScreen.tsx, find where PostWorkoutLogModal onClose is handled.
+  Make sure refetch() is called when a workout is saved:
+    onClose={(saved) => {
+      setLogVisible(false)
+      if (saved) refetch()
+    }}
+  Also check LogWorkoutScreen.tsx for another PostWorkoutLogModal instance and apply same fix.
+
+Step 6: Verify the fix by tracing the full data flow:
+  User saves workout in modal
+  → WorkoutLog written to store X
+  → fetchWorkoutLogs reads from store X
+  → JournalScreen refetch() called
+  → Sessions list updated
+
+==================================================
+BUG FIX 2: Favorites state not synced between FavoritesScreen and MachineDetailModal
+==================================================
+
+PROBLEM:
+A machine added to favorites in FavoritesScreen shows as favorited there,
+but when opening MachineDetailModal for that same machine, it shows as NOT favorited.
+This means favorites state is stored in local component state (useState) in FavoritesScreen
+and not shared with MachineDetailModal.
+
+HOW TO FIX:
+
+Step 1: Open src/data/machineReviews.ts (or wherever getUserFavorites and favorite functions are defined).
+  Check if there is a global in-memory favorites array.
+  If yes, make sure both FavoritesScreen and MachineDetailModal read from and write to this same array.
+
+Step 2: Open src/screens/FavoritesScreen.tsx
+  Find the removeMachine function and the favorites state.
+  Make sure removing a favorite calls the global store function (e.g. removeUserFavorite or similar).
+  Not just a local setState.
+
+Step 3: Open src/screens/flow/MachineDetailModal.tsx (or wherever the machine detail is shown)
+  Find where it checks if the machine is favorited.
+  Make sure it reads from the same global store (e.g. getUserFavorites('u1').includes(machine.id)).
+  Make sure the toggle favorite button writes to the same global store.
+
+Step 4: Both screens must use the same source of truth for favorites.
+  If no global store exists, create one in src/data/favoritesStore.ts:
+
+    const favoriteMachineIds: string[] = []
+
+    export function getFavoriteMachineIds(): string[] {
+      return [...favoriteMachineIds]
+    }
+
+    export function addFavoriteMachine(id: string): void {
+      if (!favoriteMachineIds.includes(id)) favoriteMachineIds.push(id)
+    }
+
+    export function removeFavoriteMachine(id: string): void {
+      const idx = favoriteMachineIds.indexOf(id)
+      if (idx !== -1) favoriteMachineIds.splice(idx, 1)
+    }
+
+    export function isFavoriteMachine(id: string): boolean {
+      return favoriteMachineIds.includes(id)
+    }
+
+  Then update both FavoritesScreen and MachineDetailModal to use this store.
+
+==================================================
+CHANGE 1: Workout logging - body part list update
+==================================================
+
+Find all places in the app where body part options are listed for workout logging.
+This includes PostWorkoutLogModal.tsx and any related step components.
+
+Current list (approximate):
+  CHEST, BACK, LEGS, SHOULDERS, ARMS, CORE, GLUTES
+
+Changes:
+1. Change 'GLUTES' to 'HIP (GLUTES)' everywhere it appears as a selectable option label.
+   Keep the internal value consistent — if the value was 'Glutes', change it to 'Hip (Glutes)'
+   or keep 'Glutes' as internal value but show 'HIP (GLUTES)' as display label.
+   Make sure machine filtering still works (machines with targetMuscle 'Glutes' still appear
+   when 'HIP (GLUTES)' is selected).
+
+2. Do NOT add a new separate HIP entry. Only rename/relabel GLUTES to HIP (GLUTES).
+
+==================================================
+CHANGE 2: Workout logging flow - routine selection redesign
+==================================================
+
+Read PostWorkoutLogModal.tsx carefully before making changes.
+The current flow has a step called something like "머신을 추가해보세요" or machine selection step.
+
+The routine selection screen shows 4 options:
+  1. 새 루틴 작성하기
+  2. 이전 운동일지 참고하기
+  3. 헬스장 추천 루틴
+  4. 다른 유저 루틴
+
+--- FIX FOR "새 루틴 작성하기" ---
+
+CURRENT BEHAVIOR (wrong):
+  User taps 새 루틴 작성하기
+  → Goes to "머신을 추가해보세요" step with empty machine list
+  → User manually adds machines one by one
+
+NEW BEHAVIOR (correct):
+  User taps 새 루틴 작성하기
+  → Skip the empty "머신을 추가해보세요" step entirely
+  → Go DIRECTLY to machine selection screen
+  → Show all machines in the selected gym that match the selected body part
+  → Each machine displayed as sports card (SelectableMachineCard if it exists, or MachineCard)
+  → User taps ONE machine card to select it
+  → Tap "이 머신으로 운동 시작" button
+  → Go to set logging for that machine
+  → After saving sets, return to machine selection screen
+  → Previously logged machines show a "완료" checkmark badge
+  → Repeat until user taps "운동 종료"
+
+Implementation:
+  In the flow after tapping 새 루틴 작성하기,
+  set the machine list state to all machines matching gym + body part immediately,
+  then navigate to the machine selection screen (skipping the empty add-machines step).
+
+--- FIX FOR 이전 운동일지 참고하기 / 헬스장 추천 루틴 / 다른 유저 루틴 ---
+
+CURRENT BEHAVIOR (wrong):
+  User selects a routine reference
+  → Goes to "머신을 추가해보세요" step with empty machine list
+  → Machines from the routine are NOT pre-loaded
+
+NEW BEHAVIOR (correct):
+  User selects a routine reference (past log, gym routine, or user routine)
+  → Goes to "머신을 추가해보세요" step
+  → The machine list is PRE-POPULATED with machines from the selected routine
+  → The machines are already shown in the list, user cannot add or remove them
+  → User taps "운동 시작" to begin
+  → Set logging proceeds one machine at a time (same as 새 루틴 작성하기 flow)
+
+Implementation:
+  When user selects a past log / gym routine / user routine,
+  extract the machine list from that selection,
+  set it as the pre-populated machine list state,
+  then navigate to the machine list screen with those machines already loaded.
+  Hide the "머신 추가" button on this screen for these three paths.
+  Show only the pre-loaded machines, no add/remove controls.
+
+==================================================
+CHANGE 3: MachineCard.tsx - visual improvements
+==================================================
+
+Open src/components/MachineCard.tsx and apply these exact changes:
+
+1. BRAND LOGO - make larger:
+   Change brandBox:
+     width: 110 → 150
+     height: 36 → 52
+   Change brandLogo:
+     maxWidth: 90 → 130
+     maxHeight: 28 → 44
+     width: 90 → 130
+     height: 28 → 44
+
+2. INFO BAND - make brighter:
+   Change infoBand backgroundColor:
+     'rgba(45,45,55,0.85)' → 'rgba(90,90,108,0.88)'
+
+3. GYMPCIK LOGO - make larger:
+   Change LOGO_SIZE constant:
+     64 → 80
+
+4. COPYRIGHT BLUR OVERLAY - make text larger:
+   Change blurOverlay:
+     backgroundColor: 'rgba(0, 0, 0, 0.55)' → 'rgba(0, 0, 0, 0.60)'
+   Change the lock icon size inside blurOverlay:
+     size={22} → size={32}
+   Change blurText:
+     fontSize: 12 → 18
+     lineHeight: 18 → 28
+     fontWeight: '600' → '800'
+
+5. FOOTER COPYRIGHT TEXT - show full text with line wrap:
+   Change FOOTER_H constant:
+     38 → 60
+   Change BAND_BOTTOM:
+     FOOTER_H + 10 → FOOTER_H + 8
+   Change the copyright Text component:
+     Remove numberOfLines={1}
+     Add numberOfLines={3}
+   Change copyright style:
+     fontSize: 10 → 9
+     Add: flexWrap: 'wrap' is already implied by flex: 1, but also remove any numberOfLines limit
+
+6. MACHINE NAME in top zone - add brand name below:
+   Change the machine name Text and the topZone to show both machine name and brand:
+
+   Replace this:
+     <Text style={s.machineName} numberOfLines={2}>
+       {machine.displayName ?? machine.name}
+     </Text>
+
+   With this:
+     <View style={{ alignSelf: 'stretch', alignItems: 'center' }}>
+       <Text style={s.machineName} numberOfLines={2}>
+         {machine.displayName ?? machine.name}
+       </Text>
+       <Text style={s.brandNameSub}>
+         ({machine.brand.toUpperCase()})
+       </Text>
+     </View>
+
+   Add brandNameSub to the StyleSheet:
+     brandNameSub: {
+       fontSize: 11,
+       fontWeight: '700',
+       color: '#444444',
+       textAlign: 'center',
+       letterSpacing: 0.5,
+       marginTop: 2,
+     }
+
+   Also increase BAND_H to accommodate the taller top zone:
+     BAND_H: 52 → 58
+
+==================================================
+CHANGE 4: MachineDetailModal - remove "이 머신 기록하기" button
+==================================================
+
+Open src/screens/flow/MachineDetailModal.tsx (or wherever machine detail is shown).
+
+Find any button with text:
+  "이 머신 기록하기" or "Log This Machine" or "Record" or similar workout-start button
+  that is directly related to starting a workout from the machine detail page.
+
+Remove that button entirely.
+Remove any related onPress handler, state, or modal that was triggered by that button
+  only if those are exclusively used by this button and nothing else.
+Do not remove any other buttons (favorites, reviews, etc.).
+
+==================================================
+FINAL INSTRUCTION
+==================================================
+
+Do not stop.
+Do not ask questions.
+Do not ask for confirmation at any point.
+Complete every single change listed above from start to finish.
+If a file does not exist, skip that change and note it in the final report.
+If a change conflicts with existing code, make the best decision and continue.
+
+When everything is done, report:
+  1. Every file modified and what changed
+  2. Root cause of each bug and how it was fixed
+  3. Any items skipped and why

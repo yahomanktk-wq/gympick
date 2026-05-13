@@ -1,0 +1,280 @@
+Apply the following fixes to the GymPick app.
+Complete everything without stopping to ask for confirmation.
+Do not pause between tasks.
+Only report back when everything is 100% complete.
+
+CORE RULES
+- Keep existing color system (C, R, T theme)
+- Do not break existing navigation structure
+- Do not modify workout logging flow
+
+==================================================
+BUG FIX 1: Admin approve/reject buttons not working
+==================================================
+
+FILE: src/screens/admin/AdminDashboard.tsx
+
+ROOT CAUSE (confirmed from code review):
+The reviewGym and reviewEdit functions use Alert.alert with confirmation dialogs.
+In some Expo environments, Alert.alert does not reliably fire the onPress callback,
+causing the buttons to appear to do nothing.
+
+The code structure is actually correct — the issue is ONLY the Alert.alert wrapper.
+
+FIX:
+Remove Alert.alert from reviewGym and reviewEdit entirely.
+Execute the state update directly on button press without confirmation dialog.
+Instead show inline visual feedback after the action.
+
+Step 1: Replace the reviewGym function:
+
+CURRENT (wrong):
+  const reviewGym = useCallback((gymId: string, action: ReviewStatus) => {
+    Alert.alert(
+      action === 'approved' ? '헬스장 승인' : '헬스장 거절',
+      ...,
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: action === 'approved' ? '승인' : '거절',
+          onPress: () => {
+            setPendingGyms(prev => {
+              const updated = prev.map(g => g.id === gymId ? { ...g, status: action } : g);
+              const updatedGym = updated.find(g => g.id === gymId);
+              if (updatedGym) setSelectedGym(updatedGym);
+              return updated;
+            });
+          },
+        },
+      ],
+    );
+  }, []);
+
+NEW (correct — no Alert):
+  const reviewGym = useCallback((gymId: string, action: ReviewStatus) => {
+    setPendingGyms(prev => {
+      const updated = prev.map(g => g.id === gymId ? { ...g, status: action } : g);
+      const updatedGym = updated.find(g => g.id === gymId);
+      if (updatedGym) setSelectedGym(updatedGym);
+      return updated;
+    });
+  }, []);
+
+Step 2: Replace the reviewEdit function:
+
+CURRENT (wrong):
+  const reviewEdit = useCallback((edit: PendingEdit, action: ReviewStatus) => {
+    Alert.alert(
+      ...,
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          onPress: () => setPendingEdits(prev =>
+            prev.map(e => e.id === edit.id ? { ...e, status: action } : e)
+          ),
+        },
+      ],
+    );
+  }, []);
+
+NEW (correct — no Alert):
+  const reviewEdit = useCallback((edit: PendingEdit, action: ReviewStatus) => {
+    setPendingEdits(prev =>
+      prev.map(e => e.id === edit.id ? { ...e, status: action } : e)
+    );
+  }, []);
+
+Step 3: Replace the resolveFlag function the same way:
+
+CURRENT (wrong): uses Alert.alert
+NEW (correct):
+  const resolveFlag = useCallback((item: FlaggedItem, resolution: 'resolved' | 'delete' | 'merge') => {
+    setFlaggedItems(prev =>
+      prev.map(f => f.id === item.id ? { ...f, status: 'resolved' } : f)
+    );
+  }, []);
+
+Step 4: In GymDetailView, add confirmation UI inline instead of Alert.
+  When status is 'pending', show approve/reject buttons as before.
+  After tapping approve or reject:
+    The status updates immediately (state updates)
+    The buttons disappear and a result badge appears
+    A "목록으로 돌아가기" button appears below the badge
+
+  The GymDetailView already has this logic (selectedGym.status === 'pending' check).
+  Since we now update selectedGym synchronously inside setPendingGyms,
+  the badge will appear immediately after tap — no Alert needed.
+
+Step 5: Also remove Alert from any other handlers in AdminDashboard.tsx
+  that might be blocking state updates.
+  Search for all Alert.alert calls and replace them with direct state updates.
+
+==================================================
+CHANGE 1: Manager machine management - remove bottom Save button,
+save on back navigation with confirmation
+==================================================
+
+FILE: src/screens/manager/ManagerDashboard.tsx
+
+CURRENT BEHAVIOR:
+  There is a "저장" button at the bottom of the machine management screen
+  that is hard to reach.
+
+NEW BEHAVIOR:
+  Remove the bottom "저장" button entirely.
+  When the user taps the back button (뒤로가기) from the machine management screen:
+    Check if gymMachineIds has changed from the original loaded list.
+    If changed: show a confirmation dialog asking to save.
+    If not changed: navigate back without any dialog.
+
+Implementation:
+
+Step 1: Track the original machine list when the machine view opens.
+  Add a ref to store the original:
+    const originalMachineIds = useRef<string[]>([])
+
+  When opening the machine management view:
+    originalMachineIds.current = [...gym.machineIds]
+    setGymMachineIds([...gym.machineIds])
+
+Step 2: Create a custom back handler for the machine management screen.
+  Instead of using the standard pop() function directly on back button,
+  create a handleMachineBack function:
+
+    const handleMachineBack = useCallback(() => {
+      const hasChanges =
+        gymMachineIds.length !== originalMachineIds.current.length ||
+        gymMachineIds.some(id => !originalMachineIds.current.includes(id)) ||
+        originalMachineIds.current.some(id => !gymMachineIds.includes(id))
+
+      if (!hasChanges) {
+        pop()
+        return
+      }
+
+      // Show inline confirmation instead of Alert
+      setShowSaveConfirm(true)
+    }, [gymMachineIds, pop])
+
+Step 3: Add save confirmation state:
+    const [showSaveConfirm, setShowSaveConfirm] = useState(false)
+
+Step 4: Show confirmation UI as an overlay or modal when showSaveConfirm is true.
+  Style it as a bottom sheet or card overlay:
+
+    {showSaveConfirm && (
+      <View style={saveConfirmOverlay}>
+        <View style={saveConfirmCard}>
+          <Text style={saveConfirmTitle}>변경사항을 저장할까요?</Text>
+          <Text style={saveConfirmSub}>선택한 머신 목록이 저장됩니다.</Text>
+          <View style={saveConfirmBtns}>
+            <TouchableOpacity
+              style={saveConfirmCancelBtn}
+              onPress={() => {
+                setShowSaveConfirm(false)
+                pop()
+              }}
+            >
+              <Text style={saveConfirmCancelText}>저장 안 함</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={saveConfirmSaveBtn}
+              onPress={() => {
+                updateGymMachines(selectedGym.id, gymMachineIds)
+                setShowSaveConfirm(false)
+                pop()
+              }}
+            >
+              <Text style={saveConfirmSaveText}>저장</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    )}
+
+  Styles:
+    saveConfirmOverlay:
+      position absolute, top/left/right/bottom 0
+      backgroundColor rgba(0,0,0,0.5)
+      justifyContent flex-end
+      zIndex 100
+
+    saveConfirmCard:
+      backgroundColor C.bg
+      borderTopLeftRadius 24
+      borderTopRightRadius 24
+      padding 24
+      paddingBottom 40
+
+    saveConfirmTitle:
+      fontSize 18, fontWeight 900, color C.text, marginBottom 8
+
+    saveConfirmSub:
+      fontSize 14, color C.textSub, marginBottom 24
+
+    saveConfirmBtns:
+      flexDirection row, gap 12
+
+    saveConfirmCancelBtn:
+      flex 1, paddingVertical 14, borderRadius R.btn
+      backgroundColor C.surface, borderWidth 1, borderColor C.border
+      alignItems center
+
+    saveConfirmCancelText:
+      fontSize 15, fontWeight 700, color C.textSub
+
+    saveConfirmSaveBtn:
+      flex 2, paddingVertical 14, borderRadius R.btn
+      backgroundColor C.accent, alignItems center
+
+    saveConfirmSaveText:
+      fontSize 15, fontWeight 800, color '#000000'
+
+Step 5: In the machine management Header, replace onBack with handleMachineBack:
+  <Header title="머신 관리" onBack={handleMachineBack} />
+
+Step 6: Make sure updateGymMachines from managedGymStore is imported and used
+  to persist the machine list to the module-level store.
+  If managedGymStore.ts doesn't exist or doesn't have updateGymMachines, create it:
+
+    // src/data/managedGymStore.ts
+    interface ManagedGymEntry {
+      gymId: string
+      machineIds: string[]
+    }
+
+    const gymMachineData: ManagedGymEntry[] = []
+
+    export function getGymMachineIds(gymId: string): string[] {
+      return gymMachineData.find(e => e.gymId === gymId)?.machineIds ?? []
+    }
+
+    export function updateGymMachines(gymId: string, machineIds: string[]): void {
+      const existing = gymMachineData.find(e => e.gymId === gymId)
+      if (existing) {
+        existing.machineIds = [...machineIds]
+      } else {
+        gymMachineData.push({ gymId, machineIds: [...machineIds] })
+      }
+    }
+
+  When opening machine management view:
+    const savedIds = getGymMachineIds(gym.id)
+    const initialIds = savedIds.length > 0 ? savedIds : [...(gym.machineIds ?? [])]
+    setGymMachineIds(initialIds)
+    originalMachineIds.current = [...initialIds]
+
+==================================================
+FINAL INSTRUCTION
+==================================================
+
+Do not stop.
+Do not ask questions.
+Do not ask for confirmation at any point.
+Complete both fixes fully.
+When done, report:
+  1. Every file modified
+  2. Confirmation that Alert.alert is removed from all admin action handlers
+  3. Confirmation that approve/reject buttons now update state immediately
+  4. Confirmation that machine management back button shows save confirmation
+  5. Confirmation that machine selections persist after saving and reopening
