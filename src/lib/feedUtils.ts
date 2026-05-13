@@ -37,7 +37,7 @@ export function convertSessionToFeedPost(
     gymName:      session.gymName ?? '',
     photoUri,
     compositeUri: session.compositeUri,
-    muscles:      session.machines?.map(m => m.targetMuscle) ?? [],
+    muscles:      [...new Set(session.machines?.map(m => m.targetMuscle) ?? [])],
     createdAt:    session.date,
     isPublic:     true,
     isMyPost:     true,

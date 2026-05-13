@@ -150,8 +150,8 @@ function FeedGridCard({
         paddingHorizontal: 8, paddingVertical: 6,
         flexDirection: 'row', gap: 4,
       }}>
-        {post.muscles.slice(0, 2).map(m => (
-          <View key={m} style={{
+        {[...new Set(post.muscles)].slice(0, 2).map((m, idx) => (
+          <View key={`${m}-${idx}`} style={{
             backgroundColor: C.accent, borderRadius: R.pill,
             paddingHorizontal: 6, paddingVertical: 2,
           }}>
@@ -271,8 +271,8 @@ function FeedDetailModal({
                 운동 부위
               </Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                {post.muscles.map(m => (
-                  <View key={m} style={{
+                {[...new Set(post.muscles)].map((m, idx) => (
+                  <View key={`${m}-${idx}`} style={{
                     backgroundColor: C.accentBg, borderRadius: R.pill,
                     paddingHorizontal: 10, paddingVertical: 4,
                   }}>
@@ -406,11 +406,11 @@ export default function WorkoutFeedScreen() {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 10, gap: 6 }}
       >
-        {MUSCLE_FILTERS.map(m => {
+        {MUSCLE_FILTERS.map((m, idx) => {
           const active = muscleFilter === m;
           return (
             <TouchableOpacity
-              key={m}
+              key={`filter-${m}-${idx}`}
               style={{
                 height: 30,
                 paddingHorizontal: 14,
