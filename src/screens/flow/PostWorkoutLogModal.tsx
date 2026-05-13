@@ -1273,7 +1273,6 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
                 captured = await captureRef(overlayRef, { format: 'png', quality: 0.95, result: 'tmpfile' });
                 onCompositeUri(captured);
               }
-              // 루틴카드 캡처
               if (routineCardRef.current) {
                 await new Promise(resolve => requestAnimationFrame(resolve));
                 capturedRoutineUri = await captureRef(routineCardRef, {
@@ -1719,6 +1718,12 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
       finalPhotoUrl = await uploadWorkoutPhoto(photoUri, user.id, sessionId, false);
     }
 
+    // 루틴카드 업로드 (Supabase Storage)
+    let finalRoutineCardUrl: string | undefined;
+    if (passedRoutineCardUri && user && supabaseConfigured) {
+      finalRoutineCardUrl = await uploadWorkoutPhoto(passedRoutineCardUri, user.id, `${sessionId}_routine`, false);
+    }
+
     const workoutLog: WorkoutLog = {
       id:          sessionId,
       gymId:       gym.id,
@@ -1823,7 +1828,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
           gymName:        gym.name,
           photoUri:       finalPhotoUrl ?? photoUri ?? effectiveCompositeUri ?? '',
           compositeUri:   finalPhotoUrl ?? effectiveCompositeUri ?? undefined,
-          routineCardUri: passedRoutineCardUri ?? routineCardUri ?? undefined,
+          routineCardUri: finalRoutineCardUrl ?? passedRoutineCardUri ?? routineCardUri ?? undefined,
           muscles:        Array.from(selectedMuscles),
           isPublic:       true,
         }).catch(err => {
