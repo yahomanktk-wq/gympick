@@ -912,7 +912,7 @@ const TEXT_COLORS = [
 
 // --- Step 5: Photo
 
-function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname, onColorChange, onCapture, onCompositeUri, onSave, onBack, onClose }: {
+function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname, onColorChange, onCapture, onCompositeUri, onRoutineUri, onSave, onBack, onClose }: {
   gym: GymWithMachines;
   exercises: ExerciseInfo[];
   logs: Record<string, SetEntry[]>;
@@ -922,6 +922,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
   onColorChange: (color: string) => void;
   onCapture: (aspect: [number, number]) => void;
   onCompositeUri: (uri: string) => void;
+  onRoutineUri: (uri: string) => void;
   onSave: (captured?: string) => void;
   onBack: () => void;
   onClose: () => void;
@@ -997,6 +998,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
           format: 'png', quality: 0.95, result: 'tmpfile',
         });
         await MediaLibrary.saveToLibraryAsync(routineUri);
+        onRoutineUri(routineUri);
       }
 
       Alert.alert('저장 완료', '인증샷과 운동 루틴 카드가 저장되었습니다.');
@@ -1436,6 +1438,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   const [photoTaken,        setPhotoTaken]        = useState(false);
   const [photoUri,          setPhotoUri]          = useState<string | null>(null);
   const [compositeUri,      setCompositeUri]      = useState<string | null>(null);
+  const [routineCardUri,    setRoutineCardUri]    = useState<string | null>(null);
   const [detectedPRs,       setDetectedPRs]       = useState<{ name: string; weight: number; reps: number }[]>([]);
   const [prCelebration,     setPrCelebration]     = useState<{ name: string; weight: number; reps: number } | null>(null);
   // XP Popup
@@ -1496,6 +1499,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
       setPhotoTaken(false);
       setPhotoUri(null);
       setCompositeUri(null);
+      setRoutineCardUri(null);
       setDetectedPRs([]);
       setPrCelebration(null);
       setSelectedColor('#ffffff');
@@ -1803,15 +1807,16 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
       // 오운완 피드 포스트 저장
       if (effectiveCompositeUri ?? photoUri) {
         insertFeedPost({
-          id:           `feed-${Date.now()}`,
-          userId:       user.id,
-          nickname:     user.nickname ?? user.name,
-          gymId:        gym.id,
-          gymName:      gym.name,
-          photoUri:     finalPhotoUrl ?? photoUri ?? effectiveCompositeUri ?? '',
-          compositeUri: finalPhotoUrl ?? effectiveCompositeUri ?? undefined,
-          muscles:      Array.from(selectedMuscles),
-          isPublic:     true,
+          id:             `feed-${Date.now()}`,
+          userId:         user.id,
+          nickname:       user.nickname ?? user.name,
+          gymId:          gym.id,
+          gymName:        gym.name,
+          photoUri:       finalPhotoUrl ?? photoUri ?? effectiveCompositeUri ?? '',
+          compositeUri:   finalPhotoUrl ?? effectiveCompositeUri ?? undefined,
+          routineCardUri: routineCardUri ?? undefined,
+          muscles:        Array.from(selectedMuscles),
+          isPublic:       true,
         }).catch(err => {
           if (__DEV__) console.warn('[feed] insertFeedPost failed:', err);
         });
@@ -2022,6 +2027,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             onColorChange={setSelectedColor}
             onCapture={(aspect) => handleCapture(aspect)}
             onCompositeUri={(uri) => setCompositeUri(uri)}
+            onRoutineUri={(uri) => setRoutineCardUri(uri)}
             onSave={requestSaveWorkout}
             onBack={goBack}
             onClose={() => onClose(false)}
