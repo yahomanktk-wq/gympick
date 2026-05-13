@@ -217,6 +217,7 @@ function SessionDetailModal({
 }) {
   const nav      = useNavigation<any>();
   const photoRef    = useRef<View>(null);
+  const routineCardRef = useRef<View>(null);
   const [photoHeight, setPhotoHeight] = useState(DET_PHOTO_H_DEFAULT);
 
   // 이미지 로드 시 실제 비율로 높이 동적 조정
@@ -276,17 +277,26 @@ function SessionDetailModal({
       return;
     }
     try {
+      // 1장: 인증샷 저장
       if (session.compositeUri) {
         await MediaLibrary.saveToLibraryAsync(session.compositeUri);
-        Alert.alert('저장 완료', '이미지가 저장되었습니다.');
       } else if (session.photoUri) {
         const uri = await captureRef(photoRef, { format: 'png', quality: 0.95, result: 'tmpfile' });
         await MediaLibrary.saveToLibraryAsync(uri);
-        Alert.alert('저장 완료', '이미지가 저장되었습니다.');
-      } else {
-        Alert.alert('사진 없음', '저장할 사진이 없습니다.');
       }
-    } catch {
+
+      // 2장: 루틴카드 캡처 및 저장
+      if (routineCardRef.current) {
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        const routineUri = await captureRef(routineCardRef, {
+          format: 'png', quality: 0.95, result: 'tmpfile',
+        });
+        await MediaLibrary.saveToLibraryAsync(routineUri);
+      }
+
+      Alert.alert('저장 완료', '인증샷과 운동 루틴 카드가 저장되었습니다.');
+    } catch (e) {
+      if (__DEV__) console.warn('[JournalScreen] handleSave 오류:', e);
       Alert.alert('저장 실패', '다시 시도해 주세요.');
     }
   }
@@ -443,7 +453,17 @@ function SessionDetailModal({
               })}
             </View>
           </View>
-          <View style={det.routineCard}>
+          <View
+            ref={routineCardRef}
+            collapsable={false}
+            style={det.routineCard}
+          >
+            {/* 헤더: 헬스장명 + 날짜 */}
+            <View style={det.routineCardHeader}>
+              <Text style={det.routineCardGymName} numberOfLines={1}>{session.gymName}</Text>
+              <Text style={det.routineCardDate}>{dateStr}</Text>
+            </View>
+            <View style={det.routineDivider} />
             {machines.map((m, i) => {
               const isPR      = prMachines.has(m.machineId);
               const brandKey  = m.machineBrand.toUpperCase().replace(/\s+/g, '_');
@@ -508,6 +528,10 @@ function SessionDetailModal({
                 </React.Fragment>
               );
             })}
+            {/* 푸터 */}
+            <View style={det.routineCardFooter}>
+              <GymPickLogo color="#AAAAAA" width={60} height={6} />
+            </View>
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -790,8 +814,8 @@ const det = StyleSheet.create({
   exIcon:    { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   exName:    { fontSize: 13, fontWeight: '700', color: C.text },
   exBrand:   { fontSize: 11, color: C.textSub, marginTop: 1 },
-  exPRBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: R.pill, backgroundColor: C.accentBg, borderWidth: 1, borderColor: C.accent + '60' },
-  exPRTxt:   { fontSize: 8, fontWeight: '900', color: C.accent, letterSpacing: 0.5 },
+  exPRBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: R.pill, backgroundColor: C.accent },
+  exPRTxt:   { fontSize: 8, fontWeight: '900', color: '#000000', letterSpacing: 0.5 },
 
   setsBlock: { gap: 4, paddingLeft: 44 },
   setLine:   { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -807,10 +831,33 @@ const det = StyleSheet.create({
   noteSectionMachine: { fontSize: 12, fontWeight: '700', color: C.accent, marginBottom: 4 },
   noteSectionText:    { fontSize: 13, color: C.textSub, lineHeight: 18 },
 
-  routineCard:       { backgroundColor: '#FFFFFF', borderRadius: R.card, overflow: 'hidden', marginBottom: 20 },
+  routineCard:       { backgroundColor: '#FFFFFF', borderRadius: R.card, overflow: 'hidden', marginBottom: 20, borderWidth: 3, borderColor: C.border },
+  routineCardHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+  },
+  routineCardGymName: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#111111',
+    letterSpacing: -0.3,
+    marginBottom: 2,
+  },
+  routineCardDate: {
+    fontSize: 11,
+    color: '#888888',
+    fontWeight: '500',
+  },
+  routineCardFooter: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    alignItems: 'flex-end',
+    backgroundColor: '#FFFFFF',
+  },
   routineDivider:    { height: 1, backgroundColor: '#E5E5E5' },
   routineRow:        { flexDirection: 'row', alignItems: 'flex-start', padding: 12, gap: 10 },
-  routineRowPR:      { backgroundColor: '#F0FFF0' },
+  routineRowPR:      {},
   routineImgWrap:    { width: 64, height: 64, borderRadius: 10, overflow: 'hidden', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: C.border },
   routineInfo:       { flex: 1, justifyContent: 'center' },
   routineMachineName:{ fontSize: 12, fontWeight: '700', color: '#000000', lineHeight: 16 },

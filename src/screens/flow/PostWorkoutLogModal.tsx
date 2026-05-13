@@ -50,6 +50,7 @@ import { fetchFreeWeights, fetchWorkoutLogs } from '../../lib/db';
 import * as Location from 'expo-location';
 import { calcDistanceKm, formatDistance } from '../../lib/geocoding';
 import { fetchGymsWithMachines } from '../../lib/db/gyms';
+import { brandLogos } from '../../constants/brandLogos';
 
 // --- Types
 
@@ -467,26 +468,36 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
 
   const hasPreloaded = preloadedIds.size > 0;
   let machines: Machine[];
+  let routineOrderedAll: Machine[] = []; // 루틴 선택 시 순서 통합 리스트
+
   if (hasPreloaded) {
-    // Routine selected: show the routine's machines in order, resolved from any source
-    machines = [...preloadedIds]
+    // 루틴 선택: preloadedIds 순서대로 머신+프리웨이트 통합
+    routineOrderedAll = [...preloadedIds]
       .map(id => {
         const gymMachine = gym.machines.find(m => m.id === id);
         if (gymMachine) return gymMachine;
         const globalMachine = ALL_MACHINES_MAP[id];
         if (globalMachine) return globalMachine;
+        const dbFw = dbFreeWeights.find(f => f.id === id);
+        if (dbFw) return { id: dbFw.id, name: dbFw.name, brand: dbFw.brand, targetMuscle: dbFw.targetMuscle, category: 'Free Weight', exerciseKind: 'freeweight' as const } as Machine;
+        const localFw = FREE_WEIGHTS.find(f => f.id === id);
+        if (localFw) return { id: localFw.id, name: localFw.name, brand: localFw.brand, targetMuscle: localFw.targetMuscle, category: 'Free Weight', exerciseKind: 'freeweight' as const } as Machine;
         const extra = routineExtraInfo?.[id];
         if (extra) return { id, name: extra.name, brand: extra.brand, targetMuscle: extra.targetMuscle, category: '' } as Machine;
         return null;
       })
       .filter(Boolean) as Machine[];
+    machines = []; // 루틴 모드에서는 분리된 machines 섹션 사용 안 함
   } else {
-    // Start Fresh: show all gym machines matching selected muscles
+    // Start Fresh: 헬스장 머신만 표시
     machines = gym.machines.filter(m => matchesMuscle(m.targetMuscle));
   }
-  // Always show free weights filtered by selected muscles (Supabase first, local fallback)
-  const freeWeights = (dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS)
-    .filter(fw => matchesMuscle(fw.targetMuscle));
+
+  // 프리웨이트: 루틴 모드가 아닐 때만 별도 섹션 표시
+  const freeWeights = hasPreloaded
+    ? []
+    : (dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS)
+        .filter(fw => matchesMuscle(fw.targetMuscle));
   const MACHINE_CARD_W2 = (SCREEN_W - 40) / 2;
 
   function handleCardPress(id: string) {
@@ -526,6 +537,49 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
           </View>
         )}
 
+        {/* 루틴 선택 모드: 머신+프리웨이트 순서 통합 */}
+        {hasPreloaded && routineOrderedAll.length > 0 && (
+          <>
+            <Text style={s.sectionTitle}>추천 루틴 머신</Text>
+            <View style={s.machineCardGrid}>
+              {routineOrderedAll.map((m, idx) => (
+                <TouchableOpacity
+                  key={m.id}
+                  activeOpacity={0.85}
+                  onPress={() => handleCardPress(m.id)}
+                  style={{ position: 'relative' }}
+                >
+                  <MachineCardBorder width={MACHINE_CARD_W2}>
+                    <MachineCard machine={m} variant="grid" width={MACHINE_CARD_W2} />
+                  </MachineCardBorder>
+                  {/* 루틴 순서 번호 */}
+                  <View style={s.cardOrderOverlay}>
+                    <View style={s.cardOrderBadge}>
+                      <Text style={s.cardOrderText}>{idx + 1}</Text>
+                    </View>
+                  </View>
+                  {localSelectedId === m.id && (
+                    <View style={s.cardSelectedOverlay}>
+                      <View style={s.cardSelectedBadge}>
+                        <Ionicons name="checkmark" size={14} color={C.bg} />
+                      </View>
+                    </View>
+                  )}
+                  {loggedIds.has(m.id) && (
+                    <View style={s.cardCompletedOverlay}>
+                      <View style={s.cardCompletedBadge}>
+                        <Ionicons name="checkmark-circle" size={13} color={C.accent} />
+                        <Text style={s.cardCompletedTxt}>완료</Text>
+                      </View>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
+
+        {/* Start Fresh 모드: 머신 섹션 */}
         {machines.length > 0 && (
           <>
             <Text style={s.sectionTitle}>머신</Text>
@@ -876,6 +930,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
   const [saveSuccess,  setSaveSuccess]  = useState(false);
   const [photoAspect,  setPhotoAspect]  = useState<'4:3' | '16:9'>('4:3');
   const overlayRef = useRef<View>(null);
+  const routineCardRef = useRef<View>(null);
 
   const photoH = photoAspect === '4:3'
     ? Math.round(PHOTO_W * 4 / 3)
@@ -934,7 +989,17 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
       const capturedUri = await captureRef(overlayRef, { format: 'png', quality: 0.95, result: 'tmpfile' });
       onCompositeUri(capturedUri);
       await MediaLibrary.saveToLibraryAsync(capturedUri);
-      Alert.alert('저장 완료', '이미지가 저장되었습니다.');
+
+      // 루틴카드 캡처 및 저장
+      if (routineCardRef.current) {
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        const routineUri = await captureRef(routineCardRef, {
+          format: 'png', quality: 0.95, result: 'tmpfile',
+        });
+        await MediaLibrary.saveToLibraryAsync(routineUri);
+      }
+
+      Alert.alert('저장 완료', '인증샷과 운동 루틴 카드가 저장되었습니다.');
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2500);
     } catch (error) {
@@ -946,14 +1011,15 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
   const tc = textColor;
 
   // Logo strip positioning math (rotate around center):
-  // Visual top-left of TL strip at (8, OVERLAY_PAD)
-  const TL_VISUAL_X = 8;
+  // 좌우 테두리 간격 통일 (OVERLAY_PAD = 20)
+  const LOGO_EDGE_GAP = 8;
+  const TL_VISUAL_X = LOGO_EDGE_GAP;
   const TL_VISUAL_Y = OVERLAY_PAD;
   const logoTlLeft = Math.round(TL_VISUAL_X + LOGO_STRIP_H / 2 - LOGO_STRIP_W / 2);
   const logoTlTop  = Math.round(TL_VISUAL_Y + LOGO_STRIP_W / 2 - LOGO_STRIP_H / 2);
 
   // Visual bottom-right of BR strip — uses dynamic photoH
-  const BR_VISUAL_X = PHOTO_W - 8 - LOGO_STRIP_H;
+  const BR_VISUAL_X = PHOTO_W - LOGO_EDGE_GAP - LOGO_STRIP_H;
   const BR_VISUAL_Y = photoH - OVERLAY_PAD - LOGO_STRIP_W;
   const logoBrLeft = Math.round(BR_VISUAL_X + LOGO_STRIP_H / 2 - LOGO_STRIP_W / 2);
   const logoBrTop  = Math.round(BR_VISUAL_Y + LOGO_STRIP_W / 2 - LOGO_STRIP_H / 2);
@@ -1035,7 +1101,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
             <View style={s.overlayBottomLeft}>
               <Text style={[s.overlayMuscleTitle, { color: tc }]}>{muscleLabel}</Text>
               <View style={s.sessionScroll}>
-                {exercises.map(ex => {
+                {exercises.slice(0, 7).map(ex => {
                   const sets = logs[ex.id] ?? [];
                   const setsLine = sets.map(st => `${st.weight} x ${st.reps}`).join(' / ');
                   return (
@@ -1051,11 +1117,102 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
                     </View>
                   );
                 })}
+                {exercises.length > 7 && (
+                  <Text style={[s.overlayExName, { color: tc, opacity: 0.6, marginTop: 2 }]}>
+                    {`+${exercises.length - 7} more...`}
+                  </Text>
+                )}
               </View>
             </View>
 
           </View>
         )}
+
+        {/* 루틴카드 — 캡처 전용 (화면 밖에 배치) */}
+        <View style={{ position: 'absolute', top: -9999, left: 0 }} pointerEvents="none">
+          <View
+            ref={routineCardRef}
+            collapsable={false}
+            style={{
+              width: PHOTO_W,
+              backgroundColor: '#FFFFFF',
+              borderWidth: 3,
+              borderColor: textColor,
+              borderRadius: 16,
+              overflow: 'hidden',
+            }}
+          >
+            {/* 헤더 */}
+            <View style={{ paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFFFFF' }}>
+              <Text style={{ fontSize: 15, fontWeight: '900', color: '#111111', marginBottom: 2 }} numberOfLines={1}>
+                {gym.name}
+              </Text>
+              <Text style={{ fontSize: 11, color: '#888888', fontWeight: '500' }}>
+                {timestamp}
+              </Text>
+            </View>
+            <View style={{ height: 1, backgroundColor: '#E5E5E5' }} />
+
+            {/* 머신 목록 */}
+            {exercises.map((ex, i) => {
+              const exSets    = logs[ex.id] ?? [];
+              const brandKey  = ex.brand.toUpperCase().replace(/\s+/g, '_');
+              const brandLogo = brandLogos[brandKey];
+              const imageUrl  = `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${ex.id}.webp`;
+
+              return (
+                <React.Fragment key={ex.id}>
+                  {i > 0 && <View style={{ height: 1, backgroundColor: '#E5E5E5' }} />}
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', padding: 12, gap: 10 }}>
+
+                    {/* 머신 이미지 */}
+                    <View style={{ width: 64, height: 64, borderRadius: 10, overflow: 'hidden', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E5E5' }}>
+                      <Image
+                        source={{ uri: imageUrl }}
+                        style={{ width: '100%', height: '100%' }}
+                        resizeMode="contain"
+                      />
+                    </View>
+
+                    {/* 머신명 + 제조사 로고 */}
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#000000', lineHeight: 16, marginBottom: 4 }} numberOfLines={2}>
+                        {ex.name.toUpperCase()}
+                      </Text>
+                      {brandLogo ? (
+                        <Image
+                          source={brandLogo}
+                          style={{ width: 56, height: 18 }}
+                          resizeMode="contain"
+                        />
+                      ) : (
+                        <Text style={{ fontSize: 10, color: '#333333' }}>{ex.brand}</Text>
+                      )}
+                    </View>
+
+                    {/* 세트 목록 */}
+                    <View style={{ alignItems: 'flex-end', justifyContent: 'center', minWidth: 80 }}>
+                      {exSets.slice(0, 6).map((st, si) => (
+                        <Text key={si} style={{ fontSize: 11, fontWeight: '600', color: '#000000', lineHeight: 18 }}>
+                          {st.weight > 0 ? `${st.weight}kg` : '--'} × {st.reps}
+                        </Text>
+                      ))}
+                      {exSets.length > 6 && (
+                        <Text style={{ fontSize: 10, color: '#666666', marginTop: 2 }}>+{exSets.length - 6}세트</Text>
+                      )}
+                    </View>
+
+                  </View>
+                </React.Fragment>
+              );
+            })}
+
+            {/* 푸터 */}
+            <View style={{ paddingHorizontal: 16, paddingVertical: 10, alignItems: 'flex-end', backgroundColor: '#FFFFFF' }}>
+              <GymPickLogo color="#AAAAAA" width={60} height={6} />
+            </View>
+          </View>
+        </View>
 
         {photoTaken && (
           <>
@@ -2124,9 +2281,9 @@ const s = StyleSheet.create({
   overlayTimestamp:  { fontSize: 10, fontWeight: '500', opacity: 0.75, marginTop: 2 },
 
   // Lower-left: muscle label + scrollable session (좌측으로 5% 이동 = left 감소)
-  overlayBottomLeft: { position: 'absolute', left: Math.max(0, OVERLAY_PAD + LOGO_STRIP_H + 4 - Math.round(PHOTO_W * 0.05)), right: OVERLAY_PAD, bottom: OVERLAY_PAD, top: '50%', zIndex: 3, justifyContent: 'flex-end' },
+  overlayBottomLeft: { position: 'absolute', left: Math.max(0, OVERLAY_PAD + LOGO_STRIP_H + 4 - Math.round(PHOTO_W * 0.05)), right: OVERLAY_PAD, bottom: OVERLAY_PAD, zIndex: 3 },
   overlayMuscleTitle:{ fontSize: 24, fontWeight: '900', letterSpacing: -0.5, marginBottom: 8 },
-  sessionScroll:     { maxHeight: 120 },
+  sessionScroll:     { maxHeight: 220 },
   overlayExBlock:    { marginBottom: 6 },
   overlayExName:     { fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
   overlayExSet:      { fontSize: 9, fontWeight: '500', opacity: 0.8, marginTop: 1 },
