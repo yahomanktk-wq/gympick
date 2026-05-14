@@ -20,9 +20,10 @@ import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/nativ
 import { Image as ExpoImage } from 'expo-image';
 import { brandLogos } from '../constants/brandLogos';
 import { C, R, T } from '../theme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WorkoutLog, Machine, UserSplitConfig, SequentialSplit } from '../data/types';
 import { fetchSplitConfig, updateSplitIndex } from '../lib/db/splitRoutine';
-import { getTodayTarget, getNextTarget, calcNextIndex } from '../lib/splitUtils';
+import { getTodayTarget, getNextTarget, calcNextIndex, extractCompletedTargets } from '../lib/splitUtils';
 import { getSessionPRMachines } from '../data/workoutSessions';
 import { fetchWorkoutLogs } from '../lib/db';
 import { deleteWorkoutSession } from '../lib/db/workouts';
@@ -117,24 +118,23 @@ const RETRO_DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일'];
 
 // --- Split Banner styles (module-level, for SplitBanner sub-component)
 const splitBannerStyle = {
-  marginHorizontal: 16,
-  marginBottom: 12,
-  backgroundColor: C.accentBg,
-  borderRadius: R.card,
-  borderWidth: 1,
-  borderColor: C.accent + '40',
-  paddingHorizontal: 16,
-  paddingVertical: 12,
+  backgroundColor:   C.surface,
+  borderRadius:      R.card,
+  borderLeftWidth:   3,
+  borderLeftColor:   C.accent,
+  padding:           14,
+  marginHorizontal:  20,
+  marginBottom:      12,
 };
 const splitBannerText = {
-  fontSize: 14,
+  fontSize:   15,
   fontWeight: '700' as const,
-  color: C.text,
+  color:      C.text,
 };
 const splitBannerSub = {
-  fontSize: 12,
-  color: C.textSub,
-  marginTop: 3,
+  fontSize:  13,
+  color:     C.textSub,
+  marginTop: 4,
 };
 
 // --- Split Banner
@@ -144,6 +144,59 @@ const SplitBanner = React.memo(({ message, sub }: { message: string; sub?: strin
     {sub ? <Text style={splitBannerSub}>{sub}</Text> : null}
   </View>
 ));
+
+// --- Split Banner Message Calculator
+function getSplitBannerMessage(
+  splitConfig: UserSplitConfig | null,
+  todaySessions: WorkoutLog[]
+): { message: string; sub?: string } | null {
+  if (!splitConfig) return null;
+  const split = splitConfig.workoutSplit;
+  if (!split || (Array.isArray(split) && split.length === 0)) return null;
+
+  const todayTarget = getTodayTarget(
+    splitConfig.splitType,
+    split,
+    splitConfig.splitCurrentIndex
+  );
+
+  if (todayTarget === '휴식') {
+    return { message: '오늘은 휴식 Day예요 🛌' };
+  }
+
+  if (todaySessions.length === 0) {
+    return todayTarget
+      ? { message: `오늘은 ${todayTarget} Day예요 💪` }
+      : null;
+  }
+
+  const completedTargets = extractCompletedTargets(todaySessions.flatMap(s => s.machines));
+  const nextTarget = getNextTarget(
+    splitConfig.splitType,
+    split,
+    splitConfig.splitCurrentIndex,
+    completedTargets
+  );
+
+  const routineTargets = Array.isArray(split) ? (split as string[]) : [];
+  const completedRoutine = completedTargets.filter(t =>
+    routineTargets.includes(t) && t !== '휴식'
+  );
+
+  if (completedRoutine.length > 0) {
+    const completedStr = completedRoutine.join(' + ');
+    if (nextTarget && nextTarget !== '휴식') {
+      return { message: `오늘 ${completedStr} 완료! 🔥`, sub: `다음은 ${nextTarget} Day예요` };
+    }
+    return { message: `오늘 ${completedStr} 완료! 🔥` };
+  }
+
+  const completedStr = completedTargets.filter(t => t !== '휴식').join(' + ');
+  return {
+    message: `오늘은 ${completedStr} 운동 했군요!`,
+    sub: todayTarget ? `${todayTarget} Day는 다음 운동 때 해요` : undefined,
+  };
+}
 
 // --- Retro Weekly Grid
 
@@ -664,8 +717,8 @@ export default function JournalScreen() {
   const [detailSessions,       setDetailSessions]       = useState<WorkoutLog[]>([]);
   const [detailMachine,        setDetailMachine]        = useState<Machine | null>(null);
   const [machineDetailVisible, setMachineDetailVisible] = useState(false);
-  const [splitConfig,          setSplitConfig]          = useState<UserSplitConfig | null>(null);
-  const splitIndexUpdatedRef                            = useRef<string | null>(null);
+  const [splitConfig,    setSplitConfig]    = useState<UserSplitConfig | null>(null);
+  const [todaySessions,  setTodaySessions]  = useState<WorkoutLog[]>([]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -673,20 +726,39 @@ export default function JournalScreen() {
   }, [user?.id]);
 
   useEffect(() => {
-    if (!user?.id || !splitConfig || splitConfig.splitType !== 'sequential') return;
     const today = new Date().toDateString();
-    if (splitIndexUpdatedRef.current === today) return;
-    const todaySessions = sessions.filter(s => isSameDay(new Date(s.date), new Date()));
+    const todayList = sessions.filter(s => new Date(s.date).toDateString() === today);
+    setTodaySessions(todayList);
+  }, [sessions]);
+
+  useEffect(() => {
+    if (!splitConfig || splitConfig.splitType !== 'sequential') return;
     if (todaySessions.length === 0) return;
-    const todayMuscles = [...new Set(todaySessions.flatMap(s => s.machines.map(m => m.targetMuscle)))];
-    const target = getTodayTarget(splitConfig.splitType, splitConfig.workoutSplit, splitConfig.splitCurrentIndex);
-    if (!target || !todayMuscles.some(m => m.toLowerCase() === target.toLowerCase())) return;
-    splitIndexUpdatedRef.current = today;
-    const newIndex = calcNextIndex(splitConfig.workoutSplit as SequentialSplit, splitConfig.splitCurrentIndex, todayMuscles);
-    updateSplitIndex(user.id, newIndex).then(() => {
-      setSplitConfig(prev => prev ? { ...prev, splitCurrentIndex: newIndex } : prev);
-    }).catch(() => {});
-  }, [sessions, splitConfig?.splitCurrentIndex, user?.id]);
+    if (!user?.id) return;
+
+    const run = async () => {
+      const lastUpdateKey = `split_updated_${new Date().toDateString()}`;
+      const alreadyUpdated = await AsyncStorage.getItem(lastUpdateKey);
+      if (alreadyUpdated) return;
+
+      const completedTargets = extractCompletedTargets(todaySessions.flatMap(s => s.machines));
+      if (completedTargets.length === 0) return;
+
+      const newIndex = calcNextIndex(
+        splitConfig.workoutSplit as SequentialSplit,
+        splitConfig.splitCurrentIndex,
+        completedTargets
+      );
+
+      if (newIndex !== splitConfig.splitCurrentIndex) {
+        await updateSplitIndex(user.id, newIndex);
+        await AsyncStorage.setItem(lastUpdateKey, 'true');
+        setSplitConfig(prev => prev ? { ...prev, splitCurrentIndex: newIndex } : prev);
+      }
+    };
+
+    run();
+  }, [todaySessions, splitConfig, user?.id]);
 
   useEffect(() => {
     const openSessionId = route.params?.openSessionId;
@@ -766,25 +838,8 @@ export default function JournalScreen() {
 
             {/* Split Banner */}
             {(() => {
-              if (!splitConfig) return null;
-              const target = getTodayTarget(splitConfig.splitType, splitConfig.workoutSplit, splitConfig.splitCurrentIndex);
-              if (!target) return null;
-              const todaySessions = sessions.filter(s => isSameDay(new Date(s.date), new Date()));
-              if (todaySessions.length === 0) {
-                return <SplitBanner message={`오늘은 ${target} Day예요 💪`} />;
-              }
-              const todayMuscles = [...new Set(todaySessions.flatMap(s => s.machines.map(m => m.targetMuscle)))];
-              const hasTarget = todayMuscles.some(m => m.toLowerCase() === target.toLowerCase());
-              if (hasTarget) {
-                const next = getNextTarget(splitConfig.splitType, splitConfig.workoutSplit, splitConfig.splitCurrentIndex, todayMuscles);
-                const completedList = todayMuscles.join(' + ');
-                if (todayMuscles.length > 1) {
-                  return <SplitBanner message={`오늘 ${completedList} 완료! 🔥`} sub={next ? `다음은 ${next} Day예요` : undefined} />;
-                }
-                return <SplitBanner message={`오늘 ${target} Day 완료! 🔥`} sub={next ? `다음은 ${next} Day예요` : undefined} />;
-              }
-              const completed = todayMuscles.join(' + ');
-              return <SplitBanner message={`오늘은 ${completed} 운동 했군요!`} sub={`${target} Day는 다음 운동 때 해요`} />;
+              const banner = getSplitBannerMessage(splitConfig, todaySessions);
+              return banner ? <SplitBanner message={banner.message} sub={banner.sub} /> : null;
             })()}
 
             {/* Retro weekly grid */}

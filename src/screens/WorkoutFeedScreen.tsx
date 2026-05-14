@@ -37,7 +37,7 @@ const GRID_GAP    = 8;
 const GRID_PAD    = 16;
 const GRID_CARD_W = Math.floor((SCREEN_W - GRID_PAD * 2 - GRID_GAP) / 2);
 
-const MUSCLE_FILTERS = ['전체', 'Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core', 'Cardio'] as const;
+const MUSCLE_FILTERS = ['전체', '가슴', '등', '하체', '어깨', '팔'] as const;
 type MuscleFilter = (typeof MUSCLE_FILTERS)[number];
 
 // ── 최신순 정렬 ───────────────────────────────────────────────────────────────
@@ -554,36 +554,27 @@ export default function WorkoutFeedScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={{ height: 40, marginBottom: 4 }}
-        contentContainerStyle={{ paddingHorizontal: 16, gap: 6, alignItems: 'center' }}
+        contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}
+        style={{ marginBottom: 8 }}
       >
-        {MUSCLE_FILTERS.map((m, idx) => {
-          const active = muscleFilter === m;
-          return (
-            <TouchableOpacity
-              key={`filter-${m}-${idx}`}
-              style={{
-                height: 30,
-                paddingHorizontal: 14,
-                borderRadius: R.pill,
-                backgroundColor: active ? C.accentBg : C.surface,
-                borderWidth: StyleSheet.hairlineWidth,
-                borderColor: active ? C.accent : C.border,
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-              onPress={() => setMuscleFilter(m)}
-              activeOpacity={0.75}
-            >
-              <Text style={{
-                fontSize: 12, fontWeight: '600',
-                color: active ? C.accent : C.textSub,
-              }}>
-                {m}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+        {MUSCLE_FILTERS.map(filter => (
+          <TouchableOpacity
+            key={filter}
+            style={[
+              s.filterChip,
+              muscleFilter === filter && s.filterChipActive,
+            ]}
+            onPress={() => setMuscleFilter(filter)}
+            activeOpacity={0.8}
+          >
+            <Text style={[
+              s.filterChipText,
+              muscleFilter === filter && s.filterChipTextActive,
+            ]}>
+              {filter}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </ScrollView>
 
       {filtered.length === 0 ? (
@@ -675,4 +666,15 @@ const s = StyleSheet.create({
     gap: 12, paddingBottom: 60,
   },
   emptyText: { fontSize: 14, color: C.textDim, fontWeight: '500' },
+  filterChip: {
+    paddingHorizontal: 16,
+    paddingVertical:   8,
+    borderRadius:      R.pill,
+    backgroundColor:   C.surface,
+    borderWidth:       1,
+    borderColor:       C.border,
+  },
+  filterChipActive:     { backgroundColor: C.accent, borderColor: C.accent },
+  filterChipText:       { fontSize: 13, fontWeight: '600', color: C.textSub },
+  filterChipTextActive: { color: C.bg },
 });

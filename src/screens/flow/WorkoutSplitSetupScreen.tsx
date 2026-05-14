@@ -217,6 +217,21 @@ function SequentialItem({
   );
 }
 
+// ── SplitBenefitCard (Step -1) ───────────────────────────────────────────────
+
+const SplitBenefitCard = React.memo(({
+  iconName,
+  text,
+}: {
+  iconName: React.ComponentProps<typeof Ionicons>['name'];
+  text: string;
+}) => (
+  <View style={s.benefitCard}>
+    <Ionicons name={iconName} size={22} color={C.accent} />
+    <Text style={s.benefitText}>{text}</Text>
+  </View>
+));
+
 // ── StartPositionItem (Step 3) ────────────────────────────────────────────────
 
 const StartPositionItem = React.memo(({
@@ -249,8 +264,8 @@ interface WorkoutSplitSetupScreenProps {
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutSplitSetupScreenProps) {
-  // null = 로딩 중, 0 = 기존설정확인, 1 = 타입선택, 2 = 설정, 3 = 시작부위선택
-  const [step,           setStep]           = useState<0 | 1 | 2 | 3 | null>(null);
+  // null = 로딩 중, -1 = 온보딩 안내, 0 = 기존설정확인, 1 = 타입선택, 2 = 설정, 3 = 시작부위선택
+  const [step,           setStep]           = useState<-1 | 0 | 1 | 2 | 3 | null>(null);
   const [existingConfig, setExistingConfig] = useState<UserSplitConfig | null>(null);
   const [type,           setType]           = useState<SplitType>('sequential');
   const [weekday,        setWeekday]        = useState<WeekdaySplit>(EMPTY_WEEKDAY);
@@ -266,7 +281,7 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
           !config ||
           (Array.isArray(config.workoutSplit) && config.workoutSplit.length === 0);
         if (isEmpty) {
-          setStep(1);
+          setStep(-1);
         } else {
           setExistingConfig(config);
           setStep(0);
@@ -319,6 +334,10 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
   }
 
   async function handleComplete() {
+    if (step === -1) {
+      setStep(1);
+      return;
+    }
     if (step === 0) {
       // 변경하기: Step 1으로
       setWeekday(EMPTY_WEEKDAY);
@@ -384,24 +403,26 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
         contentContainerStyle={s.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        {/* ── Header ── */}
-        <View style={s.header}>
-          {step === 2 && (
-            <TouchableOpacity onPress={() => setStep(1)} style={s.backBtn} activeOpacity={0.7}>
-              <Ionicons name="chevron-back" size={20} color={C.textSub} />
-            </TouchableOpacity>
-          )}
-          <View style={{ flex: 1 }}>
-            <Text style={s.title}>운동 분할 설정</Text>
-            <Text style={s.subtitle}>
-              {step === 0
-                ? '현재 설정된 분할법이에요'
-                : step === 3
-                ? '오늘 어디서 시작할까요?'
-                : '나중에 프로필에서 변경할 수 있어요'}
-            </Text>
+        {/* ── Header (Step -1 에서는 숨김) ── */}
+        {step !== -1 && (
+          <View style={s.header}>
+            {step === 2 && (
+              <TouchableOpacity onPress={() => setStep(1)} style={s.backBtn} activeOpacity={0.7}>
+                <Ionicons name="chevron-back" size={20} color={C.textSub} />
+              </TouchableOpacity>
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={s.title}>운동 분할 설정</Text>
+              <Text style={s.subtitle}>
+                {step === 0
+                  ? '현재 설정된 분할법이에요'
+                  : step === 3
+                  ? '오늘 어디서 시작할까요?'
+                  : '나중에 프로필에서 변경할 수 있어요'}
+              </Text>
+            </View>
           </View>
-        </View>
+        )}
 
         {/* Step dots (Step 1, 2만 표시) */}
         {(step === 1 || step === 2) && (
@@ -409,6 +430,31 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
             {[1, 2].map(n => (
               <View key={n} style={[s.stepDot, step >= n && s.stepDotActive]} />
             ))}
+          </View>
+        )}
+
+        {/* ── Step -1: 온보딩 안내 ── */}
+        {step === -1 && (
+          <View style={s.introWrap}>
+            <Ionicons name="barbell-outline" size={64} color={C.accent} style={{ marginBottom: 24 }} />
+            <Text style={s.introTitle}>운동 분할을 설정해볼까요?</Text>
+            <Text style={s.introSub}>
+              {'오늘 어떤 부위를 운동할지 미리 알려드려요\n운동일지 작성과 오운완 피드가 자동으로 맞춰져요'}
+            </Text>
+            <View style={s.benefitList}>
+              <SplitBenefitCard
+                iconName="document-text-outline"
+                text="운동일지 작성 시 오늘 부위가 자동 설정돼요"
+              />
+              <SplitBenefitCard
+                iconName="camera-outline"
+                text="오운완 피드가 오늘 운동 부위로 필터링돼요"
+              />
+              <SplitBenefitCard
+                iconName="refresh-outline"
+                text="운동한 날 기준으로 다음 부위로 자동 이동해요"
+              />
+            </View>
           </View>
         )}
 
@@ -525,8 +571,28 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
 
       {/* ── CTA bar ── */}
       <View style={s.ctaBar}>
-        {/* Step 0: 유지 / 변경하기 */}
-        {step === 0 ? (
+        {/* Step -1: 설정 안함 / 시작하기 */}
+        {step === -1 ? (
+          <>
+            <TouchableOpacity
+              style={s.skipBtn}
+              onPress={handleSkip}
+              disabled={saving}
+              activeOpacity={0.75}
+            >
+              <Text style={s.skipTxt}>설정 안함</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.doneBtn}
+              onPress={handleComplete}
+              disabled={saving}
+              activeOpacity={0.85}
+            >
+              <Text style={s.doneTxt}>시작하기</Text>
+            </TouchableOpacity>
+          </>
+        ) : /* Step 0: 유지 / 변경하기 */
+        step === 0 ? (
           <>
             <TouchableOpacity
               style={s.skipBtn}
@@ -826,6 +892,48 @@ const s = StyleSheet.create({
   startName:          { flex: 1, fontSize: 15, fontWeight: '600', color: C.text },
   startNameSelected:  { color: C.accent },
   startFromHere:      { fontSize: 12, fontWeight: '600', color: C.accent },
+
+  // Intro (Step -1)
+  introWrap: {
+    flex:           1,
+    alignItems:     'center',
+    paddingTop:     48,
+    paddingBottom:  32,
+    gap:            0,
+  },
+  introTitle: {
+    fontSize:      28,
+    fontWeight:    '700',
+    color:         C.text,
+    textAlign:     'center',
+    marginBottom:  16,
+  },
+  introSub: {
+    fontSize:      15,
+    color:         C.textSub,
+    textAlign:     'center',
+    lineHeight:    22,
+    marginBottom:  32,
+  },
+  benefitList: {
+    alignSelf: 'stretch',
+    gap: 10,
+  },
+  benefitCard: {
+    backgroundColor: C.surface,
+    borderRadius:    R.card,
+    borderWidth:     1,
+    borderColor:     C.border,
+    padding:         14,
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             12,
+  },
+  benefitText: {
+    flex:     1,
+    fontSize: 14,
+    color:    C.text,
+  },
 
   // CTA bar
   ctaBar: {
