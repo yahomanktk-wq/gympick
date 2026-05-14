@@ -713,6 +713,8 @@ export default function JournalScreen() {
     [sessions],
   );
 
+  const handledSessionId = useRef<string | null>(null);
+
   const [logVisible,           setLogVisible]           = useState(false);
   const [detailSessions,       setDetailSessions]       = useState<WorkoutLog[]>([]);
   const [detailMachine,        setDetailMachine]        = useState<Machine | null>(null);
@@ -761,17 +763,17 @@ export default function JournalScreen() {
   }, [todaySessions, splitConfig, user?.id]);
 
   useEffect(() => {
-    const openSessionId = route.params?.openSessionId;
-    if (openSessionId && sessions.length > 0) {
-      const target = sessions.find((s: WorkoutLog) => s.id === openSessionId);
-      if (target) {
-        const daySessions = sessions.filter((s: WorkoutLog) =>
-          isSameDay(new Date(s.date), new Date(target.date))
-        );
-        setDetailSessions(daySessions);
-      }
+    const id = route.params?.openSessionId;
+    if (!id || handledSessionId.current === id) return;
+    handledSessionId.current = id;
+    const target = sessions.find((s: WorkoutLog) => s.id === id);
+    if (target) {
+      const daySessions = sessions.filter((s: WorkoutLog) =>
+        isSameDay(new Date(s.date), new Date(target.date))
+      );
+      setDetailSessions(daySessions);
     }
-  }, [route.params?.openSessionId, sessions]);
+  }, [route.params?.openSessionId]);
 
   const thisWeekCount = weeklyFrequency(sessions)[3];
   const totalVol      = sessions.reduce((a, s) => a + sessionVolume(s), 0);
