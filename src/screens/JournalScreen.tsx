@@ -722,10 +722,16 @@ export default function JournalScreen() {
   const [splitConfig,    setSplitConfig]    = useState<UserSplitConfig | null>(null);
   const [todaySessions,  setTodaySessions]  = useState<WorkoutLog[]>([]);
 
+  const splitConfigRef = useRef<UserSplitConfig | null>(null);
+
   useEffect(() => {
     if (!user?.id) return;
     fetchSplitConfig(user.id).then(setSplitConfig).catch(() => {});
   }, [user?.id]);
+
+  useEffect(() => {
+    splitConfigRef.current = splitConfig;
+  }, [splitConfig]);
 
   useEffect(() => {
     const today = new Date().toDateString();
@@ -734,7 +740,8 @@ export default function JournalScreen() {
   }, [sessions]);
 
   useEffect(() => {
-    if (!splitConfig || splitConfig.splitType !== 'sequential') return;
+    const cfg = splitConfigRef.current;
+    if (!cfg || cfg.splitType !== 'sequential') return;
     if (todaySessions.length === 0) return;
     if (!user?.id) return;
 
@@ -743,24 +750,28 @@ export default function JournalScreen() {
       const alreadyUpdated = await AsyncStorage.getItem(lastUpdateKey);
       if (alreadyUpdated) return;
 
-      const completedTargets = extractCompletedTargets(todaySessions.flatMap(s => s.machines));
+      const completedTargets = extractCompletedTargets(
+        todaySessions.flatMap(s => s.machines)
+      );
       if (completedTargets.length === 0) return;
 
       const newIndex = calcNextIndex(
-        splitConfig.workoutSplit as SequentialSplit,
-        splitConfig.splitCurrentIndex,
+        cfg.workoutSplit as SequentialSplit,
+        cfg.splitCurrentIndex,
         completedTargets
       );
 
-      if (newIndex !== splitConfig.splitCurrentIndex) {
+      if (newIndex !== cfg.splitCurrentIndex) {
         await updateSplitIndex(user.id, newIndex);
         await AsyncStorage.setItem(lastUpdateKey, 'true');
-        setSplitConfig(prev => prev ? { ...prev, splitCurrentIndex: newIndex } : prev);
+        setSplitConfig(prev =>
+          prev ? { ...prev, splitCurrentIndex: newIndex } : prev
+        );
       }
     };
 
     run();
-  }, [todaySessions, splitConfig, user?.id]);
+  }, [todaySessions, user?.id]);
 
   useEffect(() => {
     const id = route.params?.openSessionId;
