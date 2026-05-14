@@ -448,7 +448,7 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
               />
               <SplitBenefitCard
                 iconName="camera-outline"
-                text="오운완 피드가 오늘 운동 부위로 필터링돼요"
+                text="오늘 같은 부위를 운동한 사람들의 기록을 한눈에 볼 수 있어요"
               />
               <SplitBenefitCard
                 iconName="refresh-outline"
