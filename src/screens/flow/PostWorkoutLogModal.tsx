@@ -51,6 +51,8 @@ import * as Location from 'expo-location';
 import { calcDistanceKm, formatDistance } from '../../lib/geocoding';
 import { fetchGymsWithMachines } from '../../lib/db/gyms';
 import { brandLogos } from '../../constants/brandLogos';
+import { fetchSplitConfig } from '../../lib/db/splitRoutine';
+import { getTodayTarget } from '../../lib/splitUtils';
 
 // --- Types
 
@@ -1518,6 +1520,15 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
       setRoutineReadOnly(false);
     }
   }, [visible]);
+
+  React.useEffect(() => {
+    if (!visible || !user?.id) return;
+    fetchSplitConfig(user.id).then(config => {
+      if (!config) return;
+      const target = getTodayTarget(config.splitType, config.workoutSplit, config.splitCurrentIndex);
+      if (target) setSelectedMuscles(new Set([target]));
+    }).catch(() => {});
+  }, [visible, user?.id]);
 
   function toggleMuscle(m: string) {
     setSelectedMuscles(prev => {

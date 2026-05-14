@@ -324,3 +324,29 @@ export interface FlaggedItem {
   reportedAt:  string;
   status:      'open' | 'resolved';
 }
+
+// =============================================================================
+// SECTION 4 - Workout Split Routine types
+// =============================================================================
+
+export type SplitType = 'weekday' | 'sequential';
+
+export type SequentialSplit = string[];
+
+export type WeekdaySplit = {
+  mon: string | null;
+  tue: string | null;
+  wed: string | null;
+  thu: string | null;
+  fri: string | null;
+  sat: string | null;
+  sun: string | null;
+};
+
+export type WorkoutSplit = SequentialSplit | WeekdaySplit;
+
+export interface UserSplitConfig {
+  splitType:          SplitType;
+  workoutSplit:       WorkoutSplit;
+  splitCurrentIndex:  number;
+}

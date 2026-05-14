@@ -20,6 +20,8 @@ import { WorkoutFeedPost, WorkoutLog } from '../data/types';
 const MOCK_FEED_POSTS: WorkoutFeedPost[] = [];
 import { filterActivePosts, filterByGym, filterByDistance, toggleReaction, convertSessionToFeedPost } from '../lib/feedUtils';
 import { fetchActiveFeedPosts, fetchMyLatestGymId, fetchFeedPostsByGym, fetchWorkoutSessionById } from '../lib/db/feedPosts';
+import { fetchSplitConfig } from '../lib/db/splitRoutine';
+import { getTodayTarget } from '../lib/splitUtils';
 import { fetchWorkoutLogs } from '../lib/db/workouts';
 import { useAuth } from '../context/AuthContext';
 import GymDetailModal from './flow/GymDetailModal';
@@ -35,7 +37,7 @@ const GRID_GAP    = 8;
 const GRID_PAD    = 16;
 const GRID_CARD_W = Math.floor((SCREEN_W - GRID_PAD * 2 - GRID_GAP) / 2);
 
-const MUSCLE_FILTERS = ['전체', 'Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Glutes'] as const;
+const MUSCLE_FILTERS = ['전체', 'Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core', 'Cardio'] as const;
 type MuscleFilter = (typeof MUSCLE_FILTERS)[number];
 
 // ── 최신순 정렬 ───────────────────────────────────────────────────────────────
@@ -428,6 +430,17 @@ export default function WorkoutFeedScreen() {
   const [detailPost,       setDetailPost]       = useState<WorkoutFeedPost | null>(null);
   const [gymDetailId,      setGymDetailId]      = useState<string | null>(null);
   const [machineDetailItem, setMachineDetailItem] = useState<any>(null);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    fetchSplitConfig(user.id).then(config => {
+      if (!config) return;
+      const target = getTodayTarget(config.splitType, config.workoutSplit, config.splitCurrentIndex);
+      if (target && (MUSCLE_FILTERS as readonly string[]).includes(target)) {
+        setMuscleFilter(target as MuscleFilter);
+      }
+    }).catch(() => {});
+  }, [user?.id]);
 
   useFocusEffect(
     useCallback(() => {

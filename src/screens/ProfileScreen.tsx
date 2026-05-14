@@ -33,6 +33,7 @@ import ManagerRequestModal from './flow/ManagerRequestModal';
 import { getNotifications, getUnreadCount } from '../lib/db/notifications';
 import { getUserBadges } from '../data/badgeStore';
 import WorkoutBadgeComponent from '../components/WorkoutBadge';
+import WorkoutSplitSetupScreen from './flow/WorkoutSplitSetupScreen';
 
 // --- Types
 
@@ -62,11 +63,12 @@ const RECENT_PRS = [
   { id: '3', exercise: 'Bench Press', value: '90 kg × 5',  date: 'Feb 20'  },
 ];
 
-const SETTINGS_LIST: { icon: IoniconName; label: string; toggle?: boolean; danger?: boolean; privacy?: boolean }[] = [
-  { icon: 'barbell-outline',        label: '단위 (kg / lbs)'                   },
-  { icon: 'document-text-outline',  label: '개인정보처리방침',   privacy: true  },
-  { icon: 'help-circle-outline',    label: '도움말 및 피드백'                   },
-  { icon: 'log-out-outline',        label: '로그아웃',            danger: true  },
+const SETTINGS_LIST: { icon: IoniconName; label: string; toggle?: boolean; danger?: boolean; privacy?: boolean; splitSetup?: boolean }[] = [
+  { icon: 'barbell-outline',        label: '단위 (kg / lbs)'                     },
+  { icon: 'git-branch-outline',     label: '운동 분할 설정',   splitSetup: true  },
+  { icon: 'document-text-outline',  label: '개인정보처리방침', privacy: true     },
+  { icon: 'help-circle-outline',    label: '도움말 및 피드백'                     },
+  { icon: 'log-out-outline',        label: '로그아웃',          danger: true     },
 ];
 
 // --- Role palette
@@ -93,7 +95,7 @@ function CardDivider() {
 
 function SettingRow({
   icon, label, toggle, danger, onPress,
-}: { icon: IoniconName; label: string; toggle?: boolean; danger?: boolean; privacy?: boolean; onPress?: () => void }) {
+}: { icon: IoniconName; label: string; toggle?: boolean; danger?: boolean; privacy?: boolean; splitSetup?: boolean; onPress?: () => void }) {
   const [on, setOn] = useState(false);
   return (
     <TouchableOpacity style={styles.settingRow} activeOpacity={0.7} onPress={onPress}>
@@ -361,6 +363,7 @@ export default function ProfileScreen() {
   const [showFavorites,     setShowFavorites]     = useState(false);
   const [showPRHistory,     setShowPRHistory]     = useState(false);
   const [showPrivacy,       setShowPrivacy]       = useState(false);
+  const [showSplitSetup,    setShowSplitSetup]    = useState(false);
   const [showingAuth,       setShowingAuth]       = useState(false);
   const [authPage,          setAuthPage]          = useState<'signin' | 'signup'>('signin');
   const [showNotifications, setShowNotifications] = useState(false);
@@ -448,15 +451,13 @@ export default function ProfileScreen() {
     }
   }
 
-  // When user signs in, exit the auth flow.
-  React.useEffect(() => {
-    if (user) setShowingAuth(false);
-  }, [user]);
-
-  // Guest profile view
-  if (!user && showingAuth) {
+  // Guest profile view — keep showing AuthFlow until onComplete is called
+  if (showingAuth) {
     return (
-      <AuthFlow initialPage={authPage} />
+      <AuthFlow
+        initialPage={authPage}
+        onComplete={() => setShowingAuth(false)}
+      />
     );
   }
 
@@ -666,6 +667,7 @@ export default function ProfileScreen() {
                 onPress={
                   s.label === '로그아웃' ? signOut
                   : s.privacy ? () => setShowPrivacy(true)
+                  : s.splitSetup ? () => setShowSplitSetup(true)
                   : s.label === '단위 (kg / lbs)' ? () => handleSettingPress(s.label)
                   : undefined
                 }
@@ -734,6 +736,18 @@ export default function ProfileScreen() {
         userId={user.id}
         onClose={() => setShowManagerReq(false)}
       />
+
+      {/* 운동 분할 설정 모달 */}
+      <Modal
+        visible={showSplitSetup}
+        animationType="slide"
+        onRequestClose={() => setShowSplitSetup(false)}
+      >
+        <WorkoutSplitSetupScreen
+          userId={user.id}
+          onComplete={() => setShowSplitSetup(false)}
+        />
+      </Modal>
 
       {/* ── 닉네임 수정 모달 ── */}
       <Modal
