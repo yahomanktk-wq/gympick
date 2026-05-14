@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,13 +11,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T } from '../../theme';
-import { SplitType, WeekdaySplit } from '../../data/types';
-import { saveSplitConfig } from '../../lib/db/splitRoutine';
+import { SplitType, WeekdaySplit, WorkoutSplit, UserSplitConfig } from '../../data/types';
+import { fetchSplitConfig, saveSplitConfig, updateSplitIndex } from '../../lib/db/splitRoutine';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const SPLIT_MUSCLES = ['가슴', '등', '하체', '어깨', '팔', '코어', '유산소'];
-const WEEKDAY_MUSCLES = ['가슴', '등', '하체', '어깨', '팔', '휴식'];
+const SPLIT_MUSCLES = ['가슴', '등', '하체', '어깨', '팔', '휴식'];
 
 const DAY_LABELS: { key: keyof WeekdaySplit; label: string }[] = [
   { key: 'mon', label: '월' },
@@ -33,14 +32,62 @@ const EMPTY_WEEKDAY: WeekdaySplit = {
   mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [],
 };
 
-// ── Sub-components ─────────────────────────────────────────────────────────────
+// ── CurrentSplitDisplay (Step 0 — 기존 설정 표시) ────────────────────────────
+
+const CurrentSplitDisplay = React.memo(({
+  splitType, workoutSplit, currentIndex,
+}: {
+  splitType:    SplitType;
+  workoutSplit: WorkoutSplit;
+  currentIndex: number;
+}) => {
+  if (splitType === 'sequential') {
+    const split    = workoutSplit as string[];
+    const activeIdx = split.length > 0 ? currentIndex % split.length : 0;
+    return (
+      <View style={csd.container}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={csd.seqRow}
+        >
+          {split.map((item, idx) => (
+            <React.Fragment key={idx}>
+              {idx > 0 && <Text style={csd.arrow}>→</Text>}
+              <View style={[csd.seqChip, idx === activeIdx && csd.seqChipActive]}>
+                <Text style={[csd.seqChipText, idx === activeIdx && csd.seqChipTextActive]}>
+                  {item}
+                </Text>
+              </View>
+            </React.Fragment>
+          ))}
+        </ScrollView>
+      </View>
+    );
+  }
+
+  const split = workoutSplit as WeekdaySplit;
+  return (
+    <View style={csd.container}>
+      {DAY_LABELS.map(({ key, label }) => {
+        const muscles = (split[key] ?? []) as string[];
+        return (
+          <View key={key} style={csd.weekRow}>
+            <Text style={csd.weekLabel}>{label}</Text>
+            <Text style={csd.weekMuscles}>
+              {muscles.length > 0 ? muscles.join(' · ') : '휴식'}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+});
+
+// ── TypeCard ──────────────────────────────────────────────────────────────────
 
 function TypeCard({
-  title,
-  desc,
-  example,
-  selected,
-  onPress,
+  title, desc, example, selected, onPress,
 }: {
   title:    string;
   desc:     string;
@@ -66,10 +113,10 @@ function TypeCard({
   );
 }
 
+// ── MuscleChip ────────────────────────────────────────────────────────────────
+
 function MuscleChip({
-  label,
-  selected,
-  onPress,
+  label, selected, onPress,
 }: {
   label:    string;
   selected: boolean;
@@ -86,10 +133,10 @@ function MuscleChip({
   );
 }
 
+// ── WeekdayRow ────────────────────────────────────────────────────────────────
+
 function WeekdayRow({
-  dayLabel,
-  selected,
-  onToggle,
+  dayLabel, selected, onToggle,
 }: {
   dayLabel: string;
   selected: string[];
@@ -114,7 +161,7 @@ function WeekdayRow({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ gap: 6, paddingRight: 8 }}
       >
-        {WEEKDAY_MUSCLES.map(m => (
+        {SPLIT_MUSCLES.map(m => (
           <MuscleChip
             key={m}
             label={m}
@@ -127,13 +174,10 @@ function WeekdayRow({
   );
 }
 
+// ── SequentialItem ────────────────────────────────────────────────────────────
+
 function SequentialItem({
-  name,
-  index,
-  total,
-  onRemove,
-  onMoveUp,
-  onMoveDown,
+  name, index, total, onRemove, onMoveUp, onMoveDown,
 }: {
   name:       string;
   index:      number;
@@ -173,6 +217,28 @@ function SequentialItem({
   );
 }
 
+// ── StartPositionItem (Step 3) ────────────────────────────────────────────────
+
+const StartPositionItem = React.memo(({
+  name, selected, onPress,
+}: {
+  name:     string;
+  selected: boolean;
+  onPress:  () => void;
+}) => (
+  <TouchableOpacity
+    style={[s.startItem, selected && s.startItemSelected]}
+    onPress={onPress}
+    activeOpacity={0.8}
+  >
+    <View style={[s.startRadio, selected && s.startRadioSelected]}>
+      {selected && <View style={s.startRadioDot} />}
+    </View>
+    <Text style={[s.startName, selected && s.startNameSelected]}>{name}</Text>
+    {selected && <Text style={s.startFromHere}>오늘부터 시작</Text>}
+  </TouchableOpacity>
+));
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface WorkoutSplitSetupScreenProps {
@@ -183,11 +249,31 @@ interface WorkoutSplitSetupScreenProps {
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutSplitSetupScreenProps) {
-  const [step,    setStep]    = useState<1 | 2>(1);
-  const [type,    setType]    = useState<SplitType>('sequential');
-  const [weekday, setWeekday] = useState<WeekdaySplit>(EMPTY_WEEKDAY);
-  const [seqList, setSeqList] = useState<string[]>([]);
-  const [saving,  setSaving]  = useState(false);
+  // null = 로딩 중, 0 = 기존설정확인, 1 = 타입선택, 2 = 설정, 3 = 시작부위선택
+  const [step,           setStep]           = useState<0 | 1 | 2 | 3 | null>(null);
+  const [existingConfig, setExistingConfig] = useState<UserSplitConfig | null>(null);
+  const [type,           setType]           = useState<SplitType>('sequential');
+  const [weekday,        setWeekday]        = useState<WeekdaySplit>(EMPTY_WEEKDAY);
+  const [seqList,        setSeqList]        = useState<string[]>([]);
+  const [startIndex,     setStartIndex]     = useState(0);
+  const [saving,         setSaving]         = useState(false);
+
+  // 마운트 시 기존 설정 조회
+  useEffect(() => {
+    fetchSplitConfig(userId)
+      .then(config => {
+        const isEmpty =
+          !config ||
+          (Array.isArray(config.workoutSplit) && config.workoutSplit.length === 0);
+        if (isEmpty) {
+          setStep(1);
+        } else {
+          setExistingConfig(config);
+          setStep(0);
+        }
+      })
+      .catch(() => setStep(1));
+  }, [userId]);
 
   function toggleWeekdayMuscle(key: keyof WeekdaySplit, muscle: string) {
     setWeekday(prev => {
@@ -227,33 +313,67 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
 
   async function handleSkip() {
     setSaving(true);
-    try {
-      await saveSplitConfig(userId, 'sequential', []);
-    } catch {}
+    try { await saveSplitConfig(userId, 'sequential', []); } catch {}
     setSaving(false);
     onComplete();
   }
 
   async function handleComplete() {
+    if (step === 0) {
+      // 변경하기: Step 1으로
+      setWeekday(EMPTY_WEEKDAY);
+      setSeqList([]);
+      setStartIndex(0);
+      setStep(1);
+      return;
+    }
     if (step === 1) {
       setStep(2);
       return;
     }
-    if (!canProceed) return;
-    setSaving(true);
-    try {
-      const split = type === 'weekday' ? weekday : seqList;
-      await saveSplitConfig(userId, type, split);
-    } catch {}
-    setSaving(false);
-    onComplete();
+    if (step === 2) {
+      if (!canProceed) return;
+      setSaving(true);
+      try {
+        const split = type === 'weekday' ? weekday : seqList;
+        await saveSplitConfig(userId, type, split);
+      } catch {}
+      setSaving(false);
+      if (type === 'sequential') {
+        setStartIndex(0);
+        setStep(3);
+      } else {
+        onComplete();
+      }
+      return;
+    }
+    if (step === 3) {
+      setSaving(true);
+      try { await updateSplitIndex(userId, startIndex); } catch {}
+      setSaving(false);
+      onComplete();
+    }
   }
 
   const canProceed = step === 1
     ? true
-    : type === 'weekday'
-    ? Object.values(weekday).some((arr: any) => arr.length > 0)
-    : seqList.length > 0;
+    : step === 2
+    ? type === 'weekday'
+      ? Object.values(weekday).some((arr: any) => arr.length > 0)
+      : seqList.length > 0
+    : true;
+
+  // 로딩 중
+  if (step === null) {
+    return (
+      <SafeAreaView style={s.safe}>
+        <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color={C.accent} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={s.safe}>
@@ -264,7 +384,7 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
         contentContainerStyle={s.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header */}
+        {/* ── Header ── */}
         <View style={s.header}>
           {step === 2 && (
             <TouchableOpacity onPress={() => setStep(1)} style={s.backBtn} activeOpacity={0.7}>
@@ -273,19 +393,48 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
           )}
           <View style={{ flex: 1 }}>
             <Text style={s.title}>운동 분할 설정</Text>
-            <Text style={s.subtitle}>나중에 프로필에서 변경할 수 있어요</Text>
+            <Text style={s.subtitle}>
+              {step === 0
+                ? '현재 설정된 분할법이에요'
+                : step === 3
+                ? '오늘 어디서 시작할까요?'
+                : '나중에 프로필에서 변경할 수 있어요'}
+            </Text>
           </View>
         </View>
 
-        {/* Step indicator */}
-        <View style={s.stepRow}>
-          {[1, 2].map(n => (
-            <View key={n} style={[s.stepDot, step >= n && s.stepDotActive]} />
-          ))}
-        </View>
+        {/* Step dots (Step 1, 2만 표시) */}
+        {(step === 1 || step === 2) && (
+          <View style={s.stepRow}>
+            {[1, 2].map(n => (
+              <View key={n} style={[s.stepDot, step >= n && s.stepDotActive]} />
+            ))}
+          </View>
+        )}
 
-        {step === 1 ? (
-          /* ── Step 1: Type selection ── */
+        {/* ── Step 0: 현재 설정 확인 ── */}
+        {step === 0 && existingConfig && (
+          <View style={s.section}>
+            <View style={s.existingTypeTag}>
+              <Ionicons
+                name={existingConfig.splitType === 'sequential' ? 'git-branch-outline' : 'calendar-outline'}
+                size={14}
+                color={C.accent}
+              />
+              <Text style={s.existingTypeText}>
+                {existingConfig.splitType === 'sequential' ? '순서 기반' : '요일 기반'}
+              </Text>
+            </View>
+            <CurrentSplitDisplay
+              splitType={existingConfig.splitType}
+              workoutSplit={existingConfig.workoutSplit}
+              currentIndex={existingConfig.splitCurrentIndex}
+            />
+          </View>
+        )}
+
+        {/* ── Step 1: 타입 선택 ── */}
+        {step === 1 && (
           <View style={s.section}>
             <TypeCard
               title="순서 기반"
@@ -302,24 +451,12 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
               onPress={() => setType('weekday')}
             />
           </View>
-        ) : type === 'weekday' ? (
-          /* ── Step 2a: Weekday config ── */
-          <View style={s.section}>
-            <Text style={s.sectionLabel}>요일별 운동 부위</Text>
-            {DAY_LABELS.map(({ key, label }) => (
-              <WeekdayRow
-                key={key}
-                dayLabel={label}
-                selected={weekday[key] as string[]}
-                onToggle={(muscle) => toggleWeekdayMuscle(key, muscle)}
-              />
-            ))}
-          </View>
-        ) : (
-          /* ── Step 2b: Sequential config ── */
+        )}
+
+        {/* ── Step 2a: 순서 기반 설정 ── */}
+        {step === 2 && type === 'sequential' && (
           <View style={s.section}>
             <Text style={s.sectionLabel}>운동 순서 목록</Text>
-
             {seqList.length === 0 ? (
               <View style={s.seqEmpty}>
                 <Text style={s.seqEmptyText}>아래 부위를 탭해서 추가하세요</Text>
@@ -339,7 +476,6 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
                 ))}
               </View>
             )}
-
             <Text style={[s.sectionLabel, { marginTop: 20 }]}>부위 추가 (중복 허용)</Text>
             <View style={s.chipRow}>
               {SPLIT_MUSCLES.map(m => (
@@ -350,44 +486,156 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
                   onPress={() => addToSeq(m)}
                 />
               ))}
-              <MuscleChip
-                label="휴식"
-                selected={false}
-                onPress={() => addToSeq('휴식')}
+            </View>
+          </View>
+        )}
+
+        {/* ── Step 2b: 요일 기반 설정 ── */}
+        {step === 2 && type === 'weekday' && (
+          <View style={s.section}>
+            <Text style={s.sectionLabel}>요일별 운동 부위</Text>
+            {DAY_LABELS.map(({ key, label }) => (
+              <WeekdayRow
+                key={key}
+                dayLabel={label}
+                selected={weekday[key] as string[]}
+                onToggle={(muscle) => toggleWeekdayMuscle(key, muscle)}
               />
+            ))}
+          </View>
+        )}
+
+        {/* ── Step 3: 시작 부위 선택 ── */}
+        {step === 3 && (
+          <View style={s.section}>
+            <Text style={s.sectionLabel}>시작할 부위를 선택하세요</Text>
+            <View style={s.startList}>
+              {seqList.map((name, idx) => (
+                <StartPositionItem
+                  key={`${name}-${idx}`}
+                  name={name}
+                  selected={startIndex === idx}
+                  onPress={() => setStartIndex(idx)}
+                />
+              ))}
             </View>
           </View>
         )}
       </ScrollView>
 
-      {/* CTA bar */}
+      {/* ── CTA bar ── */}
       <View style={s.ctaBar}>
-        <TouchableOpacity
-          style={s.skipBtn}
-          onPress={handleSkip}
-          disabled={saving}
-          activeOpacity={0.75}
-        >
-          <Text style={s.skipTxt}>설정 안함</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[s.doneBtn, !canProceed && s.doneBtnDisabled]}
-          onPress={handleComplete}
-          disabled={saving || !canProceed}
-          activeOpacity={0.85}
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color={C.bg} />
-          ) : (
-            <Text style={s.doneTxt}>{step === 1 ? '다음' : '완료'}</Text>
-          )}
-        </TouchableOpacity>
+        {/* Step 0: 유지 / 변경하기 */}
+        {step === 0 ? (
+          <>
+            <TouchableOpacity
+              style={s.skipBtn}
+              onPress={onComplete}
+              disabled={saving}
+              activeOpacity={0.75}
+            >
+              <Text style={s.skipTxt}>유지</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.doneBtn}
+              onPress={handleComplete}
+              disabled={saving}
+              activeOpacity={0.85}
+            >
+              <Text style={s.doneTxt}>변경하기</Text>
+            </TouchableOpacity>
+          </>
+        ) : step === 3 ? (
+          /* Step 3: 완료만 */
+          <TouchableOpacity
+            style={[s.doneBtn, { flex: 1 }]}
+            onPress={handleComplete}
+            disabled={saving}
+            activeOpacity={0.85}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color={C.bg} />
+            ) : (
+              <Text style={s.doneTxt}>완료</Text>
+            )}
+          </TouchableOpacity>
+        ) : (
+          /* Step 1, 2: 설정 안함 / 다음·완료 */
+          <>
+            <TouchableOpacity
+              style={s.skipBtn}
+              onPress={handleSkip}
+              disabled={saving}
+              activeOpacity={0.75}
+            >
+              <Text style={s.skipTxt}>설정 안함</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.doneBtn, !canProceed && s.doneBtnDisabled]}
+              onPress={handleComplete}
+              disabled={saving || !canProceed}
+              activeOpacity={0.85}
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color={C.bg} />
+              ) : (
+                <Text style={s.doneTxt}>
+                  {step === 1 ? '다음' : '완료'}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </>
+        )}
       </View>
     </SafeAreaView>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
+// ── CurrentSplitDisplay styles ────────────────────────────────────────────────
+
+const csd = StyleSheet.create({
+  container: {
+    backgroundColor: C.surface,
+    borderRadius:    R.card,
+    overflow:        'hidden',
+    borderWidth:     1,
+    borderColor:     C.border,
+  },
+  seqRow: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    padding:        16,
+    gap:            6,
+  },
+  seqChip: {
+    paddingHorizontal: 12,
+    paddingVertical:   7,
+    borderRadius:      R.pill,
+    backgroundColor:   C.surfaceHigh,
+    borderWidth:       1.5,
+    borderColor:       C.border,
+  },
+  seqChipActive: {
+    borderColor:     C.accent,
+    backgroundColor: C.accentBg,
+  },
+  seqChipText:       { fontSize: 13, fontWeight: '600', color: C.textSub },
+  seqChipTextActive: { color: C.accent, fontWeight: '800' },
+  arrow:             { fontSize: 12, color: C.textDim },
+  weekRow: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    paddingHorizontal: 16,
+    paddingVertical:   11,
+    borderTopWidth:    StyleSheet.hairlineWidth,
+    borderTopColor:    C.border,
+    gap:               12,
+  },
+  weekLabel:   { width: 24, fontSize: 13, fontWeight: '700', color: C.text },
+  weekMuscles: { flex: 1, fontSize: 13, color: C.textSub, fontWeight: '500' },
+});
+
+// ── Main styles ───────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: C.bg },
@@ -432,6 +680,21 @@ const s = StyleSheet.create({
     marginBottom:  4,
   },
 
+  // 기존 설정 타입 태그
+  existingTypeTag: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             6,
+    alignSelf:       'flex-start',
+    backgroundColor: C.accentBg,
+    paddingHorizontal: 12,
+    paddingVertical:   6,
+    borderRadius:    R.pill,
+    borderWidth:     1,
+    borderColor:     C.accent + '50',
+  },
+  existingTypeText: { fontSize: 13, fontWeight: '700', color: C.accent },
+
   // Type cards
   typeCard: {
     flexDirection:   'row',
@@ -457,17 +720,17 @@ const s = StyleSheet.create({
   typeCardDesc:          { fontSize: 12, color: C.textSub, lineHeight: 18, marginBottom: 4 },
   typeCardExample:       { fontSize: 11, color: C.textDim, fontStyle: 'italic', lineHeight: 16 },
 
-  // Chips
+  // Chips — FIX 1: 크기 확대
   chip: {
-    paddingHorizontal: 12,
-    paddingVertical:   6,
+    paddingHorizontal: 20,
+    paddingVertical:   12,
     borderRadius:      R.pill,
     backgroundColor:   C.surface,
     borderWidth:       1,
     borderColor:       C.border,
   },
   chipSelected:     { backgroundColor: C.accent, borderColor: C.accent },
-  chipText:         { fontSize: 12, fontWeight: '600', color: C.textSub },
+  chipText:         { fontSize: 15, fontWeight: '600', color: C.textSub },
   chipTextSelected: { color: C.bg, fontWeight: '700' },
 
   chipRow: {
@@ -478,9 +741,9 @@ const s = StyleSheet.create({
 
   // Weekday rows
   weekdayRow: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    gap:            8,
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             8,
     paddingVertical: 6,
   },
   weekdayLabelWrap: {
@@ -526,16 +789,43 @@ const s = StyleSheet.create({
   seqName:        { flex: 1, fontSize: 14, fontWeight: '600', color: C.text },
   seqActions:     { flexDirection: 'row', gap: 4 },
   seqBtn:         {
-    width:           28, height: 28, borderRadius: 8,
+    width: 28, height: 28, borderRadius: 8,
     backgroundColor: C.surfaceHigh,
-    alignItems:      'center', justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
   seqBtnDisabled: { opacity: 0.4 },
   seqRemoveBtn:   {
-    width:           28, height: 28, borderRadius: 8,
+    width: 28, height: 28, borderRadius: 8,
     backgroundColor: '#ff4d6d18',
-    alignItems:      'center', justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
+
+  // Start position list (Step 3)
+  startList: {
+    backgroundColor: C.surface,
+    borderRadius:    R.card,
+    overflow:        'hidden',
+  },
+  startItem: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    paddingHorizontal: 16,
+    paddingVertical:   15,
+    gap:               14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.border,
+  },
+  startItemSelected:  { backgroundColor: C.accentBg },
+  startRadio:         {
+    width: 22, height: 22, borderRadius: 11,
+    borderWidth: 2, borderColor: C.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  startRadioSelected: { borderColor: C.accent },
+  startRadioDot:      { width: 11, height: 11, borderRadius: 6, backgroundColor: C.accent },
+  startName:          { flex: 1, fontSize: 15, fontWeight: '600', color: C.text },
+  startNameSelected:  { color: C.accent },
+  startFromHere:      { fontSize: 12, fontWeight: '600', color: C.accent },
 
   // CTA bar
   ctaBar: {
@@ -554,8 +844,8 @@ const s = StyleSheet.create({
     backgroundColor: C.surfaceHigh,
     alignItems:      'center',
   },
-  skipTxt: { fontSize: 15, fontWeight: '700', color: C.textSub },
-  doneBtn: {
+  skipTxt:  { fontSize: 15, fontWeight: '700', color: C.textSub },
+  doneBtn:  {
     flex:            2,
     paddingVertical: 15,
     borderRadius:    R.btn,
