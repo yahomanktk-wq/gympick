@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,10 +18,11 @@ import { btnHeight, cardPadH, cardPadV, iconSize, screenPad } from '../theme/res
 import GymDetailModal from './flow/GymDetailModal';
 import { useAuth } from '../context/AuthContext';
 
-import { WorkoutLog, WorkoutFeedPost } from '../data/types';
+import { WorkoutLog, WorkoutFeedPost, UserSplitConfig, WeekdaySplit } from '../data/types';
 import { fetchWorkoutLogs } from '../lib/db';
-import { MOCK_FEED_POSTS } from '../data/workoutFeed';
-import { filterActivePosts, convertSessionToFeedPost } from '../lib/feedUtils';
+import { fetchActiveFeedPosts } from '../lib/db/feedPosts';
+import { fetchSplitConfig } from '../lib/db/splitRoutine';
+import { getTodayTarget } from '../lib/splitUtils';
 
 // --- Helpers
 
@@ -33,50 +34,75 @@ function getThisWeekStart(): Date {
   return d;
 }
 
+function getThisWeekDates(): Date[] {
+  const monday = getThisWeekStart();
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return d;
+  });
+}
+
 function isSameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() &&
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate();
 }
 
+function getWeekTargetMap(
+  splitConfig: UserSplitConfig | null,
+  weekDates: Date[]
+): Record<string, string | null> {
+  const result: Record<string, string | null> = {};
+
+  if (!splitConfig || !splitConfig.workoutSplit) {
+    weekDates.forEach(d => { result[d.toDateString()] = null; });
+    return result;
+  }
+
+  if (splitConfig.splitType === 'weekday') {
+    const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    const split = splitConfig.workoutSplit as WeekdaySplit;
+    weekDates.forEach(d => {
+      const key = DAY_KEYS[d.getDay()] as keyof WeekdaySplit;
+      const targets = (split[key] ?? []) as string[];
+      result[d.toDateString()] = targets.length > 0 ? targets[0] : null;
+    });
+    return result;
+  }
+
+  // sequential: assign from today onwards
+  const split = splitConfig.workoutSplit as string[];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  let idx = splitConfig.splitCurrentIndex;
+
+  weekDates.forEach(d => {
+    const date = new Date(d);
+    date.setHours(0, 0, 0, 0);
+    if (date < today) {
+      result[d.toDateString()] = null;
+    } else {
+      result[d.toDateString()] = split[idx % split.length];
+      idx++;
+    }
+  });
+
+  return result;
+}
+
 const { width: SCREEN_W } = Dimensions.get('window');
-const HOME_THUMB_W  = Math.floor((SCREEN_W - 32) / 3.5);
-const HOME_THUMB_H  = Math.round(HOME_THUMB_W * (4 / 3));
-const FEED_MINI_W   = Math.floor(SCREEN_W * 0.65);
+const HOME_THUMB_W   = Math.floor((SCREEN_W - 32) / 3.5);
+const HOME_THUMB_H   = Math.round(HOME_THUMB_W * (4 / 3));
+const OUNWAN_CARD_W  = 130;
+const OUNWAN_CARD_H  = 180;
+const OUNWAN_CARD_GAP = 10;
 
 function greeting() {
   const h = new Date().getHours();
   if (h < 12) return '좋은 아침이에요';
   if (h < 17) return '안녕하세요';
   return '좋은 저녁이에요';
-}
-
-// ── Feed mini card (module-level to support per-card imgRatio state) ─────────
-
-function FeedMiniCard({ post, onPress }: { post: WorkoutFeedPost; onPress: () => void }) {
-  const [imgRatio, setImgRatio] = useState(3 / 4);
-  const displayUri = post.compositeUri ?? post.photoUri;
-  return (
-    <TouchableOpacity
-      style={[st.feedMiniCard, { width: FEED_MINI_W }]}
-      activeOpacity={0.85}
-      onPress={onPress}
-    >
-      <ExpoImage
-        source={{ uri: displayUri }}
-        style={[st.feedMiniPhoto, { height: Math.round(FEED_MINI_W * imgRatio) }]}
-        contentFit="cover"
-        onLoad={(e) => {
-          const { width, height } = e.source;
-          if (width && height) setImgRatio(height / width);
-        }}
-      />
-      <View style={st.feedMiniOverlay}>
-        <Text style={st.feedMiniNickname} numberOfLines={1}>{post.nickname}</Text>
-        <Text style={st.feedMiniReaction}>💪 {post.reactions.muscle}</Text>
-      </View>
-    </TouchableOpacity>
-  );
 }
 
 function computeStreak(logs: WorkoutLog[]): number {
@@ -96,6 +122,91 @@ function computeStreak(logs: WorkoutLog[]): number {
   return streak;
 }
 
+// ── OunwanCard ────────────────────────────────────────────────────────────────
+
+const OunwanCard = React.memo(({ post, onPress }: { post: WorkoutFeedPost; onPress: () => void }) => {
+  const displayUri  = post.compositeUri ?? post.photoUri;
+  const muscleLabel = [...new Set(post.muscles)][0] ?? '';
+  return (
+    <TouchableOpacity style={st.ounwanCard} activeOpacity={0.85} onPress={onPress}>
+      {displayUri ? (
+        <ExpoImage
+          source={{ uri: displayUri }}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+        />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: C.surfaceHigh }]} />
+      )}
+      <View style={st.ounwanCardOverlay}>
+        {muscleLabel ? (
+          <View style={st.ounwanMuscleChip}>
+            <Text style={st.ounwanMuscleText}>{muscleLabel}</Text>
+          </View>
+        ) : null}
+        <Text style={st.ounwanGymName} numberOfLines={1}>{post.gymName}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+});
+
+// ── AutoScrollOunwan ──────────────────────────────────────────────────────────
+
+const AutoScrollOunwan = React.memo(({ posts, onPressPost }: {
+  posts:       WorkoutFeedPost[];
+  onPressPost: () => void;
+}) => {
+  const scrollRef   = useRef<ScrollView>(null);
+  const currentIdx  = useRef(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startInterval = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = null;
+    if (posts.length <= 1) return;
+    const STEP = OUNWAN_CARD_W + OUNWAN_CARD_GAP;
+    intervalRef.current = setInterval(() => {
+      currentIdx.current = (currentIdx.current + 1) % posts.length;
+      scrollRef.current?.scrollTo({ x: currentIdx.current * STEP, animated: true });
+    }, 2500);
+  }, [posts.length]);
+
+  useEffect(() => {
+    startInterval();
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    };
+  }, [startInterval]);
+
+  if (posts.length === 0) {
+    return (
+      <View style={st.feedEmpty}>
+        <Text style={st.feedEmptyText}>아직 오늘의 오운완이 없어요</Text>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView
+      ref={scrollRef}
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      scrollEventThrottle={16}
+      contentContainerStyle={{ gap: OUNWAN_CARD_GAP, paddingHorizontal: 20 }}
+      onScrollBeginDrag={() => {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }}
+      onScrollEndDrag={() => startInterval()}
+    >
+      {posts.map(post => (
+        <OunwanCard key={post.id} post={post} onPress={onPressPost} />
+      ))}
+    </ScrollView>
+  );
+});
+
 // --- Screen
 
 export default function HomeScreen() {
@@ -104,42 +215,51 @@ export default function HomeScreen() {
   const [gymDetailVisible, setGymDetailVisible] = useState(false);
   const [gymDetailId,      setGymDetailId]      = useState<string | null>(null);
   const [sessions,         setSessions]          = useState<WorkoutLog[]>([]);
+  const [splitConfig,      setSplitConfig]       = useState<UserSplitConfig | null>(null);
+  const [todayTarget,      setTodayTarget]       = useState<string | null>(null);
+  const [ounwanPosts,      setOunwanPosts]       = useState<WorkoutFeedPost[]>([]);
+  const [weekTargetMap,    setWeekTargetMap]     = useState<Record<string, string | null>>({});
 
   useFocusEffect(
     useCallback(() => {
-      if (!user) return;
-      fetchWorkoutLogs(user.id)
-        .then(logs => setSessions(logs))
-        .catch(() => setSessions([]));
+      let active = true;
+      async function load() {
+        let target: string | null = null;
+
+        if (user) {
+          const [logs, config] = await Promise.all([
+            fetchWorkoutLogs(user.id).catch(() => [] as WorkoutLog[]),
+            fetchSplitConfig(user.id).catch(() => null),
+          ]);
+          if (!active) return;
+          setSessions(logs);
+          setSplitConfig(config);
+
+          target = config
+            ? getTodayTarget(config.splitType, config.workoutSplit, config.splitCurrentIndex)
+            : null;
+          setTodayTarget(target);
+
+          const weekDates = getThisWeekDates();
+          setWeekTargetMap(getWeekTargetMap(config, weekDates));
+        }
+
+        const posts = await fetchActiveFeedPosts().catch(() => [] as WorkoutFeedPost[]);
+        if (!active) return;
+        const sorted = target && target !== '휴식'
+          ? [
+              ...posts.filter(p => p.muscles.includes(target!)),
+              ...posts.filter(p => !p.muscles.includes(target!)),
+            ]
+          : posts;
+        setOunwanPosts(sorted);
+      }
+      load();
+      return () => { active = false; };
     }, [user?.id])
   );
 
-  const streak       = useMemo(() => computeStreak(sessions), [sessions]);
-  const activePosts  = useMemo(() => {
-    const mockPosts = filterActivePosts(MOCK_FEED_POSTS);
-    const myPosts = sessions
-      .map(session => convertSessionToFeedPost(
-        session,
-        user?.id ?? 'guest',
-        user?.nickname ?? user?.name ?? 'me',
-        'g01',
-      ))
-      .filter((p): p is WorkoutFeedPost => p !== null);
-    const combined = [...myPosts, ...mockPosts];
-    const unique = combined.filter((p, i, arr) => arr.findIndex(x => x.id === p.id) === i);
-    const sorted = unique.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-    // 유저별로 오늘 날짜 기준 가장 최신 포스트 1개만 남기기
-    const today = new Date().toDateString();
-    const seenUsers = new Set<string>();
-    return sorted.filter(p => {
-      const postDate = new Date(p.createdAt).toDateString();
-      if (postDate !== today) return true; // 오늘이 아닌 건 그대로
-      if (seenUsers.has(p.userId)) return false; // 같은 유저의 오늘 포스트는 첫 번째만
-      seenUsers.add(p.userId);
-      return true;
-    });
-  }, [sessions, user]);
+  const streak = useMemo(() => computeStreak(sessions), [sessions]);
 
   const thisWeekSessions = useMemo(() => {
     const ws = getThisWeekStart();
@@ -160,64 +280,8 @@ export default function HomeScreen() {
     });
   }, []);
 
-  const lastSession = useMemo(() => {
-    if (!sessions.length) return null;
-    return [...sessions].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    )[0];
-  }, [sessions]);
-
-  const lastGymName = lastSession?.gymName ?? '';
-
-  const lastDateStr = useMemo(() => {
-    if (!lastSession) return '';
-    const d = new Date(lastSession.date);
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const hh = d.getHours();
-    const mm = String(d.getMinutes()).padStart(2, '0');
-    const ampm = hh >= 12 ? 'PM' : 'AM';
-    const h12 = hh % 12 === 0 ? 12 : hh % 12;
-    return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()} · ${h12}:${mm} ${ampm}`;
-  }, [lastSession]);
-
-  const lastMuscles = useMemo(() => {
-    if (!lastSession?.machines?.length) return [];
-    return Array.from(
-      new Set(lastSession.machines.map(m => m.targetMuscle).filter(Boolean))
-    );
-  }, [lastSession]);
-
-  const lastExerciseCount = lastSession?.machines?.length ?? 0;
-
-  const lastSetCount = useMemo(() => {
-    if (!lastSession?.machines?.length) return 0;
-    return lastSession.machines.reduce((sum, m) => sum + m.sets, 0);
-  }, [lastSession]);
-
-  const lastVolume = useMemo(() => {
-    if (!lastSession?.machines?.length) return '0';
-    const total = lastSession.machines.reduce((sum, m) => {
-      return sum + m.weight * m.reps * m.sets;
-    }, 0);
-    if (total >= 1000) return `${(total / 1000).toFixed(1)}t`;
-    return `${total}`;
-  }, [lastSession]);
-
-  const lastMachineRows = useMemo(() => {
-    if (!lastSession?.machines?.length) return [];
-    return lastSession.machines.slice(0, 5).map(m => ({
-      name:   m.machineName,
-      weight: m.weight,
-      reps:   m.reps,
-      sets:   m.sets,
-      muscle: m.targetMuscle,
-    }));
-  }, [lastSession]);
-
-  function openNearby()          { nav.navigate('FindGym', { initialTab: 'gym', viewMode: 'map' }); }
-  function openGym(id: string)   { setGymDetailId(id); setGymDetailVisible(true); }
+  function openNearby() { nav.navigate('FindGym', { initialTab: 'gym', viewMode: 'map' }); }
+  const handleFeedPress = useCallback(() => nav.navigate('WorkoutFeed'), [nav]);
 
   return (
     <SafeAreaView style={st.safe}>
@@ -286,17 +350,19 @@ export default function HomeScreen() {
               contentContainerStyle={st.weekThumbScroll}
             >
               {thisWeekDays.map((day, i) => {
-                const session = thisWeekSessions.find(s => isSameDay(new Date(s.date), day));
-                const today   = new Date();
-                const isToday = isSameDay(day, today);
-                const isPast  = day <= today;
+                const session  = thisWeekSessions.find(s => isSameDay(new Date(s.date), day));
+                const today    = new Date();
+                const isToday  = isSameDay(day, today);
+                const isPast   = !isToday && day < today;
+                const isFuture = !isToday && !isPast;
                 const photoSrc = session?.compositeUri ?? session?.photoUri;
                 const mm = String(day.getMonth() + 1).padStart(2, '0');
                 const dd = String(day.getDate()).padStart(2, '0');
+                const targetForDay = weekTargetMap[day.toDateString()];
                 return (
                   <TouchableOpacity
                     key={i}
-                    style={[st.weekThumbCell, !isPast && { opacity: 0.3 }]}
+                    style={[st.weekThumbCell, isFuture && { opacity: 0.3 }]}
                     activeOpacity={session ? 0.75 : 1}
                     onPress={() => {
                       if (session) {
@@ -309,7 +375,11 @@ export default function HomeScreen() {
                     <Text style={[st.weekThumbDayLabel, isToday && { color: C.accent }]}>
                       {['월', '화', '수', '목', '금', '토', '일'][i]}
                     </Text>
-                    <View style={[st.weekThumbBox, !photoSrc && st.weekThumbBoxEmpty, isToday && !photoSrc && st.weekThumbBoxToday]}>
+                    <View style={[
+                      st.weekThumbBox,
+                      !photoSrc && st.weekThumbBoxEmpty,
+                      isToday && !photoSrc && st.weekThumbBoxToday,
+                    ]}>
                       {photoSrc ? (
                         <Image
                           source={{ uri: photoSrc }}
@@ -322,7 +392,19 @@ export default function HomeScreen() {
                         </View>
                       ) : (
                         <View style={st.weekThumbEmptyInner}>
-                          {isPast && <Ionicons name="add" size={16} color={C.border} />}
+                          {isPast ? (
+                            <Ionicons name="add" size={16} color={C.border} />
+                          ) : targetForDay ? (
+                            <>
+                              <Text style={st.weekThumbDateNum}>{day.getDate()}</Text>
+                              <Text style={[
+                                st.weekThumbTarget,
+                                targetForDay === '휴식' && { color: C.textDim },
+                              ]}>
+                                {targetForDay}
+                              </Text>
+                            </>
+                          ) : null}
                         </View>
                       )}
                     </View>
@@ -351,51 +433,6 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        {/* ── Last Session Summary ── */}
-        {user && lastSession && (
-          <TouchableOpacity
-            style={st.recentCard}
-            activeOpacity={0.88}
-            onPress={() => nav.navigate('Journal')}
-          >
-            <Text style={st.recentEye}>마지막 운동</Text>
-            <Text style={st.recentMuscleTitle} numberOfLines={1}>
-              {lastMuscles.length > 0 ? lastMuscles.join(' + ') : '운동 기록 없음'}
-            </Text>
-            <Text style={st.recentGymSub} numberOfLines={1}>{lastGymName}</Text>
-            <Text style={st.recentDate}>{lastDateStr}</Text>
-
-            {/* Stats */}
-            <View style={st.recentStats}>
-              <View style={st.recentStat}>
-                <Text style={st.recentStatVal}>{lastExerciseCount}</Text>
-                <Text style={st.recentStatLab}>운동</Text>
-              </View>
-              <View style={st.recentDiv} />
-              <View style={st.recentStat}>
-                <Text style={st.recentStatVal}>{lastSetCount}</Text>
-                <Text style={st.recentStatLab}>세트</Text>
-              </View>
-              <View style={st.recentDiv} />
-              <View style={st.recentStat}>
-                <Text style={st.recentStatVal}>{lastVolume}</Text>
-                <Text style={st.recentStatLab}>볼륨</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        )}
-        {!user && (
-          <TouchableOpacity
-            style={st.recentCard}
-            activeOpacity={0.88}
-            onPress={() => nav.navigate('Profile')}
-          >
-            <Text style={st.recentEye}>운동 기록</Text>
-            <Text style={st.recentGymSub}>운동 기록이 여기에 표시됩니다.</Text>
-            <Text style={st.recentDate}>로그인하고 운동을 기록해보세요.</Text>
-          </TouchableOpacity>
-        )}
-
         {/* ── Find Gym CTA ── */}
         <TouchableOpacity
           style={st.ctaCard}
@@ -411,91 +448,19 @@ export default function HomeScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* ── Nearby Gyms ── */}
-        <View style={st.sectionRow}>
-          <Text style={st.sectionTitle}>주변 헬스장</Text>
-        </View>
-        <TouchableOpacity
-          style={st.nearbyMapBtn}
-          activeOpacity={0.85}
-          onPress={() => nav.navigate('FindGym', { initialTab: 'gym', viewMode: 'map' })}
-        >
-          <View style={st.nearbyMapBtnLeft}>
-            <Ionicons name="map-outline" size={22} color={C.accent} />
-            <View>
-              <Text style={st.nearbyMapBtnTitle}>내 주변 헬스장 보기</Text>
-              <Text style={st.nearbyMapBtnSub}>지도에서 가까운 헬스장을 확인하세요</Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={C.textDim} />
-        </TouchableOpacity>
-
         {/* ── 오늘의 오운완 피드 ── */}
         <View style={st.sectionRow}>
           <Text style={st.sectionTitle}>오늘의 오운완 🔥</Text>
-          <TouchableOpacity onPress={() => nav.navigate('WorkoutFeed')}>
+          <TouchableOpacity onPress={handleFeedPress}>
             <Text style={st.seeAll}>더보기</Text>
           </TouchableOpacity>
         </View>
-        {activePosts.length === 0 ? (
-          <View style={st.feedEmpty}>
-            <Text style={st.feedEmptyText}>아직 오늘의 오운완이 없어요</Text>
-          </View>
-        ) : (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={st.feedScroll}
-          >
-            {activePosts.slice(0, 4).map(post => (
-              <FeedMiniCard
-                key={post.id}
-                post={post}
-                onPress={() => nav.navigate('WorkoutFeed')}
-              />
-            ))}
-          </ScrollView>
-        )}
-
-        {/* ── Last Session ── */}
-        {user && lastSession && <View style={st.sectionRow}>
-          <Text style={st.sectionTitle}>마지막 운동</Text>
-          <TouchableOpacity onPress={() => nav.navigate('Journal')}>
-            <Text style={st.seeAll}>기록 보기</Text>
-          </TouchableOpacity>
-        </View>}
-        {user && lastSession && <View style={st.sessionCard}>
-          {/* Session header */}
-          <View style={st.sessionHead}>
-            <View style={{ flex: 1 }}>
-              <Text style={st.sessionGym}>{lastGymName}</Text>
-              <Text style={st.sessionDate}>{lastDateStr}</Text>
-            </View>
-          </View>
-
-          <View style={st.divider} />
-
-          {/* Exercise rows */}
-          {lastMachineRows.map((m, i) => (
-            <React.Fragment key={`${m.name}-${i}`}>
-              <View style={st.exRow}>
-                <Text style={st.exName} numberOfLines={1}>{m.name}</Text>
-                <Text style={st.exMeta}>{m.sets}×{m.reps} · {m.weight} kg</Text>
-              </View>
-              {i < lastMachineRows.length - 1 && <View style={st.exDivider} />}
-            </React.Fragment>
-          ))}
-
-          {/* Navigate to journal */}
-          <TouchableOpacity
-            style={st.viewLogBtn}
-            onPress={() => nav.navigate('Journal')}
-            activeOpacity={0.8}
-          >
-            <Text style={st.viewLogTxt}>전체 기록 보기</Text>
-            <Ionicons name="chevron-forward" size={13} color={C.accent} />
-          </TouchableOpacity>
-        </View>}
+        <Text style={st.ounwanMotivation}>
+          {todayTarget && todayTarget !== '휴식'
+            ? `오늘 ${todayTarget} 운동한 사람들이에요! 💪`
+            : '오늘 운동한 사람들이에요! 💪'}
+        </Text>
+        <AutoScrollOunwan posts={ounwanPosts} onPressPost={handleFeedPress} />
 
         <View style={{ height: 32 }} />
       </ScrollView>
@@ -515,91 +480,101 @@ const st = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: C.bg },
   scroll: { paddingBottom: 32 },
 
-  // Feed mini
-  feedScroll:      { paddingHorizontal: screenPad, gap: 10, paddingBottom: 4 },
-  feedMiniCard:    { borderRadius: R.inner, overflow: 'hidden', backgroundColor: C.surface },
-  feedMiniPhoto:   { width: '100%' },
-  feedMiniOverlay: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 10, paddingVertical: 7,
+  // Ounwan auto-scroll
+  ounwanMotivation: {
+    fontSize:          18,
+    fontWeight:        '800',
+    color:             C.text,
+    marginBottom:      12,
+    paddingHorizontal: screenPad,
   },
-  feedMiniNickname: { fontSize: 12, fontWeight: '700', color: C.text, flex: 1 },
-  feedMiniReaction: { fontSize: 12, fontWeight: '600', color: C.accent },
+  ounwanCard: {
+    width:           OUNWAN_CARD_W,
+    height:          OUNWAN_CARD_H,
+    borderRadius:    R.card,
+    overflow:        'hidden',
+    backgroundColor: C.surface,
+  },
+  ounwanCardOverlay: {
+    position:          'absolute',
+    bottom:            0,
+    left:              0,
+    right:             0,
+    backgroundColor:   'rgba(0,0,0,0.45)',
+    paddingHorizontal: 8,
+    paddingVertical:   7,
+    gap:               3,
+  },
+  ounwanMuscleChip: {
+    alignSelf:         'flex-start',
+    backgroundColor:   C.accent,
+    borderRadius:      R.pill,
+    paddingHorizontal: 6,
+    paddingVertical:   2,
+    marginBottom:      2,
+  },
+  ounwanMuscleText: { fontSize: 9,  fontWeight: '800', color: '#000' },
+  ounwanGymName:    { fontSize: 10, fontWeight: '600', color: '#fff' },
+
+  // Feed empty state
   feedEmpty: {
-    marginHorizontal: screenPad, marginBottom: 16,
-    backgroundColor: C.surface, borderRadius: R.inner,
-    paddingVertical: 20, alignItems: 'center',
+    marginHorizontal: screenPad,
+    marginBottom:     16,
+    backgroundColor:  C.surface,
+    borderRadius:     R.inner,
+    paddingVertical:  20,
+    alignItems:       'center',
   },
   feedEmptyText: { fontSize: 13, color: C.textDim },
 
   // Streak banner
   streakBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    marginHorizontal: screenPad, marginBottom: 12,
-    backgroundColor: C.accentBg, borderRadius: R.inner,
-    paddingHorizontal: cardPadH, paddingVertical: 10,
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               8,
+    marginHorizontal:  screenPad,
+    marginBottom:      12,
+    backgroundColor:   C.accentBg,
+    borderRadius:      R.inner,
+    paddingHorizontal: cardPadH,
+    paddingVertical:   10,
   },
-  streakEmoji:  { fontSize: 18 },
-  streakText:   { fontSize: 15, fontWeight: '800', color: C.accent },
-  streakSub:    { fontSize: 12, color: C.accent, opacity: 0.7, marginLeft: 2 },
-  streakEmpty:  { flex: 1, fontSize: 13, color: C.textDim, lineHeight: 18 },
+  streakEmoji: { fontSize: 18 },
+  streakText:  { fontSize: 15, fontWeight: '800', color: C.accent },
+  streakSub:   { fontSize: 12, color: C.accent, opacity: 0.7, marginLeft: 2 },
+  streakEmpty: { flex: 1, fontSize: 13, color: C.textDim, lineHeight: 18 },
 
   // Guest header
   guestHeaderSub: { fontSize: 13, color: C.textSub, fontWeight: '500', marginTop: 4 },
   guestAvatar:    { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border },
 
-  // Guest placeholder
-  guestPlaceholderCard: {
-    marginHorizontal: screenPad,
-    marginBottom: 24,
-    backgroundColor: C.surface,
-    borderRadius: R.card,
-    padding: cardPadH,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  guestPlaceholderText: { flex: 1, fontSize: 14, color: C.textSub, lineHeight: 20 },
-
   // Guest banner
   guestBanner: {
-    flexDirection:    'row',
-    alignItems:       'center',
-    gap:              8,
-    marginHorizontal: screenPad,
-    marginBottom:     16,
-    backgroundColor:  C.accentBg,
-    borderRadius:     R.inner,
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               8,
+    marginHorizontal:  screenPad,
+    marginBottom:      16,
+    backgroundColor:   C.accentBg,
+    borderRadius:      R.inner,
     paddingHorizontal: cardPadH,
-    paddingVertical:  11,
+    paddingVertical:   11,
   },
   guestBannerText: { flex: 1, fontSize: 13, color: C.accent, fontWeight: '600' },
 
   // Header
   header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
-    paddingHorizontal: screenPad, paddingTop: 24, paddingBottom: 16,
+    flexDirection:     'row',
+    justifyContent:    'space-between',
+    alignItems:        'flex-start',
+    paddingHorizontal: screenPad,
+    paddingTop:        24,
+    paddingBottom:     16,
   },
   greet:     { fontSize: 14, color: C.textSub, fontWeight: '500' },
   name:      { fontSize: 30, fontWeight: '900', color: C.text, letterSpacing: -1 },
   avatar:    { width: 42, height: 42, borderRadius: 21, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center', marginTop: 4, overflow: 'hidden' },
   avatarImg: { width: '100%', height: '100%' },
-
-  // Last session summary card
-  recentCard: {
-    marginHorizontal: screenPad, marginTop: 8, marginBottom: 24,
-    backgroundColor: C.surface, borderRadius: R.card,
-    padding: cardPadH,
-  },
-  recentEye:         { fontSize: 9, fontWeight: '900', color: C.accent, letterSpacing: 1.5, marginBottom: 8 },
-  recentMuscleTitle: { fontSize: 22, fontWeight: '900', color: C.text, letterSpacing: -0.5, marginBottom: 2 },
-  recentGymSub:      { fontSize: 13, color: C.textSub, fontWeight: '600', marginBottom: 2 },
-  recentDate:        { fontSize: 12, color: C.textDim, marginBottom: 14 },
-  recentStats:      { flexDirection: 'row', alignItems: 'center' },
-  recentStat:       { flex: 1, alignItems: 'center' },
-  recentStatVal:    { fontSize: 22, fontWeight: '900', color: C.text, letterSpacing: -0.5 },
-  recentStatLab:    { fontSize: 11, color: C.textSub, fontWeight: '600', marginTop: 2 },
-  recentDiv:        { width: 1, height: 32, backgroundColor: C.border },
 
   // Section headers
   sectionRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: screenPad, marginBottom: 8 },
@@ -610,28 +585,28 @@ const st = StyleSheet.create({
   // Weekly retro thumbnail row
   weekThumbScroll: {
     paddingHorizontal: screenPad,
-    gap: 8,
-    paddingBottom: 24,
+    gap:               8,
+    paddingBottom:     24,
   },
   weekThumbCell: {
-    width: HOME_THUMB_W,
+    width:      HOME_THUMB_W,
     alignItems: 'center',
-    gap: 5,
+    gap:        5,
   },
   weekThumbDayLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: C.textDim,
+    fontSize:      10,
+    fontWeight:    '700',
+    color:         C.textDim,
     letterSpacing: 0.3,
   },
   weekThumbBox: {
-    width: HOME_THUMB_W,
-    height: HOME_THUMB_H,
-    borderRadius: 10,
+    width:           HOME_THUMB_W,
+    height:          HOME_THUMB_H,
+    borderRadius:    10,
     backgroundColor: C.surface,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
+    overflow:        'hidden',
+    alignItems:      'center',
+    justifyContent:  'center',
   },
   weekThumbBoxEmpty: {
     borderWidth: 1,
@@ -643,81 +618,26 @@ const st = StyleSheet.create({
     borderColor: C.accent,
     borderStyle: 'solid',
   },
-  weekThumbImg: { width: '100%', height: '100%' },
-  weekThumbEmptyInner: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  weekThumbDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.accent },
-  weekThumbDate: { fontSize: 9, fontWeight: '600', color: C.textSub },
+  weekThumbImg:        { width: '100%', height: '100%' },
+  weekThumbEmptyInner: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2 },
+  weekThumbDot:        { width: 6, height: 6, borderRadius: 3, backgroundColor: C.accent },
+  weekThumbDate:       { fontSize: 9,  fontWeight: '600', color: C.textSub },
+  weekThumbDateNum:    { fontSize: 16, fontWeight: '700', color: C.text },
+  weekThumbTarget:     { fontSize: 10, fontWeight: '700', color: C.accent, marginTop: 2 },
 
   // CTA
   ctaCard: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: C.surface, borderRadius: R.card,
-    marginHorizontal: screenPad, marginBottom: 24,
-    padding: cardPadH, gap: 16,
+    flexDirection:    'row',
+    alignItems:       'center',
+    backgroundColor:  C.surface,
+    borderRadius:     R.card,
+    marginHorizontal: screenPad,
+    marginBottom:     24,
+    padding:          cardPadH,
+    gap:              16,
   },
   ctaLeft:  { flex: 1 },
   ctaEye:   { fontSize: 9, fontWeight: '900', color: C.accent, letterSpacing: 1.5, marginBottom: 6 },
   ctaTitle: { fontSize: 24, fontWeight: '900', color: C.text, lineHeight: 26, letterSpacing: -0.8 },
   ctaBtn:   { width: btnHeight, height: btnHeight, borderRadius: btnHeight / 2, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
-
-  // Nearby gyms
-  gymScroll: { paddingHorizontal: screenPad, gap: 10, paddingBottom: 4, marginBottom: 24 },
-  gymChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: C.surface, borderRadius: R.card,
-    padding: 14, width: 210,
-  },
-  gymName: { fontSize: 14, fontWeight: '700', color: C.text },
-  gymSub:  { fontSize: 12, color: C.textSub, marginTop: 2 },
-
-  // Nearby map button
-  nearbyMapBtn: {
-    flexDirection:     'row',
-    alignItems:        'center',
-    justifyContent:    'space-between',
-    backgroundColor:   C.surface,
-    borderRadius:      R.card,
-    borderWidth:       1,
-    borderColor:       C.border,
-    padding:           16,
-    marginBottom:      24,
-    marginHorizontal:  screenPad,
-  },
-  nearbyMapBtnLeft: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           12,
-    flex:          1,
-  },
-  nearbyMapBtnTitle: {
-    fontSize:     15,
-    fontWeight:   '700',
-    color:        C.text,
-    marginBottom: 2,
-  },
-  nearbyMapBtnSub: {
-    fontSize: 12,
-    color:    C.textSub,
-  },
-
-  // Last Session card
-  sessionCard: {
-    backgroundColor: C.surface, borderRadius: R.card,
-    marginHorizontal: screenPad, overflow: 'hidden',
-  },
-  sessionHead: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: cardPadH },
-  sessionGym:  { fontSize: 14, fontWeight: '800', color: C.text },
-  sessionDate: { fontSize: 11, color: C.textSub, marginTop: 2 },
-  divider:     { height: 1, backgroundColor: C.border },
-
-  exRow:     { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
-  exName:    { flex: 1, fontSize: 13, fontWeight: '600', color: C.text },
-  exMeta:    { fontSize: 12, color: C.textSub, fontWeight: '600' },
-  exDivider: { height: 1, backgroundColor: C.border, marginLeft: 16 },
-
-  viewLogBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
-    borderTopWidth: 1, borderTopColor: C.border, paddingVertical: 14,
-  },
-  viewLogTxt: { fontSize: 13, fontWeight: '700', color: C.accent },
 });
