@@ -1718,12 +1718,6 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
       finalPhotoUrl = await uploadWorkoutPhoto(photoUri, user.id, sessionId, false);
     }
 
-    // 루틴카드 업로드 (Supabase Storage)
-    let finalRoutineCardUrl: string | undefined;
-    if (passedRoutineCardUri && user && supabaseConfigured) {
-      finalRoutineCardUrl = await uploadWorkoutPhoto(passedRoutineCardUri, user.id, `${sessionId}_routine`, false);
-    }
-
     const workoutLog: WorkoutLog = {
       id:          sessionId,
       gymId:       gym.id,
@@ -1828,7 +1822,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
           gymName:        gym.name,
           photoUri:       finalPhotoUrl ?? photoUri ?? effectiveCompositeUri ?? '',
           compositeUri:   finalPhotoUrl ?? effectiveCompositeUri ?? undefined,
-          routineCardUri: finalRoutineCardUrl ?? passedRoutineCardUri ?? routineCardUri ?? undefined,
+          routineCardUri: passedRoutineCardUri ?? routineCardUri ?? undefined,
           sessionId:      sessionId,
           muscles:        Array.from(selectedMuscles),
           isPublic:       true,

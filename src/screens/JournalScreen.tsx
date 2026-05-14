@@ -232,11 +232,13 @@ function SessionDetailModal({
 
   useEffect(() => {
     if (!userId) return;
+    // 모달 열릴 때마다 초기화 후 재fetch
+    setPublicStatusMap({});
     sessions.forEach(async (session) => {
       const status = await fetchFeedPostPublicStatus(userId, session.date);
       setPublicStatusMap(prev => ({ ...prev, [session.id]: status }));
     });
-  }, [sessions, userId]);
+  }, [sessions.map(s => s.id).join(','), userId]);
 
   useEffect(() => {
     sessions.forEach(session => {

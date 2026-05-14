@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import { WorkoutFeedPost, WorkoutLog } from '../../data/types';
+import { WorkoutFeedPost } from '../../data/types';
 
 function rowToPost(r: any): WorkoutFeedPost {
   return {
@@ -101,35 +101,77 @@ export async function fetchFeedPostsByGym(gymId: string): Promise<WorkoutFeedPos
   return data.map(rowToPost);
 }
 
-/** 유저의 특정 날짜 오운완 피드 삭제 */
-export async function deleteFeedPostBySession(
-  userId: string,
-  sessionDate: string,
-): Promise<void> {
+/** session_id로 운동 세션 전체 데이터 fetch */
+export async function fetchWorkoutSessionById(sessionId: string): Promise<any | null> {
   try {
-    const dayStart = new Date(sessionDate);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(sessionDate);
-    dayEnd.setHours(23, 59, 59, 999);
+    const { data: session, error } = await supabase
+      .from('workout_sessions')
+      .select('id, gym_id, date, notes')
+      .eq('id', sessionId)
+      .single();
 
-    await supabase
-      .from('workout_feed_posts')
-      .delete()
-      .eq('user_id', userId)
-      .gte('created_at', dayStart.toISOString())
-      .lte('created_at', dayEnd.toISOString());
+    if (error || !session) return null;
 
-    if (__DEV__) console.log('[feedPosts] deleteFeedPostBySession 완료');
+    // workout_entries 조회 (order 컬럼은 예약어라 별칭 사용)
+    const { data: entries } = await supabase
+      .from('workout_entries')
+      .select('id, machine_id, machine_name, machine_brand, target_muscle, exercise_kind')
+      .eq('session_id', sessionId);
+
+    // 각 entry의 sets 개별 조회
+    const machines = await Promise.all(
+      (entries ?? []).map(async (e: any) => {
+        const { data: sets } = await supabase
+          .from('workout_sets')
+          .select('set_number, weight, reps, is_pr')
+          .eq('entry_id', e.id)
+          .order('set_number');
+
+        const sortedSets = sets ?? [];
+        const best = sortedSets.reduce(
+          (b: any, s: any) => (!b || Number(s.weight) > Number(b.weight) ? s : b),
+          null
+        );
+
+        return {
+          machineId:    e.machine_id,
+          machineName:  e.machine_name,
+          machineBrand: e.machine_brand,
+          targetMuscle: e.target_muscle,
+          weight:       best?.weight ?? 0,
+          reps:         best?.reps ?? 0,
+          sets:         sortedSets.length,
+          allSets:      sortedSets,
+        };
+      })
+    );
+
+    // gyms 이름 fetch
+    const { data: gym } = await supabase
+      .from('gyms')
+      .select('name, location')
+      .eq('id', session.gym_id)
+      .single();
+
+    return {
+      id:          session.id,
+      gymId:       session.gym_id,
+      gymName:     gym?.name ?? '',
+      gymLocation: gym?.location ?? '',
+      date:        session.date,
+      machines,
+    };
   } catch (e) {
-    if (__DEV__) console.warn('[feedPosts] deleteFeedPostBySession 오류:', e);
+    if (__DEV__) console.warn('[feedPosts] fetchWorkoutSessionById 오류:', e);
+    return null;
   }
 }
 
-/** 해당 유저+날짜의 피드 게시물 공개 여부 조회 */
+/** 유저의 특정 날짜 오운완 피드 공개 여부 조회 */
 export async function fetchFeedPostPublicStatus(
   userId: string,
   sessionDate: string,
-): Promise<{ id: string; isPublic: boolean } | null> {
+): Promise<{ postId: string; isPublic: boolean } | null> {
   try {
     const dayStart = new Date(sessionDate);
     dayStart.setHours(0, 0, 0, 0);
@@ -147,13 +189,13 @@ export async function fetchFeedPostPublicStatus(
       .single();
 
     if (error || !data) return null;
-    return { id: data.id, isPublic: data.is_public };
+    return { postId: data.id, isPublic: data.is_public };
   } catch {
     return null;
   }
 }
 
-/** 피드 게시물 공개 여부 토글 */
+/** 피드 게시물 공개 여부 업데이트 */
 export async function updateFeedPostPublic(
   postId: string,
   isPublic: boolean,
@@ -169,59 +211,24 @@ export async function updateFeedPostPublic(
   }
 }
 
-/** session_id로 운동 세션 전체 데이터 fetch */
-export async function fetchWorkoutSessionById(sessionId: string): Promise<WorkoutLog | null> {
+/** 유저의 특정 날짜 오운완 피드 삭제 */
+export async function deleteFeedPostBySession(
+  userId: string,
+  sessionDate: string,
+): Promise<void> {
   try {
-    const { data: session, error } = await supabase
-      .from('workout_sessions')
-      .select('id, gym_id, date, notes')
-      .eq('id', sessionId)
-      .single();
+    const dayStart = new Date(sessionDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(sessionDate);
+    dayEnd.setHours(23, 59, 59, 999);
 
-    if (error || !session) return null;
-
-    const { data: entries } = await supabase
-      .from('workout_entries')
-      .select(`
-        id, machine_id, machine_name, machine_brand, target_muscle, exercise_kind, sort_order,
-        workout_sets ( set_number, weight, reps, is_pr )
-      `)
-      .eq('session_id', sessionId)
-      .order('sort_order');
-
-    const { data: gym } = await supabase
-      .from('gyms')
-      .select('name, location')
-      .eq('id', session.gym_id)
-      .single();
-
-    const machines = (entries ?? []).map((e: any) => {
-      const sets = (e.workout_sets ?? []).sort((a: any, b: any) => a.set_number - b.set_number);
-      const best = sets.reduce((b: any, s: any) => (!b || s.weight > b.weight ? s : b), null);
-      return {
-        machineId:    e.machine_id,
-        machineName:  e.machine_name,
-        machineBrand: e.machine_brand,
-        targetMuscle: e.target_muscle,
-        exerciseKind: e.exercise_kind,
-        weight:       best?.weight ?? 0,
-        reps:         best?.reps ?? 0,
-        sets:         sets.length,
-        allSets:      sets,
-      };
-    });
-
-    return {
-      id:          session.id,
-      gymId:       session.gym_id,
-      gymName:     gym?.name ?? '',
-      gymLocation: gym?.location ?? '',
-      date:        session.date,
-      machines,
-      hasPhoto:    false,
-    };
+    await supabase
+      .from('workout_feed_posts')
+      .delete()
+      .eq('user_id', userId)
+      .gte('created_at', dayStart.toISOString())
+      .lte('created_at', dayEnd.toISOString());
   } catch (e) {
-    if (__DEV__) console.warn('[feedPosts] fetchWorkoutSessionById 오류:', e);
-    return null;
+    if (__DEV__) console.warn('[feedPosts] deleteFeedPostBySession 오류:', e);
   }
 }

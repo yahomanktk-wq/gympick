@@ -53,7 +53,8 @@
       "Bash(sort -t'_' -k2 -n)",
       "Bash(git commit *)",
       "Bash(Get-ChildItem -Path \"D:\\\\시작\\\\gympick\" -Directory)",
-      "Bash(Select-Object Name)"
+      "Bash(Select-Object Name)",
+      "Bash(del *)"
     ]
   }
 }

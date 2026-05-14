@@ -25,6 +25,8 @@ import { useAuth } from '../context/AuthContext';
 import GymDetailModal from './flow/GymDetailModal';
 import MachineDetailModal from './flow/MachineDetailModal';
 import { MACHINES } from '../data';
+import { brandLogos } from '../constants/brandLogos';
+import GymPickLogo from '../components/GymPickLogo';
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
@@ -325,13 +327,15 @@ function FeedDetailModal({
 
                 {/* 머신 목록 */}
                 {sessionData.machines.map((m: any, idx: number) => {
-                  const imageUrl = `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${m.machineId}.webp`;
-                  const allSets  = m.allSets ?? [];
+                  const imageUrl   = `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${m.machineId}.webp`;
+                  const allSets    = m.allSets ?? [];
+                  const brandKey   = (m.machineBrand ?? '').toUpperCase().replace(/\s+/g, '_');
+                  const brandLogo  = brandLogos[brandKey];
                   return (
                     <TouchableOpacity
                       key={`${m.machineId}-${idx}`}
                       style={{
-                        flexDirection: 'row', alignItems: 'center',
+                        flexDirection: 'row', alignItems: 'flex-start',
                         padding: 12, gap: 10,
                         borderTopWidth: idx > 0 ? StyleSheet.hairlineWidth : 0,
                         borderTopColor: '#E5E5E5',
@@ -339,10 +343,12 @@ function FeedDetailModal({
                       onPress={() => onPressMachine(m.machineId)}
                       activeOpacity={0.75}
                     >
+                      {/* 머신 이미지 */}
                       <View style={{
                         width: 56, height: 56, borderRadius: 8,
                         overflow: 'hidden', backgroundColor: '#F5F5F5',
                         borderWidth: 1, borderColor: '#E5E5E5',
+                        flexShrink: 0,
                       }}>
                         <Image
                           source={{ uri: imageUrl }}
@@ -350,16 +356,28 @@ function FeedDetailModal({
                           contentFit="contain"
                         />
                       </View>
+
+                      {/* 머신명 + 브랜드 로고 */}
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#111111', marginBottom: 4 }} numberOfLines={2}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#111111', marginBottom: 6 }} numberOfLines={2}>
                           {m.machineName.toUpperCase()}
                         </Text>
-                        <Text style={{ fontSize: 10, color: '#666666' }}>{m.machineBrand}</Text>
+                        {brandLogo ? (
+                          <Image
+                            source={brandLogo}
+                            style={{ width: 56, height: 18 }}
+                            contentFit="contain"
+                          />
+                        ) : (
+                          <Text style={{ fontSize: 10, color: '#666666' }}>{m.machineBrand}</Text>
+                        )}
                       </View>
-                      <View style={{ alignItems: 'flex-end' }}>
+
+                      {/* 세트 목록 — 상단 정렬 */}
+                      <View style={{ alignItems: 'flex-end', justifyContent: 'flex-start' }}>
                         {allSets.slice(0, 4).map((s: any, si: number) => (
                           <Text key={si} style={{ fontSize: 11, fontWeight: '600', color: '#111111', lineHeight: 18 }}>
-                            {s.weight > 0 ? `${s.weight}kg` : '--'} × {s.reps}
+                            {Number(s.weight) > 0 ? `${s.weight}kg` : '--'} × {s.reps}
                           </Text>
                         ))}
                         {allSets.length > 4 && (
@@ -370,9 +388,9 @@ function FeedDetailModal({
                   );
                 })}
 
-                {/* 푸터 */}
+                {/* 푸터 — GymPick 로고 */}
                 <View style={{ paddingHorizontal: 16, paddingVertical: 8, alignItems: 'flex-end', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E5E5E5' }}>
-                  <Text style={{ fontSize: 9, fontWeight: '700', color: '#AAAAAA', letterSpacing: 1 }}>GymPick</Text>
+                  <GymPickLogo color="#000000" width={60} height={12} />
                 </View>
               </View>
             ) : (
