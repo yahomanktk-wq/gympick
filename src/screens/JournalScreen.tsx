@@ -706,7 +706,7 @@ export default function JournalScreen() {
 
   useFocusEffect(useCallback(() => { refetch(); }, [refetch]));
 
-  const sessions = fetchedSessions ?? [];
+  const sessions = useMemo(() => fetchedSessions ?? [], [fetchedSessions]);
 
   const sessionPRMap = useMemo(
     () => getSessionPRMachines(sessions),
@@ -737,7 +737,7 @@ export default function JournalScreen() {
     const today = new Date().toDateString();
     const todayList = sessions.filter(s => new Date(s.date).toDateString() === today);
     setTodaySessions(todayList);
-  }, [sessions]);
+  }, [sessions.map(s => s.id).join(',')]);
 
   useEffect(() => {
     const cfg = splitConfigRef.current;
