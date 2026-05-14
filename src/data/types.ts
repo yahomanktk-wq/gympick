@@ -334,13 +334,13 @@ export type SplitType = 'weekday' | 'sequential';
 export type SequentialSplit = string[];
 
 export type WeekdaySplit = {
-  mon: string | null;
-  tue: string | null;
-  wed: string | null;
-  thu: string | null;
-  fri: string | null;
-  sat: string | null;
-  sun: string | null;
+  mon: string[];
+  tue: string[];
+  wed: string[];
+  thu: string[];
+  fri: string[];
+  sat: string[];
+  sun: string[];
 };
 
 export type WorkoutSplit = SequentialSplit | WeekdaySplit;

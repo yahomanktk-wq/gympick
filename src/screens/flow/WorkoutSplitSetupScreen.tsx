@@ -16,8 +16,9 @@ import { saveSplitConfig } from '../../lib/db/splitRoutine';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const SPLIT_MUSCLES = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core', 'Cardio'];
-const WEEKDAY_MUSCLES = [...SPLIT_MUSCLES, '휴식'];
+const SPLIT_MUSCLES = ['가슴', '등', '하체', '어깨', '팔', '코어', '유산소'];
+const WEEKDAY_MUSCLES = ['가슴', '등', '하체', '어깨', '팔', '휴식'];
+
 const DAY_LABELS: { key: keyof WeekdaySplit; label: string }[] = [
   { key: 'mon', label: '월' },
   { key: 'tue', label: '화' },
@@ -28,18 +29,24 @@ const DAY_LABELS: { key: keyof WeekdaySplit; label: string }[] = [
   { key: 'sun', label: '일' },
 ];
 
+const EMPTY_WEEKDAY: WeekdaySplit = {
+  mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [],
+};
+
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
 function TypeCard({
   title,
   desc,
+  example,
   selected,
   onPress,
 }: {
-  title: string;
-  desc: string;
+  title:    string;
+  desc:     string;
+  example:  string;
   selected: boolean;
-  onPress: () => void;
+  onPress:  () => void;
 }) {
   return (
     <TouchableOpacity
@@ -53,6 +60,7 @@ function TypeCard({
       <View style={{ flex: 1 }}>
         <Text style={[s.typeCardTitle, selected && s.typeCardTitleSelected]}>{title}</Text>
         <Text style={s.typeCardDesc}>{desc}</Text>
+        <Text style={s.typeCardExample}>{example}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -63,9 +71,9 @@ function MuscleChip({
   selected,
   onPress,
 }: {
-  label: string;
+  label:    string;
   selected: boolean;
-  onPress: () => void;
+  onPress:  () => void;
 }) {
   return (
     <TouchableOpacity
@@ -81,15 +89,26 @@ function MuscleChip({
 function WeekdayRow({
   dayLabel,
   selected,
-  onSelect,
+  onToggle,
 }: {
   dayLabel: string;
-  selected: string | null;
-  onSelect: (muscle: string | null) => void;
+  selected: string[];
+  onToggle: (muscle: string) => void;
 }) {
+  const displayMuscles = selected.filter(m => m !== '휴식');
+  const hasRest        = selected.includes('휴식');
+  const displayLabel   = displayMuscles.length > 0
+    ? displayMuscles.join('·')
+    : hasRest ? '휴식' : '';
+
   return (
     <View style={s.weekdayRow}>
-      <Text style={s.weekdayLabel}>{dayLabel}</Text>
+      <View style={s.weekdayLabelWrap}>
+        <Text style={s.weekdayLabel}>{dayLabel}</Text>
+        {displayLabel ? (
+          <Text style={s.weekdaySelected} numberOfLines={1}>{displayLabel}</Text>
+        ) : null}
+      </View>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -99,8 +118,8 @@ function WeekdayRow({
           <MuscleChip
             key={m}
             label={m}
-            selected={m === '휴식' ? selected === null && false : selected === m}
-            onPress={() => onSelect(m === '휴식' ? null : m)}
+            selected={selected.includes(m)}
+            onPress={() => onToggle(m)}
           />
         ))}
       </ScrollView>
@@ -164,20 +183,23 @@ interface WorkoutSplitSetupScreenProps {
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutSplitSetupScreenProps) {
-  const [step,     setStep]     = useState<1 | 2>(1);
-  const [type,     setType]     = useState<SplitType>('sequential');
-  const [weekday,  setWeekday]  = useState<WeekdaySplit>({
-    mon: null, tue: null, wed: null, thu: null, fri: null, sat: null, sun: null,
-  });
-  const [seqList,  setSeqList]  = useState<string[]>([]);
-  const [saving,   setSaving]   = useState(false);
+  const [step,    setStep]    = useState<1 | 2>(1);
+  const [type,    setType]    = useState<SplitType>('sequential');
+  const [weekday, setWeekday] = useState<WeekdaySplit>(EMPTY_WEEKDAY);
+  const [seqList, setSeqList] = useState<string[]>([]);
+  const [saving,  setSaving]  = useState(false);
 
-  function updateWeekday(key: keyof WeekdaySplit, value: string | null) {
-    setWeekday(prev => ({ ...prev, [key]: value }));
+  function toggleWeekdayMuscle(key: keyof WeekdaySplit, muscle: string) {
+    setWeekday(prev => {
+      const current = prev[key] as string[];
+      const newArr  = current.includes(muscle)
+        ? current.filter(m => m !== muscle)
+        : [...current, muscle];
+      return { ...prev, [key]: newArr };
+    });
   }
 
   function addToSeq(muscle: string) {
-    if (seqList.includes(muscle)) return;
     setSeqList(prev => [...prev, muscle]);
   }
 
@@ -217,12 +239,7 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
       setStep(2);
       return;
     }
-    const canComplete = type === 'weekday'
-      ? Object.values(weekday).some(v => v !== null)
-      : seqList.length > 0;
-
-    if (!canComplete) return;
-
+    if (!canProceed) return;
     setSaving(true);
     try {
       const split = type === 'weekday' ? weekday : seqList;
@@ -235,7 +252,7 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
   const canProceed = step === 1
     ? true
     : type === 'weekday'
-    ? Object.values(weekday).some(v => v !== null)
+    ? Object.values(weekday).some((arr: any) => arr.length > 0)
     : seqList.length > 0;
 
   return (
@@ -255,7 +272,7 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
             </TouchableOpacity>
           )}
           <View style={{ flex: 1 }}>
-            <Text style={s.title}>운동 분할법을 설정해주세요</Text>
+            <Text style={s.title}>운동 분할 설정</Text>
             <Text style={s.subtitle}>나중에 프로필에서 변경할 수 있어요</Text>
           </View>
         </View>
@@ -273,12 +290,14 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
             <TypeCard
               title="순서 기반"
               desc="운동한 날 기준으로 다음 부위로 자동 이동"
+              example="예) 가슴 → 등 → 하체 → 휴식 → 어깨 → 팔 → 휴식"
               selected={type === 'sequential'}
               onPress={() => setType('sequential')}
             />
             <TypeCard
               title="요일 기반"
               desc="월~일 요일별로 운동 부위 설정"
+              example="예) 월 가슴·등 / 화 하체 / 수 휴식 / 목 어깨·팔"
               selected={type === 'weekday'}
               onPress={() => setType('weekday')}
             />
@@ -291,8 +310,8 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
               <WeekdayRow
                 key={key}
                 dayLabel={label}
-                selected={weekday[key]}
-                onSelect={(muscle) => updateWeekday(key, muscle)}
+                selected={weekday[key] as string[]}
+                onToggle={(muscle) => toggleWeekdayMuscle(key, muscle)}
               />
             ))}
           </View>
@@ -321,16 +340,21 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
               </View>
             )}
 
-            <Text style={[s.sectionLabel, { marginTop: 20 }]}>부위 추가</Text>
+            <Text style={[s.sectionLabel, { marginTop: 20 }]}>부위 추가 (중복 허용)</Text>
             <View style={s.chipRow}>
               {SPLIT_MUSCLES.map(m => (
                 <MuscleChip
                   key={m}
                   label={m}
-                  selected={seqList.includes(m)}
+                  selected={false}
                   onPress={() => addToSeq(m)}
                 />
               ))}
+              <MuscleChip
+                label="휴식"
+                selected={false}
+                onPress={() => addToSeq('휴식')}
+              />
             </View>
           </View>
         )}
@@ -344,7 +368,7 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
           disabled={saving}
           activeOpacity={0.75}
         >
-          <Text style={s.skipTxt}>건너뛰기</Text>
+          <Text style={s.skipTxt}>설정 안함</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[s.doneBtn, !canProceed && s.doneBtnDisabled]}
@@ -366,8 +390,8 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  safe:     { flex: 1, backgroundColor: C.bg },
-  scroll:   { paddingHorizontal: 20, paddingBottom: 32 },
+  safe:   { flex: 1, backgroundColor: C.bg },
+  scroll: { paddingHorizontal: 20, paddingBottom: 32 },
 
   header: {
     flexDirection:  'row',
@@ -383,7 +407,7 @@ const s = StyleSheet.create({
     justifyContent:  'center',
     marginTop:       2,
   },
-  title:    { ...T.hero, color: C.text, marginBottom: 6 },
+  title:    { ...T.title, fontSize: 22, color: C.text, marginBottom: 6 },
   subtitle: { fontSize: 13, color: C.textSub },
 
   stepRow: {
@@ -392,9 +416,9 @@ const s = StyleSheet.create({
     marginBottom:  28,
   },
   stepDot: {
-    width:         20,
-    height:        4,
-    borderRadius:  2,
+    width:           20,
+    height:          4,
+    borderRadius:    2,
     backgroundColor: C.surfaceHigh,
   },
   stepDotActive: { backgroundColor: C.accent },
@@ -410,22 +434,28 @@ const s = StyleSheet.create({
 
   // Type cards
   typeCard: {
-    flexDirection:    'row',
-    alignItems:       'flex-start',
-    gap:              14,
-    backgroundColor:  C.surface,
-    borderRadius:     R.card,
-    padding:          18,
-    borderWidth:      1.5,
-    borderColor:      C.border,
+    flexDirection:   'row',
+    alignItems:      'flex-start',
+    gap:             14,
+    backgroundColor: C.surface,
+    borderRadius:    R.card,
+    padding:         18,
+    borderWidth:     1.5,
+    borderColor:     C.border,
   },
   typeCardSelected:      { borderColor: C.accent, backgroundColor: C.accentBg },
-  typeCardRadio:         { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: C.border, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  typeCardRadio:         {
+    width: 20, height: 20, borderRadius: 10,
+    borderWidth: 2, borderColor: C.border,
+    alignItems: 'center', justifyContent: 'center',
+    marginTop: 1,
+  },
   typeCardRadioSelected: { borderColor: C.accent },
   typeCardRadioDot:      { width: 10, height: 10, borderRadius: 5, backgroundColor: C.accent },
   typeCardTitle:         { fontSize: 15, fontWeight: '700', color: C.text, marginBottom: 4 },
   typeCardTitleSelected: { color: C.accent },
-  typeCardDesc:          { fontSize: 12, color: C.textSub, lineHeight: 18 },
+  typeCardDesc:          { fontSize: 12, color: C.textSub, lineHeight: 18, marginBottom: 4 },
+  typeCardExample:       { fontSize: 11, color: C.textDim, fontStyle: 'italic', lineHeight: 16 },
 
   // Chips
   chip: {
@@ -436,9 +466,9 @@ const s = StyleSheet.create({
     borderWidth:       1,
     borderColor:       C.border,
   },
-  chipSelected:     { backgroundColor: C.accentBg, borderColor: C.accent },
+  chipSelected:     { backgroundColor: C.accent, borderColor: C.accent },
   chipText:         { fontSize: 12, fontWeight: '600', color: C.textSub },
-  chipTextSelected: { color: C.accent },
+  chipTextSelected: { color: C.bg, fontWeight: '700' },
 
   chipRow: {
     flexDirection: 'row',
@@ -450,16 +480,16 @@ const s = StyleSheet.create({
   weekdayRow: {
     flexDirection:  'row',
     alignItems:     'center',
-    gap:            10,
+    gap:            8,
     paddingVertical: 6,
   },
-  weekdayLabel: {
-    width:      28,
-    fontSize:   14,
-    fontWeight: '700',
-    color:      C.text,
-    textAlign:  'center',
+  weekdayLabelWrap: {
+    width:      46,
+    alignItems: 'center',
+    gap:        2,
   },
+  weekdayLabel:    { fontSize: 14, fontWeight: '700', color: C.text },
+  weekdaySelected: { fontSize: 9, color: C.accent, fontWeight: '700', textAlign: 'center' },
 
   // Sequential list
   seqEmpty: {
@@ -476,54 +506,62 @@ const s = StyleSheet.create({
     overflow:        'hidden',
   },
   seqItem: {
-    flexDirection:  'row',
-    alignItems:     'center',
+    flexDirection:     'row',
+    alignItems:        'center',
     paddingHorizontal: 14,
     paddingVertical:   12,
-    gap:            12,
+    gap:               12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: C.border,
   },
   seqIndex: {
-    width:            28,
-    height:           28,
-    borderRadius:     14,
-    backgroundColor:  C.accentBg,
-    alignItems:       'center',
-    justifyContent:   'center',
+    width:           28,
+    height:          28,
+    borderRadius:    14,
+    backgroundColor: C.accentBg,
+    alignItems:      'center',
+    justifyContent:  'center',
   },
-  seqIndexText:  { fontSize: 12, fontWeight: '800', color: C.accent },
-  seqName:       { flex: 1, fontSize: 14, fontWeight: '600', color: C.text },
-  seqActions:    { flexDirection: 'row', gap: 4 },
-  seqBtn:        { width: 28, height: 28, borderRadius: 8, backgroundColor: C.surfaceHigh, alignItems: 'center', justifyContent: 'center' },
+  seqIndexText:   { fontSize: 12, fontWeight: '800', color: C.accent },
+  seqName:        { flex: 1, fontSize: 14, fontWeight: '600', color: C.text },
+  seqActions:     { flexDirection: 'row', gap: 4 },
+  seqBtn:         {
+    width:           28, height: 28, borderRadius: 8,
+    backgroundColor: C.surfaceHigh,
+    alignItems:      'center', justifyContent: 'center',
+  },
   seqBtnDisabled: { opacity: 0.4 },
-  seqRemoveBtn:  { width: 28, height: 28, borderRadius: 8, backgroundColor: '#ff4d6d18', alignItems: 'center', justifyContent: 'center' },
+  seqRemoveBtn:   {
+    width:           28, height: 28, borderRadius: 8,
+    backgroundColor: '#ff4d6d18',
+    alignItems:      'center', justifyContent: 'center',
+  },
 
   // CTA bar
   ctaBar: {
-    flexDirection:   'row',
-    gap:             12,
+    flexDirection:     'row',
+    gap:               12,
     paddingHorizontal: 20,
     paddingVertical:   16,
-    borderTopWidth:  StyleSheet.hairlineWidth,
-    borderTopColor:  C.border,
-    backgroundColor: C.bg,
+    borderTopWidth:    StyleSheet.hairlineWidth,
+    borderTopColor:    C.border,
+    backgroundColor:   C.bg,
   },
   skipBtn: {
-    flex:          1,
+    flex:            1,
     paddingVertical: 15,
-    borderRadius:  R.btn,
+    borderRadius:    R.btn,
     backgroundColor: C.surfaceHigh,
-    alignItems:    'center',
+    alignItems:      'center',
   },
-  skipTxt:  { fontSize: 15, fontWeight: '700', color: C.textSub },
-  doneBtn:  {
-    flex:          2,
+  skipTxt: { fontSize: 15, fontWeight: '700', color: C.textSub },
+  doneBtn: {
+    flex:            2,
     paddingVertical: 15,
-    borderRadius:  R.btn,
+    borderRadius:    R.btn,
     backgroundColor: C.accent,
-    alignItems:    'center',
+    alignItems:      'center',
   },
   doneBtnDisabled: { opacity: 0.4 },
-  doneTxt:  { fontSize: 15, fontWeight: '800', color: C.bg },
+  doneTxt: { fontSize: 15, fontWeight: '800', color: C.bg },
 });

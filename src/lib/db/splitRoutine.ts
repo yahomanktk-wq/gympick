@@ -1,5 +1,18 @@
 import { supabase } from '../supabase';
-import { SplitType, WorkoutSplit, UserSplitConfig } from '../../data/types';
+import { SplitType, WorkoutSplit, WeekdaySplit, UserSplitConfig } from '../../data/types';
+
+const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+
+function migrateLegacyWeekdaySplit(raw: any): WeekdaySplit {
+  const result: any = {};
+  for (const day of WEEKDAY_KEYS) {
+    const val = raw[day];
+    if (Array.isArray(val))          result[day] = val;
+    else if (typeof val === 'string') result[day] = val ? [val] : [];
+    else                              result[day] = [];
+  }
+  return result as WeekdaySplit;
+}
 
 export async function fetchSplitConfig(userId: string): Promise<UserSplitConfig | null> {
   const { data, error } = await supabase
@@ -10,9 +23,16 @@ export async function fetchSplitConfig(userId: string): Promise<UserSplitConfig 
 
   if (error || !data) return null;
 
+  const splitType = (data.split_type ?? 'sequential') as SplitType;
+  let workoutSplit = (data.workout_split ?? []) as WorkoutSplit;
+
+  if (splitType === 'weekday' && workoutSplit && !Array.isArray(workoutSplit)) {
+    workoutSplit = migrateLegacyWeekdaySplit(workoutSplit);
+  }
+
   return {
-    splitType:         (data.split_type ?? 'sequential') as SplitType,
-    workoutSplit:      (data.workout_split ?? []) as WorkoutSplit,
+    splitType,
+    workoutSplit,
     splitCurrentIndex: data.split_current_index ?? 0,
   };
 }

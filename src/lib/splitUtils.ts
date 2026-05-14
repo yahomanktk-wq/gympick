@@ -13,12 +13,15 @@ export function getTodayTarget(
   if (splitType === 'weekday') {
     const split = workoutSplit as WeekdaySplit;
     const dayKey = DAY_KEYS[new Date().getDay()];
-    return split[dayKey] ?? null;
+    const targets = (split[dayKey] ?? []) as string[];
+    const nonRest = targets.filter(t => t !== '휴식');
+    return nonRest.length > 0 ? nonRest[0] : null;
   }
 
   const split = workoutSplit as SequentialSplit;
   if (split.length === 0) return null;
-  return split[splitCurrentIndex % split.length] ?? null;
+  const target = split[splitCurrentIndex % split.length] ?? null;
+  return target === '휴식' ? null : target;
 }
 
 export function getNextTarget(
@@ -35,6 +38,7 @@ export function getNextTarget(
     let checked = 0;
     while (checked < split.length) {
       const target = split[idx % split.length];
+      if (target === '휴식') { idx++; checked++; continue; }
       if (!completedTargets.map(t => t.toLowerCase()).includes(target.toLowerCase())) return target;
       idx++;
       checked++;
@@ -46,7 +50,9 @@ export function getNextTarget(
   const todayIdx = new Date().getDay();
   for (let i = 1; i <= 7; i++) {
     const dayKey = DAY_KEYS[(todayIdx + i) % 7];
-    if (split[dayKey]) return split[dayKey];
+    const targets = (split[dayKey] ?? []) as string[];
+    const nonRest = targets.filter(t => t !== '휴식');
+    if (nonRest.length > 0) return nonRest[0];
   }
   return null;
 }
@@ -62,6 +68,7 @@ export function calcNextIndex(
   let advanced = 0;
   while (advanced < len) {
     const target = workoutSplit[idx % len];
+    if (target === '휴식') { idx++; advanced++; continue; }
     if (!completedTargets.map(t => t.toLowerCase()).includes(target.toLowerCase())) break;
     idx++;
     advanced++;
