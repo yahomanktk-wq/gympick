@@ -159,25 +159,42 @@ const AutoScrollOunwan = React.memo(({ posts, onPressPost }: {
   const scrollRef   = useRef<ScrollView>(null);
   const currentIdx  = useRef(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Keep a ref so setInterval callback always reads the latest length without being a dep
+  const postsLenRef = useRef(posts.length);
+  postsLenRef.current = posts.length;
 
-  const startInterval = useCallback(() => {
+  // Only depends on posts.length — no useCallback chain
+  useEffect(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
     intervalRef.current = null;
     if (posts.length <= 1) return;
     const STEP = OUNWAN_CARD_W + OUNWAN_CARD_GAP;
     intervalRef.current = setInterval(() => {
-      currentIdx.current = (currentIdx.current + 1) % posts.length;
+      currentIdx.current = (currentIdx.current + 1) % postsLenRef.current;
       scrollRef.current?.scrollTo({ x: currentIdx.current * STEP, animated: true });
     }, 2500);
-  }, [posts.length]);
-
-  useEffect(() => {
-    startInterval();
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       intervalRef.current = null;
     };
-  }, [startInterval]);
+  }, [posts.length]);
+
+  // Stable handlers — only read/write refs, no state involved
+  const handleScrollBegin = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = null;
+  }, []);
+
+  const handleScrollEnd = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = null;
+    if (postsLenRef.current <= 1) return;
+    const STEP = OUNWAN_CARD_W + OUNWAN_CARD_GAP;
+    intervalRef.current = setInterval(() => {
+      currentIdx.current = (currentIdx.current + 1) % postsLenRef.current;
+      scrollRef.current?.scrollTo({ x: currentIdx.current * STEP, animated: true });
+    }, 2500);
+  }, []);
 
   if (posts.length === 0) {
     return (
@@ -194,11 +211,8 @@ const AutoScrollOunwan = React.memo(({ posts, onPressPost }: {
       showsHorizontalScrollIndicator={false}
       scrollEventThrottle={16}
       contentContainerStyle={{ gap: OUNWAN_CARD_GAP, paddingHorizontal: 20 }}
-      onScrollBeginDrag={() => {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }}
-      onScrollEndDrag={() => startInterval()}
+      onScrollBeginDrag={handleScrollBegin}
+      onScrollEndDrag={handleScrollEnd}
     >
       {posts.map(post => (
         <OunwanCard key={post.id} post={post} onPress={onPressPost} />
