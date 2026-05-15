@@ -21,7 +21,7 @@ const MOCK_FEED_POSTS: WorkoutFeedPost[] = [];
 import { filterActivePosts, filterByGym, filterByDistance, toggleReaction, convertSessionToFeedPost } from '../lib/feedUtils';
 import { fetchActiveFeedPosts, fetchMyLatestGymId, fetchFeedPostsByGym, fetchWorkoutSessionById } from '../lib/db/feedPosts';
 import { fetchSplitConfig } from '../lib/db/splitRoutine';
-import { getTodayTarget } from '../lib/splitUtils';
+import { getTodayTarget, toEnMuscle } from '../lib/splitUtils';
 import { fetchWorkoutLogs } from '../lib/db/workouts';
 import { useAuth } from '../context/AuthContext';
 import GymDetailModal from './flow/GymDetailModal';
@@ -525,11 +525,10 @@ export default function WorkoutFeedScreen() {
       base = sortByLatest(posts);
     }
 
-    // 부위 필터
+    // 부위 필터 (muscleFilter는 한글, p.muscles는 영어이므로 변환 후 비교)
     if (muscleFilter === '전체') return base;
-    return base.filter(p =>
-      p.muscles.some(m => m.toLowerCase() === muscleFilter.toLowerCase())
-    );
+    const targetEn = toEnMuscle(muscleFilter);
+    return base.filter(p => p.muscles.some(m => m === targetEn));
   }, [posts, activeTab, myGymId, muscleFilter]);
 
   const handleReact = useCallback((postId: string, key: keyof WorkoutFeedPost['reactions']) => {

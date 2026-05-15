@@ -127,8 +127,7 @@ const OunwanCard = React.memo(({ post, onPress }: {
   post:    WorkoutFeedPost;
   onPress: () => void;
 }) => {
-  const isComposite = !post.photoUri && !!post.compositeUri;
-  const displayUri  = post.photoUri ?? post.compositeUri;
+  const displayUri = post.photoUri ?? post.compositeUri;
   const [cardH, setCardH] = useState(Math.round(OUNWAN_CARD_W * 3 / 4));
 
   useEffect(() => {
@@ -146,15 +145,12 @@ const OunwanCard = React.memo(({ post, onPress }: {
       activeOpacity={0.85}
       onPress={onPress}
     >
-      <View style={[
-        st.ounwanCardInner,
-        isComposite && { borderRadius: 0, overflow: 'visible' },
-      ]}>
+      <View style={st.ounwanCardInner}>
         {displayUri ? (
           <ExpoImage
             source={{ uri: displayUri }}
             style={StyleSheet.absoluteFill}
-            contentFit={isComposite ? 'contain' : 'cover'}
+            contentFit="cover"
           />
         ) : (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: C.surfaceHigh }]} />
@@ -543,12 +539,10 @@ const st = StyleSheet.create({
   // Ounwan auto-scroll
   ounwanCardOuter: {
     width:           OUNWAN_CARD_W,
-    backgroundColor: 'transparent',
+    backgroundColor: C.surfaceHigh,
   },
   ounwanCardInner: {
     flex:            1,
-    borderRadius:    R.card,
-    overflow:        'hidden',
     backgroundColor: C.surfaceHigh,
   },
 
