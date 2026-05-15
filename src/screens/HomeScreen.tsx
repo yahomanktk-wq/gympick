@@ -95,7 +95,7 @@ const { width: SCREEN_W } = Dimensions.get('window');
 const HOME_THUMB_W   = Math.floor((SCREEN_W - 32) / 3.5);
 const HOME_THUMB_H   = Math.round(HOME_THUMB_W * (4 / 3));
 const OUNWAN_CARD_W  = 160;
-const OUNWAN_CARD_H  = Math.round(OUNWAN_CARD_W * 3 / 4);
+const OUNWAN_CARD_H  = Math.round(OUNWAN_CARD_W * 4 / 3);
 const OUNWAN_CARD_GAP = 10;
 
 function greeting() {
