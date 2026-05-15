@@ -14,7 +14,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { C, R } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
-import PrivacyPolicyScreen from '../PrivacyPolicyScreen';
+import TermsOfServiceScreen from './TermsOfServiceScreen';
+import PrivacyPolicyScreen  from '../PrivacyPolicyScreen';
 
 interface Props {
   onBack:         () => void;
@@ -24,6 +25,45 @@ interface Props {
 function isValidEmail(v: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 }
+
+// ── 모듈 레벨 상수 & 컴포넌트 ────────────────────────────────────────────────
+
+const SIGNUP_CONSENT_ITEMS = [
+  { id: 'terms',     label: '서비스 이용약관 동의 (필수)',     required: true,  hasLink: true  },
+  { id: 'privacy',   label: '개인정보 처리방침 동의 (필수)',   required: true,  hasLink: true  },
+  { id: 'location',  label: '위치정보 수집·이용 동의 (필수)', required: true,  hasLink: false },
+  { id: 'age',       label: '만 14세 이상입니다 (필수)',       required: true,  hasLink: false },
+  { id: 'marketing', label: '마케팅 정보 수신 동의 (선택)',    required: false, hasLink: false },
+] as const;
+
+const SignupConsentItem = React.memo(({
+  item, checked, onToggle, onPressLink,
+}: {
+  item:         typeof SIGNUP_CONSENT_ITEMS[number];
+  checked:      boolean;
+  onToggle:     () => void;
+  onPressLink?: () => void;
+}) => (
+  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 }}>
+    <TouchableOpacity
+      onPress={onToggle}
+      activeOpacity={0.7}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+    >
+      <View style={[s.checkbox, checked && s.checkboxActive]}>
+        {checked && <Ionicons name="checkmark" size={12} color={C.bg} />}
+      </View>
+    </TouchableOpacity>
+    <Text style={s.consentLabel}>{item.label}</Text>
+    {item.hasLink && onPressLink && (
+      <TouchableOpacity onPress={onPressLink} activeOpacity={0.7}>
+        <Text style={s.consentLink}>보기</Text>
+      </TouchableOpacity>
+    )}
+  </View>
+));
+
+// ── Screen ───────────────────────────────────────────────────────────────────
 
 export default function SignUpScreen({ onBack, onVerification }: Props) {
   const { signUp } = useAuth();
@@ -38,13 +78,21 @@ export default function SignUpScreen({ onBack, onVerification }: Props) {
   const [day,       setDay]       = useState('');
   const [error,     setError]     = useState<string | null>(null);
   const [loading,   setLoading]   = useState(false);
+  const [showTerms,   setShowTerms]   = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
+  const [termsChecked, setTermsChecked] = useState({
+    terms: false, privacy: false, location: false, age: false, marketing: false,
+  });
+
+  const allRequiredChecked = ['terms', 'privacy', 'location', 'age'].every(
+    id => termsChecked[id as keyof typeof termsChecked]
+  );
 
   async function handleSignUp() {
     setError(null);
 
-    if (!name.trim())      return setError('이름을 입력해주세요.');
-    if (!nickname.trim())  return setError('닉네임을 입력해주세요.');
+    if (!name.trim())         return setError('이름을 입력해주세요.');
+    if (!nickname.trim())     return setError('닉네임을 입력해주세요.');
     if (!isValidEmail(email)) return setError('유효한 이메일을 입력해주세요.');
     if (password.length < 6)  return setError('비밀번호는 6자 이상이어야 해요.');
     if (password !== confirm)  return setError('비밀번호가 일치하지 않아요.');
@@ -63,15 +111,24 @@ export default function SignUpScreen({ onBack, onVerification }: Props) {
     const result = await signUp(email.trim(), password, name.trim(), nickname.trim(), birthDate);
     setLoading(false);
 
-    if (result.error) {
-      setError(result.error);
-      return;
+    if (result.error) { setError(result.error); return; }
+
+    // 약관 동의 Supabase 저장
+    try {
+      const { supabase } = await import('../../lib/supabase');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('profiles').update({
+          terms_agreed_at:  new Date().toISOString(),
+          location_agreed:  true,
+          marketing_agreed: termsChecked.marketing,
+        }).eq('id', user.id);
+      }
+    } catch (e) {
+      if (__DEV__) console.warn('[SignUp] terms save error:', e);
     }
 
-    if (result.needsVerification) {
-      onVerification();
-    }
-    // If no verification needed, user is now signed in — AuthContext user state updated.
+    if (result.needsVerification) { onVerification(); }
   }
 
   return (
@@ -91,9 +148,7 @@ export default function SignUpScreen({ onBack, onVerification }: Props) {
         </TouchableOpacity>
 
         <Text style={s.title}>GymPick 계정 만들기</Text>
-        <Text style={s.sub}>
-          운동을 기록하고 성장을 추적해보세요.
-        </Text>
+        <Text style={s.sub}>운동을 기록하고 성장을 추적해보세요.</Text>
 
         {/* Fields */}
         <View style={s.fields}>
@@ -197,29 +252,40 @@ export default function SignUpScreen({ onBack, onVerification }: Props) {
           </View>
         )}
 
-        {/* Create account button */}
+        {/* 약관 동의 */}
+        <View style={s.consentSection}>
+          <Text style={s.consentTitle}>약관 동의</Text>
+          {SIGNUP_CONSENT_ITEMS.map((item, idx) => (
+            <React.Fragment key={item.id}>
+              <SignupConsentItem
+                item={item}
+                checked={!!termsChecked[item.id as keyof typeof termsChecked]}
+                onToggle={() =>
+                  setTermsChecked(prev => ({ ...prev, [item.id]: !prev[item.id as keyof typeof prev] }))
+                }
+                onPressLink={
+                  item.id === 'terms'   ? () => setShowTerms(true)   :
+                  item.id === 'privacy' ? () => setShowPrivacy(true) :
+                  undefined
+                }
+              />
+              {idx < SIGNUP_CONSENT_ITEMS.length - 1 && <View style={s.consentDivider} />}
+            </React.Fragment>
+          ))}
+        </View>
+
+        {/* 회원가입 버튼 */}
         <TouchableOpacity
-          style={[s.btn, loading && s.btnDisabled]}
+          style={[s.btn, (loading || !allRequiredChecked) && s.btnDisabled]}
           activeOpacity={0.85}
           onPress={handleSignUp}
-          disabled={loading}
+          disabled={loading || !allRequiredChecked}
         >
           {loading
             ? <ActivityIndicator color={C.bg} />
             : <Text style={s.btnText}>회원가입</Text>
           }
         </TouchableOpacity>
-
-        {/* Privacy policy consent */}
-        <View style={s.privacyRow}>
-          <Text style={s.privacyText}>
-            가입하면{' '}
-            <Text style={s.privacyLink} onPress={() => setShowPrivacy(true)}>
-              개인정보처리방침
-            </Text>
-            에 동의하는 것으로 간주됩니다.
-          </Text>
-        </View>
 
         {/* Already have account */}
         <TouchableOpacity style={s.linkBtn} activeOpacity={0.7} onPress={onBack}>
@@ -229,7 +295,18 @@ export default function SignUpScreen({ onBack, onVerification }: Props) {
           </Text>
         </TouchableOpacity>
 
-        <Modal visible={showPrivacy} animationType="slide" onRequestClose={() => setShowPrivacy(false)}>
+        <Modal
+          visible={showTerms}
+          animationType="slide"
+          onRequestClose={() => setShowTerms(false)}
+        >
+          <TermsOfServiceScreen onClose={() => setShowTerms(false)} />
+        </Modal>
+        <Modal
+          visible={showPrivacy}
+          animationType="slide"
+          onRequestClose={() => setShowPrivacy(false)}
+        >
           <PrivacyPolicyScreen onClose={() => setShowPrivacy(false)} />
         </Modal>
       </ScrollView>
@@ -239,18 +316,18 @@ export default function SignUpScreen({ onBack, onVerification }: Props) {
 
 const s = StyleSheet.create({
   scroll: {
-    flexGrow: 1,
+    flexGrow:          1,
     paddingHorizontal: 28,
-    paddingTop: 24,
-    paddingBottom: 48,
+    paddingTop:        24,
+    paddingBottom:     48,
   },
 
   backBtn: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 32,
-    alignSelf: 'flex-start',
+    alignItems:    'center',
+    gap:           4,
+    marginBottom:  32,
+    alignSelf:     'flex-start',
   },
   backText: { fontSize: 14, color: C.textSub, fontWeight: '600' },
 
@@ -259,34 +336,31 @@ const s = StyleSheet.create({
 
   fields: {
     backgroundColor: C.surface,
-    borderRadius: R.card,
-    overflow: 'hidden',
-    marginBottom: 12,
+    borderRadius:    R.card,
+    overflow:        'hidden',
+    marginBottom:    12,
   },
   input: {
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    fontSize: 15,
-    color: C.text,
-    fontWeight: '500',
+    paddingVertical:   16,
+    fontSize:          15,
+    color:             C.text,
+    fontWeight:        '500',
   },
   divider: { height: 1, backgroundColor: C.border },
 
-  dateRow: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  dateLabel: { fontSize: 12, color: C.textSub, fontWeight: '600', marginBottom: 8 },
+  dateRow:    { paddingHorizontal: 16, paddingVertical: 12 },
+  dateLabel:  { fontSize: 12, color: C.textSub, fontWeight: '600', marginBottom: 8 },
   dateInputs: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   dateInput: {
     paddingHorizontal: 8,
-    paddingVertical: 10,
-    backgroundColor: C.surfaceHigh,
-    borderRadius: R.inner,
-    textAlign: 'center',
-    fontSize: 15,
-    color: C.text,
-    fontWeight: '500',
+    paddingVertical:   10,
+    backgroundColor:   C.surfaceHigh,
+    borderRadius:      R.inner,
+    textAlign:         'center',
+    fontSize:          15,
+    color:             C.text,
+    fontWeight:        '500',
   },
   dateInputYear:  { width: 76 },
   dateInputMonth: { width: 48 },
@@ -294,29 +368,56 @@ const s = StyleSheet.create({
   dateSep: { fontSize: 16, color: C.textDim, fontWeight: '700' },
 
   errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
+    flexDirection:    'row',
+    alignItems:       'center',
+    gap:              8,
+    marginBottom:     12,
     paddingHorizontal: 4,
   },
   errorText: { fontSize: 13, color: '#ff6b6b', fontWeight: '600', flex: 1 },
 
+  consentSection: {
+    backgroundColor:   C.surface,
+    borderRadius:      R.card,
+    borderWidth:       1,
+    borderColor:       C.border,
+    paddingHorizontal: 16,
+    marginBottom:      16,
+  },
+  consentTitle: {
+    fontSize:      12,
+    fontWeight:    '700',
+    color:         C.textDim,
+    letterSpacing: 0.8,
+    paddingTop:    14,
+    paddingBottom: 8,
+  },
+  consentDivider: { height: 1, backgroundColor: C.border },
+  consentLabel:   { flex: 1, fontSize: 13, fontWeight: '600', color: C.text },
+  consentLink:    { fontSize: 12, color: C.accent, fontWeight: '700' },
+  checkbox: {
+    width:           20,
+    height:          20,
+    borderRadius:    5,
+    borderWidth:     1.5,
+    borderColor:     C.border,
+    backgroundColor: C.surfaceHigh,
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
+  checkboxActive: { backgroundColor: C.accent, borderColor: C.accent },
+
   btn: {
     backgroundColor: C.accent,
-    borderRadius: R.btn,
+    borderRadius:    R.btn,
     paddingVertical: 16,
-    alignItems: 'center',
-    marginBottom: 20,
+    alignItems:      'center',
+    marginBottom:    20,
   },
   btnDisabled: { opacity: 0.6 },
   btnText: { fontSize: 15, fontWeight: '800', color: C.bg },
 
-  privacyRow: { alignItems: 'center', marginBottom: 20 },
-  privacyText: { fontSize: 12, color: C.textDim, textAlign: 'center', lineHeight: 18 },
-  privacyLink: { color: C.accent, fontWeight: '700' },
-
-  linkBtn: { alignItems: 'center' },
+  linkBtn:    { alignItems: 'center' },
   linkText:   { fontSize: 14, color: C.textSub },
   linkAccent: { color: C.accent, fontWeight: '700' },
 });

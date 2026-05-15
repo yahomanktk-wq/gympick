@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { SafeAreaView, StatusBar, StyleSheet } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { C } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
 import { fetchSplitConfig } from '../../lib/db/splitRoutine';
 import { supabase } from '../../lib/supabase';
-import SignInScreen   from './SignInScreen';
-import SignUpScreen   from './SignUpScreen';
-import VerifyScreen   from './VerifyScreen';
+import SignInScreen        from './SignInScreen';
+import SignUpScreen        from './SignUpScreen';
+import VerifyScreen        from './VerifyScreen';
 import TermsConsentScreen  from './TermsConsentScreen';
 import WorkoutSplitSetupScreen from '../flow/WorkoutSplitSetupScreen';
 
@@ -19,54 +18,61 @@ interface Props {
 }
 
 export default function AuthFlow({ initialPage = 'signin', onComplete }: Props) {
-  const [page, setPage] = useState<Page>('terms');
+  const [page, setPage] = useState<Page>(initialPage);
   const { user } = useAuth();
 
-  // 이미 약관에 동의한 경우 terms 화면 건너뜀
-  useEffect(() => {
-    AsyncStorage.getItem('terms_completed').then(val => {
-      if (val === 'true') setPage(initialPage);
-    });
-  }, []);
-
-  // 로그인 완료 후: 약관 Supabase 저장 + 분할 설정 확인
+  // 로그인 완료 후: terms_agreed_at 확인 → 약관 or split-setup or 완료
   useEffect(() => {
     if (!user?.id) return;
 
-    const savePendingTerms = async () => {
-      const pending = await AsyncStorage.getItem('pending_terms_agreed');
-      if (pending) {
-        const data = JSON.parse(pending);
-        await supabase.from('profiles').update({
-          terms_agreed_at:  new Date().toISOString(),
-          location_agreed:  true,
-          marketing_agreed: data.marketing ?? false,
-        }).eq('id', user.id);
-        await AsyncStorage.removeItem('pending_terms_agreed');
+    const run = async () => {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('terms_agreed_at, workout_split, split_current_index, split_type')
+        .eq('id', user.id)
+        .single();
+
+      if (!profile?.terms_agreed_at) {
+        // 소셜 신규 유저 → 약관 화면
+        setPage('terms');
+        return;
+      }
+
+      // 기존 유저 → split-setup 또는 완료
+      const isEmpty =
+        !profile.workout_split ||
+        (Array.isArray(profile.workout_split) && profile.workout_split.length === 0);
+
+      if (isEmpty) {
+        setPage('split-setup');
+      } else {
+        onComplete?.();
       }
     };
-    savePendingTerms().catch(() => {});
 
-    fetchSplitConfig(user.id)
-      .then(config => {
-        const isEmpty =
-          !config ||
-          (Array.isArray(config.workoutSplit) && config.workoutSplit.length === 0);
-        if (isEmpty) {
-          setPage('split-setup');
-        } else {
-          onComplete?.();
-        }
-      })
-      .catch(() => { onComplete?.(); });
+    run().catch(() => { onComplete?.(); });
   }, [user?.id]);
 
-  if (page === 'terms') {
+  // 소셜 신규 유저 약관 화면
+  if (page === 'terms' && user) {
     return (
       <TermsConsentScreen
-        onComplete={() => {
-          AsyncStorage.setItem('terms_completed', 'true');
-          setPage('signin');
+        onComplete={async (marketingAgreed) => {
+          await supabase.from('profiles').update({
+            terms_agreed_at:  new Date().toISOString(),
+            location_agreed:  true,
+            marketing_agreed: marketingAgreed,
+          }).eq('id', user.id);
+
+          const config = await fetchSplitConfig(user.id).catch(() => null);
+          const isEmpty =
+            !config ||
+            (Array.isArray(config.workoutSplit) && config.workoutSplit.length === 0);
+          if (isEmpty) {
+            setPage('split-setup');
+          } else {
+            onComplete?.();
+          }
         }}
       />
     );
