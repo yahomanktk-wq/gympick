@@ -94,8 +94,8 @@ function getWeekTargetMap(
 const { width: SCREEN_W } = Dimensions.get('window');
 const HOME_THUMB_W   = Math.floor((SCREEN_W - 32) / 3.5);
 const HOME_THUMB_H   = Math.round(HOME_THUMB_W * (4 / 3));
-const OUNWAN_CARD_W  = 130;
-const OUNWAN_CARD_H  = 180;
+const OUNWAN_CARD_W  = 160;
+const OUNWAN_CARD_H  = Math.round(OUNWAN_CARD_W * 3 / 4);
 const OUNWAN_CARD_GAP = 10;
 
 function greeting() {
@@ -124,28 +124,22 @@ function computeStreak(logs: WorkoutLog[]): number {
 
 // ── OunwanCard ────────────────────────────────────────────────────────────────
 
-const OunwanCard = React.memo(({ post, onPress }: { post: WorkoutFeedPost; onPress: () => void }) => {
-  const displayUri  = post.compositeUri ?? post.photoUri;
-  const muscleLabel = [...new Set(post.muscles)][0] ?? '';
+const OunwanCard = React.memo(({ post, onPress }: {
+  post:    WorkoutFeedPost;
+  onPress: () => void;
+}) => {
+  const displayUri = post.compositeUri ?? post.photoUri;
   return (
     <TouchableOpacity style={st.ounwanCard} activeOpacity={0.85} onPress={onPress}>
       {displayUri ? (
         <ExpoImage
           source={{ uri: displayUri }}
           style={StyleSheet.absoluteFill}
-          contentFit="cover"
+          contentFit="contain"
         />
       ) : (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: C.surfaceHigh }]} />
       )}
-      <View style={st.ounwanCardOverlay}>
-        {muscleLabel ? (
-          <View style={st.ounwanMuscleChip}>
-            <Text style={st.ounwanMuscleText}>{muscleLabel}</Text>
-          </View>
-        ) : null}
-        <Text style={st.ounwanGymName} numberOfLines={1}>{post.gymName}</Text>
-      </View>
     </TouchableOpacity>
   );
 });
@@ -299,14 +293,14 @@ export default function HomeScreen() {
 
         const posts = await fetchActiveFeedPosts().catch(() => [] as WorkoutFeedPost[]);
         if (!active) return;
-        const targetEn = target && target !== '휴식' ? toEnMuscle(target) : null;
-        const sorted = targetEn
-          ? [
-              ...posts.filter(p => p.muscles.includes(targetEn)),
-              ...posts.filter(p => !p.muscles.includes(targetEn)),
-            ]
-          : posts;
-        setOunwanPosts(sorted);
+
+        if (target && target !== '휴식') {
+          const targetEn = toEnMuscle(target);
+          const filtered = posts.filter(p => p.muscles.some(m => m === targetEn));
+          setOunwanPosts(filtered.length > 0 ? filtered : posts);
+        } else {
+          setOunwanPosts(posts);
+        }
       }
       load();
       return () => { active = false; };
@@ -528,32 +522,12 @@ const st = StyleSheet.create({
 
   // Ounwan auto-scroll
   ounwanCard: {
-    width:           OUNWAN_CARD_W,
-    height:          OUNWAN_CARD_H,
-    borderRadius:    R.card,
-    overflow:        'hidden',
-    backgroundColor: C.surface,
+    width:            OUNWAN_CARD_W,
+    height:           OUNWAN_CARD_H,
+    borderRadius:     R.card,
+    overflow:         'hidden',
+    backgroundColor:  C.surfaceHigh,
   },
-  ounwanCardOverlay: {
-    position:          'absolute',
-    bottom:            0,
-    left:              0,
-    right:             0,
-    backgroundColor:   'rgba(0,0,0,0.45)',
-    paddingHorizontal: 8,
-    paddingVertical:   7,
-    gap:               3,
-  },
-  ounwanMuscleChip: {
-    alignSelf:         'flex-start',
-    backgroundColor:   C.accent,
-    borderRadius:      R.pill,
-    paddingHorizontal: 6,
-    paddingVertical:   2,
-    marginBottom:      2,
-  },
-  ounwanMuscleText: { fontSize: 9,  fontWeight: '800', color: '#000' },
-  ounwanGymName:    { fontSize: 10, fontWeight: '600', color: '#fff' },
 
   // Feed empty state
   feedEmpty: {
