@@ -1073,7 +1073,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
         {photoTaken && (
           <View
             ref={overlayRef}
-            style={[s.photoFrame, s.photoFrameActive, { height: photoH, backgroundColor: 'transparent', borderColor: tc }]}
+            style={[s.photoFrame, s.photoFrameActive, { height: photoH, backgroundColor: 'transparent', borderColor: tc, borderRadius: 0 }]}
             collapsable={false}
           >
             {/* Background photo */}

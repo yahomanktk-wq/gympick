@@ -127,7 +127,8 @@ const OunwanCard = React.memo(({ post, onPress }: {
   post:    WorkoutFeedPost;
   onPress: () => void;
 }) => {
-  const displayUri = post.photoUri ?? post.compositeUri;
+  const isComposite = !post.photoUri && !!post.compositeUri;
+  const displayUri  = post.photoUri ?? post.compositeUri;
   const [cardH, setCardH] = useState(Math.round(OUNWAN_CARD_W * 3 / 4));
 
   useEffect(() => {
@@ -145,12 +146,15 @@ const OunwanCard = React.memo(({ post, onPress }: {
       activeOpacity={0.85}
       onPress={onPress}
     >
-      <View style={st.ounwanCardInner}>
+      <View style={[
+        st.ounwanCardInner,
+        isComposite && { borderRadius: 0, overflow: 'visible' },
+      ]}>
         {displayUri ? (
           <ExpoImage
             source={{ uri: displayUri }}
             style={StyleSheet.absoluteFill}
-            contentFit="cover"
+            contentFit={isComposite ? 'contain' : 'cover'}
           />
         ) : (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: C.surfaceHigh }]} />
