@@ -1,5 +1,38 @@
 import { SplitType, WorkoutSplit, WeekdaySplit, SequentialSplit } from '../data/types';
 
+// 머신 targetMuscle(영어) → 분할 루틴 부위명(한글) 매핑
+export const MUSCLE_EN_TO_KO: Record<string, string> = {
+  'Chest':     '가슴',
+  'Back':      '등',
+  'Legs':      '하체',
+  'Shoulders': '어깨',
+  'Arms':      '팔',
+  'Core':      '코어',
+  'Cardio':    '유산소',
+  'Full Body': '전신',
+  'Glutes':    '하체',
+};
+
+// 분할 루틴 부위명(한글) → 머신 targetMuscle(영어) 매핑
+export const MUSCLE_KO_TO_EN: Record<string, string> = {
+  '가슴': 'Chest',
+  '등':   'Back',
+  '하체': 'Legs',
+  '어깨': 'Shoulders',
+  '팔':   'Arms',
+  '코어': 'Core',
+  '유산소': 'Cardio',
+  '전신': 'Full Body',
+};
+
+export function toKoMuscle(en: string): string {
+  return MUSCLE_EN_TO_KO[en] ?? en;
+}
+
+export function toEnMuscle(ko: string): string {
+  return MUSCLE_KO_TO_EN[ko] ?? ko;
+}
+
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 type DayKey = typeof DAY_KEYS[number];
 
@@ -76,8 +109,15 @@ export function calcNextIndex(
   return idx % len;
 }
 
-export function extractCompletedTargets(todaySessions: Array<{ targetMuscle?: string }>): string[] {
-  return todaySessions
-    .map(s => s.targetMuscle)
-    .filter((t): t is string => !!t);
+export function extractCompletedTargets(
+  machines: Array<{ targetMuscle?: string }>
+): string[] {
+  return [
+    ...new Set(
+      machines
+        .map(m => m.targetMuscle)
+        .filter((t): t is string => !!t)
+        .map(t => toKoMuscle(t))
+    )
+  ];
 }

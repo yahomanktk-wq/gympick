@@ -22,7 +22,7 @@ import { WorkoutLog, WorkoutFeedPost, UserSplitConfig, WeekdaySplit } from '../d
 import { fetchWorkoutLogs } from '../lib/db';
 import { fetchActiveFeedPosts } from '../lib/db/feedPosts';
 import { fetchSplitConfig } from '../lib/db/splitRoutine';
-import { getTodayTarget } from '../lib/splitUtils';
+import { getTodayTarget, toEnMuscle } from '../lib/splitUtils';
 
 // --- Helpers
 
@@ -299,10 +299,11 @@ export default function HomeScreen() {
 
         const posts = await fetchActiveFeedPosts().catch(() => [] as WorkoutFeedPost[]);
         if (!active) return;
-        const sorted = target && target !== '휴식'
+        const targetEn = target && target !== '휴식' ? toEnMuscle(target) : null;
+        const sorted = targetEn
           ? [
-              ...posts.filter(p => p.muscles.includes(target!)),
-              ...posts.filter(p => !p.muscles.includes(target!)),
+              ...posts.filter(p => p.muscles.includes(targetEn)),
+              ...posts.filter(p => !p.muscles.includes(targetEn)),
             ]
           : posts;
         setOunwanPosts(sorted);

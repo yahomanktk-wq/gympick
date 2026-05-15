@@ -118,13 +118,11 @@ const RETRO_DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일'];
 
 // --- Split Banner styles (module-level, for SplitBanner sub-component)
 const splitBannerStyle = {
-  backgroundColor:   C.surface,
-  borderRadius:      R.card,
-  borderLeftWidth:   3,
-  borderLeftColor:   C.accent,
-  padding:           14,
-  marginHorizontal:  20,
-  marginBottom:      12,
+  backgroundColor:  C.surface,
+  borderRadius:     R.card,
+  padding:          14,
+  marginHorizontal: 20,
+  marginBottom:     12,
 };
 const splitBannerText = {
   fontSize:   15,
