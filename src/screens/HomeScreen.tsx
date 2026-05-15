@@ -537,13 +537,12 @@ const st = StyleSheet.create({
   // Ounwan auto-scroll
   ounwanCardOuter: {
     width:           OUNWAN_CARD_W,
-    borderRadius:    R.card,
-    overflow:        'hidden',
     backgroundColor: C.surfaceHigh,
   },
   ounwanCardImage: {
-    width:  '100%',
-    height: '100%',
+    width:        '100%',
+    height:       '100%',
+    borderRadius: R.card,
   },
 
   // Feed empty state
