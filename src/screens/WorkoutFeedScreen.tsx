@@ -121,13 +121,11 @@ function FeedGridCard({
       onPress={onPress}
       activeOpacity={0.85}
     >
-      <View style={{ borderRadius: R.card, overflow: 'hidden' }}>
-        <Image
-          source={{ uri: displayUri }}
-          style={{ width, height: CARD_H }}
-          contentFit="cover"
-        />
-      </View>
+      <Image
+        source={{ uri: displayUri }}
+        style={{ width, height: CARD_H }}
+        contentFit="cover"
+      />
       {post.isMyPost && (
         <View style={{
           position: 'absolute', top: 8, left: 8,
