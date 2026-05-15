@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { C, R } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
 import TermsOfServiceScreen from './TermsOfServiceScreen';
+import LocationPolicyScreen from './LocationPolicyScreen';
 import PrivacyPolicyScreen  from '../PrivacyPolicyScreen';
 
 interface Props {
@@ -31,7 +32,7 @@ function isValidEmail(v: string) {
 const SIGNUP_CONSENT_ITEMS = [
   { id: 'terms',     label: '서비스 이용약관 동의 (필수)',     required: true,  hasLink: true  },
   { id: 'privacy',   label: '개인정보 처리방침 동의 (필수)',   required: true,  hasLink: true  },
-  { id: 'location',  label: '위치정보 수집·이용 동의 (필수)', required: true,  hasLink: false },
+  { id: 'location',  label: '위치정보 수집·이용 동의 (필수)', required: true,  hasLink: true  },
   { id: 'age',       label: '만 14세 이상입니다 (필수)',       required: true,  hasLink: false },
   { id: 'marketing', label: '마케팅 정보 수신 동의 (선택)',    required: false, hasLink: false },
 ] as const;
@@ -78,8 +79,9 @@ export default function SignUpScreen({ onBack, onVerification }: Props) {
   const [day,       setDay]       = useState('');
   const [error,     setError]     = useState<string | null>(null);
   const [loading,   setLoading]   = useState(false);
-  const [showTerms,   setShowTerms]   = useState(false);
-  const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showTerms,    setShowTerms]    = useState(false);
+  const [showPrivacy,  setShowPrivacy]  = useState(false);
+  const [showLocation, setShowLocation] = useState(false);
   const [termsChecked, setTermsChecked] = useState({
     terms: false, privacy: false, location: false, age: false, marketing: false,
   });
@@ -264,8 +266,9 @@ export default function SignUpScreen({ onBack, onVerification }: Props) {
                   setTermsChecked(prev => ({ ...prev, [item.id]: !prev[item.id as keyof typeof prev] }))
                 }
                 onPressLink={
-                  item.id === 'terms'   ? () => setShowTerms(true)   :
-                  item.id === 'privacy' ? () => setShowPrivacy(true) :
+                  item.id === 'terms'    ? () => setShowTerms(true)    :
+                  item.id === 'privacy'  ? () => setShowPrivacy(true)  :
+                  item.id === 'location' ? () => setShowLocation(true) :
                   undefined
                 }
               />
@@ -308,6 +311,13 @@ export default function SignUpScreen({ onBack, onVerification }: Props) {
           onRequestClose={() => setShowPrivacy(false)}
         >
           <PrivacyPolicyScreen onClose={() => setShowPrivacy(false)} />
+        </Modal>
+        <Modal
+          visible={showLocation}
+          animationType="slide"
+          onRequestClose={() => setShowLocation(false)}
+        >
+          <LocationPolicyScreen onClose={() => setShowLocation(false)} />
         </Modal>
       </ScrollView>
     </KeyboardAvoidingView>

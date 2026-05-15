@@ -11,8 +11,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R } from '../../theme';
-import TermsOfServiceScreen from './TermsOfServiceScreen';
-import PrivacyPolicyScreen  from '../PrivacyPolicyScreen';
+import TermsOfServiceScreen  from './TermsOfServiceScreen';
+import LocationPolicyScreen  from './LocationPolicyScreen';
+import PrivacyPolicyScreen   from '../PrivacyPolicyScreen';
 
 interface Props {
   onComplete: (marketingAgreed: boolean) => void;
@@ -31,8 +32,8 @@ const CONSENT_ITEMS = [
   },
   {
     id: 'location', label: '위치정보 수집·이용 동의 (필수)',
-    required: true, hasLink: false, linkLabel: null,
-    description: '주변 헬스장 탐색을 위해 앱 사용 중에만 위치 정보를 수집합니다. 백그라운드에서는 수집하지 않습니다.',
+    required: true, hasLink: true, linkLabel: '보기',
+    description: '주변 헬스장 탐색을 위해 앱 사용 중에만 위치 정보를 수집합니다.',
   },
   {
     id: 'age', label: '만 14세 이상입니다 (필수)',
@@ -88,8 +89,9 @@ export default function TermsConsentScreen({ onComplete }: Props) {
   const [checked, setChecked] = useState({
     terms: false, privacy: false, location: false, age: false, marketing: false,
   });
-  const [showTerms,   setShowTerms]   = useState(false);
-  const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showTerms,    setShowTerms]    = useState(false);
+  const [showPrivacy,  setShowPrivacy]  = useState(false);
+  const [showLocation, setShowLocation] = useState(false);
 
   const allRequired = ['terms', 'privacy', 'location', 'age'].every(
     id => checked[id as keyof typeof checked]
@@ -136,8 +138,9 @@ export default function TermsConsentScreen({ onComplete }: Props) {
                 checked={!!checked[item.id as keyof typeof checked]}
                 onToggle={() => toggle(item.id)}
                 onPressLink={
-                  item.id === 'terms'   ? () => setShowTerms(true)   :
-                  item.id === 'privacy' ? () => setShowPrivacy(true) :
+                  item.id === 'terms'    ? () => setShowTerms(true)    :
+                  item.id === 'privacy'  ? () => setShowPrivacy(true)  :
+                  item.id === 'location' ? () => setShowLocation(true) :
                   undefined
                 }
               />
@@ -169,6 +172,13 @@ export default function TermsConsentScreen({ onComplete }: Props) {
         onRequestClose={() => setShowPrivacy(false)}
       >
         <PrivacyPolicyScreen onClose={() => setShowPrivacy(false)} />
+      </Modal>
+      <Modal
+        visible={showLocation}
+        animationType="slide"
+        onRequestClose={() => setShowLocation(false)}
+      >
+        <LocationPolicyScreen onClose={() => setShowLocation(false)} />
       </Modal>
     </SafeAreaView>
   );
