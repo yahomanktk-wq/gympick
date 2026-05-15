@@ -117,15 +117,17 @@ function FeedGridCard({
 
   return (
     <TouchableOpacity
-      style={{ width, borderRadius: R.card, overflow: 'hidden', backgroundColor: C.surface }}
+      style={{ width, backgroundColor: C.surface }}
       onPress={onPress}
       activeOpacity={0.85}
     >
-      <Image
-        source={{ uri: displayUri }}
-        style={{ width, height: CARD_H }}
-        contentFit="cover"
-      />
+      <View style={{ borderRadius: R.card, overflow: 'hidden' }}>
+        <Image
+          source={{ uri: displayUri }}
+          style={{ width, height: CARD_H }}
+          contentFit="cover"
+        />
+      </View>
       {post.isMyPost && (
         <View style={{
           position: 'absolute', top: 8, left: 8,
@@ -151,21 +153,6 @@ function FeedGridCard({
             return '곧 사라져요';
           })()}
         </Text>
-      </View>
-      <View style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0,
-        backgroundColor: 'rgba(0,0,0,0.35)',
-        paddingHorizontal: 8, paddingVertical: 6,
-        flexDirection: 'row', gap: 4,
-      }}>
-        {[...new Set(post.muscles)].slice(0, 2).map((m, idx) => (
-          <View key={`${m}-${idx}`} style={{
-            backgroundColor: C.accent, borderRadius: R.pill,
-            paddingHorizontal: 6, paddingVertical: 2,
-          }}>
-            <Text style={{ fontSize: 8, fontWeight: '800', color: '#000' }}>{m}</Text>
-          </View>
-        ))}
       </View>
     </TouchableOpacity>
   );
@@ -554,7 +541,7 @@ export default function WorkoutFeedScreen() {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}
-        style={{ marginBottom: 8 }}
+        style={{ marginBottom: 8, flexGrow: 0 }}
       >
         {MUSCLE_FILTERS.map(filter => (
           <TouchableOpacity
