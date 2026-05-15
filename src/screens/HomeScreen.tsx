@@ -221,6 +221,45 @@ const AutoScrollOunwan = React.memo(({ posts, onPressPost }: {
   );
 });
 
+// ── OunwanHeader ─────────────────────────────────────────────────────────────
+
+const ounwanHeaderStyle = {
+  flexDirection:  'row' as const,
+  alignItems:     'center' as const,
+  justifyContent: 'space-between' as const,
+  paddingHorizontal: 20,
+  marginBottom:   12,
+};
+const ounwanHeaderTextStyle = {
+  flex:       1,
+  fontSize:   18,
+  fontWeight: '800' as const,
+  color:      C.text,
+};
+const moreBtnStyle = {
+  fontSize:   13,
+  fontWeight: '600' as const,
+  color:      C.accent,
+  marginLeft: 8,
+};
+
+const OunwanHeader = React.memo(({
+  message,
+  onMorePress,
+}: {
+  message:      string;
+  onMorePress:  () => void;
+}) => (
+  <View style={ounwanHeaderStyle}>
+    <Text style={ounwanHeaderTextStyle} numberOfLines={1}>
+      {message}
+    </Text>
+    <TouchableOpacity onPress={onMorePress} activeOpacity={0.7}>
+      <Text style={moreBtnStyle}>더보기</Text>
+    </TouchableOpacity>
+  </View>
+));
+
 // --- Screen
 
 export default function HomeScreen() {
@@ -370,8 +409,6 @@ export default function HomeScreen() {
                 const isPast   = !isToday && day < today;
                 const isFuture = !isToday && !isPast;
                 const photoSrc = session?.compositeUri ?? session?.photoUri;
-                const mm = String(day.getMonth() + 1).padStart(2, '0');
-                const dd = String(day.getDate()).padStart(2, '0');
                 const targetForDay = weekTargetMap[day.toDateString()];
                 return (
                   <TouchableOpacity
@@ -422,9 +459,6 @@ export default function HomeScreen() {
                         </View>
                       )}
                     </View>
-                    <Text style={[st.weekThumbDate, isToday && { color: C.accent }]}>
-                      {`${mm}.${dd}`}
-                    </Text>
                   </TouchableOpacity>
                 );
               })}
@@ -451,7 +485,7 @@ export default function HomeScreen() {
         <TouchableOpacity
           style={st.ctaCard}
           activeOpacity={0.88}
-          onPress={user ? openNearby : () => nav.navigate('LogWorkout')}
+          onPress={() => nav.navigate('LogWorkout')}
         >
           <View style={st.ctaLeft}>
             <Text style={st.ctaEye}>READY TO LIFT?</Text>
@@ -463,17 +497,14 @@ export default function HomeScreen() {
         </TouchableOpacity>
 
         {/* ── 오늘의 오운완 피드 ── */}
-        <View style={st.sectionRow}>
-          <Text style={st.sectionTitle}>오늘의 오운완 🔥</Text>
-          <TouchableOpacity onPress={handleFeedPress}>
-            <Text style={st.seeAll}>더보기</Text>
-          </TouchableOpacity>
-        </View>
-        <Text style={st.ounwanMotivation}>
-          {todayTarget && todayTarget !== '휴식'
-            ? `오늘 ${todayTarget} 운동한 사람들이에요! 💪`
-            : '오늘 운동한 사람들이에요! 💪'}
-        </Text>
+        <OunwanHeader
+          message={
+            todayTarget && todayTarget !== '휴식'
+              ? `오늘 ${todayTarget} 운동한 사람들이에요! 💪`
+              : '오늘 운동한 사람들이에요! 💪'
+          }
+          onMorePress={handleFeedPress}
+        />
         <AutoScrollOunwan posts={ounwanPosts} onPressPost={handleFeedPress} />
 
         <View style={{ height: 32 }} />
@@ -495,13 +526,6 @@ const st = StyleSheet.create({
   scroll: { paddingBottom: 32 },
 
   // Ounwan auto-scroll
-  ounwanMotivation: {
-    fontSize:          18,
-    fontWeight:        '800',
-    color:             C.text,
-    marginBottom:      12,
-    paddingHorizontal: screenPad,
-  },
   ounwanCard: {
     width:           OUNWAN_CARD_W,
     height:          OUNWAN_CARD_H,
@@ -635,7 +659,6 @@ const st = StyleSheet.create({
   weekThumbImg:        { width: '100%', height: '100%' },
   weekThumbEmptyInner: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2 },
   weekThumbDot:        { width: 6, height: 6, borderRadius: 3, backgroundColor: C.accent },
-  weekThumbDate:       { fontSize: 9,  fontWeight: '600', color: C.textSub },
   weekThumbDateNum:    { fontSize: 16, fontWeight: '700', color: C.text },
   weekThumbTarget:     { fontSize: 10, fontWeight: '700', color: C.accent, marginTop: 2 },
 
