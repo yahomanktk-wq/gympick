@@ -95,7 +95,6 @@ const { width: SCREEN_W } = Dimensions.get('window');
 const HOME_THUMB_W   = Math.floor((SCREEN_W - 32) / 3.5);
 const HOME_THUMB_H   = Math.round(HOME_THUMB_W * (4 / 3));
 const OUNWAN_CARD_W  = 160;
-const OUNWAN_CARD_H  = Math.round(OUNWAN_CARD_W * 4 / 3);
 const OUNWAN_CARD_GAP = 10;
 
 function greeting() {
@@ -128,10 +127,21 @@ const OunwanCard = React.memo(({ post, onPress }: {
   post:    WorkoutFeedPost;
   onPress: () => void;
 }) => {
-  const displayUri = post.compositeUri ?? post.photoUri;
+  const displayUri = post.photoUri ?? post.compositeUri;
+  const [cardH, setCardH] = useState(OUNWAN_CARD_W * 3 / 4);
+
+  useEffect(() => {
+    if (!displayUri) return;
+    Image.getSize(
+      displayUri,
+      (w, h) => { if (w > 0 && h > 0) setCardH(Math.round(OUNWAN_CARD_W * (h / w))); },
+      () => {}
+    );
+  }, [displayUri]);
+
   return (
     <TouchableOpacity
-      style={st.ounwanCardOuter}
+      style={[st.ounwanCardOuter, { height: cardH }]}
       activeOpacity={0.85}
       onPress={onPress}
     >
@@ -139,10 +149,10 @@ const OunwanCard = React.memo(({ post, onPress }: {
         <ExpoImage
           source={{ uri: displayUri }}
           style={st.ounwanCardImage}
-          contentFit="contain"
+          contentFit="cover"
         />
       ) : (
-        <View style={st.ounwanCardEmpty} />
+        <View style={[st.ounwanCardImage, { backgroundColor: C.surfaceHigh }]} />
       )}
     </TouchableOpacity>
   );
@@ -527,20 +537,13 @@ const st = StyleSheet.create({
   // Ounwan auto-scroll
   ounwanCardOuter: {
     width:           OUNWAN_CARD_W,
-    height:          OUNWAN_CARD_H,
     borderRadius:    R.card,
+    overflow:        'hidden',
     backgroundColor: C.surfaceHigh,
   },
   ounwanCardImage: {
-    width:        '100%',
-    height:       '100%',
-    borderRadius: R.card,
-  },
-  ounwanCardEmpty: {
-    width:           '100%',
-    height:          '100%',
-    borderRadius:    R.card,
-    backgroundColor: C.surfaceHigh,
+    width:  '100%',
+    height: '100%',
   },
 
   // Feed empty state
