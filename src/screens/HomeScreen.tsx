@@ -130,15 +130,19 @@ const OunwanCard = React.memo(({ post, onPress }: {
 }) => {
   const displayUri = post.compositeUri ?? post.photoUri;
   return (
-    <TouchableOpacity style={st.ounwanCard} activeOpacity={0.85} onPress={onPress}>
+    <TouchableOpacity
+      style={st.ounwanCardOuter}
+      activeOpacity={0.85}
+      onPress={onPress}
+    >
       {displayUri ? (
         <ExpoImage
           source={{ uri: displayUri }}
-          style={StyleSheet.absoluteFill}
+          style={st.ounwanCardImage}
           contentFit="contain"
         />
       ) : (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: C.surfaceHigh }]} />
+        <View style={st.ounwanCardEmpty} />
       )}
     </TouchableOpacity>
   );
@@ -521,12 +525,22 @@ const st = StyleSheet.create({
   scroll: { paddingBottom: 32 },
 
   // Ounwan auto-scroll
-  ounwanCard: {
-    width:            OUNWAN_CARD_W,
-    height:           OUNWAN_CARD_H,
-    borderRadius:     R.card,
-    overflow:         'hidden',
-    backgroundColor:  C.surfaceHigh,
+  ounwanCardOuter: {
+    width:           OUNWAN_CARD_W,
+    height:          OUNWAN_CARD_H,
+    borderRadius:    R.card,
+    backgroundColor: C.surfaceHigh,
+  },
+  ounwanCardImage: {
+    width:        '100%',
+    height:       '100%',
+    borderRadius: R.card,
+  },
+  ounwanCardEmpty: {
+    width:           '100%',
+    height:          '100%',
+    borderRadius:    R.card,
+    backgroundColor: C.surfaceHigh,
   },
 
   // Feed empty state
