@@ -37,7 +37,6 @@ import { fetchGymMachineIds, saveGymMachineIds } from '../../lib/db/gymMachines'
 import { geocodeAddress } from '../../lib/geocoding';
 import GymStatsView from './GymStatsView';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -1431,25 +1430,40 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
         const photoId  = `gym_photo_${Date.now()}`;
         const fileName = `${user.id}/gym-${selectedGym.id}-${photoId}.jpg`;
 
-        // base64로 변환 후 Supabase SDK로 업로드
-        const base64 = await FileSystem.readAsStringAsync(uri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        const byteArray = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+        // FormData 방식으로 업로드 (Expo Go 환경 호환)
+        const formData = new FormData();
+        formData.append('file', {
+          uri,
+          name: fileName,
+          type: 'image/jpeg',
+        } as any);
 
         const { supabase } = await import('../../lib/supabase');
-        const { error } = await supabase.storage
-          .from('workout-photos')
-          .upload(fileName, byteArray, {
-            contentType: 'image/jpeg',
-            upsert: true,
-          });
-
-        if (error) {
-          if (__DEV__) console.warn('[handleAddPhoto] 업로드 실패:', error.message);
-          Alert.alert('업로드 실패', '사진 업로드에 실패했습니다: ' + error.message);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          Alert.alert('업로드 실패', '로그인이 필요합니다.');
           return;
         }
+
+        const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
+        const uploadUrl    = `${SUPABASE_URL}/storage/v1/object/gym-photos/${fileName}`;
+
+        const response = await fetch(uploadUrl, {
+          method:  'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'x-upsert':      'true',
+          },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          if (__DEV__) console.warn('[handleAddPhoto] 업로드 실패:', errText);
+          Alert.alert('업로드 실패', '사진 업로드에 실패했습니다.');
+          return;
+        }
+
         setPhotos(prev => [...prev, photoId]);
         Alert.alert('업로드 완료', '사진이 업로드되었습니다.');
       } catch (e) {
