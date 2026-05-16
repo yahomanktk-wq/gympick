@@ -40,7 +40,13 @@ const TODAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDa
 
 // --- Sub-components
 
-const GymPhotoStrip = React.memo(({ gymId }: { gymId: string }) => {
+const GymPhotoStrip = React.memo(({
+  gymId,
+  onPressPhoto,
+}: {
+  gymId:        string;
+  onPressPhoto: (urls: string[], index: number) => void;
+}) => {
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [loading,   setLoading]   = useState(true);
 
@@ -71,14 +77,91 @@ const GymPhotoStrip = React.memo(({ gymId }: { gymId: string }) => {
       contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingVertical: 12 }}
     >
       {photoUrls.map((url, idx) => (
-        <ExpoImage
+        <TouchableOpacity
           key={idx}
-          source={{ uri: url }}
-          style={{ width: 160, height: 120, borderRadius: R.card }}
-          contentFit="cover"
-        />
+          onPress={() => onPressPhoto(photoUrls, idx)}
+          activeOpacity={0.85}
+        >
+          <ExpoImage
+            source={{ uri: url }}
+            style={{ width: 160, height: 120, borderRadius: R.card }}
+            contentFit="cover"
+          />
+        </TouchableOpacity>
       ))}
     </ScrollView>
+  );
+});
+
+const PhotoViewer = React.memo(({
+  urls,
+  initialIndex,
+  onClose,
+}: {
+  urls:         string[];
+  initialIndex: number;
+  onClose:      () => void;
+}) => {
+  const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const SCREEN_W = Dimensions.get('window').width;
+  const SCREEN_H = Dimensions.get('window').height;
+
+  return (
+    <Modal
+      visible
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
+      <View style={{ flex: 1, backgroundColor: '#000' }}>
+
+        {/* 닫기 버튼 */}
+        <SafeAreaView style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 }}>
+          <View style={{
+            flexDirection: 'row', justifyContent: 'space-between',
+            alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12,
+          }}>
+            <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>
+              {currentIndex + 1} / {urls.length}
+            </Text>
+            <TouchableOpacity
+              onPress={onClose}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="close" size={28} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+
+        {/* 사진 가로 스크롤 (페이지 방식) */}
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          contentOffset={{ x: initialIndex * SCREEN_W, y: 0 }}
+          onMomentumScrollEnd={e => {
+            const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+            setCurrentIndex(idx);
+          }}
+          style={{ flex: 1 }}
+        >
+          {urls.map((url, idx) => (
+            <View
+              key={idx}
+              style={{ width: SCREEN_W, height: SCREEN_H, justifyContent: 'center' }}
+            >
+              <ExpoImage
+                source={{ uri: url }}
+                style={{ width: SCREEN_W, height: SCREEN_H }}
+                contentFit="contain"
+              />
+            </View>
+          ))}
+        </ScrollView>
+
+      </View>
+    </Modal>
   );
 });
 
@@ -158,6 +241,15 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
   const [reportMsg,           setReportMsg]           = useState('');
   const [reportSent,          setReportSent]          = useState(false);
   const [reportLoading,       setReportLoading]       = useState(false);
+  const [viewerUrls,          setViewerUrls]          = useState<string[]>([]);
+  const [viewerIndex,         setViewerIndex]         = useState(0);
+  const [viewerVisible,       setViewerVisible]       = useState(false);
+
+  function openPhotoViewer(urls: string[], index: number) {
+    setViewerUrls(urls);
+    setViewerIndex(index);
+    setViewerVisible(true);
+  }
 
   useEffect(() => {
     setIsFav(gymId ? isGymFavorite(gymId) : false);
@@ -325,7 +417,7 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.content}>
 
             {/* ── 헬스장 사진 ── */}
-            <GymPhotoStrip gymId={gymId} />
+            <GymPhotoStrip gymId={gymId} onPressPhoto={openPhotoViewer} />
 
             {/* ── Gym name + location ── */}
             <View style={s.gymHeader}>
@@ -435,6 +527,15 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
         machine={machineForDetail}
         onClose={() => setSelectedMachineId(null)}
       />
+
+      {/* ── 사진 전체화면 뷰어 ── */}
+      {viewerVisible && (
+        <PhotoViewer
+          urls={viewerUrls}
+          initialIndex={viewerIndex}
+          onClose={() => setViewerVisible(false)}
+        />
+      )}
 
       <GymAllMachinesScreen
         visible={showAllMachines}
