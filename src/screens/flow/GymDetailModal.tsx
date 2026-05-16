@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Image as ExpoImage } from 'expo-image';
+import { fetchGymPhotoUrls } from '../../lib/db/gymPhotos';
 import GymAllMachinesScreen from './GymAllMachinesScreen';
 import {
   View,
@@ -32,35 +34,53 @@ import MachineCardBorder from '../../components/MachineCardBorder';
 const SCREEN_W = Dimensions.get('window').width;
 const CARD_W   = (SCREEN_W - 32 - 8) / 2;
 
-// --- Mock photo palette
-
-const PHOTO_PALETTES = [
-  { bg: '#1a1a2e', icon: 'barbell-outline',  fg: '#5ba4ff' },
-  { bg: '#1a2e1a', icon: 'fitness-outline',  fg: '#c8ff57' },
-  { bg: '#2e1a2e', icon: 'bicycle-outline',  fg: '#b36bff' },
-  { bg: '#2e1a1a', icon: 'body-outline',     fg: '#ff7c47' },
-];
-
 // --- Today's day name
 
 const TODAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()];
 
 // --- Sub-components
 
-function PhotoStrip({ gymId }: { gymId: string }) {
-  const offset = gymId.charCodeAt(gymId.length - 1) % PHOTO_PALETTES.length;
-  const photos = [0, 1, 2].map(i => PHOTO_PALETTES[(offset + i) % PHOTO_PALETTES.length]);
+const GymPhotoStrip = React.memo(({ gymId }: { gymId: string }) => {
+  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
+  const [loading,   setLoading]   = useState(true);
+
+  useEffect(() => {
+    if (!gymId) return;
+    setLoading(true);
+    fetchGymPhotoUrls(gymId)
+      .then(urls => setPhotoUrls(urls))
+      .finally(() => setLoading(false));
+  }, [gymId]);
+
+  if (!loading && photoUrls.length === 0) return null;
+
+  if (loading) {
+    return (
+      <View style={s.photoStrip}>
+        {[0, 1, 2].map(i => (
+          <View key={i} style={[s.photoCard, { backgroundColor: C.surface }]} />
+        ))}
+      </View>
+    );
+  }
 
   return (
-    <View style={s.photoStrip}>
-      {photos.map((p, i) => (
-        <View key={i} style={[s.photoCard, { backgroundColor: p.bg }]}>
-          <Ionicons name={p.icon as any} size={28} color={p.fg} style={{ opacity: 0.7 }} />
-        </View>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingVertical: 12 }}
+    >
+      {photoUrls.map((url, idx) => (
+        <ExpoImage
+          key={idx}
+          source={{ uri: url }}
+          style={{ width: 160, height: 120, borderRadius: R.card }}
+          contentFit="cover"
+        />
       ))}
-    </View>
+    </ScrollView>
   );
-}
+});
 
 function HoursTable({ hours }: { hours: DayHours[] }) {
   return (
@@ -303,6 +323,9 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
         {/* ── 정보 tab ── */}
         {activeTab === '정보' && (
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.content}>
+
+            {/* ── 헬스장 사진 ── */}
+            <GymPhotoStrip gymId={gymId} />
 
             {/* ── Gym name + location ── */}
             <View style={s.gymHeader}>

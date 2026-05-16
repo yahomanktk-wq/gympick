@@ -38,6 +38,8 @@ import { invalidateGymsCache } from '../../lib/db/gyms';
 import { geocodeAddress } from '../../lib/geocoding';
 import GymStatsView from './GymStatsView';
 import * as ImagePicker from 'expo-image-picker';
+import { Image as ExpoImage } from 'expo-image';
+import { fetchGymPhotoUrlsByUser } from '../../lib/db/gymPhotos';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -587,20 +589,42 @@ function EditView({
             <Text style={styles.sectionCardTitle}>사진</Text>
             <Text style={styles.photoCount}>{photos.length}장 업로드됨</Text>
           </View>
-          <View style={styles.photoGrid}>
-            {photos.map(id => (
-              <View key={id} style={[styles.photoTile, { width: PHOTO_SIZE, height: PHOTO_SIZE }]}>
-                <View style={styles.photoPlaceholder}><Ionicons name="image-outline" size={20} color={C.textDim} /></View>
-                <TouchableOpacity style={styles.photoRemoveBtn} onPress={() => Alert.alert('사진 삭제', '이 사진을 삭제할까요?', [{ text: '취소', style: 'cancel' }, { text: '삭제', style: 'destructive', onPress: () => setPhotos(p => p.filter(x => x !== id)) }])}>
-                  <Ionicons name="close" size={10} color="#fff" />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 8, paddingVertical: 8 }}>
+            {photos.map((url, idx) => (
+              <View key={idx} style={{ position: 'relative' }}>
+                <ExpoImage
+                  source={{ uri: url }}
+                  style={{ width: 100, height: 100, borderRadius: R.card }}
+                  contentFit="cover"
+                />
+                <TouchableOpacity
+                  style={{
+                    position: 'absolute', top: 4, right: 4,
+                    backgroundColor: 'rgba(0,0,0,0.6)',
+                    borderRadius: 10, padding: 2,
+                  }}
+                  onPress={() => setPhotos(prev => prev.filter((_, i) => i !== idx))}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="close" size={14} color="#fff" />
                 </TouchableOpacity>
               </View>
             ))}
-            <TouchableOpacity style={[styles.photoTile, styles.photoUploadBtn, { width: PHOTO_SIZE, height: PHOTO_SIZE }]} onPress={onAddPhoto} activeOpacity={0.75}>
-              <Ionicons name="camera-outline" size={22} color={C.textSub} />
-              <Text style={styles.photoUploadText}>사진 추가</Text>
+            <TouchableOpacity
+              style={{
+                width: 100, height: 100, borderRadius: R.card,
+                backgroundColor: C.surface, borderWidth: 1.5,
+                borderColor: C.border, borderStyle: 'dashed',
+                alignItems: 'center', justifyContent: 'center', gap: 4,
+              }}
+              onPress={onAddPhoto}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="add" size={24} color={C.textDim} />
+              <Text style={{ fontSize: 11, color: C.textDim }}>사진 추가</Text>
             </TouchableOpacity>
-          </View>
+          </ScrollView>
         </View>
         <TouchableOpacity style={styles.saveBtn} onPress={onSave} activeOpacity={0.88}>
           <Text style={styles.saveBtnText}>수정 내용 제출</Text>
@@ -1148,13 +1172,18 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
   const serializeHours = useCallback((h: OperatingHours): string =>
     DAY_KEYS.filter(d => h[d].enabled).map(d => `${DAY_LABELS[d]} ${h[d].open}~${h[d].close}`).join(', '), []);
 
-  const openEdit = useCallback((gym: ManagedGym) => {
+  const openEdit = useCallback(async (gym: ManagedGym) => {
     setSelectedGym(gym);
     setEditForm({ name: gym.name, location: gym.location, addressDetail: '', description: gym.description, phone: gym.phone, website: gym.website });
     setEditHours(DEFAULT_HOURS); setEditNotices([]);
-    setPhotos(Array.from({ length: gym.photoCount }, (_, i) => `p_${gym.id}_${i}`));
+    setPhotos([]);
     push('edit');
-  }, [push]);
+
+    if (user?.id) {
+      const urls = await fetchGymPhotoUrlsByUser(gym.id, user.id);
+      setPhotos(urls);
+    }
+  }, [push, user?.id]);
 
   const openMachines = useCallback(async (gym: ManagedGym) => {
     if (!gym) return;
@@ -1465,7 +1494,8 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
           return;
         }
 
-        setPhotos(prev => [...prev, photoId]);
+        const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/gym-photos/${fileName}`;
+        setPhotos(prev => [...prev, publicUrl]);
         Alert.alert('업로드 완료', '사진이 업로드되었습니다.');
       } catch (e) {
         if (__DEV__) console.warn('[handleAddPhoto] 오류:', e);
