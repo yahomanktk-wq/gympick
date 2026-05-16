@@ -2,6 +2,20 @@ import { supabase } from '../supabase';
 import { Machine, MachineWithGyms, ExerciseKind } from '../../data/types';
 import { MACHINES } from '../../data/machines';
 
+// ── 메모리 캐시 ──────────────────────────────────────────────
+let _machinesCache:     MachineWithGyms[] | null = null;
+let _machinesCacheTime: number                   = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5분
+
+export function invalidateMachinesCache() {
+  _machinesCache     = null;
+  _machinesCacheTime = 0;
+}
+
+export function getMachinesCacheSync(): MachineWithGyms[] {
+  return _machinesCache ?? [];
+}
+
 // --- Row type matching the Supabase `machines` table schema
 
 type MachineRow = {
@@ -30,6 +44,12 @@ function rowToMachine(row: MachineRow): Machine {
 
 /** Fetch all machines. Falls back to mock data on error. */
 export async function fetchMachines(): Promise<MachineWithGyms[]> {
+  // 캐시 유효하면 즉시 반환
+  const now = Date.now();
+  if (_machinesCache && now - _machinesCacheTime < CACHE_TTL_MS) {
+    return _machinesCache;
+  }
+
   // 머신 목록과 gym_machines를 동시에 한 번에 가져옴 (N+1 쿼리 방지)
   const [machinesResult, gymMachinesResult] = await Promise.all([
     supabase
@@ -44,7 +64,7 @@ export async function fetchMachines(): Promise<MachineWithGyms[]> {
 
   if (machinesResult.error || !machinesResult.data?.length) {
     if (__DEV__ && machinesResult.error) console.warn('[db/machines] fetchMachines error, using mock:', machinesResult.error.message);
-    return MACHINES;
+    return _machinesCache ?? MACHINES;
   }
 
   // gym_machines를 machineId 기준으로 인메모리 맵핑
@@ -55,10 +75,14 @@ export async function fetchMachines(): Promise<MachineWithGyms[]> {
     gymMap.set(row.machine_id, existing);
   }
 
-  return machinesResult.data.map(row => ({
+  const result = machinesResult.data.map(row => ({
     ...rowToMachine(row),
     gymIds: gymMap.get(row.id) ?? [],
   }));
+
+  _machinesCache     = result;
+  _machinesCacheTime = Date.now();
+  return result;
 }
 
 /** Free Weight 머신만 조회. Falls back to local FREE_WEIGHTS on error. */

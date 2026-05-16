@@ -34,6 +34,7 @@ import { getManagedGymById, getGymMachineIds, updateGymMachines } from '../../da
 import { FREE_WEIGHTS } from '../../data/freeWeights';
 import { submitGymRegistrationRequest } from '../../lib/db/gymRegistrationRequests';
 import { fetchGymMachineIds, saveGymMachineIds } from '../../lib/db/gymMachines';
+import { invalidateGymsCache } from '../../lib/db/gyms';
 import { geocodeAddress } from '../../lib/geocoding';
 import GymStatsView from './GymStatsView';
 import * as ImagePicker from 'expo-image-picker';
@@ -1529,7 +1530,10 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
     setGyms(prev => prev.map(g =>
       g.id === selectedGym.id ? { ...g, ...editForm, hours: updatedHours } : g
     ));
-    Alert.alert('수정 완료', '헬스장 정보가 수정되었습니다.', [{ text: '확인', onPress: pop }]);
+    Alert.alert('수정 완료', '헬스장 정보가 수정되었습니다.', [{
+      text: '확인',
+      onPress: () => { invalidateGymsCache(); pop(); },
+    }]);
   }, [selectedGym, editForm, editHours, serializeHours, pop]);
 
   // ─── View meta ────────────────────────────────────────────────────────────

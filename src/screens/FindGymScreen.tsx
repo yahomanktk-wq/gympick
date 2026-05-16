@@ -26,8 +26,7 @@ import GymMapView from '../components/GymMapView';
 import { C, R, T } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import { submitGymRegistrationRequest } from '../lib/db/gymRegistrationRequests';
-import { fetchMachines, fetchGymsWithMachines } from '../lib/db';
-import { useFetch } from '../lib/useFetch';
+import { fetchMachines, fetchGymsWithMachines, getGymsCacheSync, getMachinesCacheSync } from '../lib/db';
 import { MachineWithGyms, GymWithMachines } from '../data/types';
 import { fetchRankingTabData, type RankingTabData } from '../lib/db/rankingQueries';
 import { fetchOlympicRankings, type OlympicRankingEntry } from '../lib/db/olympicRankings';
@@ -281,12 +280,33 @@ export default function FindGymScreen() {
   }, []);
 
   // --- Supabase data - falls back to mock automatically
-  const { data: machinesData, loading: machinesLoading } = useFetch(() => fetchMachines(),         []);
-  const { data: gymsData,     loading: gymsLoading }     = useFetch(() => fetchGymsWithMachines(), []);
+  const [machinesData,    setMachinesData]    = useState<MachineWithGyms[]>(() => getMachinesCacheSync());
+  const [machinesLoading, setMachinesLoading] = useState(true);
+  const [gymsData,        setGymsData]        = useState<GymWithMachines[]>(() => getGymsCacheSync());
+  const [gymsLoading,     setGymsLoading]     = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchMachines().then(data => {
+      if (!cancelled) { setMachinesData(data); setMachinesLoading(false); }
+    }).catch(() => {
+      if (!cancelled) setMachinesLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchGymsWithMachines().then(data => {
+      if (!cancelled) { setGymsData(data); setGymsLoading(false); }
+    }).catch(() => {
+      if (!cancelled) setGymsLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const isLoading   = machinesLoading || gymsLoading;
   const allMachines = machinesData ?? [];
-  console.log('[DEBUG] FindGym machines[0]:', allMachines?.[0]?.id, allMachines?.[0]?.imageUrl);
 
   const allGyms = useMemo<GymWithMachines[]>(() => {
     const base = gymsData ?? [];

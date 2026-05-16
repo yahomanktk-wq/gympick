@@ -1,6 +1,20 @@
 import { supabase } from '../supabase';
 import { Gym, GymWithMachines } from '../../data/types';
 
+// ── 메모리 캐시 ──────────────────────────────────────────────
+let _gymsCache:     GymWithMachines[] | null = null;
+let _gymsCacheTime: number                   = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5분
+
+export function invalidateGymsCache() {
+  _gymsCache     = null;
+  _gymsCacheTime = 0;
+}
+
+export function getGymsCacheSync(): GymWithMachines[] {
+  return _gymsCache ?? [];
+}
+
 // --- Row type matching the Supabase `gyms` table schema
 
 type GymRow = {
@@ -61,27 +75,55 @@ export async function fetchGym(id: string): Promise<Gym | undefined> {
 }
 
 export async function fetchGymsWithMachines(): Promise<GymWithMachines[]> {
-  try {
-    const gyms = await fetchGyms();
-    if (gyms.length === 0) return [];
+  // 캐시 유효하면 즉시 반환
+  const now = Date.now();
+  if (_gymsCache && now - _gymsCacheTime < CACHE_TTL_MS) {
+    return _gymsCache;
+  }
 
-    const { fetchGymMachineIds } = await import('./gymMachines');
-    const { fetchMachines }      = await import('./machines');
-    const [allMachines, ...gymMachineIdArrays] = await Promise.all([
-      fetchMachines(),
-      ...gyms.map(g => fetchGymMachineIds(g.id)),
-    ]);
-    return gyms.map((gym, i) => {
-      const machineIds = gymMachineIdArrays[i] as string[];
+  try {
+    // gyms + gym_machines를 한 번에 JOIN 조회 (N+1 → 2회 요청)
+    const { data: gymsData, error: gymsError } = await supabase
+      .from('gyms')
+      .select(`
+        id, name, location, address_detail, description,
+        latitude, longitude, hours, phone, website,
+        gym_machines ( machine_id )
+      `)
+      .order('name');
+
+    if (gymsError || !gymsData?.length) {
+      if (__DEV__ && gymsError) console.warn('[db/gyms] fetchGymsWithMachines error:', gymsError.message);
+      return _gymsCache ?? [];
+    }
+
+    const { fetchMachines } = await import('./machines');
+    const allMachines = await fetchMachines();
+
+    const result: GymWithMachines[] = gymsData.map(row => {
+      const machineIds: string[] = (row.gym_machines ?? []).map((gm: any) => gm.machine_id);
       return {
-        ...gym,
+        id:            row.id,
+        name:          row.name,
+        location:      row.location,
+        addressDetail: row.address_detail ?? null,
+        description:   row.description,
+        latitude:      row.latitude  ?? null,
+        longitude:     row.longitude ?? null,
+        hours:         row.hours    ?? null,
+        phone:         row.phone    ?? null,
+        website:       row.website  ?? null,
         machineIds,
         machines: allMachines.filter(m => machineIds.includes(m.id)),
       } as GymWithMachines;
     });
+
+    _gymsCache     = result;
+    _gymsCacheTime = Date.now();
+    return result;
   } catch (e) {
     if (__DEV__) console.warn('[db/gyms] fetchGymsWithMachines error:', e);
-    return [];
+    return _gymsCache ?? [];
   }
 }
 
