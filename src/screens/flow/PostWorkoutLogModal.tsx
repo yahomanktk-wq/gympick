@@ -931,13 +931,10 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
 }) {
   const [textColor,    setTextColor]    = useState('#ffffff');
   const [saveSuccess,  setSaveSuccess]  = useState(false);
-  const [photoAspect,  setPhotoAspect]  = useState<'4:3' | '16:9'>('4:3');
   const overlayRef = useRef<View>(null);
   const routineCardRef = useRef<View>(null);
 
-  const photoH = photoAspect === '4:3'
-    ? Math.round(PHOTO_W * 4 / 3)
-    : Math.round(PHOTO_W * 16 / 9);
+  const photoH = Math.round(PHOTO_W * 4 / 3);
 
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -1035,29 +1032,12 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
         <Text style={s.hint}>운동 후 사진을 찍어보세요 (선택)</Text>
 
-        {/* Aspect ratio selector */}
-        {!photoTaken && (
-          <View style={s.aspectRow}>
-            <Text style={s.aspectLabel}>사진 비율</Text>
-            {(['4:3', '16:9'] as const).map(asp => (
-              <TouchableOpacity
-                key={asp}
-                style={[s.aspectChip, photoAspect === asp && s.aspectChipActive]}
-                onPress={() => setPhotoAspect(asp)}
-                activeOpacity={0.75}
-              >
-                <Text style={[s.aspectChipText, photoAspect === asp && s.aspectChipTextActive]}>{asp}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
         {/* No photo: show camera CTA as TouchableOpacity */}
         {!photoTaken && (
           <TouchableOpacity
             style={[s.photoFrame, { height: photoH }]}
             activeOpacity={0.85}
-            onPress={() => onCapture(photoAspect === '4:3' ? [3, 4] : [9, 16])}
+            onPress={() => onCapture([3, 4])}
           >
             <View style={s.photoCta}>
               <View style={s.photoCtaIcon}>
@@ -1231,7 +1211,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
 
         {photoTaken && (
           <>
-            <TouchableOpacity style={s.retakeRow} onPress={() => onCapture(photoAspect === '4:3' ? [3, 4] : [9, 16])} activeOpacity={0.75}>
+            <TouchableOpacity style={s.retakeRow} onPress={() => onCapture([3, 4])} activeOpacity={0.75}>
               <Ionicons name="camera-reverse-outline" size={13} color={C.textSub} />
               <Text style={s.retakeText}>다시 찍기</Text>
             </TouchableOpacity>
