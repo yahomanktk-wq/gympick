@@ -298,6 +298,33 @@ export default function HomeScreen() {
           setSessions(logs);
           setSplitConfig(config);
 
+          const todayStr = new Date().toDateString();
+          const todayLogs = logs.filter(l =>
+            new Date(l.date).toDateString() === todayStr
+          );
+
+          if (todayLogs.length > 0) {
+            const todayMuscle = todayLogs[0].machines[0]?.targetMuscle ?? null;
+            target = config
+              ? getTodayTarget(config.splitType, config.workoutSplit, config.splitCurrentIndex)
+              : null;
+
+            const posts = await fetchActiveFeedPosts().catch(() => [] as WorkoutFeedPost[]);
+            if (!active) return;
+
+            if (todayMuscle) {
+              const filtered = posts.filter(p => p.muscles.some(m => m === todayMuscle));
+              setOunwanPosts(filtered.length > 0 ? filtered : posts);
+            } else {
+              setOunwanPosts(posts);
+            }
+
+            setTodayTarget(target);
+            const weekDates = getThisWeekDates();
+            setWeekTargetMap(getWeekTargetMap(config, weekDates));
+            return;
+          }
+
           target = config
             ? getTodayTarget(config.splitType, config.workoutSplit, config.splitCurrentIndex)
             : null;
