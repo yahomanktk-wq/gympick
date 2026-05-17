@@ -1073,14 +1073,14 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
         {photoTaken && (
           <View
             ref={overlayRef}
-            style={[s.photoFrame, s.photoFrameActive, { height: photoH, backgroundColor: 'transparent', borderColor: tc, borderRadius: 20 }]}
+            style={[s.photoFrame, s.photoFrameActive, { height: photoH, backgroundColor: 'transparent', borderWidth: 0, borderRadius: 20, overflow: 'hidden' }]}
             collapsable={false}
           >
             {/* Background photo */}
             {photoUri ? (
               <Image
                 source={{ uri: photoUri }}
-                style={[StyleSheet.absoluteFill, { borderRadius: 20 }]}
+                style={StyleSheet.absoluteFill}
                 resizeMode="cover"
               />
             ) : null}
@@ -1129,6 +1129,20 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
               </View>
             </View>
 
+            {/* 테두리: overflow 클리핑 이후 absolute로 덮어 빈공간 방지 */}
+            <View
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                borderRadius: 20,
+                borderWidth: 2,
+                borderColor: tc,
+              }}
+              pointerEvents="none"
+            />
           </View>
         )}
 
