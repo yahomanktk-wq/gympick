@@ -8,7 +8,7 @@ import requests
 
 FOLDER = r"D:\시작\gympick\machine_card_image\변경 후"
 SUPABASE_URL = "https://okrouzqqvfioodfieljv.supabase.co"
-SERVICE_KEY = "REMOVED_SECRET"
+SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 BUCKET = "machine-images"
 
 HEADERS = {
