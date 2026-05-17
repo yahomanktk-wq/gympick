@@ -31,7 +31,6 @@ import { MachineWithGyms, GymWithMachines } from '../data/types';
 import { fetchRankingTabData, type RankingTabData } from '../lib/db/rankingQueries';
 import { fetchOlympicRankings, type OlympicRankingEntry } from '../lib/db/olympicRankings';
 import { RankingTab } from './FindGymRankingTab';
-import { FAVORITE_MACHINES } from '../data/machineReviews';
 import { getGymFavorites } from '../data/gymFavoriteStore';
 import { getAllAdminGyms } from '../data/adminGymStore';
 import GymDetailModal     from './flow/GymDetailModal';
@@ -214,9 +213,7 @@ export default function FindGymScreen() {
   const [detailMachine,    setDetailMachine]    = useState<MachineWithGyms | null>(null);
   const [gymDetailId,      setGymDetailId]      = useState<string | null>(null);
   const [gymDetailVisible, setGymDetailVisible] = useState(false);
-  const [favorites,         setFavorites]         = useState<Set<string>>(
-    () => new Set(FAVORITE_MACHINES.map(f => f.machineId))
-  );
+  const [favorites,         setFavorites]         = useState<Set<string>>(new Set());
   const [activeTab,         setActiveTab]         = useState<'machine' | 'gym' | 'favorite' | 'ranking'>('machine');
   const [gymFavoriteIds, setGymFavoriteIds] = useState<string[]>(() => getGymFavorites());
 
