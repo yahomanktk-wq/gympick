@@ -38,7 +38,7 @@ import GymDetailModal     from './flow/GymDetailModal';
 import MachineDetailModal from './flow/MachineDetailModal';
 import MachineCard        from '../components/MachineCard';
 import MachineCardBorder  from '../components/MachineCardBorder';
-import OlympicNavigator   from './olympic/OlympicNavigator';
+
 import * as Location from 'expo-location';
 import { calcDistanceKm, formatDistance } from '../lib/geocoding';
 import FavoriteGymRecommendation from '../components/FavoriteGymRecommendation';
@@ -223,7 +223,7 @@ export default function FindGymScreen() {
   useEffect(() => {
     setGymFavoriteIds(getGymFavorites());
   }, [user?.id]);
-  const [olympicVisible,    setOlympicVisible]    = useState(false);
+
   const [showGymRequestModal, setShowGymRequestModal] = useState(false);
   const [reqGymName,   setReqGymName]   = useState('');
   const [reqLocation,  setReqLocation]  = useState('');
@@ -620,20 +620,6 @@ export default function FindGymScreen() {
                 </View>
               )}
 
-              {!isLoading && !hasFilters && (
-                <TouchableOpacity
-                  style={s.olympicBanner}
-                  activeOpacity={0.85}
-                  onPress={() => setOlympicVisible(true)}
-                >
-                  <Ionicons name="trophy" size={28} color={C.accent} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.olympicTitle}>머신 올림픽</Text>
-                    <Text style={s.olympicSub}>내가 가장 좋아하는 머신은?</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={C.textDim} />
-                </TouchableOpacity>
-              )}
               {!isLoading && (
                 <SectionHead
                   title={hasFilters ? '검색 결과' : '머신'}
@@ -840,11 +826,6 @@ export default function FindGymScreen() {
         onClose={() => setGymDetailVisible(false)}
       />
 
-      <OlympicNavigator
-        visible={olympicVisible}
-        onClose={() => setOlympicVisible(false)}
-      />
-
       <Modal visible={showGymRequestModal} transparent animationType="slide" onRequestClose={() => setShowGymRequestModal(false)}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
@@ -999,19 +980,6 @@ const s = StyleSheet.create({
 
   emptyRow:     { paddingVertical: 18, alignItems: 'center', marginBottom: 16 },
   emptyRowText: { fontSize: 13, color: C.textDim },
-
-  // Olympic banner
-  olympicBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: C.surfaceHigh,
-    borderRadius: R.card,
-    padding: 16,
-    marginBottom: 16,
-  },
-  olympicTitle: { fontSize: 16, fontWeight: '900', color: C.text },
-  olympicSub:   { fontSize: 12, color: C.textSub, marginTop: 3 },
 
   // Tab buttons
   tabRow: {

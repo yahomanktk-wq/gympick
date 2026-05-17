@@ -25,7 +25,7 @@ import { MANAGED_GYMS, PENDING_GYMS, PENDING_EDITS, FLAGGED_ITEMS } from '../dat
 import ManagerDashboard from './manager/ManagerDashboard';
 import AdminDashboard from './admin/AdminDashboard';
 import FavoritesScreen from './FavoritesScreen';
-import PRHistoryScreen from './PRHistoryScreen';
+
 import PrivacyPolicyScreen from './PrivacyPolicyScreen';
 import AuthFlow from './auth/AuthFlow';
 import NotificationsScreen from './NotificationsScreen';
@@ -41,13 +41,6 @@ type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
 // --- Static mock data
 
-const PERSONAL_STATS = [
-  { label: '운동 횟수', value: '48' },
-  { label: 'PR 횟수',  value: '12' },
-  { label: '연속 기록',   value: '12d' },
-  { label: '볼륨',   value: '12t' },
-];
-
 const ACHIEVEMENTS = [
   { id: '1', icon: 'flame',   label: '10일 연속', earned: true  },
   { id: '2', icon: 'barbell', label: '첫 PR',      earned: true  },
@@ -55,12 +48,6 @@ const ACHIEVEMENTS = [
   { id: '4', icon: 'flash',   label: '스피드 리프터',  earned: false },
   { id: '5', icon: 'fitness', label: '철의 의지',     earned: true  },
   { id: '6', icon: 'medal',   label: '센추리 클럽',  earned: false },
-];
-
-const RECENT_PRS = [
-  { id: '1', exercise: 'Back Squat',  value: '110 kg × 3', date: 'Mar 4'   },
-  { id: '2', exercise: 'Deadlift',    value: '130 kg × 1', date: 'Feb 28'  },
-  { id: '3', exercise: 'Bench Press', value: '90 kg × 5',  date: 'Feb 20'  },
 ];
 
 const SETTINGS_LIST: { icon: IoniconName; label: string; toggle?: boolean; danger?: boolean; privacy?: boolean; splitSetup?: boolean }[] = [
@@ -361,13 +348,15 @@ export default function ProfileScreen() {
   const [showManager,       setShowManager]       = useState(false);
   const [showAdmin,         setShowAdmin]         = useState(false);
   const [showFavorites,     setShowFavorites]     = useState(false);
-  const [showPRHistory,     setShowPRHistory]     = useState(false);
   const [showPrivacy,       setShowPrivacy]       = useState(false);
   const [showSplitSetup,    setShowSplitSetup]    = useState(false);
   const [showingAuth,       setShowingAuth]       = useState(false);
   const [authPage,          setAuthPage]          = useState<'signin' | 'signup'>('signin');
   const [showNotifications, setShowNotifications] = useState(false);
   const [showManagerReq,    setShowManagerReq]    = useState(false);
+  const [profileStats,      setProfileStats]      = useState({ workoutCount: 0, prCount: 0, streak: 0, volume: 0 });
+  const [splitConfig,       setSplitConfig]       = useState<any>(null);
+  const [splitConfigLoaded, setSplitConfigLoaded] = useState(false);
   const [showNicknameEdit,  setShowNicknameEdit]  = useState(false);
   const [nicknameInput,     setNicknameInput]     = useState('');
   const [unreadCount,       setUnreadCount]       = useState(0);
@@ -427,6 +416,57 @@ export default function ProfileScreen() {
   }, [user?.id]);
 
   useEffect(() => { loadUnreadCount(); }, [loadUnreadCount]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const loadStats = async () => {
+      try {
+        const { fetchWorkoutLogs } = await import('../lib/db');
+        const logs = await fetchWorkoutLogs(user.id);
+        if (!logs?.length) return;
+        const workoutCount = logs.length;
+        const volume = logs.reduce((acc, log) => {
+          return acc + log.machines.reduce((a, m) => a + (m.weight ?? 0) * (m.reps ?? 0) * (m.sets ?? 1), 0);
+        }, 0) / 1000;
+        const uniqueDates = [...new Set(logs.map(l => l.date.slice(0, 10)))].sort().reverse();
+        let streak = uniqueDates.length > 0 ? 1 : 0;
+        for (let i = 1; i < uniqueDates.length; i++) {
+          const prev = new Date(uniqueDates[i - 1]);
+          prev.setDate(prev.getDate() - 1);
+          if (uniqueDates[i] === prev.toISOString().slice(0, 10)) { streak++; } else { break; }
+        }
+        const machineMaxMap: Record<string, number> = {};
+        let prCount = 0;
+        logs.forEach(log => {
+          log.machines.forEach(m => {
+            const key = m.machineId ?? m.machineName;
+            const prev = machineMaxMap[key] ?? 0;
+            if ((m.weight ?? 0) > prev) { machineMaxMap[key] = m.weight ?? 0; prCount++; }
+          });
+        });
+        setProfileStats({ workoutCount, prCount, streak, volume: Math.round(volume * 10) / 10 });
+      } catch (e) {
+        if (__DEV__) console.warn('[ProfileScreen] stats load error:', e);
+      }
+    };
+    loadStats();
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const loadSplit = async () => {
+      try {
+        const { fetchSplitConfig } = await import('../lib/db/splitRoutine');
+        const config = await fetchSplitConfig(user.id);
+        setSplitConfig(config);
+      } catch (e) {
+        setSplitConfig(null);
+      } finally {
+        setSplitConfigLoaded(true);
+      }
+    };
+    loadSplit();
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user) return;
@@ -587,50 +627,43 @@ export default function ProfileScreen() {
           </>
         )}
 
+        {/* ── Split setup banner (미설정 유저) ── */}
+        {splitConfigLoaded && (
+          !splitConfig ||
+          (Array.isArray(splitConfig?.workoutSplit) && splitConfig.workoutSplit.length === 0)
+        ) && (
+          <TouchableOpacity
+            style={styles.splitSetupBanner}
+            onPress={() => setShowSplitSetup(true)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="git-branch-outline" size={20} color={C.accent} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.splitSetupBannerTitle}>운동 분할을 설정해볼까요?</Text>
+              <Text style={styles.splitSetupBannerSub}>오늘 운동 부위를 자동으로 추천해드려요</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={C.textDim} />
+          </TouchableOpacity>
+        )}
+
         {/* ── Personal stats ── */}
         <SectionLabel text="내 통계" />
         <View style={styles.statsGrid}>
-          {PERSONAL_STATS.map((s, i) => (
+          {[
+            { label: '운동 횟수', value: String(profileStats.workoutCount) },
+            { label: 'PR 횟수',  value: String(profileStats.prCount)      },
+            { label: '연속 기록', value: `${profileStats.streak}d`         },
+            { label: '볼륨',     value: `${profileStats.volume}t`          },
+          ].map((s, i, arr) => (
             <React.Fragment key={s.label}>
               <View style={styles.statCell}>
                 <Text style={styles.statValue}>{s.value}</Text>
                 <Text style={styles.statLabel}>{s.label}</Text>
               </View>
-              {i < PERSONAL_STATS.length - 1 && <View style={styles.statDivider} />}
+              {i < arr.length - 1 && <View style={styles.statDivider} />}
             </React.Fragment>
           ))}
         </View>
-
-        {/* ── Personal records ── */}
-        <View style={styles.sectionRow}>
-          <SectionLabel text="개인 기록" />
-          <TouchableOpacity onPress={() => setShowPRHistory(true)}>
-            <Text style={styles.seeAll}>전체 보기</Text>
-          </TouchableOpacity>
-        </View>
-        {user.id.startsWith('mock-') ? (
-          <View style={styles.prPlaceholderCard}>
-            <Ionicons name="trophy-outline" size={22} color={C.textDim} />
-            <Text style={styles.prPlaceholderText}>
-              운동을 기록하면 PR이 자동으로 추적돼요.
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.card}>
-            {RECENT_PRS.map((pr, i) => (
-              <React.Fragment key={pr.id}>
-                <View style={styles.prRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.prExercise}>{pr.exercise}</Text>
-                    <Text style={styles.prValue}>{pr.value}</Text>
-                  </View>
-                  <Text style={styles.prDate}>{pr.date}</Text>
-                </View>
-                {i < RECENT_PRS.length - 1 && <Divider />}
-              </React.Fragment>
-            ))}
-          </View>
-        )}
 
         {/* ── My Library ── */}
         <SectionLabel text="내 라이브러리" />
@@ -640,14 +673,6 @@ export default function ProfileScreen() {
               <Ionicons name="bookmark-outline" size={16} color={C.textSub} />
             </View>
             <Text style={styles.settingLabel}>즐겨찾기</Text>
-            <Ionicons name="chevron-forward" size={15} color={C.textDim} />
-          </TouchableOpacity>
-          <Divider />
-          <TouchableOpacity style={styles.navRow} activeOpacity={0.75} onPress={() => nav.navigate('WorkoutAnalytics')}>
-            <View style={styles.settingIcon}>
-              <Ionicons name="bar-chart-outline" size={16} color={C.textSub} />
-            </View>
-            <Text style={styles.settingLabel}>3대 PR 분석</Text>
             <Ionicons name="chevron-forward" size={15} color={C.textDim} />
           </TouchableOpacity>
         </View>
@@ -667,7 +692,16 @@ export default function ProfileScreen() {
                 onPress={
                   s.label === '로그아웃' ? signOut
                   : s.privacy ? () => setShowPrivacy(true)
-                  : s.splitSetup ? () => setShowSplitSetup(true)
+                  : s.splitSetup ? async () => {
+                    const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+                    const termsCompleted = await AsyncStorage.getItem('terms_completed');
+                    if (termsCompleted !== 'true') {
+                      setAuthPage('signup');
+                      setShowingAuth(true);
+                      return;
+                    }
+                    setShowSplitSetup(true);
+                  }
                   : s.label === '단위 (kg / lbs)' ? () => handleSettingPress(s.label)
                   : undefined
                 }
@@ -708,9 +742,6 @@ export default function ProfileScreen() {
       {/* ── Modals ── */}
       <Modal visible={showFavorites} animationType="slide" onRequestClose={() => setShowFavorites(false)}>
         <FavoritesScreen onClose={() => setShowFavorites(false)} />
-      </Modal>
-      <Modal visible={showPRHistory} animationType="slide" onRequestClose={() => setShowPRHistory(false)}>
-        <PRHistoryScreen onClose={() => setShowPRHistory(false)} />
       </Modal>
       <Modal visible={showManager} animationType="slide" onRequestClose={() => setShowManager(false)}>
         <ManagerDashboard onClose={() => setShowManager(false)} />
@@ -1121,6 +1152,21 @@ const styles = StyleSheet.create({
   prExercise: { fontSize: 14, fontWeight: '700', color: C.text },
   prValue:    { fontSize: 12, color: C.accent, fontWeight: '600', marginTop: 2 },
   prDate:     { fontSize: 11, color: C.textDim, fontWeight: '600' },
+
+  splitSetupBanner: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             12,
+    backgroundColor: C.accentBg,
+    borderRadius:    R.card,
+    borderWidth:     1,
+    borderColor:     C.accent + '40',
+    padding:         14,
+    marginHorizontal: screenPad,
+    marginBottom:    16,
+  },
+  splitSetupBannerTitle: { fontSize: 14, fontWeight: '700', color: C.text, marginBottom: 2 },
+  splitSetupBannerSub:   { fontSize: 12, color: C.textSub },
 
   // --- Settings / Nav rows
   navRow:      { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
