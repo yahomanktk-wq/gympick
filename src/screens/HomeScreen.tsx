@@ -22,7 +22,7 @@ import { WorkoutLog, WorkoutFeedPost, UserSplitConfig, WeekdaySplit } from '../d
 import { fetchWorkoutLogs } from '../lib/db';
 import { fetchActiveFeedPosts } from '../lib/db/feedPosts';
 import { fetchSplitConfig } from '../lib/db/splitRoutine';
-import { getTodayTarget, toEnMuscle } from '../lib/splitUtils';
+import { getTodayTarget, toEnMuscle, toKoMuscle } from '../lib/splitUtils';
 
 // --- Helpers
 
@@ -280,8 +280,9 @@ export default function HomeScreen() {
   const [sessions,         setSessions]          = useState<WorkoutLog[]>([]);
   const [splitConfig,      setSplitConfig]       = useState<UserSplitConfig | null>(null);
   const [todayTarget,      setTodayTarget]       = useState<string | null>(null);
-  const [ounwanPosts,      setOunwanPosts]       = useState<WorkoutFeedPost[]>([]);
-  const [weekTargetMap,    setWeekTargetMap]     = useState<Record<string, string | null>>({});
+  const [ounwanPosts,        setOunwanPosts]         = useState<WorkoutFeedPost[]>([]);
+  const [weekTargetMap,      setWeekTargetMap]       = useState<Record<string, string | null>>({});
+  const [ounwanDisplayTarget, setOunwanDisplayTarget] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -320,6 +321,7 @@ export default function HomeScreen() {
             }
 
             setTodayTarget(target);
+            setOunwanDisplayTarget(todayMuscle ? toKoMuscle(todayMuscle) : target);
             const weekDates = getThisWeekDates();
             setWeekTargetMap(getWeekTargetMap(config, weekDates));
             return;
@@ -329,6 +331,7 @@ export default function HomeScreen() {
             ? getTodayTarget(config.splitType, config.workoutSplit, config.splitCurrentIndex)
             : null;
           setTodayTarget(target);
+          setOunwanDisplayTarget(target);
 
           const weekDates = getThisWeekDates();
           setWeekTargetMap(getWeekTargetMap(config, weekDates));
@@ -537,8 +540,8 @@ export default function HomeScreen() {
         {/* ── 오늘의 오운완 피드 ── */}
         <OunwanHeader
           message={
-            todayTarget && todayTarget !== '휴식'
-              ? `오늘 ${todayTarget} 운동한 사람들이에요! 💪`
+            ounwanDisplayTarget && ounwanDisplayTarget !== '휴식'
+              ? `오늘 ${ounwanDisplayTarget} 운동한 사람들이에요! 💪`
               : '오늘 운동한 사람들이에요! 💪'
           }
           onMorePress={handleFeedPress}
