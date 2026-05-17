@@ -21,7 +21,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { brandLogos } from '../constants/brandLogos';
 import { C, R, T } from '../theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { WorkoutLog, Machine, UserSplitConfig, SequentialSplit } from '../data/types';
+import { WorkoutLog, Machine, UserSplitConfig, SequentialSplit, WeekdaySplit } from '../data/types';
 import { fetchSplitConfig, updateSplitIndex } from '../lib/db/splitRoutine';
 import { getTodayTarget, getNextTarget, calcNextIndex, extractCompletedTargets } from '../lib/splitUtils';
 import { getSessionPRMachines } from '../data/workoutSessions';
@@ -198,12 +198,58 @@ function getSplitBannerMessage(
 
 // --- Retro Weekly Grid
 
+function getWeekTargetMap(
+  splitConfig: UserSplitConfig | null,
+  weekDates:   Date[]
+): Record<string, string | null> {
+  const result: Record<string, string | null> = {};
+
+  if (!splitConfig || !splitConfig.workoutSplit) {
+    weekDates.forEach(d => { result[d.toDateString()] = null; });
+    return result;
+  }
+
+  if (splitConfig.splitType === 'weekday') {
+    const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    const split = splitConfig.workoutSplit as WeekdaySplit;
+    weekDates.forEach(d => {
+      const key     = DAY_KEYS[d.getDay()] as keyof WeekdaySplit;
+      const targets = (split[key] ?? []) as string[];
+      result[d.toDateString()] = targets.length > 0 ? targets[0] : null;
+    });
+    return result;
+  }
+
+  const split  = splitConfig.workoutSplit as string[];
+  const len    = split.length;
+  if (len === 0) {
+    weekDates.forEach(d => { result[d.toDateString()] = null; });
+    return result;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const currentIdx = splitConfig.splitCurrentIndex % len;
+
+  weekDates.forEach(d => {
+    const date = new Date(d);
+    date.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const idx = ((currentIdx + diffDays) % len + len) % len;
+    result[d.toDateString()] = split[idx] ?? null;
+  });
+
+  return result;
+}
+
 function RetroWeeklyGrid({
   sessions,
   onSelectDay,
+  splitConfig,
 }: {
-  sessions: WorkoutLog[];
+  sessions:    WorkoutLog[];
   onSelectDay: (daySessions: WorkoutLog[]) => void;
+  splitConfig: UserSplitConfig | null;
 }) {
   const today     = useMemo(() => new Date(), []);
   const numWeeks  = computeNumWeeks(sessions);
@@ -216,6 +262,23 @@ function RetroWeeklyGrid({
       return { weekStart: ws, weekEnd: we, weekNum: getISOWeekNumber(ws), key: ws.toISOString() };
     });
   }, [numWeeks]);
+
+  const allWeekDates = useMemo(() => {
+    const currentWeekStart = getWeekStart(today);
+    const dates: Date[] = [];
+    for (let i = 0; i < numWeeks; i++) {
+      const ws = addDays(currentWeekStart, -i * 7);
+      for (let j = 0; j < 7; j++) {
+        dates.push(addDays(ws, j));
+      }
+    }
+    return dates;
+  }, [numWeeks, today]);
+
+  const weekTargetMap = useMemo(
+    () => getWeekTargetMap(splitConfig, allWeekDates),
+    [splitConfig, allWeekDates]
+  );
 
   return (
     <View style={{ paddingBottom: 16 }}>
@@ -260,22 +323,29 @@ function RetroWeeklyGrid({
                     }}
                   >
                     {photoSrc ? (
-                      <>
-                        <ExpoImage
-                          source={{ uri: photoSrc }}
-                          style={StyleSheet.absoluteFill}
-                          contentFit="cover"
-                          onError={() => {}}
-                        />
-                        <View style={rg.photoOverlay}>
-                          <Text style={rg.photoDate}>{day.getDate()}</Text>
-                          <Text style={rg.photoDay}>{RETRO_DAY_LABELS[i]}</Text>
-                        </View>
-                      </>
+                      <ExpoImage
+                        source={{ uri: photoSrc }}
+                        style={StyleSheet.absoluteFill}
+                        contentFit="cover"
+                        onError={() => {}}
+                      />
                     ) : (
                       <View style={rg.emptyCell}>
-                        <Text style={rg.emptyCellDate}>{day.getDate()}</Text>
+                        <Text style={[
+                          rg.emptyCellDate,
+                          isSameDay(day, today) && { color: C.accent },
+                        ]}>
+                          {day.getDate()}
+                        </Text>
                         <Text style={rg.emptyCellDay}>{RETRO_DAY_LABELS[i]}</Text>
+                        {weekTargetMap[day.toDateString()] && (
+                          <Text style={[
+                            rg.emptyCellTarget,
+                            weekTargetMap[day.toDateString()] === '휴식' && { color: C.textDim },
+                          ]}>
+                            {weekTargetMap[day.toDateString()]}
+                          </Text>
+                        )}
                       </View>
                     )}
                   </TouchableOpacity>
@@ -857,6 +927,7 @@ export default function JournalScreen() {
             <RetroWeeklyGrid
               sessions={sessions}
               onSelectDay={(daySessions) => setDetailSessions(daySessions)}
+              splitConfig={splitConfig}
             />
 
             {sessions.length === 0 && (
@@ -968,26 +1039,6 @@ const rg = StyleSheet.create({
   dayCellFuture: {
     opacity: 0.3,
   },
-  photoOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0,0,0,0.52)',
-    paddingHorizontal: 5,
-    paddingVertical: 4,
-  },
-  photoDate: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#fff',
-    lineHeight: 14,
-  },
-  photoDay: {
-    fontSize: 9,
-    color: 'rgba(255,255,255,0.8)',
-    lineHeight: 11,
-  },
   emptyCell: {
     flex: 1,
     alignItems: 'center',
@@ -1002,6 +1053,13 @@ const rg = StyleSheet.create({
   emptyCellDay: {
     fontSize: 10,
     color: C.textDim,
+  },
+  emptyCellTarget: {
+    fontSize:   10,
+    fontWeight: '700',
+    color:      C.accent,
+    marginTop:  2,
+    textAlign:  'center',
   },
 });
 
