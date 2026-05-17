@@ -1195,15 +1195,12 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
                     </View>
 
                     {/* 세트 목록 */}
-                    <View style={{ alignItems: 'flex-end', justifyContent: 'center', minWidth: 80 }}>
-                      {exSets.slice(0, 6).map((st, si) => (
+                    <View style={{ alignItems: 'flex-end', justifyContent: 'flex-start', minWidth: 80 }}>
+                      {exSets.map((st, si) => (
                         <Text key={si} style={{ fontSize: 11, fontWeight: '600', color: '#000000', lineHeight: 18 }}>
                           {st.weight > 0 ? `${st.weight}kg` : '--'} × {st.reps}
                         </Text>
                       ))}
-                      {exSets.length > 6 && (
-                        <Text style={{ fontSize: 10, color: '#666666', marginTop: 2 }}>+{exSets.length - 6}세트</Text>
-                      )}
                     </View>
 
                   </View>
