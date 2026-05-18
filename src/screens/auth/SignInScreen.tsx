@@ -17,10 +17,11 @@ import { C, R } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
 
 interface Props {
-  onSignUp: () => void;
+  onSignUp:         () => void;
+  onForgotPassword: () => void;
 }
 
-export default function SignInScreen({ onSignUp }: Props) {
+export default function SignInScreen({ onSignUp, onForgotPassword }: Props) {
   const { signIn, signInGoogle, signInApple } = useAuth();
 
   const [email,    setEmail]    = useState('');
@@ -112,6 +113,17 @@ export default function SignInScreen({ onSignUp }: Props) {
             onSubmitEditing={handleSignIn}
           />
         </View>
+
+        {/* 비밀번호 재설정 링크 */}
+        <TouchableOpacity
+          style={{ alignSelf: 'flex-end', marginBottom: 8, marginTop: 4 }}
+          onPress={onForgotPassword}
+          activeOpacity={0.7}
+        >
+          <Text style={{ fontSize: 13, color: C.accent, fontWeight: '600' }}>
+            비밀번호를 잊으셨나요?
+          </Text>
+        </TouchableOpacity>
 
         {/* Error */}
         {error && (

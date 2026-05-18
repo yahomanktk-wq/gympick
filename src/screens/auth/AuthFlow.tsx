@@ -4,16 +4,17 @@ import { C } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
 import { fetchSplitConfig } from '../../lib/db/splitRoutine';
 import { supabase } from '../../lib/supabase';
-import SignInScreen        from './SignInScreen';
-import SignUpScreen        from './SignUpScreen';
-import VerifyScreen        from './VerifyScreen';
-import TermsConsentScreen  from './TermsConsentScreen';
+import SignInScreen          from './SignInScreen';
+import SignUpScreen          from './SignUpScreen';
+import VerifyScreen          from './VerifyScreen';
+import TermsConsentScreen    from './TermsConsentScreen';
+import ForgotPasswordScreen  from './ForgotPasswordScreen';
 import WorkoutSplitSetupScreen from '../flow/WorkoutSplitSetupScreen';
 
-type Page = 'terms' | 'signin' | 'signup' | 'verify' | 'split-setup';
+type Page = 'terms' | 'signin' | 'signup' | 'verify' | 'split-setup' | 'forgot-password';
 
 interface Props {
-  initialPage?: Exclude<Page, 'split-setup' | 'terms'>;
+  initialPage?: Exclude<Page, 'split-setup' | 'terms' | 'forgot-password'>;
   onComplete?:  () => void;
 }
 
@@ -91,7 +92,9 @@ export default function AuthFlow({ initialPage = 'signin', onComplete }: Props) 
     <SafeAreaView style={s.safe}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
 
-      {page === 'signup' ? (
+      {page === 'forgot-password' ? (
+        <ForgotPasswordScreen onBack={() => setPage('signin')} />
+      ) : page === 'signup' ? (
         <SignUpScreen
           onBack={() => setPage('signin')}
           onVerification={() => setPage('verify')}
@@ -99,7 +102,10 @@ export default function AuthFlow({ initialPage = 'signin', onComplete }: Props) 
       ) : page === 'verify' ? (
         <VerifyScreen onBack={() => setPage('signin')} />
       ) : (
-        <SignInScreen onSignUp={() => setPage('signup')} />
+        <SignInScreen
+          onSignUp={() => setPage('signup')}
+          onForgotPassword={() => setPage('forgot-password')}
+        />
       )}
     </SafeAreaView>
   );
