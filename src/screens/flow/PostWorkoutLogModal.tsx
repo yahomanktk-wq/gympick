@@ -225,19 +225,24 @@ function MuscleCard({ name, sub, SvgIcon, selected, onToggle }: {
   );
 }
 
-function MuscleSelectStep({ selected, onToggle, onNext, onBack, onClose }: {
-  selected: Set<string>;
-  onToggle: (m: string) => void;
-  onNext: () => void;
-  onBack: () => void;
-  onClose: () => void;
+function MuscleSelectStep({ selected, onToggle, onNext, onBack, onClose, isRestDay }: {
+  selected:   Set<string>;
+  onToggle:   (m: string) => void;
+  onNext:     () => void;
+  onBack:     () => void;
+  onClose:    () => void;
+  isRestDay?: boolean;
 }) {
   return (
     <SafeAreaView style={s.safe}>
       <NavHeader title="어떤 부위를 운동했나요?" onBack={onBack} onClose={onClose} />
       <StepBar total={5} current={1} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
-        <Text style={s.hint}>오늘 운동한 부위를 모두 선택하세요</Text>
+        <Text style={s.hint}>
+          {isRestDay
+            ? '오늘은 휴식 날이에요. 그래도 운동하실 건가요?'
+            : '오늘 운동한 부위를 모두 선택하세요'}
+        </Text>
 
         <View style={s.muscleGrid}>
           {MUSCLE_GROUPS.map(g => (
@@ -1431,6 +1436,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
 
   const [step,              setStep]              = useState<Step>('gym-select');
   const [selectedMuscles,   setSelectedMuscles]   = useState<Set<string>>(new Set());
+  const [isRestDay,         setIsRestDay]         = useState(false);
   const [gym,               setGym]               = useState<GymWithMachines | null>(null);
   const [currentExerciseId, setCurrentExerciseId] = useState<string | null>(null);
   const [loggedIds,         setLoggedIds]         = useState<Set<string>>(new Set());
@@ -1517,7 +1523,12 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     fetchSplitConfig(user.id).then(config => {
       if (!config) return;
       const target = getTodayTarget(config.splitType, config.workoutSplit, config.splitCurrentIndex);
-      if (target) setSelectedMuscles(new Set([target]));
+      if (!target || target === '휴식') {
+        if (target === '휴식') setIsRestDay(true);
+        return;
+      }
+      setIsRestDay(false);
+      setSelectedMuscles(new Set([target]));
     }).catch(() => {});
   }, [visible, user?.id]);
 
@@ -1954,6 +1965,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             onNext={() => setStep('routine-reference')}
             onBack={goBack}
             onClose={() => onClose(false)}
+            isRestDay={isRestDay}
           />
         );
       case 'routine-reference':
