@@ -107,7 +107,7 @@ export async function fetchWorkoutSessionById(sessionId: string): Promise<any | 
     const { data, error } = await supabase
       .from('workout_sessions')
       .select(`
-        id, date, gym_id, target_muscle,
+        id, date, gym_id,
         workout_entries (
           id, machine_id, machine_name, machine_brand,
           workout_sets ( weight, reps, set_number )
@@ -115,6 +115,10 @@ export async function fetchWorkoutSessionById(sessionId: string): Promise<any | 
       `)
       .eq('id', sessionId)
       .single();
+
+    console.log('[fetchWorkoutSessionById] sessionId:', sessionId);
+    console.log('[fetchWorkoutSessionById] data:', JSON.stringify(data));
+    console.log('[fetchWorkoutSessionById] error:', error);
 
     if (error || !data) return null;
 
@@ -164,7 +168,7 @@ export async function fetchWorkoutSessionByUserAndDate(
     const { data, error } = await supabase
       .from('workout_sessions')
       .select(`
-        id, date, gym_id, target_muscle,
+        id, date, gym_id,
         workout_entries (
           id, machine_id, machine_name, machine_brand,
           workout_sets ( weight, reps, set_number )
