@@ -107,7 +107,7 @@ export async function fetchWorkoutSessionById(sessionId: string): Promise<any | 
     const { data, error } = await supabase
       .from('workout_sessions')
       .select(`
-        id, date, gym_id, gym_name, target_muscle,
+        id, date, gym_id, target_muscle,
         workout_entries (
           id, machine_id, machine_name, machine_brand,
           workout_sets ( weight, reps, set_number )
@@ -118,10 +118,21 @@ export async function fetchWorkoutSessionById(sessionId: string): Promise<any | 
 
     if (error || !data) return null;
 
+    // gym_id로 헬스장명 별도 조회
+    let gymName = data.gym_id ?? '';
+    try {
+      const { data: gymData } = await supabase
+        .from('gyms')
+        .select('name')
+        .eq('id', data.gym_id)
+        .single();
+      if (gymData?.name) gymName = gymData.name;
+    } catch {}
+
     return {
       id:      data.id,
       date:    data.date,
-      gymName: data.gym_name,
+      gymName: gymName,
       machines: (data.workout_entries ?? []).map((e: any) => ({
         machineId:    e.machine_id,
         machineName:  e.machine_name,
@@ -153,7 +164,7 @@ export async function fetchWorkoutSessionByUserAndDate(
     const { data, error } = await supabase
       .from('workout_sessions')
       .select(`
-        id, date, gym_id, gym_name, target_muscle,
+        id, date, gym_id, target_muscle,
         workout_entries (
           id, machine_id, machine_name, machine_brand,
           workout_sets ( weight, reps, set_number )
@@ -168,10 +179,21 @@ export async function fetchWorkoutSessionByUserAndDate(
 
     if (error || !data) return null;
 
+    // gym_id로 헬스장명 별도 조회
+    let gymName = data.gym_id ?? '';
+    try {
+      const { data: gymData } = await supabase
+        .from('gyms')
+        .select('name')
+        .eq('id', data.gym_id)
+        .single();
+      if (gymData?.name) gymName = gymData.name;
+    } catch {}
+
     return {
       id:      data.id,
       date:    data.date,
-      gymName: data.gym_name,
+      gymName: gymName,
       machines: (data.workout_entries ?? []).map((e: any) => ({
         machineId:    e.machine_id,
         machineName:  e.machine_name,
