@@ -1750,14 +1750,16 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     addNewSession(user?.id ?? 'guest', workoutLog);
 
     // Supabase DB에 저장 (실패해도 로컬 저장은 유지)
+    let dbSessionId: string | undefined;
     if (user && supabaseConfigured) {
       try {
-        await insertWorkoutSession({
+        const savedSession = await insertWorkoutSession({
           id:     sessionId,
           userId: user.id,
           gymId:  gym.id,
           date:   workoutLog.date,
         });
+        dbSessionId = savedSession?.id;
 
         for (let i = 0; i < selectedExercises.length; i++) {
           const ex = selectedExercises[i];
@@ -1825,7 +1827,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
           photoUri:       finalPhotoUrl ?? photoUri ?? effectiveCompositeUri ?? '',
           compositeUri:   finalPhotoUrl ?? effectiveCompositeUri ?? undefined,
           routineCardUri: passedRoutineCardUri ?? routineCardUri ?? undefined,
-          sessionId:      sessionId,
+          sessionId:      dbSessionId ?? sessionId,
           muscles:        Array.from(selectedMuscles),
           isPublic:       true,
         }).catch(err => {
