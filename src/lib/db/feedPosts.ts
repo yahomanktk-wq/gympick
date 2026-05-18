@@ -137,6 +137,56 @@ export async function fetchWorkoutSessionById(sessionId: string): Promise<any | 
   }
 }
 
+/**
+ * sessionId가 없을 때 userId + 날짜로 세션 조회 (fallback)
+ */
+export async function fetchWorkoutSessionByUserAndDate(
+  userId:    string,
+  createdAt: string,
+): Promise<any | null> {
+  try {
+    const dayStart = new Date(createdAt);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(createdAt);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const { data, error } = await supabase
+      .from('workout_sessions')
+      .select(`
+        id, date, gym_id, gym_name, target_muscle,
+        workout_entries (
+          id, machine_id, machine_name, machine_brand,
+          workout_sets ( weight, reps, set_number )
+        )
+      `)
+      .eq('user_id', userId)
+      .gte('date', dayStart.toISOString())
+      .lte('date', dayEnd.toISOString())
+      .order('date', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error || !data) return null;
+
+    return {
+      id:      data.id,
+      date:    data.date,
+      gymName: data.gym_name,
+      machines: (data.workout_entries ?? []).map((e: any) => ({
+        machineId:    e.machine_id,
+        machineName:  e.machine_name,
+        machineBrand: e.machine_brand,
+        allSets: (e.workout_sets ?? [])
+          .sort((a: any, b: any) => a.set_number - b.set_number)
+          .map((s: any) => ({ weight: s.weight, reps: s.reps })),
+      })),
+    };
+  } catch (e) {
+    if (__DEV__) console.warn('[fetchWorkoutSessionByUserAndDate] error:', e);
+    return null;
+  }
+}
+
 /** 유저의 특정 날짜 오운완 피드 공개 여부 조회 */
 export async function fetchFeedPostPublicStatus(
   userId: string,

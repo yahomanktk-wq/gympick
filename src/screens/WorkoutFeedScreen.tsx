@@ -19,7 +19,7 @@ import { C, R } from '../theme';
 import { WorkoutFeedPost, WorkoutLog } from '../data/types';
 const MOCK_FEED_POSTS: WorkoutFeedPost[] = [];
 import { filterActivePosts, filterByGym, filterByDistance, toggleReaction, convertSessionToFeedPost } from '../lib/feedUtils';
-import { fetchActiveFeedPosts, fetchMyLatestGymId, fetchFeedPostsByGym, fetchWorkoutSessionById } from '../lib/db/feedPosts';
+import { fetchActiveFeedPosts, fetchMyLatestGymId, fetchFeedPostsByGym, fetchWorkoutSessionById, fetchWorkoutSessionByUserAndDate } from '../lib/db/feedPosts';
 import { fetchSplitConfig } from '../lib/db/splitRoutine';
 import { getTodayTarget, toEnMuscle } from '../lib/splitUtils';
 import { fetchWorkoutLogs } from '../lib/db/workouts';
@@ -186,12 +186,30 @@ function FeedDetailModal({
   const [sessionLoading, setSessionLoading] = useState(false);
 
   useEffect(() => {
-    if (!post.sessionId) return;
     setSessionLoading(true);
-    fetchWorkoutSessionById(post.sessionId)
-      .then(setSessionData)
-      .finally(() => setSessionLoading(false));
-  }, [post.sessionId]);
+
+    const load = async () => {
+      try {
+        if (post.sessionId) {
+          const data = await fetchWorkoutSessionById(post.sessionId);
+          setSessionData(data);
+        } else {
+          const data = await fetchWorkoutSessionByUserAndDate(
+            post.userId,
+            post.createdAt,
+          );
+          setSessionData(data);
+        }
+      } catch (e) {
+        if (__DEV__) console.warn('[FeedDetailModal] session load error:', e);
+        setSessionData(null);
+      } finally {
+        setSessionLoading(false);
+      }
+    };
+
+    load();
+  }, [post.sessionId, post.userId, post.createdAt]);
 
   return (
     <Modal
