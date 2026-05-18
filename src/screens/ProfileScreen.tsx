@@ -497,16 +497,16 @@ export default function ProfileScreen() {
   async function handleDeleteAccount() {
     Alert.alert(
       '계정 삭제',
-      '계정을 삭제하면 모든 운동 기록, 오운완 사진, 설정이 영구적으로 삭제되며 복구할 수 없어요. 정말 삭제하시겠어요?',
+      '계정을 삭제하면 운동 기록, 오운완 사진, 머신 리뷰, 즐겨찾기 등 모든 데이터가 영구적으로 삭제되며 복구할 수 없어요. 정말 삭제하시겠어요?',
       [
         { text: '취소', style: 'cancel' },
         {
           text: '삭제',
           style: 'destructive',
-          onPress: async () => {
+          onPress: () => {
             Alert.alert(
               '마지막 확인',
-              '계정을 완전히 삭제합니다. 이 작업은 되돌릴 수 없어요.',
+              '모든 데이터가 완전히 삭제됩니다. 이 작업은 절대 되돌릴 수 없어요.',
               [
                 { text: '취소', style: 'cancel' },
                 {
@@ -519,8 +519,9 @@ export default function ProfileScreen() {
                       if (error) {
                         Alert.alert('오류', error);
                       }
+                      // 성공 시 deleteAccount() 내부에서 signOut 처리됨
                     } catch (e) {
-                      Alert.alert('오류', '계정 삭제 중 문제가 발생했어요.');
+                      Alert.alert('오류', '계정 삭제 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.');
                     }
                   },
                 },
