@@ -733,21 +733,18 @@ function SessionDetailModal({
                             )}
                           </View>
                           <View style={det.routineSets}>
-                            {Array.from({ length: Math.min(m.sets, 6) }).map((_, si) => (
+                            {Array.from({ length: m.sets }).map((_, si) => (
                               <Text key={si} style={det.routineSetLine}>
                                 {m.weight > 0 ? `${m.weight}kg` : '--'} × {m.reps}
                               </Text>
                             ))}
-                            {m.sets > 6 && (
-                              <Text style={det.routineSetMore}>+{m.sets - 6}세트</Text>
-                            )}
                           </View>
                         </View>
                       </React.Fragment>
                     );
                   })}
                   <View style={det.routineCardFooter}>
-                    <GymPickLogo color="#AAAAAA" width={60} height={6} />
+                    <GymPickLogo color="#000000" width={60} height={6} />
                   </View>
                 </View>
               </View>
@@ -1150,7 +1147,6 @@ const det = StyleSheet.create({
   routineBrandText:  { fontSize: 10, color: '#333333', marginTop: 4 },
   routineSets:       { alignItems: 'flex-end', justifyContent: 'center', minWidth: 80 },
   routineSetLine:    { fontSize: 11, fontWeight: '600', color: '#000000', lineHeight: 18 },
-  routineSetMore:    { fontSize: 10, color: '#666666', marginTop: 2 },
 
   photoActionRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
   photoActionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: C.surface, borderRadius: R.inner, paddingVertical: 12, borderWidth: 1, borderColor: C.border },
