@@ -17,3 +17,32 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     storage:            AsyncStorage,
   },
 });
+
+export async function deleteAccount(): Promise<{ error: string | null }> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return { error: '로그인이 필요합니다.' };
+
+    const response = await fetch(
+      `${supabaseUrl}/functions/v1/delete-account`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const err = await response.json();
+      return { error: err.error ?? '계정 삭제에 실패했습니다.' };
+    }
+
+    await supabase.auth.signOut();
+    return { error: null };
+  } catch (e) {
+    if (__DEV__) console.warn('[deleteAccount] error:', e);
+    return { error: '계정 삭제 중 오류가 발생했습니다.' };
+  }
+}

@@ -51,11 +51,12 @@ const ACHIEVEMENTS = [
   { id: '6', icon: 'medal',   label: '센추리 클럽',  earned: false },
 ];
 
-const SETTINGS_LIST: { icon: IoniconName; label: string; toggle?: boolean; danger?: boolean; privacy?: boolean; splitSetup?: boolean }[] = [
+const SETTINGS_LIST: { icon: IoniconName; label: string; toggle?: boolean; danger?: boolean; privacy?: boolean; splitSetup?: boolean; deleteAccount?: boolean }[] = [
   { icon: 'barbell-outline',        label: '단위 (kg / lbs)'                     },
   { icon: 'git-branch-outline',     label: '운동 분할 설정',   splitSetup: true  },
   { icon: 'document-text-outline',  label: '개인정보처리방침', privacy: true     },
   { icon: 'help-circle-outline',    label: '도움말 및 피드백'                     },
+  { icon: 'trash-outline',          label: '계정 삭제',        deleteAccount: true, danger: true },
   { icon: 'log-out-outline',        label: '로그아웃',          danger: true     },
 ];
 
@@ -493,6 +494,44 @@ export default function ProfileScreen() {
     }
   }
 
+  async function handleDeleteAccount() {
+    Alert.alert(
+      '계정 삭제',
+      '계정을 삭제하면 모든 운동 기록, 오운완 사진, 설정이 영구적으로 삭제되며 복구할 수 없어요. 정말 삭제하시겠어요?',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '삭제',
+          style: 'destructive',
+          onPress: async () => {
+            Alert.alert(
+              '마지막 확인',
+              '계정을 완전히 삭제합니다. 이 작업은 되돌릴 수 없어요.',
+              [
+                { text: '취소', style: 'cancel' },
+                {
+                  text: '영구 삭제',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      const { deleteAccount } = await import('../lib/supabase');
+                      const { error } = await deleteAccount();
+                      if (error) {
+                        Alert.alert('오류', error);
+                      }
+                    } catch (e) {
+                      Alert.alert('오류', '계정 삭제 중 문제가 발생했어요.');
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
+  }
+
   // Guest profile view — keep showing AuthFlow until onComplete is called
   if (showingAuth) {
     return (
@@ -694,6 +733,7 @@ export default function ProfileScreen() {
                 onPress={
                   s.label === '로그아웃' ? signOut
                   : s.privacy ? () => setShowPrivacy(true)
+                  : s.deleteAccount ? () => handleDeleteAccount()
                   : s.splitSetup ? async () => {
                     // Supabase DB로 약관 동의 여부 확인 (AsyncStorage 대신)
                     const { supabase } = await import('../lib/supabase');
