@@ -34,6 +34,7 @@ import { getNotifications, getUnreadCount } from '../lib/db/notifications';
 import { getUserBadges } from '../data/badgeStore';
 import WorkoutBadgeComponent from '../components/WorkoutBadge';
 import WorkoutSplitSetupScreen from './flow/WorkoutSplitSetupScreen';
+import TermsConsentScreen from './auth/TermsConsentScreen';
 
 // --- Types
 
@@ -350,6 +351,7 @@ export default function ProfileScreen() {
   const [showFavorites,     setShowFavorites]     = useState(false);
   const [showPrivacy,       setShowPrivacy]       = useState(false);
   const [showSplitSetup,    setShowSplitSetup]    = useState(false);
+  const [showTermsConsent,  setShowTermsConsent]  = useState(false);
   const [showingAuth,       setShowingAuth]       = useState(false);
   const [authPage,          setAuthPage]          = useState<'signin' | 'signup'>('signin');
   const [showNotifications, setShowNotifications] = useState(false);
@@ -693,13 +695,20 @@ export default function ProfileScreen() {
                   s.label === '로그아웃' ? signOut
                   : s.privacy ? () => setShowPrivacy(true)
                   : s.splitSetup ? async () => {
-                    const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
-                    const termsCompleted = await AsyncStorage.getItem('terms_completed');
-                    if (termsCompleted !== 'true') {
-                      setAuthPage('signup');
-                      setShowingAuth(true);
+                    // Supabase DB로 약관 동의 여부 확인 (AsyncStorage 대신)
+                    const { supabase } = await import('../lib/supabase');
+                    const { data: profile } = await supabase
+                      .from('profiles')
+                      .select('terms_agreed_at')
+                      .eq('id', user.id)
+                      .single();
+
+                    if (!profile?.terms_agreed_at) {
+                      // 약관 미동의 → TermsConsentScreen 직접 표시
+                      setShowTermsConsent(true);
                       return;
                     }
+                    // 약관 동의 완료 → 운동 분할 설정 화면
                     setShowSplitSetup(true);
                   }
                   : s.label === '단위 (kg / lbs)' ? () => handleSettingPress(s.label)
@@ -777,6 +786,26 @@ export default function ProfileScreen() {
         <WorkoutSplitSetupScreen
           userId={user.id}
           onComplete={() => setShowSplitSetup(false)}
+        />
+      </Modal>
+
+      {/* 약관 동의 모달 (분할 설정 진입 전) */}
+      <Modal
+        visible={showTermsConsent}
+        animationType="slide"
+        onRequestClose={() => setShowTermsConsent(false)}
+      >
+        <TermsConsentScreen
+          onComplete={async (marketingAgreed) => {
+            const { supabase } = await import('../lib/supabase');
+            await supabase.from('profiles').update({
+              terms_agreed_at:  new Date().toISOString(),
+              location_agreed:  true,
+              marketing_agreed: marketingAgreed,
+            }).eq('id', user.id);
+            setShowTermsConsent(false);
+            setShowSplitSetup(true);
+          }}
         />
       </Modal>
 

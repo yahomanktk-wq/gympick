@@ -406,8 +406,9 @@ export default function FindGymScreen() {
       const brandOk  = activeBrand  === 'All' || m.brand?.toLowerCase()         === activeBrand.toLowerCase();
       const kw       = keyword.trim().toLowerCase();
       const keyOk    = !kw ||
-        m.name.toLowerCase().includes(kw) ||
-        m.category.toLowerCase().includes(kw);
+        m.name.toLowerCase().includes(kw)     ||
+        m.category.toLowerCase().includes(kw) ||
+        m.brand?.toLowerCase().includes(kw);
       return muscleOk && brandOk && keyOk;
     });
   }, [keyword, activeMuscle, activeBrand, allMachines]);

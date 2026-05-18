@@ -362,14 +362,11 @@ function FeedDetailModal({
 
                       {/* 세트 목록 — 상단 정렬 */}
                       <View style={{ alignItems: 'flex-end', justifyContent: 'flex-start' }}>
-                        {allSets.slice(0, 4).map((s: any, si: number) => (
+                        {allSets.map((s: any, si: number) => (
                           <Text key={si} style={{ fontSize: 11, fontWeight: '600', color: '#111111', lineHeight: 18 }}>
                             {Number(s.weight) > 0 ? `${s.weight}kg` : '--'} × {s.reps}
                           </Text>
                         ))}
-                        {allSets.length > 4 && (
-                          <Text style={{ fontSize: 10, color: '#888888' }}>+{allSets.length - 4}세트</Text>
-                        )}
                       </View>
                     </TouchableOpacity>
                   );
@@ -418,13 +415,41 @@ export default function WorkoutFeedScreen() {
 
   useEffect(() => {
     if (!user?.id) return;
-    fetchSplitConfig(user.id).then(config => {
-      if (!config) return;
-      const target = getTodayTarget(config.splitType, config.workoutSplit, config.splitCurrentIndex);
-      if (target && (MUSCLE_FILTERS as readonly string[]).includes(target)) {
-        setMuscleFilter(target as MuscleFilter);
+
+    const loadFilter = async () => {
+      const [config, logs] = await Promise.all([
+        fetchSplitConfig(user.id).catch(() => null),
+        fetchWorkoutLogs(user.id).catch(() => []),
+      ]);
+
+      // 오늘 운동일지 확인
+      const todayStr  = new Date().toDateString();
+      const todayLogs = logs.filter((l: any) =>
+        new Date(l.date).toDateString() === todayStr
+      );
+
+      let targetKo: string | null = null;
+
+      if (todayLogs.length > 0) {
+        // 오늘 일지 있음 → 일지 타겟 부위(영어)를 한글로 변환
+        const { toKoMuscle } = await import('../lib/splitUtils');
+        const todayMuscleEn  = todayLogs[0].targetMuscle ?? null;
+        targetKo = todayMuscleEn ? toKoMuscle(todayMuscleEn) : null;
+      } else if (config) {
+        // 오늘 일지 없음 → 현재 인덱스 타겟 부위
+        targetKo = getTodayTarget(config.splitType, config.workoutSplit, config.splitCurrentIndex);
       }
-    }).catch(() => {});
+
+      if (
+        targetKo &&
+        targetKo !== '휴식' &&
+        (MUSCLE_FILTERS as readonly string[]).includes(targetKo)
+      ) {
+        setMuscleFilter(targetKo as MuscleFilter);
+      }
+    };
+
+    loadFilter();
   }, [user?.id]);
 
   useFocusEffect(

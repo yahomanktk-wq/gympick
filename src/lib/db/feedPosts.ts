@@ -104,65 +104,35 @@ export async function fetchFeedPostsByGym(gymId: string): Promise<WorkoutFeedPos
 /** session_id로 운동 세션 전체 데이터 fetch */
 export async function fetchWorkoutSessionById(sessionId: string): Promise<any | null> {
   try {
-    const { data: session, error } = await supabase
+    const { data, error } = await supabase
       .from('workout_sessions')
-      .select('id, gym_id, date, notes')
+      .select(`
+        id, date, gym_id, gym_name, target_muscle,
+        workout_entries (
+          id, machine_id, machine_name, machine_brand,
+          workout_sets ( weight, reps, set_number )
+        )
+      `)
       .eq('id', sessionId)
       .single();
 
-    if (error || !session) return null;
-
-    // workout_entries 조회 (order 컬럼은 예약어라 별칭 사용)
-    const { data: entries } = await supabase
-      .from('workout_entries')
-      .select('id, machine_id, machine_name, machine_brand, target_muscle, exercise_kind')
-      .eq('session_id', sessionId);
-
-    // 각 entry의 sets 개별 조회
-    const machines = await Promise.all(
-      (entries ?? []).map(async (e: any) => {
-        const { data: sets } = await supabase
-          .from('workout_sets')
-          .select('set_number, weight, reps, is_pr')
-          .eq('entry_id', e.id)
-          .order('set_number');
-
-        const sortedSets = sets ?? [];
-        const best = sortedSets.reduce(
-          (b: any, s: any) => (!b || Number(s.weight) > Number(b.weight) ? s : b),
-          null
-        );
-
-        return {
-          machineId:    e.machine_id,
-          machineName:  e.machine_name,
-          machineBrand: e.machine_brand,
-          targetMuscle: e.target_muscle,
-          weight:       best?.weight ?? 0,
-          reps:         best?.reps ?? 0,
-          sets:         sortedSets.length,
-          allSets:      sortedSets,
-        };
-      })
-    );
-
-    // gyms 이름 fetch
-    const { data: gym } = await supabase
-      .from('gyms')
-      .select('name, location')
-      .eq('id', session.gym_id)
-      .single();
+    if (error || !data) return null;
 
     return {
-      id:          session.id,
-      gymId:       session.gym_id,
-      gymName:     gym?.name ?? '',
-      gymLocation: gym?.location ?? '',
-      date:        session.date,
-      machines,
+      id:      data.id,
+      date:    data.date,
+      gymName: data.gym_name,
+      machines: (data.workout_entries ?? []).map((e: any) => ({
+        machineId:    e.machine_id,
+        machineName:  e.machine_name,
+        machineBrand: e.machine_brand,
+        allSets: (e.workout_sets ?? [])
+          .sort((a: any, b: any) => a.set_number - b.set_number)
+          .map((s: any) => ({ weight: s.weight, reps: s.reps })),
+      })),
     };
   } catch (e) {
-    if (__DEV__) console.warn('[feedPosts] fetchWorkoutSessionById 오류:', e);
+    if (__DEV__) console.warn('[fetchWorkoutSessionById] error:', e);
     return null;
   }
 }

@@ -1204,7 +1204,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
 
             {/* 푸터 */}
             <View style={{ paddingHorizontal: 16, paddingVertical: 10, alignItems: 'flex-end', backgroundColor: '#FFFFFF' }}>
-              <GymPickLogo color="#AAAAAA" width={60} height={6} />
+              <GymPickLogo color="#000000" width={60} height={6} />
             </View>
           </View>
         </View>
