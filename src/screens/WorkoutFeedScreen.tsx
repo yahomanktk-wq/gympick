@@ -186,6 +186,7 @@ function FeedDetailModal({
   const [sessionLoading, setSessionLoading] = useState(false);
 
   useEffect(() => {
+    console.log('[FeedDetailModal] mount - sessionId:', post.sessionId, 'userId:', post.userId, 'createdAt:', post.createdAt);
     setSessionLoading(true);
 
     const load = async () => {
