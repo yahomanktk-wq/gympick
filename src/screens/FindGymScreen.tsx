@@ -465,29 +465,6 @@ export default function FindGymScreen() {
           )}
         </View>
 
-        {/* Keyword search */}
-        <View style={s.searchWrap}>
-          <Ionicons name="search-outline" size={16} color={C.textSub} style={{ marginRight: 8 }} />
-          <TextInput
-            style={s.searchInput}
-            placeholder={activeTab === 'machine' ? '머신 이름으로 검색' : '헬스장 이름으로 검색'}
-            placeholderTextColor={C.textDim}
-            value={keyword}
-            onChangeText={setKeyword}
-            returnKeyType="search"
-            autoCorrect={false}
-            selectionColor={C.accent}
-          />
-          {keyword.length > 0 && (
-            <TouchableOpacity
-              onPress={() => setKeyword('')}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="close-circle" size={16} color={C.textDim} />
-            </TouchableOpacity>
-          )}
-        </View>
-
         {/* Tab buttons */}
         <View style={s.tabRow}>
           <TouchableOpacity
@@ -520,6 +497,29 @@ export default function FindGymScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Keyword search */}
+        <View style={s.searchWrap}>
+          <Ionicons name="search-outline" size={16} color={C.textSub} style={{ marginRight: 8 }} />
+          <TextInput
+            style={s.searchInput}
+            placeholder={activeTab === 'machine' ? '머신 이름으로 검색' : '헬스장 이름으로 검색'}
+            placeholderTextColor={C.textDim}
+            value={keyword}
+            onChangeText={setKeyword}
+            returnKeyType="search"
+            autoCorrect={false}
+            selectionColor={C.accent}
+          />
+          {keyword.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setKeyword('')}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="close-circle" size={16} color={C.textDim} />
+            </TouchableOpacity>
+          )}
+        </View>
+
         {/* Machine tab filters */}
         {activeTab === 'machine' && (
           <>
@@ -529,6 +529,7 @@ export default function FindGymScreen() {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={s.filterRow}
+                style={{ marginBottom: 6 }}
               >
                 {muscleOptions.map(opt => {
                   const on = opt === activeMuscle;
@@ -550,13 +551,15 @@ export default function FindGymScreen() {
             </View>
 
             {/* Brand filter */}
-            <FilterRow
-              sectionLabel="브랜드"
-              options={brands}
-              active={activeBrand}
-              onSelect={setActiveBrand}
-              activeColor={C.tagBrand.fg}
-            />
+            <View style={{ marginTop: 6 }}>
+              <FilterRow
+                sectionLabel="브랜드"
+                options={brands}
+                active={activeBrand}
+                onSelect={setActiveBrand}
+                activeColor={C.tagBrand.fg}
+              />
+            </View>
 
             {hasFilters && (
               <View style={s.filterSummaryRow}>
