@@ -80,7 +80,6 @@ function FilterRow({
 }) {
   return (
     <View>
-      <Text style={s.filterLabel}>{sectionLabel}</Text>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -526,7 +525,6 @@ export default function FindGymScreen() {
           <>
             {/* Muscle filter */}
             <View>
-              <Text style={s.filterLabel}>타겟 부위</Text>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -935,11 +933,6 @@ const s = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 14, color: C.text, padding: 0 },
 
   // Filters
-  filterLabel: {
-    fontSize: 9, fontWeight: '700', color: C.textDim,
-    letterSpacing: 1.2, textTransform: 'uppercase',
-    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8,
-  },
   filterRow:      { paddingHorizontal: 16, gap: 8, paddingBottom: 4 },
   filterChip:     {
     paddingHorizontal: 16,
