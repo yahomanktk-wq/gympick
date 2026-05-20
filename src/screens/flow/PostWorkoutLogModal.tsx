@@ -13,7 +13,9 @@ import {
   Alert,
   Image,
   InteractionManager,
+  Animated,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import ChestIcon     from '../../assets/muscle-icons/chest.svg';
 import BackIcon       from '../../assets/muscle-icons/back.svg';
 import ShouldersIcon  from '../../assets/muscle-icons/shoulders.svg';
@@ -250,7 +252,7 @@ function MuscleSelectStep({ selected, onToggle, onNext, onBack, onClose, isRestD
               key={g.name}
               name={g.name} sub={g.sub} SvgIcon={g.SvgIcon}
               selected={selected.has(g.name)}
-              onToggle={() => onToggle(g.name)}
+              onToggle={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onToggle(g.name); }}
             />
           ))}
         </View>
@@ -354,7 +356,7 @@ function GymSelectStep({ onSelect, onClose }: {
             const distLabel    = getDistLabel(gym);
             const machineCount = gym.machines.length;
             return (
-              <TouchableOpacity key={gym.id} style={s.gymCard} activeOpacity={0.8} onPress={() => onSelect(gym)}>
+              <TouchableOpacity key={gym.id} style={s.gymCard} activeOpacity={0.8} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onSelect(gym); }}>
                 <View style={{ flex: 1, paddingLeft: 14 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <Text style={[s.gymCardName, { flex: 1 }]} numberOfLines={1}>{gym.name}</Text>
@@ -685,7 +687,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
           <TouchableOpacity
             style={[s.ctaBtn, !localSelectedId && s.ctaDisabled]}
             activeOpacity={0.85}
-            onPress={() => localSelectedId && onSelectExercise(localSelectedId)}
+            onPress={() => { if (localSelectedId) { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onSelectExercise(localSelectedId); } }}
             disabled={!localSelectedId}
           >
             <Ionicons name="play" size={18} color={C.bg} />
@@ -722,6 +724,12 @@ function SetCard({ ex, sets, onChange, onAdd, onCopyPrev, onRemove }: {
   const curMax  = sets.length ? Math.max(...sets.map(s => s.weight)) : 0;
   const histPR  = HIST_PRS[ex.id]; // { weight, reps } | undefined
   const isNewPR = curMax > 0 && (histPR === undefined || curMax > histPR.weight);
+
+  useEffect(() => {
+    if (isNewPR) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    }
+  }, [isNewPR]);
 
   return (
     <View style={s.logCard}>
@@ -809,7 +817,7 @@ function SetCard({ ex, sets, onChange, onAdd, onCopyPrev, onRemove }: {
       ))}
 
       <View style={s.setActions}>
-        <TouchableOpacity style={s.addSetBtn} onPress={onAdd} activeOpacity={0.75}>
+        <TouchableOpacity style={s.addSetBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onAdd(); }} activeOpacity={0.75}>
           <Ionicons name="add" size={14} color={C.accent} />
           <Text style={s.addSetText}>세트 추가</Text>
         </TouchableOpacity>
@@ -1005,6 +1013,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
         onRoutineCardUri?.(routineUri);
       }
 
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('저장 완료', '인증샷과 운동 루틴 카드가 저장되었습니다.');
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2500);
@@ -1460,6 +1469,8 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   // Overlay
   const [selectedColor,      setSelectedColor]      = useState('#ffffff');
   const [isSaving,           setIsSaving]           = useState(false);
+  const [savingProgress,     setSavingProgress]     = useState(0);
+  const savingAnim = useRef(new Animated.Value(0)).current;
   // Template loading
   const [showTemplates,       setShowTemplates]       = useState(false);
   const [templates,           setTemplates]           = useState<WorkoutTemplate[]>([]);
@@ -1719,6 +1730,20 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   async function handleSaveWorkout(passedCompositeUri?: string, passedRoutineCardUri?: string) {
     if (!gym) return;
     setIsSaving(true);
+    savingAnim.setValue(0);
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    Animated.timing(savingAnim, {
+      toValue:         0.8,
+      duration:        2000,
+      useNativeDriver: false,
+    }).start();
+
+    setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light), 500);
+    setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light), 1000);
+    setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light), 1500);
+
     const effectiveCompositeUri = passedCompositeUri ?? compositeUri;
     const sessionId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const supabaseConfigured = !!(process.env.EXPO_PUBLIC_SUPABASE_URL);
@@ -1847,6 +1872,15 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
       }
     }
 
+    Animated.timing(savingAnim, {
+      toValue:         1,
+      duration:        300,
+      useNativeDriver: false,
+    }).start();
+
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    await new Promise(resolve => setTimeout(resolve, 300));
     setIsSaving(false);
     setStep('done');
   }
@@ -2087,7 +2121,21 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
         {isSaving && (
           <View style={s.savingOverlay}>
             <View style={s.savingCard}>
-              <Text style={s.savingText}>운동일지를 저장 중 입니다.</Text>
+              <Ionicons name="barbell-outline" size={32} color={C.accent} />
+              <Text style={s.savingText}>운동일지를 저장 중입니다 💪</Text>
+              <View style={s.savingBarBg}>
+                <Animated.View
+                  style={[
+                    s.savingBarFill,
+                    {
+                      width: savingAnim.interpolate({
+                        inputRange:  [0, 1],
+                        outputRange: ['0%', '100%'],
+                      }),
+                    },
+                  ]}
+                />
+              </View>
             </View>
           </View>
         )}
@@ -2462,17 +2510,33 @@ const s = StyleSheet.create({
     zIndex: 999,
   },
   savingCard: {
-    backgroundColor: C.surface,
-    borderRadius: R.card,
+    backgroundColor:   C.surface,
+    borderRadius:      R.card,
     paddingHorizontal: 32,
-    paddingVertical: 24,
-    alignItems: 'center',
-    gap: 12,
+    paddingVertical:   28,
+    alignItems:        'center',
+    gap:               16,
+    width:             260,
+    borderWidth:       1,
+    borderColor:       C.border,
   },
   savingText: {
-    fontSize: 15,
+    fontSize:   15,
     fontWeight: '700',
-    color: C.text,
+    color:      C.text,
+    textAlign:  'center',
+  },
+  savingBarBg: {
+    width:           '100%',
+    height:          6,
+    backgroundColor: C.border,
+    borderRadius:    3,
+    overflow:        'hidden',
+  },
+  savingBarFill: {
+    height:          6,
+    backgroundColor: C.accent,
+    borderRadius:    3,
   },
   prOverlay:     { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center', zIndex: 99 },
   prOverlayCard: { backgroundColor: C.surface, borderRadius: R.card, padding: 32, alignItems: 'center', marginHorizontal: 32, borderWidth: 1, borderColor: C.accent + '40' },
