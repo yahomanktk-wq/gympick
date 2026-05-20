@@ -66,7 +66,14 @@
         {
           "photosPermission": "운동 완료 카드 이미지를 사진 앱에 저장하기 위해 접근이 필요합니다.",
           "savePhotosPermission": "운동 완료 카드 이미지를 사진 앱에 저장하기 위해 접근이 필요합니다.",
-          "isAccessMediaLocationEnabled": true
+          "isAccessMediaLocationEnabled": true,
+          "androidPermissions": [
+            "READ_MEDIA_IMAGES",
+            "READ_MEDIA_VIDEO",
+            "READ_MEDIA_AUDIO",
+            "READ_EXTERNAL_STORAGE",
+            "WRITE_EXTERNAL_STORAGE"
+          ]
         }
       ],
       "expo-web-browser",
