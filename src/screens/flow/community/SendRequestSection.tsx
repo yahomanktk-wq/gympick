@@ -11,6 +11,7 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T } from '../../../theme';
@@ -34,25 +35,37 @@ const QUICK_TEMPLATES = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface Props {
-  gymId: string;
+  gymId:   string;
   gymName: string;
-  onSent: () => void;
+  onSent:  () => void;
+  user:    { id: string; nickname?: string; name?: string } | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function SendRequestSection({ gymId, gymName, onSent }: Props) {
+export default function SendRequestSection({ gymId, gymName, onSent, user }: Props) {
   const [message, setMessage]   = useState('');
   const [sent, setSent]         = useState(false);
 
   function handleSend() {
+    if (!user) {
+      Alert.alert(
+        '로그인 필요',
+        '요청을 전송하려면 로그인이 필요해요.',
+        [
+          { text: '취소', style: 'cancel' },
+          { text: '로그인하기', onPress: () => {} },
+        ]
+      );
+      return;
+    }
     const trimmed = message.trim();
     if (!trimmed) return;
     sendRequest(gymId, trimmed);
     setSent(true);
-    setTimeout(onSent, 1800); // 잠깐 완료 상태 보여준 후 부모에서 리셋
+    setTimeout(onSent, 1800);
   }
 
   return (
@@ -114,15 +127,23 @@ export default function SendRequestSection({ gymId, gymName, onSent }: Props) {
               {message.length} / {MAX_LEN}
             </Text>
 
+            {/* ── 미로그인 안내 ── */}
+            {!user && (
+              <View style={s.loginBanner}>
+                <Ionicons name="lock-closed-outline" size={14} color={C.textDim} />
+                <Text style={s.loginBannerText}>로그인하면 요청을 전송할 수 있어요</Text>
+              </View>
+            )}
+
             {/* ── 전송 버튼 ── */}
             <TouchableOpacity
-              style={[s.sendBtn, !message.trim() && s.sendBtnDisabled]}
+              style={[s.sendBtn, (!message.trim() || !user) && s.sendBtnDisabled]}
               onPress={handleSend}
               disabled={!message.trim()}
               activeOpacity={0.85}
             >
               <Ionicons name="paper-plane-outline" size={16} color={C.bg} />
-              <Text style={s.sendBtnText}>익명으로 전송</Text>
+              <Text style={s.sendBtnText}>{user ? '익명으로 전송' : '로그인 후 전송'}</Text>
             </TouchableOpacity>
           </>
         )}
@@ -210,6 +231,23 @@ const s = StyleSheet.create({
     color: C.textDim,
     textAlign: 'right',
     marginBottom: 14,
+  },
+
+  // Login banner
+  loginBanner: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             6,
+    backgroundColor: C.surfaceHigh,
+    borderRadius:    R.inner,
+    padding:         10,
+    marginBottom:    10,
+  },
+  loginBannerText: {
+    fontSize:   12,
+    color:      C.textDim,
+    fontWeight: '600',
+    flex:       1,
   },
 
   // Send button

@@ -10,6 +10,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T } from '../../theme';
@@ -140,6 +141,17 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
   }
 
   function submitReview() {
+    if (!user) {
+      Alert.alert(
+        '로그인 필요',
+        '리뷰를 작성하려면 로그인이 필요해요.',
+        [
+          { text: '취소', style: 'cancel' },
+          { text: '로그인하기', onPress: () => { onClose(); nav.navigate('Profile'); } },
+        ]
+      );
+      return;
+    }
     if (!reviewText.trim()) return;
     const displayName = user?.nickname ?? user?.name ?? 'GymPick User';
     const initials    = displayName.slice(0, 2).toUpperCase();
@@ -289,43 +301,55 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
 
             {/* ── Write a review ── */}
             <Text style={s.sectionTitle}>리뷰 작성</Text>
-            <View style={s.reviewCard}>
-              <View style={s.reviewStarRow}>
-                {[1, 2, 3, 4, 5].map(n => (
-                  <TouchableOpacity
-                    key={n}
-                    onPress={() => setReviewRating(n)}
-                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                  >
-                    <Ionicons
-                      name={n <= reviewRating ? 'star' : 'star-outline'}
-                      size={26}
-                      color={n <= reviewRating ? '#ffd166' : C.textDim}
-                    />
-                  </TouchableOpacity>
-                ))}
-                <Text style={s.reviewRatingLabel}>{reviewRating}.0</Text>
+            {user ? (
+              <View style={s.reviewCard}>
+                <View style={s.reviewStarRow}>
+                  {[1, 2, 3, 4, 5].map(n => (
+                    <TouchableOpacity
+                      key={n}
+                      onPress={() => setReviewRating(n)}
+                      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                    >
+                      <Ionicons
+                        name={n <= reviewRating ? 'star' : 'star-outline'}
+                        size={26}
+                        color={n <= reviewRating ? '#ffd166' : C.textDim}
+                      />
+                    </TouchableOpacity>
+                  ))}
+                  <Text style={s.reviewRatingLabel}>{reviewRating}.0</Text>
+                </View>
+                <TextInput
+                  style={s.reviewInput}
+                  placeholder="이 머신에 대한 경험을 공유해보세요…"
+                  placeholderTextColor={C.textDim}
+                  multiline
+                  numberOfLines={3}
+                  value={reviewText}
+                  onChangeText={setReviewText}
+                  textAlignVertical="top"
+                />
+                <TouchableOpacity
+                  style={[s.reviewSubmitBtn, !reviewText.trim() && { opacity: 0.35 }]}
+                  activeOpacity={0.85}
+                  disabled={!reviewText.trim()}
+                  onPress={submitReview}
+                >
+                  <Ionicons name="send" size={15} color={C.bg} />
+                  <Text style={s.reviewSubmitTxt}>리뷰 등록</Text>
+                </TouchableOpacity>
               </View>
-              <TextInput
-                style={s.reviewInput}
-                placeholder="이 머신에 대한 경험을 공유해보세요…"
-                placeholderTextColor={C.textDim}
-                multiline
-                numberOfLines={3}
-                value={reviewText}
-                onChangeText={setReviewText}
-                textAlignVertical="top"
-              />
+            ) : (
               <TouchableOpacity
-                style={[s.reviewSubmitBtn, !reviewText.trim() && { opacity: 0.35 }]}
+                style={s.loginPromptCard}
+                onPress={() => { onClose(); nav.navigate('Profile'); }}
                 activeOpacity={0.85}
-                disabled={!reviewText.trim()}
-                onPress={submitReview}
               >
-                <Ionicons name="send" size={15} color={C.bg} />
-                <Text style={s.reviewSubmitTxt}>리뷰 등록</Text>
+                <Ionicons name="lock-closed-outline" size={18} color={C.textDim} />
+                <Text style={s.loginPromptText}>로그인하면 리뷰를 작성할 수 있어요</Text>
+                <Text style={s.loginPromptLink}>로그인하기 →</Text>
               </TouchableOpacity>
-            </View>
+            )}
 
             {/* ── Available at ── */}
             <Text style={s.sectionTitle}>보유 헬스장</Text>
@@ -520,4 +544,26 @@ const s = StyleSheet.create({
     backgroundColor: C.accent, borderRadius: R.btn, paddingVertical: 13,
   },
   reviewSubmitTxt: { fontSize: 14, fontWeight: '800', color: C.bg },
+
+  loginPromptCard: {
+    backgroundColor: C.surface,
+    borderRadius:    R.card,
+    borderWidth:     1,
+    borderColor:     C.border,
+    padding:         20,
+    alignItems:      'center',
+    gap:             8,
+    marginBottom:    12,
+  },
+  loginPromptText: {
+    fontSize:   14,
+    color:      C.textSub,
+    fontWeight: '600',
+    textAlign:  'center',
+  },
+  loginPromptLink: {
+    fontSize:   13,
+    color:      C.accent,
+    fontWeight: '700',
+  },
 });

@@ -16,6 +16,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { C, R, T } from '../../../theme';
+import { useAuth } from '../../../context/AuthContext';
 import AnnouncementsSection from './AnnouncementsSection';
 import SendRequestSection from './SendRequestSection';
 
@@ -33,7 +34,7 @@ interface Props {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function GymCommunityTab({ gymId, gymName }: Props) {
-  // SendRequestSection이 전송 완료 후 확인 메시지를 표시하도록 key로 리셋
+  const { user } = useAuth();
   const [requestKey, setRequestKey] = useState(0);
 
   const handleRequestSent = useCallback(() => {
@@ -61,6 +62,7 @@ export default function GymCommunityTab({ gymId, gymName }: Props) {
         gymId={gymId}
         gymName={gymName}
         onSent={handleRequestSent}
+        user={user}
       />
 
       <View style={{ height: 40 }} />
