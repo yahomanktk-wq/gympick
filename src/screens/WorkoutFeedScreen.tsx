@@ -328,7 +328,7 @@ function FeedDetailModal({
                       })}
                     </Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={16} color={C.accent} />
+                  <Ionicons name="chevron-forward" size={16} color="#000000" />
                 </TouchableOpacity>
 
                 {/* 머신 목록 */}
