@@ -498,27 +498,29 @@ export default function FindGymScreen() {
         </View>
 
         {/* Keyword search */}
-        <View style={s.searchWrap}>
-          <Ionicons name="search-outline" size={16} color={C.textSub} style={{ marginRight: 8 }} />
-          <TextInput
-            style={s.searchInput}
-            placeholder={activeTab === 'machine' ? '머신 이름으로 검색' : '헬스장 이름으로 검색'}
-            placeholderTextColor={C.textDim}
-            value={keyword}
-            onChangeText={setKeyword}
-            returnKeyType="search"
-            autoCorrect={false}
-            selectionColor={C.accent}
-          />
-          {keyword.length > 0 && (
-            <TouchableOpacity
-              onPress={() => setKeyword('')}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="close-circle" size={16} color={C.textDim} />
-            </TouchableOpacity>
-          )}
-        </View>
+        {activeTab !== 'ranking' && (
+          <View style={s.searchWrap}>
+            <Ionicons name="search-outline" size={16} color={C.textSub} style={{ marginRight: 8 }} />
+            <TextInput
+              style={s.searchInput}
+              placeholder={activeTab === 'machine' ? '머신 이름으로 검색' : '헬스장 이름으로 검색'}
+              placeholderTextColor={C.textDim}
+              value={keyword}
+              onChangeText={setKeyword}
+              returnKeyType="search"
+              autoCorrect={false}
+              selectionColor={C.accent}
+            />
+            {keyword.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setKeyword('')}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close-circle" size={16} color={C.textDim} />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
         {/* Machine tab filters */}
         {activeTab === 'machine' && (

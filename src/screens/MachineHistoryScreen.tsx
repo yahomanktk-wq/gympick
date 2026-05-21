@@ -299,7 +299,7 @@ const s = StyleSheet.create({
   headerSub:   { fontSize: 11, color: C.textSub, marginTop: 1 },
 
   chipRow:      { paddingHorizontal: 16, paddingVertical: 8, gap: 8 },
-  chip:         { paddingHorizontal: 16, paddingVertical: 10, borderRadius: R.pill, backgroundColor: C.surface, minHeight: 40, justifyContent: 'center' },
+  chip:         { paddingHorizontal: 16, paddingVertical: 0, borderRadius: R.pill, backgroundColor: C.surface, height: 40, justifyContent: 'center', alignItems: 'center' },
   chipActive:   { backgroundColor: C.accent },
   chipText:     { fontSize: 13, fontWeight: '600', color: C.textSub },
   chipTextActive:{ fontSize: 13, fontWeight: '700', color: C.bg },

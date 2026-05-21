@@ -969,9 +969,55 @@ export default function JournalScreen() {
               if (session && user?.id) {
                 await deleteFeedPostBySession(user.id, session.date);
               }
+
               const remaining = detailSessions.filter(s => s.id !== sessionId);
               setDetailSessions(remaining);
               refetch();
+
+              // 삭제 후 오늘 날짜 운동일지가 없으면 분할 인덱스 롤백
+              if (user?.id && session) {
+                const deletedDate = new Date(session.date);
+                const today = new Date();
+                const isToday =
+                  deletedDate.getFullYear() === today.getFullYear() &&
+                  deletedDate.getMonth()    === today.getMonth()    &&
+                  deletedDate.getDate()     === today.getDate();
+
+                if (isToday) {
+                  const todayRemaining = remaining.filter(s => {
+                    const d = new Date(s.date);
+                    return (
+                      d.getFullYear() === today.getFullYear() &&
+                      d.getMonth()    === today.getMonth()    &&
+                      d.getDate()     === today.getDate()
+                    );
+                  });
+
+                  if (todayRemaining.length === 0) {
+                    try {
+                      const cfg = await fetchSplitConfig(user.id);
+                      if (cfg && cfg.splitType === 'sequential') {
+                        const split = cfg.workoutSplit as string[];
+                        const len   = split.length;
+                        if (len > 0) {
+                          const prevIndex = ((cfg.splitCurrentIndex - 1) + len) % len;
+                          await updateSplitIndex(user.id, prevIndex);
+
+                          const dateKey       = today.toISOString().slice(0, 10).replace(/-/g, '');
+                          const lastUpdateKey = `split_last_update_${user.id}_${dateKey}`;
+                          await AsyncStorage.removeItem(lastUpdateKey);
+
+                          setSplitConfig(prev =>
+                            prev ? { ...prev, splitCurrentIndex: prevIndex } : prev
+                          );
+                        }
+                      }
+                    } catch (e) {
+                      if (__DEV__) console.warn('[JournalScreen] split rollback error:', e);
+                    }
+                  }
+                }
+              }
             }}
             userId={user?.id ?? null}
           />

@@ -29,16 +29,6 @@ export default function SignInScreen({ onSignUp, onForgotPassword }: Props) {
   const [error,    setError]    = useState<string | null>(null);
   const [loading,  setLoading]  = useState(false);
 
-  async function loginWithDemo() {
-    setEmail('demo@gympick.app');
-    setPassword('Demo1234!');
-    setError(null);
-    setLoading(true);
-    const result = await signIn('demo@gympick.app', 'Demo1234!');
-    setLoading(false);
-    if (result.error) setError(result.error);
-  }
-
   async function handleGoogleSignIn() {
     setLoading(true);
     const { error } = await signInGoogle();
@@ -182,16 +172,6 @@ export default function SignInScreen({ onSignUp, onForgotPassword }: Props) {
           />
         )}
 
-        {/* Demo account section for App Store reviewers */}
-        <View style={s.demoSection}>
-          <Text style={s.demoTitle}>앱 심사용 데모 계정</Text>
-          <Text style={s.demoText}>이메일: demo@gympick.app</Text>
-          <Text style={s.demoText}>비밀번호: Demo1234!</Text>
-          <TouchableOpacity style={s.demoBtn} activeOpacity={0.85} onPress={loginWithDemo} disabled={loading}>
-            <Text style={s.demoBtnText}>데모 계정으로 로그인</Text>
-          </TouchableOpacity>
-        </View>
-
         <Text style={s.footer}>
           로그인 없이 헬스장과 머신을 탐색할 수 있어요.
         </Text>
@@ -269,28 +249,6 @@ const s = StyleSheet.create({
     marginBottom: 24,
   },
   secondaryText: { fontSize: 15, fontWeight: '700', color: C.text },
-
-  demoSection: {
-    alignSelf: 'stretch',
-    backgroundColor: C.surface,
-    borderRadius: R.card,
-    borderWidth: 1,
-    borderColor: C.border,
-    padding: 16,
-    marginBottom: 20,
-  },
-  demoTitle: { fontSize: 11, fontWeight: '800', color: C.textDim, letterSpacing: 0.8, marginBottom: 8, textAlign: 'center' },
-  demoText:  { fontSize: 13, color: C.textSub, marginBottom: 4 },
-  demoBtn: {
-    backgroundColor: C.surfaceHigh,
-    borderRadius: R.btn,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: C.border,
-  },
-  demoBtnText: { fontSize: 13, fontWeight: '700', color: C.text },
 
   footer: { fontSize: 12, color: C.textDim, textAlign: 'center', lineHeight: 18 },
 

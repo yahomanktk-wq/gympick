@@ -54,7 +54,7 @@ import { calcDistanceKm, formatDistance } from '../../lib/geocoding';
 import { fetchGymsWithMachines } from '../../lib/db/gyms';
 import { brandLogos } from '../../constants/brandLogos';
 import { fetchSplitConfig } from '../../lib/db/splitRoutine';
-import { getTodayTarget } from '../../lib/splitUtils';
+import { getTodayTarget, toEnMuscle } from '../../lib/splitUtils';
 
 // --- Types
 
@@ -1539,7 +1539,10 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
         return;
       }
       setIsRestDay(false);
-      setSelectedMuscles(new Set([target]));
+      const targetEn = toEnMuscle(target);
+      if (targetEn) {
+        setSelectedMuscles(new Set([targetEn]));
+      }
     }).catch(() => {});
   }, [visible, user?.id]);
 
