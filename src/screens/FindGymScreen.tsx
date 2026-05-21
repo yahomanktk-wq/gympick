@@ -353,8 +353,11 @@ export default function FindGymScreen() {
     );
     const unique = [...new Set(
       muscleFiltered
-        .map(m => m.category)
-        .filter(c => c && c.trim().length > 0)
+        .flatMap(m =>
+          m.category
+            ? m.category.split(',').map(c => c.trim()).filter(c => c.length > 0)
+            : []
+        )
     )].sort();
     return unique;
   }, [allMachines, activeMuscle]);
@@ -421,7 +424,8 @@ export default function FindGymScreen() {
     return allMachines.filter(m => {
       const muscleOk   = activeMuscle === 'All' || m.targetMuscle?.toLowerCase() === activeMuscle.toLowerCase();
       const brandOk    = activeBrand  === 'All' || m.brand?.toLowerCase()         === activeBrand.toLowerCase();
-      const categoryOk = activeCategory === 'All' || m.category === activeCategory;
+      const categoryOk = activeCategory === 'All' ||
+        m.category?.split(',').map(c => c.trim()).includes(activeCategory);
       const kw         = keyword.trim().toLowerCase();
       const keyOk      = !kw ||
         m.name.toLowerCase().includes(kw)     ||
