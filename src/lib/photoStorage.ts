@@ -9,8 +9,8 @@ export async function uploadWorkoutPhoto(
   isComposite: boolean = false,
 ): Promise<string> {
   try {
-    const ext      = localUri.split('.').pop()?.split('?')[0] ?? 'jpg';
-    const fileName = `${userId}/${sessionId}_${Date.now()}.${ext}`;
+    // WebP로 고정 (로딩 속도 최적화)
+    const fileName = `${userId}/${sessionId}_${Date.now()}.webp`;
 
     const response    = await fetch(localUri);
     const blob        = await response.blob();
@@ -24,7 +24,7 @@ export async function uploadWorkoutPhoto(
     const { data, error } = await supabase.storage
       .from(BUCKET)
       .upload(fileName, arrayBuffer, {
-        contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+        contentType: 'image/webp',  // WebP로 고정
         upsert:      false,
       });
 

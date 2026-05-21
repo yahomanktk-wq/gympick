@@ -1004,7 +1004,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
         Alert.alert('저장 실패', '저장에 실패했습니다.');
         return;
       }
-      const capturedUri = await captureRef(overlayRef, { format: 'png', quality: 0.95, result: 'tmpfile' });
+      const capturedUri = await captureRef(overlayRef, { format: 'webp', quality: 0.9, result: 'tmpfile' });
       onCompositeUri(capturedUri);
       await MediaLibrary.saveToLibraryAsync(capturedUri);
 
@@ -1012,7 +1012,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
       if (routineCardRef.current) {
         await new Promise(resolve => requestAnimationFrame(resolve));
         const routineUri = await captureRef(routineCardRef, {
-          format: 'png', quality: 0.95, result: 'tmpfile',
+          format: 'webp', quality: 0.9, result: 'tmpfile',
         });
         await MediaLibrary.saveToLibraryAsync(routineUri);
         onRoutineCardUri?.(routineUri);
@@ -1296,13 +1296,13 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
               await new Promise(resolve => requestAnimationFrame(resolve));
               await new Promise<void>(resolve => InteractionManager.runAfterInteractions(() => resolve()));
               if (overlayRef.current) {
-                captured = await captureRef(overlayRef, { format: 'png', quality: 0.95, result: 'tmpfile' });
+                captured = await captureRef(overlayRef, { format: 'webp', quality: 0.9, result: 'tmpfile' });
                 onCompositeUri(captured);
               }
               if (routineCardRef.current) {
                 await new Promise(resolve => requestAnimationFrame(resolve));
                 capturedRoutineUri = await captureRef(routineCardRef, {
-                  format: 'png', quality: 0.95, result: 'tmpfile',
+                  format: 'webp', quality: 0.9, result: 'tmpfile',
                 });
                 onRoutineCardUri?.(capturedRoutineUri);
               }
