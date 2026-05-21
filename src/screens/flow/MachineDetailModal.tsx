@@ -13,6 +13,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { C, R, T } from '../../theme';
 import { Machine } from '../../data';
 import { MachineComment } from '../../data/gymDetails';
@@ -51,7 +52,15 @@ function CommentCard({ comment, last }: { comment: MachineComment; last: boolean
   return (
     <View style={[s.commentRow, !last && s.commentBorder]}>
       <View style={s.commentAvatar}>
-        <Text style={s.commentInitials}>{comment.initials}</Text>
+        {comment.profileImageUrl ? (
+          <Image
+            source={{ uri: comment.profileImageUrl }}
+            style={s.commentAvatarImage}
+            contentFit="cover"
+          />
+        ) : (
+          <Text style={s.commentInitials}>{comment.initials}</Text>
+        )}
       </View>
       <View style={{ flex: 1 }}>
         <View style={s.commentMeta}>
@@ -115,6 +124,31 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
         setAllAvailableGyms(filtered);
         setGymsWithCoords(filtered.filter(g => g.latitude != null && g.longitude != null));
       } catch {}
+      // 리뷰 불러오기 (Supabase)
+      try {
+        const { supabase } = await import('../../lib/supabase');
+        const { data: reviews } = await supabase
+          .from('machine_reviews')
+          .select('*')
+          .eq('machine_id', machineId)
+          .order('created_at', { ascending: false });
+
+        if (reviews?.length) {
+          setUserReviews(reviews.map(r => ({
+            id:              r.id,
+            user:            r.user_name,
+            initials:        r.user_initials,
+            profileImageUrl: r.profile_image_url ?? null,
+            rating:          r.rating,
+            text:            r.text,
+            date:            new Date(r.created_at).toLocaleDateString('en-US', {
+              month: 'short', day: 'numeric', year: 'numeric',
+            }),
+          })));
+        }
+      } catch (e) {
+        if (__DEV__) console.warn('[MachineDetailModal] review load error:', e);
+      }
     }
     loadData();
   }, [machine?.id]);
@@ -140,7 +174,7 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
     onToggleFavorite?.(machine.id);
   }
 
-  function submitReview() {
+  async function submitReview() {
     if (!user) {
       Alert.alert(
         '로그인 필요',
@@ -153,19 +187,47 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
       return;
     }
     if (!reviewText.trim()) return;
-    const displayName = user?.nickname ?? user?.name ?? 'GymPick User';
-    const initials    = displayName.slice(0, 2).toUpperCase();
+
+    const displayName     = user?.nickname ?? user?.name ?? 'GymPick User';
+    const initials        = displayName.slice(0, 2).toUpperCase();
+    const profileImageUrl = user?.profileImageUrl ?? null;
+    const id              = `review-${Date.now()}`;
+    const reviewTextVal   = reviewText.trim();
+    const ratingVal       = reviewRating;
+
+    // 로컬 state 즉시 반영 (낙관적 업데이트)
     const r: MachineComment = {
-      id:       `ur-${Date.now()}`,
-      user:     displayName,
+      id,
+      user:             displayName,
       initials,
-      rating:   reviewRating,
-      text:     reviewText.trim(),
-      date:     new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      profileImageUrl,
+      rating:           ratingVal,
+      text:             reviewTextVal,
+      date:             new Date().toLocaleDateString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric',
+      }),
     };
     setUserReviews(prev => [r, ...prev]);
     setReviewText('');
     setReviewRating(5);
+
+    // Supabase 저장
+    try {
+      const { supabase } = await import('../../lib/supabase');
+      const { error } = await supabase.from('machine_reviews').insert({
+        id,
+        machine_id:        machine?.id ?? '',
+        user_id:           user.id,
+        user_name:         displayName,
+        user_initials:     initials,
+        profile_image_url: profileImageUrl,
+        rating:            ratingVal,
+        text:              reviewTextVal,
+      });
+      if (error && __DEV__) console.warn('[submitReview] Supabase error:', error.message);
+    } catch (e) {
+      if (__DEV__) console.warn('[submitReview] error:', e);
+    }
   }
 
   const availableGyms = allAvailableGyms.sort((a, b) => {
@@ -504,6 +566,7 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     flexShrink: 0,
   },
+  commentAvatarImage: { width: 36, height: 36, borderRadius: 18 },
   commentInitials: { fontSize: 11, fontWeight: '800', color: C.accent },
   commentMeta:     { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   commentUser:     { fontSize: 13, fontWeight: '700', color: C.text },
