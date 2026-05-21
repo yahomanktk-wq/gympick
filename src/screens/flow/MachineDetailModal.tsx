@@ -48,7 +48,19 @@ function StarRow({ rating }: { rating: number }) {
 
 // --- Comment card
 
-function CommentCard({ comment, last }: { comment: MachineComment; last: boolean }) {
+function CommentCard({
+  comment,
+  last,
+  currentUserId,
+  onDelete,
+}: {
+  comment:        MachineComment;
+  last:           boolean;
+  currentUserId?: string;
+  onDelete?:      (id: string) => void;
+}) {
+  const isMyReview = !!comment.userId && comment.userId === currentUserId;
+
   return (
     <View style={[s.commentRow, !last && s.commentBorder]}>
       <View style={s.commentAvatar}>
@@ -67,6 +79,25 @@ function CommentCard({ comment, last }: { comment: MachineComment; last: boolean
           <Text style={s.commentUser}>{comment.user}</Text>
           <StarRow rating={comment.rating} />
           <Text style={s.commentDate}>{comment.date}</Text>
+          {isMyReview && onDelete && (
+            <TouchableOpacity
+              onPress={() => {
+                Alert.alert(
+                  '리뷰 삭제',
+                  '이 리뷰를 삭제할까요?',
+                  [
+                    { text: '취소', style: 'cancel' },
+                    { text: '삭제', style: 'destructive', onPress: () => onDelete(comment.id) },
+                  ]
+                );
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.7}
+              style={{ marginLeft: 'auto' }}
+            >
+              <Ionicons name="trash-outline" size={13} color={C.danger} />
+            </TouchableOpacity>
+          )}
         </View>
         <Text style={s.commentText}>{comment.text}</Text>
       </View>
@@ -107,6 +138,7 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
 
   React.useEffect(() => {
     if (!machine) return;
+    setUserReviews([]); // 머신 변경 시 리뷰 초기화 (다른 머신 리뷰 섞임 방지)
     const machineId = machine.id;
     async function loadData() {
       // GPS
@@ -137,6 +169,7 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
           setUserReviews(reviews.map(r => ({
             id:              r.id,
             user:            r.user_name,
+            userId:          r.user_id,
             initials:        r.user_initials,
             profileImageUrl: r.profile_image_url ?? null,
             rating:          r.rating,
@@ -199,6 +232,7 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
     const r: MachineComment = {
       id,
       user:             displayName,
+      userId:           user.id,
       initials,
       profileImageUrl,
       rating:           ratingVal,
@@ -227,6 +261,22 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
       if (error && __DEV__) console.warn('[submitReview] Supabase error:', error.message);
     } catch (e) {
       if (__DEV__) console.warn('[submitReview] error:', e);
+    }
+  }
+
+  async function handleDeleteReview(reviewId: string) {
+    setUserReviews(prev => prev.filter(r => r.id !== reviewId));
+
+    try {
+      const { supabase } = await import('../../lib/supabase');
+      const { error } = await supabase
+        .from('machine_reviews')
+        .delete()
+        .eq('id', reviewId)
+        .eq('user_id', user?.id ?? '');
+      if (error && __DEV__) console.warn('[deleteReview] error:', error.message);
+    } catch (e) {
+      if (__DEV__) console.warn('[deleteReview] error:', e);
     }
   }
 
@@ -357,7 +407,13 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
             <Text style={s.sectionTitle}>리뷰</Text>
             <View style={s.commentsCard}>
               {allReviews.map((c, i) => (
-                <CommentCard key={c.id} comment={c} last={i === allReviews.length - 1} />
+                <CommentCard
+                  key={c.id}
+                  comment={c}
+                  last={i === allReviews.length - 1}
+                  currentUserId={user?.id}
+                  onDelete={handleDeleteReview}
+                />
               ))}
             </View>
 

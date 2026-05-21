@@ -32,11 +32,12 @@ export interface GymDetailData {
 export interface MachineComment {
   id:               string;
   user:             string;
+  userId?:          string | null;
   initials:         string;
+  profileImageUrl?: string | null;
+  rating:           number;
   text:             string;
   date:             string;
-  rating:           number;
-  profileImageUrl?: string | null;
 }
 
 // --- Shared comment pool
