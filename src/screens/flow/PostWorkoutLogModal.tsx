@@ -983,6 +983,9 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
   }
 
   async function handleSaveImage() {
+    console.log('[handleSaveImage] called');
+    console.log('[handleSaveImage] photoUri:', photoUri);
+    console.log('[handleSaveImage] overlayRef.current:', overlayRef.current);
     if (!photoUri || !overlayRef.current) {
       Alert.alert('사진 없음', '먼저 사진을 찍어주세요.');
       return;
@@ -1156,6 +1159,17 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
           >
             {/* 헤더 */}
             <View style={{ paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFFFFF' }}>
+              {/* 타겟부위 */}
+              <Text style={{
+                fontSize:      12,
+                fontWeight:    '800',
+                color:         textColor,
+                letterSpacing: 1,
+                marginBottom:  4,
+                textTransform: 'uppercase',
+              }}>
+                {muscleLabel}
+              </Text>
               <Text style={{ fontSize: 15, fontWeight: '900', color: '#111111', marginBottom: 2 }} numberOfLines={1}>
                 {gym.name}
               </Text>
@@ -1258,7 +1272,10 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
             <Ionicons name="share-social-outline" size={16} color={C.accent} />
             <Text style={s.shareBtnTxt}>공유</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.shareBtn} activeOpacity={0.8} onPress={handleSaveImage}>
+          <TouchableOpacity style={s.shareBtn} activeOpacity={0.8} onPress={() => {
+            console.log('[saveBtn] tapped');
+            handleSaveImage();
+          }}>
             <Ionicons name="image-outline" size={16} color={C.textSub} />
             <Text style={[s.shareBtnTxt, { color: C.textSub }]}>
               {saveSuccess ? '저장됨 ✓' : '이미지 저장'}

@@ -209,6 +209,7 @@ export default function FindGymScreen() {
   const [keyword,          setKeyword]          = useState('');
   const [activeMuscle,     setActiveMuscle]     = useState('All');
   const [activeBrand,      setActiveBrand]      = useState('All');
+  const [activeCategory,   setActiveCategory]   = useState('All');
   const [detailMachine,    setDetailMachine]    = useState<MachineWithGyms | null>(null);
   const [gymDetailId,      setGymDetailId]      = useState<string | null>(null);
   const [gymDetailVisible, setGymDetailVisible] = useState(false);
@@ -345,11 +346,28 @@ export default function FindGymScreen() {
     return ['All', ...uniqueBrands];
   }, [allMachines, activeMuscle]);
 
+  const categories = useMemo(() => {
+    if (activeMuscle === 'All') return [];
+    const muscleFiltered = allMachines.filter(m =>
+      m.targetMuscle?.toLowerCase() === activeMuscle.toLowerCase()
+    );
+    const unique = [...new Set(
+      muscleFiltered
+        .map(m => m.category)
+        .filter(c => c && c.trim().length > 0)
+    )].sort();
+    return unique;
+  }, [allMachines, activeMuscle]);
+
   useEffect(() => {
     if (activeBrand === 'All') return;
     const stillValid = brands.some(b => b.toLowerCase() === activeBrand.toLowerCase());
     if (!stillValid) setActiveBrand('All');
   }, [brands, activeBrand]);
+
+  useEffect(() => {
+    setActiveCategory('All');
+  }, [activeMuscle]);
 
   function toggleFavorite(id: string) {
     setFavorites(prev => {
@@ -360,7 +378,7 @@ export default function FindGymScreen() {
   }
 
   const hasFilters =
-    keyword.trim().length > 0 || activeMuscle !== 'All' || activeBrand !== 'All';
+    keyword.trim().length > 0 || activeMuscle !== 'All' || activeBrand !== 'All' || activeCategory !== 'All';
 
   function clearAll() {
     setKeyword('');
@@ -401,16 +419,17 @@ export default function FindGymScreen() {
   // --- Filtered machines
   const filteredMachines = useMemo(() => {
     return allMachines.filter(m => {
-      const muscleOk = activeMuscle === 'All' || m.targetMuscle?.toLowerCase() === activeMuscle.toLowerCase();
-      const brandOk  = activeBrand  === 'All' || m.brand?.toLowerCase()         === activeBrand.toLowerCase();
-      const kw       = keyword.trim().toLowerCase();
-      const keyOk    = !kw ||
+      const muscleOk   = activeMuscle === 'All' || m.targetMuscle?.toLowerCase() === activeMuscle.toLowerCase();
+      const brandOk    = activeBrand  === 'All' || m.brand?.toLowerCase()         === activeBrand.toLowerCase();
+      const categoryOk = activeCategory === 'All' || m.category === activeCategory;
+      const kw         = keyword.trim().toLowerCase();
+      const keyOk      = !kw ||
         m.name.toLowerCase().includes(kw)     ||
         m.category.toLowerCase().includes(kw) ||
         m.brand?.toLowerCase().includes(kw);
-      return muscleOk && brandOk && keyOk;
+      return muscleOk && brandOk && categoryOk && keyOk;
     });
-  }, [keyword, activeMuscle, activeBrand, allMachines]);
+  }, [keyword, activeMuscle, activeBrand, activeCategory, allMachines]);
 
   useEffect(() => {
     flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
@@ -552,6 +571,55 @@ export default function FindGymScreen() {
               </ScrollView>
             </View>
 
+            {/* Category filter - 부위 선택 시에만 표시 */}
+            {activeMuscle !== 'All' && categories.length > 0 && (
+              <View style={{ marginTop: 6 }}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={s.filterRow}
+                  style={{ flexGrow: 0 }}
+                >
+                  <TouchableOpacity
+                    style={[
+                      s.filterChip,
+                      activeCategory === 'All' && { backgroundColor: C.textDim, borderColor: C.textDim },
+                    ]}
+                    onPress={() => setActiveCategory('All')}
+                    activeOpacity={0.75}
+                  >
+                    <Ionicons
+                      name="refresh-outline"
+                      size={12}
+                      color={activeCategory === 'All' ? C.bg : C.textSub}
+                    />
+                    <Text style={[
+                      s.filterChipText,
+                      { marginLeft: 4 },
+                      activeCategory === 'All' && { color: C.bg },
+                    ]}>전체</Text>
+                  </TouchableOpacity>
+
+                  {categories.map(cat => {
+                    const on = cat === activeCategory;
+                    return (
+                      <TouchableOpacity
+                        key={cat}
+                        style={[
+                          s.filterChip,
+                          on && { backgroundColor: C.accent, borderColor: C.accent },
+                        ]}
+                        onPress={() => setActiveCategory(on ? 'All' : cat)}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[s.filterChipText, on && { color: C.bg }]}>{cat}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+
             {/* Brand filter */}
             <View style={{ marginTop: 6 }}>
               <FilterRow
@@ -568,8 +636,9 @@ export default function FindGymScreen() {
                 <Ionicons name="options-outline" size={13} color={C.accent} />
                 <Text style={s.filterSummaryText}>
                   {[
-                    activeMuscle !== 'All' && activeMuscle,
-                    activeBrand  !== 'All' && activeBrand,
+                    activeMuscle  !== 'All' && activeMuscle,
+                    activeCategory !== 'All' && activeCategory,
+                    activeBrand   !== 'All' && activeBrand,
                     keyword.trim() && `"${keyword.trim()}"`,
                   ].filter(Boolean).join(' + ')}
                 </Text>

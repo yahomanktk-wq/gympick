@@ -287,50 +287,11 @@ function AdminSection({ onOpen }: { onOpen: () => void }) {
   );
 }
 
-// --- Dev role switcher
-
-function DevRoleSwitcher({ currentRole, onSwitch }: { currentRole: UserRole; onSwitch: (r: UserRole) => void }) {
-  const [expanded, setExpanded] = useState(false);
-
-  return (
-    <View style={styles.devWrap}>
-      <TouchableOpacity style={styles.devToggle} onPress={() => setExpanded(e => !e)} activeOpacity={0.75}>
-        <View style={styles.devBadge}>
-          <Ionicons name="flask" size={11} color={C.textDim} />
-          <Text style={styles.devBadgeText}>DEV</Text>
-        </View>
-        <Text style={styles.devToggleText}>역할 전환</Text>
-        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={14} color={C.textDim} />
-      </TouchableOpacity>
-
-      {expanded && (
-        <View style={styles.devBtnRow}>
-          {(['user', 'manager', 'admin'] as UserRole[]).map(role => {
-            const m      = ROLE_META[role];
-            const active = currentRole === role;
-            return (
-              <TouchableOpacity
-                key={role}
-                style={[styles.devRoleBtn, { borderColor: m.color + '60' }, active && { backgroundColor: m.color }]}
-                onPress={() => onSwitch(role)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name={m.icon} size={13} color={active ? C.bg : m.color} />
-                <Text style={[styles.devRoleBtnText, { color: active ? C.bg : m.color }]}>{m.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      )}
-    </View>
-  );
-}
-
 // --- Main screen
 
 export default function ProfileScreen() {
   const nav = useNavigation<any>();
-  const { user, switchRole, signOut, updateNickname, updateProfileImage, updateWeightUnit } = useAuth();
+  const { user, signOut, updateNickname, updateProfileImage, updateWeightUnit } = useAuth();
 
   function handleSettingPress(label: string) {
     if (label === '단위 (kg / lbs)') {
@@ -782,9 +743,6 @@ export default function ProfileScreen() {
             <View style={{ height: 28 }} />
           </>
         )}
-
-        {/* ── Dev tool ── */}
-        <DevRoleSwitcher currentRole={user.role} onSwitch={switchRole} />
 
         <Text style={styles.version}>GymPick v1.0.0</Text>
       </ScrollView>
