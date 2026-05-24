@@ -165,7 +165,7 @@ export default function SignInScreen({ onSignUp, onForgotPassword }: Props) {
         {Platform.OS === 'ios' && (
           <AppleAuthentication.AppleAuthenticationButton
             buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-            buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+            buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
             cornerRadius={12}
             style={s.appleBtn}
             onPress={handleAppleSignIn}
