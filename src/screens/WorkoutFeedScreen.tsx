@@ -583,7 +583,7 @@ export default function WorkoutFeedScreen() {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}
-        style={{ marginBottom: 8, flexGrow: 0 }}
+        style={{ marginBottom: 8, flexGrow: 0, height: 44 }}
       >
         {MUSCLE_FILTERS.map(filter => (
           <TouchableOpacity
@@ -696,7 +696,10 @@ const s = StyleSheet.create({
   emptyText: { fontSize: 14, color: C.textDim, fontWeight: '500' },
   filterChip: {
     paddingHorizontal: 16,
-    paddingVertical:   8,
+    paddingVertical:   0,
+    height:            36,
+    justifyContent:    'center',
+    alignItems:        'center',
     borderRadius:      R.pill,
     backgroundColor:   C.surface,
     borderWidth:       1,
