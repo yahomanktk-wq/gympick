@@ -477,7 +477,9 @@ export default function WorkoutFeedScreen() {
 
       async function loadPosts() {
         if (!user?.id) {
-          if (active) setPosts([]);
+          const serverPosts = await fetchActiveFeedPosts().catch(() => []);
+          const previewPosts = serverPosts.slice(0, 4);
+          if (active) setPosts(previewPosts);
           return;
         }
         const myUserId = user.id;
@@ -622,6 +624,27 @@ export default function WorkoutFeedScreen() {
               onPress={() => setDetailPost(item)}
             />
           )}
+          ListFooterComponent={() => (
+            <>
+              {!user?.id && posts.length > 0 && (
+                <TouchableOpacity
+                  style={s.loginPromptBanner}
+                  onPress={() => nav.navigate('Profile')}
+                  activeOpacity={0.85}
+                >
+                  <View style={s.loginPromptInner}>
+                    <Ionicons name="lock-closed-outline" size={20} color={C.accent} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.loginPromptTitle}>더 많은 오운완을 보려면 로그인하세요</Text>
+                      <Text style={s.loginPromptSub}>로그인하면 내 헬스장, 주변 운동 친구들의 오운완을 볼 수 있어요</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={C.accent} />
+                  </View>
+                </TouchableOpacity>
+              )}
+              <View style={{ height: 40 }} />
+            </>
+          )}
         />
       )}
 
@@ -708,4 +731,31 @@ const s = StyleSheet.create({
   filterChipActive:     { backgroundColor: C.accent, borderColor: C.accent },
   filterChipText:       { fontSize: 13, fontWeight: '600', color: C.textSub },
   filterChipTextActive: { color: C.bg },
+
+  loginPromptBanner: {
+    marginHorizontal: 16,
+    marginBottom:     16,
+    borderRadius:     R.card,
+    backgroundColor:  C.accentBg,
+    borderWidth:      1,
+    borderColor:      C.accent + '40',
+    overflow:         'hidden',
+  },
+  loginPromptInner: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    gap:            12,
+    padding:        16,
+  },
+  loginPromptTitle: {
+    fontSize:     14,
+    fontWeight:   '700',
+    color:        C.text,
+    marginBottom: 4,
+  },
+  loginPromptSub: {
+    fontSize:   12,
+    color:      C.textSub,
+    lineHeight: 17,
+  },
 });
