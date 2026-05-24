@@ -5,6 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as Linking from 'expo-linking';
+import * as SplashScreen from 'expo-splash-screen';
 import { AuthProvider } from './src/context/AuthContext';
 import { supabase } from './src/lib/supabase';
 import TabNavigator from './src/navigation/TabNavigator';
@@ -16,8 +17,20 @@ import ResetPasswordScreen from './src/screens/auth/ResetPasswordScreen';
 
 const Stack = createNativeStackNavigator();
 
+SplashScreen.preventAutoHideAsync();
+
 export default function App() {
   const [showResetPassword, setShowResetPassword] = useState(false);
+  const [appReady, setAppReady] = useState(false);
+
+  useEffect(() => {
+    const prepare = async () => {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      setAppReady(true);
+      await SplashScreen.hideAsync();
+    };
+    prepare();
+  }, []);
 
   useEffect(() => {
     // 앱이 열려있는 상태에서 딥링크 수신
@@ -57,6 +70,8 @@ export default function App() {
       }
     }
   }
+
+  if (!appReady) return null;
 
   return (
     <AuthProvider>
