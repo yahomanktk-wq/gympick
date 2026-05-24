@@ -1,13 +1,4 @@
-/**
- * In-memory store for machine favorites.
- * Pre-seeded with mock favorites (matches FAVORITE_MACHINES in machineReviews.ts).
- */
-
-const favoriteMachineIds: string[] = [
-  'arsenal_back_1',
-  'hammer_strength_chest_1',
-  'atlantis_leg_12',
-];
+const favoriteMachineIds: string[] = [];
 
 export function getFavoriteMachineIds(): string[] {
   return [...favoriteMachineIds];

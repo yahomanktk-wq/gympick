@@ -136,11 +136,7 @@ export const MACHINE_REVIEWS: MachineReview[] = [
 
 // --- Favorite machines
 
-export const FAVORITE_MACHINES: FavoriteMachine[] = [
-  { id: 'fm01', userId: 'u1', machineId: 'arsenal_back_1',         createdAt: '2026-02-10' },
-  { id: 'fm02', userId: 'u1', machineId: 'hammer_strength_chest_1', createdAt: '2026-02-15' },
-  { id: 'fm03', userId: 'u1', machineId: 'atlantis_leg_12',         createdAt: '2026-02-20' },
-];
+export const FAVORITE_MACHINES: FavoriteMachine[] = [];
 
 // --- Query helpers
 
