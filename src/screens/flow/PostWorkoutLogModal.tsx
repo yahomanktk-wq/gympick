@@ -1161,20 +1161,37 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
           >
             {/* 헤더 */}
             <View style={{ paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFFFFF' }}>
-              {/* 타겟부위 */}
-              <Text style={{
-                fontSize:      12,
-                fontWeight:    '800',
-                color:         textColor,
-                letterSpacing: 1,
-                marginBottom:  4,
-                textTransform: 'uppercase',
+              {/* 헬스장명 + 타겟부위 칩 한 줄 */}
+              <View style={{
+                flexDirection:  'row',
+                alignItems:     'center',
+                justifyContent: 'space-between',
+                marginBottom:   2,
               }}>
-                {muscleLabel}
-              </Text>
-              <Text style={{ fontSize: 15, fontWeight: '900', color: '#111111', marginBottom: 2 }} numberOfLines={1}>
-                {gym.name}
-              </Text>
+                <Text
+                  style={{ fontSize: 15, fontWeight: '900', color: '#111111', flex: 1, marginRight: 8 }}
+                  numberOfLines={1}
+                >
+                  {gym.name}
+                </Text>
+                {/* 타겟부위 칩 */}
+                <View style={{
+                  backgroundColor:  textColor,
+                  borderRadius:     20,
+                  paddingHorizontal: 10,
+                  paddingVertical:   3,
+                }}>
+                  <Text style={{
+                    fontSize:      10,
+                    fontWeight:    '800',
+                    color:         '#FFFFFF',
+                    letterSpacing: 0.5,
+                    textTransform: 'uppercase',
+                  }}>
+                    {muscleLabel.replace(' Day', '')}
+                  </Text>
+                </View>
+              </View>
               <Text style={{ fontSize: 11, color: '#888888', fontWeight: '500' }}>
                 {timestamp}
               </Text>
