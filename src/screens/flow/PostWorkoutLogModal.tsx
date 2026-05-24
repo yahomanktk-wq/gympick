@@ -6,7 +6,6 @@ import {
   Modal,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   TextInput,
   Share,
   Dimensions,
@@ -15,6 +14,7 @@ import {
   InteractionManager,
   Animated,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import ChestIcon     from '../../assets/muscle-icons/chest.svg';
 import BackIcon       from '../../assets/muscle-icons/back.svg';

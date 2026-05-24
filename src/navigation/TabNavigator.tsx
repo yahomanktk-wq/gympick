@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C } from '../theme';
 
 import HomeScreen       from '../screens/HomeScreen';
@@ -63,12 +64,18 @@ function TabItem({ name, focused }: { name: keyof TabParamList; focused: boolean
 const Tab = createBottomTabNavigator<TabParamList>();
 
 export default function TabNavigator() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown:     false,
         tabBarShowLabel: false,
-        tabBarStyle:     tabSt.bar,
+        tabBarStyle: {
+          ...tabSt.bar,
+          height:        Platform.OS === 'ios' ? 80 : 56 + insets.bottom,
+          paddingBottom: Platform.OS === 'ios' ? 16 : insets.bottom > 0 ? insets.bottom : 8,
+        },
         tabBarIcon:      ({ focused }) => (
           <TabItem name={route.name as keyof TabParamList} focused={focused} />
         ),
@@ -90,8 +97,6 @@ const tabSt = StyleSheet.create({
     backgroundColor: C.surface,
     borderTopWidth:  1,
     borderTopColor:  C.border,
-    height:          Platform.OS === 'ios' ? 80 : 68,
-    paddingBottom:   Platform.OS === 'ios' ? 16 : 4,
     elevation:       0,
     shadowOpacity:   0,
   },
