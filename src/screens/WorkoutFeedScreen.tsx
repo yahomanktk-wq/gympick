@@ -629,7 +629,7 @@ export default function WorkoutFeedScreen() {
               {!user?.id && posts.length > 0 && (
                 <TouchableOpacity
                   style={s.loginPromptBanner}
-                  onPress={() => nav.navigate('Profile')}
+                  onPress={() => nav.navigate('Main', { screen: 'Profile' })}
                   activeOpacity={0.85}
                 >
                   <View style={s.loginPromptInner}>
