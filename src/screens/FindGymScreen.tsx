@@ -41,6 +41,35 @@ import MachineCardBorder  from '../components/MachineCardBorder';
 import * as Location from 'expo-location';
 import { calcDistanceKm, formatDistance } from '../lib/geocoding';
 import FavoriteGymRecommendation from '../components/FavoriteGymRecommendation';
+import { toEnMuscle } from '../lib/splitUtils';
+
+const CATEGORY_ORDER: Record<string, string[]> = {
+  Chest: [
+    'Chest Press', 'Incline Press', 'Decline Press',
+    'Fly', 'Incline Fly', 'Chest_Etc',
+  ],
+  Back: [
+    'Pull Down', 'High Row', 'Middle Row', 'Low Row',
+    'T-Bar', 'Pullover', 'Chin Dip', 'Back_Etc',
+  ],
+  Legs: [
+    'Leg Press', 'Hack Squat', 'Pendulum Squat', 'Squat Machine',
+    'Leg Curl', 'Leg Extention', 'Calf', 'Viking Press', 'Leg_Etc',
+  ],
+  Shoulders: [
+    'Shoulder Press', 'Raise_Side Lateral', 'Rear Delt',
+    'Rear Delt / Pec Fly', 'Shoulder_Etc',
+  ],
+  Arms: [
+    'Biceps', 'Triceps', 'Arm_Etc',
+  ],
+  'Hip (Glutes)': [
+    'Hip Press', 'Hip Thrust', 'Hip Abduction', 'Inner Outer', 'Glute_Etc',
+  ],
+  Other: [
+    'Free Weight', 'Etc',
+  ],
+};
 
 // --- Muscle colour palette
 
@@ -348,18 +377,29 @@ export default function FindGymScreen() {
 
   const categories = useMemo(() => {
     if (activeMuscle === 'All') return [];
+
     const muscleFiltered = allMachines.filter(m =>
       m.targetMuscle?.toLowerCase() === activeMuscle.toLowerCase()
     );
-    const unique = [...new Set(
-      muscleFiltered
-        .flatMap(m =>
-          m.category
-            ? m.category.split(',').map(c => c.trim()).filter(c => c.length > 0)
-            : []
-        )
-    )].sort();
-    return unique;
+
+    const available = new Set(
+      muscleFiltered.flatMap(m =>
+        m.category
+          ? m.category.split(',').map((c: string) => c.trim()).filter((c: string) => c.length > 0)
+          : []
+      )
+    );
+
+    const muscleEn    = toEnMuscle(activeMuscle) || activeMuscle;
+    const orderedList = CATEGORY_ORDER[muscleEn] ?? [];
+
+    const ordered   = orderedList.filter(cat => available.has(cat));
+
+    const remaining = [...available]
+      .filter(cat => !orderedList.includes(cat))
+      .sort();
+
+    return [...ordered, ...remaining];
   }, [allMachines, activeMuscle]);
 
   useEffect(() => {
