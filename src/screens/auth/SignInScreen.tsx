@@ -12,6 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { C, R } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
@@ -30,6 +31,7 @@ export default function SignInScreen({ onSignUp, onForgotPassword }: Props) {
   const [loading,  setLoading]  = useState(false);
 
   async function handleGoogleSignIn() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     const { error } = await signInGoogle();
     setLoading(false);
@@ -37,6 +39,7 @@ export default function SignInScreen({ onSignUp, onForgotPassword }: Props) {
   }
 
   async function handleAppleSignIn() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     const { error } = await signInApple();
     setLoading(false);
@@ -107,7 +110,7 @@ export default function SignInScreen({ onSignUp, onForgotPassword }: Props) {
         {/* 비밀번호 재설정 링크 */}
         <TouchableOpacity
           style={{ alignSelf: 'flex-end', marginBottom: 8, marginTop: 4 }}
-          onPress={onForgotPassword}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onForgotPassword(); }}
           activeOpacity={0.7}
         >
           <Text style={{ fontSize: 13, color: C.accent, fontWeight: '600' }}>
@@ -127,7 +130,7 @@ export default function SignInScreen({ onSignUp, onForgotPassword }: Props) {
         <TouchableOpacity
           style={[s.btn, loading && s.btnDisabled]}
           activeOpacity={0.85}
-          onPress={handleSignIn}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); handleSignIn(); }}
           disabled={loading}
         >
           {loading
@@ -137,7 +140,7 @@ export default function SignInScreen({ onSignUp, onForgotPassword }: Props) {
         </TouchableOpacity>
 
         {/* Create account */}
-        <TouchableOpacity style={s.secondaryBtn} activeOpacity={0.7} onPress={onSignUp}>
+        <TouchableOpacity style={s.secondaryBtn} activeOpacity={0.7} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onSignUp(); }}>
           <Text style={s.secondaryText}>계정 만들기</Text>
         </TouchableOpacity>
 

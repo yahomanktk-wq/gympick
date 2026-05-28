@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import * as Haptics from 'expo-haptics'; // reserved for future button additions in this flow
 import { SafeAreaView, StatusBar, StyleSheet } from 'react-native';
 import { C } from '../../theme';
 import { useAuth } from '../../context/AuthContext';

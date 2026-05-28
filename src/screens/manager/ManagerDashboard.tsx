@@ -17,6 +17,7 @@ import {
   Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { C, R, T } from '../../theme';
 import { ManagedGym, Machine, GymStatus } from '../../data/types';
 import { MACHINES } from '../../data/machines';
@@ -131,7 +132,7 @@ function Header({ title, subtitle, onBack, right }: {
 }) {
   return (
     <View style={styles.header}>
-      <TouchableOpacity onPress={onBack} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+      <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onBack(); }} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
         <Ionicons name="chevron-back" size={22} color={C.text} />
       </TouchableOpacity>
       <View style={styles.headerCenter}>
@@ -429,22 +430,22 @@ function HomeView({ gyms, onOpenEdit, onOpenMachines, onOpenManage, onOpenStats,
             <View style={styles.metaChip}><Ionicons name="time-outline" size={11} color={C.textSub} /><Text style={styles.metaChipText}>{gym.submittedAt}</Text></View>
           </View>
           <View style={styles.gymCardActions}>
-            <TouchableOpacity style={styles.gymActionBtn} onPress={() => onOpenEdit(gym)} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.gymActionBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpenEdit(gym); }} activeOpacity={0.8}>
               <Ionicons name="create-outline" size={14} color={C.accent} />
               <Text style={styles.gymActionBtnText}>정보 수정</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.gymActionBtn} onPress={() => onOpenMachines(gym)} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.gymActionBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpenMachines(gym); }} activeOpacity={0.8}>
               <Ionicons name="barbell-outline" size={14} color={C.accent} />
               <Text style={styles.gymActionBtnText}>머신 관리</Text>
             </TouchableOpacity>
           </View>
-          <TouchableOpacity style={[styles.gymActionBtn, { marginTop: 8 }]} onPress={() => onOpenManage(gym)} activeOpacity={0.8}>
+          <TouchableOpacity style={[styles.gymActionBtn, { marginTop: 8 }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpenManage(gym); }} activeOpacity={0.8}>
             <Ionicons name="grid-outline" size={14} color={C.accent} />
             <Text style={styles.gymActionBtnText}>관리 센터 (루틴·공지·요청)</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.gymActionBtn, { marginTop: 8, backgroundColor: C.accentBg, borderColor: C.accent + '40' }]}
-            onPress={() => onOpenStats(gym)}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpenStats(gym); }}
             activeOpacity={0.8}
           >
             <Ionicons name="bar-chart-outline" size={14} color={C.accent} />
@@ -455,7 +456,7 @@ function HomeView({ gyms, onOpenEdit, onOpenMachines, onOpenManage, onOpenStats,
 
       <TouchableOpacity
         style={styles.registerBtn}
-        onPress={onRegister}
+        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onRegister(); }}
         activeOpacity={0.88}
       >
         <Ionicons name="add-circle-outline" size={18} color={C.bg} />
@@ -487,7 +488,7 @@ function RegisterView({
         <Text style={styles.completionSub}>승인 후 머신 등록이 가능합니다.</Text>
         <TouchableOpacity
           style={[styles.registerBtn, { marginTop: 32, width: '100%' }]}
-          onPress={() => { setStep(1); onBack(); }}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setStep(1); onBack(); }}
           activeOpacity={0.88}
         >
           <Text style={styles.registerBtnText}>확인</Text>
@@ -546,13 +547,13 @@ function RegisterView({
         )}
         <View style={styles.stepNav}>
           {step > 1 && (
-            <TouchableOpacity style={styles.stepBack} onPress={() => setStep(s => s - 1)} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.stepBack} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setStep(s => s - 1); }} activeOpacity={0.8}>
               <Text style={styles.stepBackText}>이전</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity
             style={[styles.stepNext, step > 1 && { flex: 1 }, submitting && step === 3 && { opacity: 0.5 }]}
-            onPress={step < 3 ? (step === 1 ? onNextStep : () => setStep(s => s + 1)) : onSubmit}
+            onPress={step < 3 ? (step === 1 ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onNextStep(); } : () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setStep(s => s + 1); }) : () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onSubmit(); }}
             activeOpacity={0.88}
             disabled={submitting && step === 3}
           >
@@ -604,7 +605,7 @@ function EditView({
                     backgroundColor: 'rgba(0,0,0,0.6)',
                     borderRadius: 10, padding: 2,
                   }}
-                  onPress={() => setPhotos(prev => prev.filter((_, i) => i !== idx))}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); setPhotos(prev => prev.filter((_, i) => i !== idx)); }}
                   activeOpacity={0.8}
                 >
                   <Ionicons name="close" size={14} color="#fff" />
@@ -618,7 +619,7 @@ function EditView({
                 borderColor: C.border, borderStyle: 'dashed',
                 alignItems: 'center', justifyContent: 'center', gap: 4,
               }}
-              onPress={onAddPhoto}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onAddPhoto(); }}
               activeOpacity={0.8}
             >
               <Ionicons name="add" size={24} color={C.textDim} />
@@ -626,7 +627,7 @@ function EditView({
             </TouchableOpacity>
           </ScrollView>
         </View>
-        <TouchableOpacity style={styles.saveBtn} onPress={onSave} activeOpacity={0.88}>
+        <TouchableOpacity style={styles.saveBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onSave(); }} activeOpacity={0.88}>
           <Text style={styles.saveBtnText}>수정 내용 제출</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -641,7 +642,7 @@ const MachineItem = React.memo(({ machine, isAdded, onToggle, cardWidth }: {
   cardWidth: number;
 }) => (
   <View style={{ width: cardWidth, position: 'relative' }}>
-    <TouchableOpacity onPress={() => onToggle(machine.id)} activeOpacity={0.8}>
+    <TouchableOpacity onPress={() => { Haptics.impactAsync(isAdded ? Haptics.ImpactFeedbackStyle.Heavy : Haptics.ImpactFeedbackStyle.Medium); onToggle(machine.id); }} activeOpacity={0.8}>
       <MachineCard machine={machine} variant="grid" width={cardWidth} />
     </TouchableOpacity>
     {isAdded && (
@@ -684,14 +685,14 @@ function MachinesView({
       <View style={styles.ownershipFilterRow}>
         <TouchableOpacity
           style={[styles.ownershipChip, !showOwnedOnly && styles.ownershipChipActive]}
-          onPress={() => setShowOwnedOnly(false)}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowOwnedOnly(false); }}
           activeOpacity={0.8}
         >
           <Text style={[styles.ownershipChipText, !showOwnedOnly && styles.ownershipChipTextActive]}>전체</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.ownershipChip, showOwnedOnly && styles.ownershipChipActive]}
-          onPress={() => setShowOwnedOnly(true)}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowOwnedOnly(true); }}
           activeOpacity={0.8}
         >
           <Ionicons name="checkmark-circle" size={13} color={showOwnedOnly ? '#000000' : C.textSub} />
@@ -701,7 +702,7 @@ function MachinesView({
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow} contentContainerStyle={styles.filterRowContent}>
         {['전체', ...CATALOG_MUSCLES].map(m => (
-          <TouchableOpacity key={m} style={[styles.filterChip, machineMusclFilter === m && styles.filterChipActive]} onPress={() => setMachineMusclFilter(machineMusclFilter === m && m !== '전체' ? '전체' : m)}>
+          <TouchableOpacity key={m} style={[styles.filterChip, machineMusclFilter === m && styles.filterChipActive]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMachineMusclFilter(machineMusclFilter === m && m !== '전체' ? '전체' : m); }}>
             <Text style={[styles.filterChipText, machineMusclFilter === m && styles.filterChipTextActive]}>{m}</Text>
           </TouchableOpacity>
         ))}
@@ -709,7 +710,7 @@ function MachinesView({
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.filterRow, { marginTop: 0, marginBottom: 12 }]} contentContainerStyle={styles.filterRowContent}>
         {['전체', ...CATALOG_BRANDS].map(b => (
-          <TouchableOpacity key={b} style={[styles.filterChip, machineBrandFilter === b && styles.filterChipActive]} onPress={() => setMachineBrandFilter(machineBrandFilter === b && b !== '전체' ? '전체' : b)}>
+          <TouchableOpacity key={b} style={[styles.filterChip, machineBrandFilter === b && styles.filterChipActive]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMachineBrandFilter(machineBrandFilter === b && b !== '전체' ? '전체' : b); }}>
             <Text style={[styles.filterChipText, machineBrandFilter === b && styles.filterChipTextActive]}>{b}</Text>
           </TouchableOpacity>
         ))}
@@ -769,7 +770,7 @@ function RoutineTab({
     <ScrollView contentContainerStyle={styles.tabScroll} showsVerticalScrollIndicator={false}>
       <View style={styles.tabSectionHeader}>
         <Text style={styles.tabSectionTitle}>헬스장 추천 루틴</Text>
-        <TouchableOpacity style={styles.tabAddBtn} onPress={onOpenAdd} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.tabAddBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onOpenAdd(); }} activeOpacity={0.8}>
           <Ionicons name="add" size={14} color={C.bg} />
           <Text style={styles.tabAddBtnText}>루틴 추가</Text>
         </TouchableOpacity>
@@ -785,7 +786,7 @@ function RoutineTab({
       {gymRoutines.map(r => {
         const col = muscleColor(r.bodyPart);
         return (
-          <TouchableOpacity key={r.id} style={styles.routineCard} activeOpacity={0.8} onPress={() => onOpenEdit(r)}>
+          <TouchableOpacity key={r.id} style={styles.routineCard} activeOpacity={0.8} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpenEdit(r); }}>
             <View style={styles.routineCardHead}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.routineCardName}>{r.name}</Text>
@@ -796,7 +797,7 @@ function RoutineTab({
                   <Text style={styles.routineCardMeta}>머신 {r.machines.length}개</Text>
                 </View>
               </View>
-              <TouchableOpacity onPress={() => onDelete(r.id)} style={styles.iconBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); onDelete(r.id); }} style={styles.iconBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="trash-outline" size={16} color={C.danger} />
               </TouchableOpacity>
             </View>
@@ -813,7 +814,7 @@ function RoutineTab({
       <Modal visible={routineModalVisible} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setRoutineModalVisible(false)}>
         <SafeAreaView style={styles.safe}>
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => setRoutineModalVisible(false)} style={styles.backBtn}>
+            <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setRoutineModalVisible(false); }} style={styles.backBtn}>
               <Ionicons name="close" size={22} color={C.text} />
             </TouchableOpacity>
             <View style={styles.headerCenter}>
@@ -828,7 +829,7 @@ function RoutineTab({
                 <Text style={styles.fieldLabel}>타겟 부위</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow} contentContainerStyle={styles.filterRowContent}>
                   {BODY_PARTS.map(bp => (
-                    <TouchableOpacity key={bp} style={[styles.filterChip, routineBodyPart === bp && styles.filterChipActive]} onPress={() => setRoutineBodyPart(bp)}>
+                    <TouchableOpacity key={bp} style={[styles.filterChip, routineBodyPart === bp && styles.filterChipActive]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setRoutineBodyPart(bp); }}>
                       <Text style={[styles.filterChipText, routineBodyPart === bp && styles.filterChipTextActive]}>{bp}</Text>
                     </TouchableOpacity>
                   ))}
@@ -852,11 +853,14 @@ function RoutineTab({
                   return (
                     <View key={machine.id} style={{ width: ROUTINE_CARD_W, position: 'relative' }}>
                       <TouchableOpacity
-                        onPress={() => setRoutineSelectedIds(prev => {
-                          const next = new Set(prev);
-                          next.has(machine.id) ? next.delete(machine.id) : next.add(machine.id);
-                          return next;
-                        })}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setRoutineSelectedIds(prev => {
+                            const next = new Set(prev);
+                            next.has(machine.id) ? next.delete(machine.id) : next.add(machine.id);
+                            return next;
+                          });
+                        }}
                         activeOpacity={0.8}
                       >
                         <MachineCard machine={machine} variant="grid" width={ROUTINE_CARD_W} />
@@ -873,7 +877,7 @@ function RoutineTab({
 
               <TouchableOpacity
                 style={[styles.saveBtn, (!routineName.trim() || routineSelectedIds.size === 0) && { opacity: 0.5 }]}
-                onPress={onSave}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onSave(); }}
                 disabled={!routineName.trim() || routineSelectedIds.size === 0}
                 activeOpacity={0.88}
               >
@@ -903,7 +907,7 @@ function NoticeTab({
     <ScrollView contentContainerStyle={styles.tabScroll} showsVerticalScrollIndicator={false}>
       <View style={styles.tabSectionHeader}>
         <Text style={styles.tabSectionTitle}>공지사항</Text>
-        <TouchableOpacity style={styles.tabAddBtn} onPress={handleOpenModal} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.tabAddBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); handleOpenModal(); }} activeOpacity={0.8}>
           <Ionicons name="add" size={14} color={C.bg} />
           <Text style={styles.tabAddBtnText}>공지 작성</Text>
         </TouchableOpacity>
@@ -925,7 +929,7 @@ function NoticeTab({
               </View>
               <Text style={styles.noticeRowContent} numberOfLines={2}>{a.content}</Text>
             </View>
-            <TouchableOpacity onPress={() => onDelete(a.id)} style={styles.iconBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); onDelete(a.id); }} style={styles.iconBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Ionicons name="trash-outline" size={15} color={C.danger} />
             </TouchableOpacity>
           </View>
@@ -936,7 +940,7 @@ function NoticeTab({
       <Modal visible={annModalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setAnnModalVisible(false)}>
         <SafeAreaView style={styles.safe}>
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => setAnnModalVisible(false)} style={styles.backBtn}><Ionicons name="close" size={22} color={C.text} /></TouchableOpacity>
+            <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setAnnModalVisible(false); }} style={styles.backBtn}><Ionicons name="close" size={22} color={C.text} /></TouchableOpacity>
             <View style={styles.headerCenter}><Text style={styles.headerTitle}>공지 작성</Text></View>
             <View style={{ width: 40 }} />
           </View>
@@ -954,7 +958,7 @@ function NoticeTab({
                   />
                 </View>
               </SectionCard>
-              <TouchableOpacity style={styles.saveBtn} onPress={() => onSubmit(annTitle, annContent)} activeOpacity={0.88}>
+              <TouchableOpacity style={styles.saveBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onSubmit(annTitle, annContent); }} activeOpacity={0.88}>
                 <Text style={styles.saveBtnText}>공지 등록</Text>
               </TouchableOpacity>
             </ScrollView>
@@ -985,7 +989,7 @@ function RequestTab({ requests, readIds, onMarkRead }: RequestTabProps) {
           </View>
           <TouchableOpacity
             style={styles.readBtn}
-            onPress={() => onMarkRead(r.id)}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onMarkRead(r.id); }}
             activeOpacity={0.8}
           >
             <Text style={styles.readBtnText}>확인 완료</Text>
@@ -1021,7 +1025,7 @@ function ManageView({
           <TouchableOpacity
             key={tab.key}
             style={[styles.tabBtn, activeManagerTab === tab.key && styles.tabBtnActive]}
-            onPress={() => setActiveManagerTab(tab.key)}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveManagerTab(tab.key); }}
           >
             <Text style={[styles.tabBtnText, activeManagerTab === tab.key && styles.tabBtnTextActive]}>
               {tab.label}
@@ -1597,6 +1601,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
           ) : currentView === 'machines' ? (
             <TouchableOpacity
               onPress={async () => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 if (!selectedGym) return;
                 updateGymMachines(selectedGym.id, gymMachineIds);
                 const { error } = await saveGymMachineIds(selectedGym.id, gymMachineIds);
@@ -1677,7 +1682,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
                 <View style={styles.saveConfirmBtns}>
                   <TouchableOpacity
                     style={styles.saveConfirmCancelBtn}
-                    onPress={() => { setShowSaveConfirm(false); pop(); }}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowSaveConfirm(false); pop(); }}
                     activeOpacity={0.8}
                   >
                     <Text style={styles.saveConfirmCancelText}>저장 안 함</Text>
@@ -1685,6 +1690,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
                   <TouchableOpacity
                     style={styles.saveConfirmSaveBtn}
                     onPress={async () => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                       if (!selectedGym) return;
                       updateGymMachines(selectedGym.id, gymMachineIds);
                       const { error } = await saveGymMachineIds(selectedGym.id, gymMachineIds);

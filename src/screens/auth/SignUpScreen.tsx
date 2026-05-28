@@ -12,6 +12,7 @@ import {
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { C, R } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
 import TermsOfServiceScreen from './TermsOfServiceScreen';
@@ -47,7 +48,7 @@ const SignupConsentItem = React.memo(({
 }) => (
   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 }}>
     <TouchableOpacity
-      onPress={onToggle}
+      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onToggle(); }}
       activeOpacity={0.7}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
     >
@@ -57,7 +58,7 @@ const SignupConsentItem = React.memo(({
     </TouchableOpacity>
     <Text style={s.consentLabel}>{item.label}</Text>
     {item.hasLink && onPressLink && (
-      <TouchableOpacity onPress={onPressLink} activeOpacity={0.7}>
+      <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPressLink!(); }} activeOpacity={0.7}>
         <Text style={s.consentLink}>보기</Text>
       </TouchableOpacity>
     )}
@@ -144,7 +145,7 @@ export default function SignUpScreen({ onBack, onVerification }: Props) {
         showsVerticalScrollIndicator={false}
       >
         {/* Back */}
-        <TouchableOpacity style={s.backBtn} activeOpacity={0.7} onPress={onBack}>
+        <TouchableOpacity style={s.backBtn} activeOpacity={0.7} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onBack(); }}>
           <Ionicons name="chevron-back" size={20} color={C.textSub} />
           <Text style={s.backText}>로그인</Text>
         </TouchableOpacity>
@@ -281,7 +282,7 @@ export default function SignUpScreen({ onBack, onVerification }: Props) {
         <TouchableOpacity
           style={[s.btn, (loading || !allRequiredChecked) && s.btnDisabled]}
           activeOpacity={0.85}
-          onPress={handleSignUp}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); handleSignUp(); }}
           disabled={loading || !allRequiredChecked}
         >
           {loading
@@ -291,7 +292,7 @@ export default function SignUpScreen({ onBack, onVerification }: Props) {
         </TouchableOpacity>
 
         {/* Already have account */}
-        <TouchableOpacity style={s.linkBtn} activeOpacity={0.7} onPress={onBack}>
+        <TouchableOpacity style={s.linkBtn} activeOpacity={0.7} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onBack(); }}>
           <Text style={s.linkText}>
             이미 계정이 있으신가요?{' '}
             <Text style={s.linkAccent}>로그인</Text>
