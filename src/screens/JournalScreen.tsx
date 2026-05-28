@@ -33,6 +33,7 @@ import { useAuth } from '../context/AuthContext';
 import PostWorkoutLogModal from './flow/PostWorkoutLogModal';
 import MachineDetailModal from './flow/MachineDetailModal';
 import GymPickLogo from '../components/GymPickLogo';
+import * as Haptics from 'expo-haptics';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -318,6 +319,7 @@ function RetroWeeklyGrid({
                     ]}
                     activeOpacity={session ? 0.75 : 1}
                     onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       const daySessions = sessions.filter(s => isSameDay(new Date(s.date), day));
                       if (daySessions.length > 0) onSelectDay(daySessions);
                     }}
@@ -591,7 +593,7 @@ function SessionDetailModal({
                 <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 12 }}>
                   <TouchableOpacity
                     style={[det.photoActionBtn, { flex: 1 }]}
-                    onPress={() => handleSave(session)}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); handleSave(session); }}
                     activeOpacity={0.8}
                   >
                     <Ionicons name="download-outline" size={16} color={C.text} />
@@ -607,7 +609,7 @@ function SessionDetailModal({
                           ? { borderColor: C.accent + '60', backgroundColor: C.accentBg }
                           : { borderColor: C.border },
                       ]}
-                      onPress={() => handleTogglePublic(session)}
+                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); handleTogglePublic(session); }}
                       activeOpacity={0.8}
                     >
                       <Ionicons
@@ -626,7 +628,7 @@ function SessionDetailModal({
 
                   <TouchableOpacity
                     style={[det.photoActionBtn, { flex: 1, borderColor: C.danger + '60' }]}
-                    onPress={() => handleDelete(session)}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); handleDelete(session); }}
                     activeOpacity={0.8}
                   >
                     <Ionicons name="trash-outline" size={16} color={C.danger} />
@@ -686,26 +688,59 @@ function SessionDetailModal({
                 <View
                   ref={(ref) => { routineCardRefs.current[session.id] = ref as View | null; }}
                   collapsable={false}
-                  style={det.routineCard}
+                  style={[det.routineCard, { borderColor: session.overlayTextColor ?? '#ffffff' }]}
                 >
                   <View style={det.routineCardHeader}>
-                    <Text style={det.routineCardGymName} numberOfLines={1}>{session.gymName}</Text>
-                    <Text style={det.routineCardDate}>{new Date(session.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                      <Text style={[det.routineCardGymName, { flex: 1, marginRight: 8 }]} numberOfLines={1}>{session.gymName}</Text>
+                      <View style={{
+                        backgroundColor: session.overlayTextColor ?? '#ffffff',
+                        borderRadius: 20,
+                        paddingHorizontal: 10,
+                        paddingVertical: 3,
+                      }}>
+                        <Text style={{
+                          fontSize: 10,
+                          fontWeight: '800',
+                          color: '#000000',
+                          letterSpacing: 0.5,
+                          textTransform: 'uppercase',
+                        }}>
+                          {(() => {
+                            const muscleCounts = machines.reduce<Record<string, number>>((acc, m) => {
+                              acc[m.targetMuscle] = (acc[m.targetMuscle] ?? 0) + 1;
+                              return acc;
+                            }, {});
+                            const sorted = Object.entries(muscleCounts)
+                              .sort(([, a], [, b]) => b - a)
+                              .map(([m]) => m);
+                            return sorted.length > 1
+                              ? sorted.slice(0, 2).join(' + ')
+                              : `${sorted[0] ?? 'WORKOUT'}`;
+                          })()}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={det.routineCardDate}>{(() => {
+                      const d = new Date(session.date);
+                      const pad = (n: number) => String(n).padStart(2, '0');
+                      const ENG_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}(${ENG_DAYS[d.getDay()]})_${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                    })()}</Text>
                   </View>
                   <View style={det.routineDivider} />
                   {machines.map((m, i) => {
-                    const isPR      = prMachines.has(m.machineId);
                     const brandKey  = m.machineBrand.toUpperCase().replace(/\s+/g, '_');
                     const brandLogo = brandLogos[brandKey];
                     const imageUrl  = `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${m.machineId}.webp`;
                     return (
                       <React.Fragment key={m.machineId}>
                         {i > 0 && <View style={det.routineDivider} />}
-                        <View style={[det.routineRow, isPR && det.routineRowPR]}>
+                        <View style={det.routineRow}>
                           <TouchableOpacity
                             style={det.routineImgWrap}
                             activeOpacity={0.8}
-                            onPress={() => onOpenMachine(m.machineId, m.machineName, m.machineBrand, m.targetMuscle)}
+                            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpenMachine(m.machineId, m.machineName, m.machineBrand, m.targetMuscle); }}
                           >
                             <ExpoImage
                               source={{ uri: imageUrl }}
@@ -716,11 +751,6 @@ function SessionDetailModal({
                           <View style={det.routineInfo}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
                               <Text style={det.routineMachineName} numberOfLines={2}>{m.machineName}</Text>
-                              {isPR && (
-                                <View style={det.exPRBadge}>
-                                  <Text style={det.exPRTxt}>PR</Text>
-                                </View>
-                              )}
                             </View>
                             {brandLogo ? (
                               <ExpoImage
@@ -869,7 +899,7 @@ export default function JournalScreen() {
           </Text>
         </View>
         {user && (
-          <TouchableOpacity style={st.logBtn} activeOpacity={0.85} onPress={() => setLogVisible(true)}>
+          <TouchableOpacity style={st.logBtn} activeOpacity={0.85} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setLogVisible(true); }}>
             <Ionicons name="add" size={18} color={C.bg} />
             <Text style={st.logBtnText}>기록</Text>
           </TouchableOpacity>
@@ -887,7 +917,7 @@ export default function JournalScreen() {
             <TouchableOpacity
               style={st.emptySignInBtn}
               activeOpacity={0.85}
-              onPress={() => nav.navigate('Profile')}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); nav.navigate('Profile'); }}
             >
               <Text style={st.emptySignInTxt}>로그인</Text>
             </TouchableOpacity>
@@ -966,8 +996,8 @@ export default function JournalScreen() {
             onDelete={async (sessionId) => {
               const session = detailSessions.find(s => s.id === sessionId);
               await deleteWorkoutSession(sessionId);
-              if (session && user?.id) {
-                await deleteFeedPostBySession(user.id, session.date);
+              if (user?.id) {
+                await deleteFeedPostBySession(user.id, sessionId);
               }
 
               const remaining = detailSessions.filter(s => s.id !== sessionId);
@@ -1159,7 +1189,7 @@ const det = StyleSheet.create({
   noteSectionMachine: { fontSize: 12, fontWeight: '700', color: C.accent, marginBottom: 4 },
   noteSectionText:    { fontSize: 13, color: C.textSub, lineHeight: 18 },
 
-  routineCard:       { backgroundColor: '#FFFFFF', borderRadius: R.card, overflow: 'hidden', marginBottom: 20, borderWidth: 3, borderColor: C.border },
+  routineCard:       { backgroundColor: '#FFFFFF', borderRadius: R.card, overflow: 'hidden', marginBottom: 20, borderWidth: 3, borderColor: '#ffffff' },
   routineCardHeader: {
     paddingHorizontal: 16,
     paddingVertical: 12,

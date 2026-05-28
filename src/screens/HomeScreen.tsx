@@ -23,6 +23,7 @@ import { fetchWorkoutLogs } from '../lib/db';
 import { fetchActiveFeedPosts } from '../lib/db/feedPosts';
 import { fetchSplitConfig } from '../lib/db/splitRoutine';
 import { getTodayTarget, toEnMuscle, toKoMuscle } from '../lib/splitUtils';
+import * as Haptics from 'expo-haptics';
 
 // --- Helpers
 
@@ -264,7 +265,7 @@ const OunwanHeader = React.memo(({
     <Text style={ounwanHeaderTextStyle} numberOfLines={1}>
       {message}
     </Text>
-    <TouchableOpacity onPress={onMorePress} activeOpacity={0.7}>
+    <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onMorePress(); }} activeOpacity={0.7}>
       <Text style={moreBtnStyle}>더보기</Text>
     </TouchableOpacity>
   </View>
@@ -434,7 +435,7 @@ export default function HomeScreen() {
           <>
             <View style={st.sectionRow}>
               <Text style={st.sectionTitle}>이번 주 운동</Text>
-              <TouchableOpacity onPress={() => nav.navigate('Journal')}>
+              <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); nav.navigate('Journal'); }}>
                 <Text style={st.seeAll}>더보기</Text>
               </TouchableOpacity>
             </View>
@@ -457,6 +458,7 @@ export default function HomeScreen() {
                     style={[st.weekThumbCell, isFuture && { opacity: 0.3 }]}
                     activeOpacity={session ? 0.75 : 1}
                     onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       if (session) {
                         nav.navigate('Journal', { openSessionId: session.id });
                       } else {
@@ -512,7 +514,7 @@ export default function HomeScreen() {
           <TouchableOpacity
             style={st.guestBanner}
             activeOpacity={0.8}
-            onPress={() => nav.navigate('Profile')}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); nav.navigate('Profile'); }}
           >
             <Ionicons name="person-outline" size={15} color={C.accent} />
             <Text style={st.guestBannerText}>
@@ -526,7 +528,7 @@ export default function HomeScreen() {
         <TouchableOpacity
           style={st.ctaCard}
           activeOpacity={0.88}
-          onPress={() => nav.navigate('LogWorkout')}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); nav.navigate('LogWorkout'); }}
         >
           <View style={st.ctaLeft}>
             <Text style={st.ctaEye}>READY TO LIFT?</Text>

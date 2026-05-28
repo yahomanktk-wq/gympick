@@ -24,6 +24,7 @@ import GymDetailModal     from './flow/GymDetailModal';
 import MachineDetailModal from './flow/MachineDetailModal';
 import MachineCard       from '../components/MachineCard';
 import MachineCardBorder from '../components/MachineCardBorder';
+import * as Haptics from 'expo-haptics';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W = (SCREEN_W - 32 - 8) / 2;
@@ -67,7 +68,7 @@ function FilterPills<T extends string>({
           <TouchableOpacity
             key={opt}
             style={[st.filterPill, active && st.filterPillActive]}
-            onPress={() => onSelect(opt)}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onSelect(opt); }}
             activeOpacity={0.75}
           >
             <Text style={[st.filterPillTxt, active && st.filterPillTxtActive]}>
@@ -212,7 +213,7 @@ export default function FavoritesScreen({ onClose }: { onClose: () => void }) {
                 <TouchableOpacity
                   style={st.gymRow}
                   activeOpacity={0.75}
-                  onPress={() => setGymDetailId(gym.id)}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setGymDetailId(gym.id); }}
                 >
                   <View style={{ flex: 1 }}>
                     <Text style={st.gymName}>{gym.name}</Text>
@@ -221,7 +222,7 @@ export default function FavoritesScreen({ onClose }: { onClose: () => void }) {
                   <Text style={st.gymMachines}>{gym.machines.length} 머신</Text>
                   <TouchableOpacity
                     style={st.removeBtn}
-                    onPress={() => removeGym(gym.id)}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); removeGym(gym.id); }}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
                     <Ionicons name="bookmark" size={16} color={C.accent} />
@@ -270,14 +271,14 @@ export default function FavoritesScreen({ onClose }: { onClose: () => void }) {
                     key={m.id}
                     style={{ width: CARD_W, position: 'relative' }}
                     activeOpacity={0.85}
-                    onPress={() => setSelectedMachine(m)}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSelectedMachine(m); }}
                   >
                     <MachineCardBorder>
                       <MachineCard machine={m} variant="grid" width={CARD_W} />
                     </MachineCardBorder>
                     <TouchableOpacity
                       style={st.removeOverlay}
-                      onPress={() => removeMachine(m.id)}
+                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); removeMachine(m.id); }}
                       hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
                     >
                       <Ionicons name="heart" size={14} color="#ff4d6d" />

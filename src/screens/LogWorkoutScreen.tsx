@@ -10,6 +10,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T } from '../theme';
+import * as Haptics from 'expo-haptics';
 import PostWorkoutLogModal from './flow/PostWorkoutLogModal';
 import { useAuth } from '../context/AuthContext';
 import AuthFlow from './auth/AuthFlow';
@@ -61,7 +62,7 @@ export default function LogWorkoutScreen() {
         <TouchableOpacity
           style={s.startBtn}
           activeOpacity={0.85}
-          onPress={() => setVisible(true)}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setVisible(true); }}
         >
           <Ionicons name="add" size={18} color={C.bg} />
           <Text style={s.startBtnText}>기록 시작</Text>

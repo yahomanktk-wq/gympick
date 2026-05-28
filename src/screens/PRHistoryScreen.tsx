@@ -10,6 +10,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { C, R } from '../theme';
 import { getAllNewPRs, PREntry } from '../data/prStore';
 
@@ -176,7 +177,7 @@ export default function PRHistoryScreen({ onClose }: { onClose: () => void }) {
       >
         <TouchableOpacity
           style={[s.chip, !selectedLift && s.chipActive]}
-          onPress={() => setSelectedLift(null)}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSelectedLift(null); }}
           activeOpacity={0.75}
         >
           <Text style={[s.chipTxt, !selectedLift && s.chipTxtActive]}>전체</Text>
@@ -188,7 +189,7 @@ export default function PRHistoryScreen({ onClose }: { onClose: () => void }) {
             <TouchableOpacity
               key={l}
               style={[s.chip, active && { backgroundColor: color + '22', borderColor: color + '44' }]}
-              onPress={() => setSelectedLift(l)}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSelectedLift(l); }}
               activeOpacity={0.75}
             >
               <Text style={[s.chipTxt, active && { color }]}>{l}</Text>

@@ -35,6 +35,7 @@ import { getUserBadges } from '../data/badgeStore';
 import WorkoutBadgeComponent from '../components/WorkoutBadge';
 import WorkoutSplitSetupScreen from './flow/WorkoutSplitSetupScreen';
 import TermsConsentScreen from './auth/TermsConsentScreen';
+import * as Haptics from 'expo-haptics';
 
 // --- Types
 
@@ -83,11 +84,24 @@ function CardDivider() {
 }
 
 function SettingRow({
-  icon, label, toggle, danger, onPress,
-}: { icon: IoniconName; label: string; toggle?: boolean; danger?: boolean; privacy?: boolean; splitSetup?: boolean; onPress?: () => void }) {
+  icon, label, toggle, danger, deleteAccount, onPress,
+}: { icon: IoniconName; label: string; toggle?: boolean; danger?: boolean; privacy?: boolean; splitSetup?: boolean; deleteAccount?: boolean; onPress?: () => void }) {
   const [on, setOn] = useState(false);
   return (
-    <TouchableOpacity style={styles.settingRow} activeOpacity={0.7} onPress={onPress}>
+    <TouchableOpacity
+      style={styles.settingRow}
+      activeOpacity={0.7}
+      onPress={() => {
+        if (deleteAccount) {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        } else if (danger) {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        } else {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
+        onPress?.();
+      }}
+    >
       <View style={[styles.settingIcon, danger && { backgroundColor: C.dangerBg }]}>
         <Ionicons name={icon} size={16} color={danger ? C.danger : C.textSub} />
       </View>
@@ -519,14 +533,14 @@ export default function ProfileScreen() {
           <TouchableOpacity
             style={styles.guestSignInBtn}
             activeOpacity={0.85}
-            onPress={() => { setAuthPage('signin'); setShowingAuth(true); }}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setAuthPage('signin'); setShowingAuth(true); }}
           >
             <Text style={styles.guestSignInTxt}>Login</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.guestCreateBtn}
             activeOpacity={0.85}
-            onPress={() => { setAuthPage('signup'); setShowingAuth(true); }}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setAuthPage('signup'); setShowingAuth(true); }}
           >
             <Text style={styles.guestCreateTxt}>회원가입</Text>
           </TouchableOpacity>
@@ -550,7 +564,7 @@ export default function ProfileScreen() {
           {/* Notification bell — top right of hero */}
           <TouchableOpacity
             style={styles.bellBtn}
-            onPress={() => setShowNotifications(true)}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowNotifications(true); }}
             activeOpacity={0.7}
           >
             <Ionicons name="notifications-outline" size={22} color={C.textSub} />
@@ -565,7 +579,7 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             style={styles.avatarWrap}
-            onPress={handlePickProfileImage}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); handlePickProfileImage(); }}
             activeOpacity={0.8}
             disabled={uploading}
           >
@@ -603,7 +617,7 @@ export default function ProfileScreen() {
             )}
             <Text style={styles.userName}>{user.nickname ?? user.name}</Text>
             <TouchableOpacity
-              onPress={() => { setNicknameInput(user.nickname ?? user.name ?? ''); setShowNicknameEdit(true); }}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setNicknameInput(user.nickname ?? user.name ?? ''); setShowNicknameEdit(true); }}
               activeOpacity={0.7}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
@@ -637,7 +651,7 @@ export default function ProfileScreen() {
         ) && (
           <TouchableOpacity
             style={styles.splitSetupBanner}
-            onPress={() => setShowSplitSetup(true)}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowSplitSetup(true); }}
             activeOpacity={0.85}
           >
             <Ionicons name="git-branch-outline" size={20} color={C.accent} />
@@ -671,7 +685,7 @@ export default function ProfileScreen() {
         {/* ── My Library ── */}
         <SectionLabel text="내 라이브러리" />
         <View style={styles.card}>
-          <TouchableOpacity style={styles.navRow} activeOpacity={0.75} onPress={() => setShowFavorites(true)}>
+          <TouchableOpacity style={styles.navRow} activeOpacity={0.75} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowFavorites(true); }}>
             <View style={styles.settingIcon}>
               <Ionicons name="bookmark-outline" size={16} color={C.textSub} />
             </View>
@@ -728,7 +742,7 @@ export default function ProfileScreen() {
             <SectionLabel text="헬스장 운영자이신가요?" />
             <TouchableOpacity
               style={styles.managerRequestCard}
-              onPress={() => setShowManagerReq(true)}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowManagerReq(true); }}
               activeOpacity={0.85}
             >
               <View style={styles.managerRequestIcon}>
@@ -830,7 +844,7 @@ export default function ProfileScreen() {
             <View style={styles.nicknameModalBtns}>
               <TouchableOpacity
                 style={styles.nicknameCancelBtn}
-                onPress={() => setShowNicknameEdit(false)}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowNicknameEdit(false); }}
                 activeOpacity={0.8}
               >
                 <Text style={styles.nicknameCancelTxt}>취소</Text>
@@ -839,6 +853,7 @@ export default function ProfileScreen() {
                 style={styles.nicknameSaveBtn}
                 activeOpacity={0.8}
                 onPress={async () => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                   const { error } = await updateNickname(nicknameInput);
                   if (error) {
                     Alert.alert('오류', error);

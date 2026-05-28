@@ -42,6 +42,7 @@ import * as Location from 'expo-location';
 import { calcDistanceKm, formatDistance } from '../lib/geocoding';
 import FavoriteGymRecommendation from '../components/FavoriteGymRecommendation';
 import { toEnMuscle } from '../lib/splitUtils';
+import * as Haptics from 'expo-haptics';
 
 const CATEGORY_ORDER: Record<string, string[]> = {
   Chest: [
@@ -123,7 +124,7 @@ function FilterRow({
                 s.filterChip,
                 on && { backgroundColor: activeColor, borderColor: activeColor },
               ]}
-              onPress={() => onSelect(on ? 'All' : opt)}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onSelect(on ? 'All' : opt); }}
               activeOpacity={0.75}
             >
               <Text style={[s.filterChipText, on && { color: C.bg }]}>{opt}</Text>
@@ -532,28 +533,28 @@ export default function FindGymScreen() {
         <View style={s.tabRow}>
           <TouchableOpacity
             style={[s.tabBtn, activeTab === 'machine' && s.tabBtnActive]}
-            onPress={() => setActiveTab('machine')}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveTab('machine'); }}
             activeOpacity={0.75}
           >
             <Text style={[s.tabBtnText, activeTab === 'machine' && s.tabBtnTextActive]}>머신</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[s.tabBtn, activeTab === 'gym' && s.tabBtnActive]}
-            onPress={() => setActiveTab('gym')}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveTab('gym'); }}
             activeOpacity={0.75}
           >
             <Text style={[s.tabBtnText, activeTab === 'gym' && s.tabBtnTextActive]}>헬스장</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[s.tabBtn, activeTab === 'favorite' && s.tabBtnActive]}
-            onPress={() => setActiveTab('favorite')}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveTab('favorite'); }}
             activeOpacity={0.75}
           >
             <Text style={[s.tabBtnText, activeTab === 'favorite' && s.tabBtnTextActive]}>즐겨찾기</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[s.tabBtn, activeTab === 'ranking' && s.tabBtnActive]}
-            onPress={() => setActiveTab('ranking')}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveTab('ranking'); }}
             activeOpacity={0.75}
           >
             <Text style={[s.tabBtnText, activeTab === 'ranking' && s.tabBtnTextActive]}>랭킹</Text>
@@ -576,7 +577,7 @@ export default function FindGymScreen() {
             />
             {keyword.length > 0 && (
               <TouchableOpacity
-                onPress={() => setKeyword('')}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setKeyword(''); }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Ionicons name="close-circle" size={16} color={C.textDim} />
@@ -605,7 +606,7 @@ export default function FindGymScreen() {
                         s.filterChip,
                         on && { backgroundColor: C.tagMuscle.fg, borderColor: C.tagMuscle.fg },
                       ]}
-                      onPress={() => setActiveMuscle(on ? 'All' : opt)}
+                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveMuscle(on ? 'All' : opt); }}
                       activeOpacity={0.75}
                     >
                       <Text style={[s.filterChipText, on && { color: C.bg }]}>{opt}</Text>
@@ -629,7 +630,7 @@ export default function FindGymScreen() {
                       s.filterChip,
                       activeCategory === 'All' && { backgroundColor: C.textDim, borderColor: C.textDim },
                     ]}
-                    onPress={() => setActiveCategory('All')}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveCategory('All'); }}
                     activeOpacity={0.75}
                   >
                     <Ionicons
@@ -653,7 +654,7 @@ export default function FindGymScreen() {
                           s.filterChip,
                           on && { backgroundColor: C.accent, borderColor: C.accent },
                         ]}
-                        onPress={() => setActiveCategory(on ? 'All' : cat)}
+                        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveCategory(on ? 'All' : cat); }}
                         activeOpacity={0.75}
                       >
                         <Text style={[s.filterChipText, on && { color: C.bg }]}>{cat}</Text>
@@ -753,7 +754,7 @@ export default function FindGymScreen() {
           <View style={s.viewToggleRow}>
             <TouchableOpacity
               style={[s.viewToggleBtn, gymViewMode === 'list' && s.viewToggleBtnActive]}
-              onPress={() => setGymViewMode('list')}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setGymViewMode('list'); }}
               activeOpacity={0.8}
             >
               <Ionicons name="list" size={14} color={gymViewMode === 'list' ? C.bg : C.textSub} />
@@ -761,7 +762,7 @@ export default function FindGymScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={[s.viewToggleBtn, gymViewMode === 'map' && s.viewToggleBtnActive]}
-              onPress={() => setGymViewMode('map')}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setGymViewMode('map'); }}
               activeOpacity={0.8}
             >
               <Ionicons name="map-outline" size={14} color={gymViewMode === 'map' ? C.bg : C.textSub} />
@@ -801,7 +802,7 @@ export default function FindGymScreen() {
               ))}
               <TouchableOpacity
                 style={s.gymRequestBtn}
-                onPress={() => setShowGymRequestModal(true)}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowGymRequestModal(true); }}
                 activeOpacity={0.8}
               >
                 <Ionicons name="add-circle-outline" size={18} color={C.accent} />
