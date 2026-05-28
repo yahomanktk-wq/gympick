@@ -22,6 +22,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { C, R, T } from '../../theme';
 import { Machine } from '../../data/types';
 import { MACHINES } from '../../data';
@@ -76,7 +77,7 @@ function NavHeader({
   return (
     <View style={s.navHeader}>
       {onBack ? (
-        <TouchableOpacity style={s.navBtn} onPress={onBack} activeOpacity={0.7}>
+        <TouchableOpacity style={s.navBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onBack!(); }} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={20} color={C.text} />
         </TouchableOpacity>
       ) : (
@@ -85,7 +86,7 @@ function NavHeader({
       <Text style={s.navTitle} numberOfLines={1}>
         {title}
       </Text>
-      <TouchableOpacity style={s.navBtn} onPress={onClose} activeOpacity={0.7}>
+      <TouchableOpacity style={s.navBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onClose(); }} activeOpacity={0.7}>
         <Ionicons name="close" size={20} color={C.textSub} />
       </TouchableOpacity>
     </View>
@@ -168,7 +169,7 @@ function MachineListRow({
           >
             <Ionicons name="chevron-down" size={16} color={index === total - 1 ? C.textDim : C.textSub} />
           </TouchableOpacity>
-          <TouchableOpacity style={[s.iconBtn, s.removeBtn]} onPress={onRemove} activeOpacity={0.7}>
+          <TouchableOpacity style={[s.iconBtn, s.removeBtn]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); onRemove(); }} activeOpacity={0.7}>
             <Ionicons name="close" size={16} color="#ff6b6b" />
           </TouchableOpacity>
         </View>
@@ -364,7 +365,7 @@ export default function TodayWorkoutListScreen({
           <>
             <TouchableOpacity
               style={s.addToggleBtn}
-              onPress={() => setAddExpanded((v) => !v)}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setAddExpanded((v) => !v); }}
               activeOpacity={0.8}
             >
               <Ionicons
@@ -390,7 +391,7 @@ export default function TodayWorkoutListScreen({
                 >
                   <TouchableOpacity
                     style={[s.filterChip, !muscleFilter && s.filterChipActive]}
-                    onPress={() => setMuscleFilter(null)}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMuscleFilter(null); }}
                   >
                     <Text style={[s.filterChipText, !muscleFilter && s.filterChipTextActive]}>
                       전체
@@ -406,7 +407,7 @@ export default function TodayWorkoutListScreen({
                           s.filterChip,
                           active && { backgroundColor: col.bg, borderColor: col.fg + '60' },
                         ]}
-                        onPress={() => setMuscleFilter(active ? null : m)}
+                        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMuscleFilter(active ? null : m); }}
                       >
                         <Text style={[s.filterChipText, active && { color: col.fg }]}>
                           {m}
@@ -442,7 +443,7 @@ export default function TodayWorkoutListScreen({
         <TouchableOpacity
           style={s.ctaBtn}
           activeOpacity={0.85}
-          onPress={() => onConfirm(orderedIds)}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onConfirm(orderedIds); }}
         >
           <Text style={s.ctaTxt}>
             {orderedIds.length === 0 ? 'Start Workout' : `Start Workout — ${orderedIds.length} machines`}

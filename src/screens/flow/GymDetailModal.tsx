@@ -16,6 +16,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { GymReportType } from '../../lib/db/gymReports';
 import { addGymInfoReport } from '../../data/gymReportStore';
 import { useAuth } from '../../context/AuthContext';
@@ -297,7 +298,7 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
 
         {/* Nav header */}
         <View style={s.navHeader}>
-          <TouchableOpacity style={s.navBtn} onPress={onClose} activeOpacity={0.7}>
+          <TouchableOpacity style={s.navBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onClose(); }} activeOpacity={0.7}>
             <Ionicons name="chevron-back" size={20} color={C.text} />
           </TouchableOpacity>
           <Text style={s.navTitle} numberOfLines={1}>{gym.name}</Text>
@@ -305,6 +306,7 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
             style={s.navBtn}
             activeOpacity={0.7}
             onPress={async () => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               if (!user) { onClose(); nav.navigate('Profile'); return; }
               const next = toggleGymFavorite(gym.id);
               setIsFav(next);
@@ -329,7 +331,7 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
             <TouchableOpacity
               key={tab}
               style={[s.tabBtn, activeTab === tab && s.tabBtnActive]}
-              onPress={() => setActiveTab(tab)}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveTab(tab); }}
               activeOpacity={0.8}
             >
               <Text style={[s.tabBtnText, activeTab === tab && s.tabBtnTextActive]}>
@@ -358,7 +360,7 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
                 <TouchableOpacity
                   key={opt}
                   style={[s.filterChip, machineMuscleFilter === opt && s.filterChipActive]}
-                  onPress={() => setMachineMuscleFilter(opt)}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMachineMuscleFilter(opt); }}
                   activeOpacity={0.8}
                 >
                   <Text style={[s.filterChipText, machineMuscleFilter === opt && s.filterChipTextActive]}>
@@ -378,7 +380,7 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
                 <TouchableOpacity
                   key={opt}
                   style={[s.filterChip, machineBrandFilter === opt && s.filterChipActive]}
-                  onPress={() => setMachineBrandFilter(opt)}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMachineBrandFilter(opt); }}
                   activeOpacity={0.8}
                 >
                   <Text style={[s.filterChipText, machineBrandFilter === opt && s.filterChipTextActive]}>
@@ -510,7 +512,7 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
             {/* ── 정보 제보하기 ── */}
             <TouchableOpacity
               style={s.reportBtn}
-              onPress={() => { setReportSent(false); setReportMsg(''); setReportType('other'); setShowReport(true); }}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setReportSent(false); setReportMsg(''); setReportType('other'); setShowReport(true); }}
               activeOpacity={0.8}
             >
               <Ionicons name="flag-outline" size={14} color={C.textDim} />
@@ -555,7 +557,7 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
         <SafeAreaView style={s.safe}>
           <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <View style={s.repHeader}>
-              <TouchableOpacity style={s.repHeaderBtn} onPress={() => setShowReport(false)} activeOpacity={0.7}>
+              <TouchableOpacity style={s.repHeaderBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowReport(false); }} activeOpacity={0.7}>
                 <Ionicons name="close" size={20} color={C.text} />
               </TouchableOpacity>
               <Text style={s.repHeaderTitle}>정보 제보하기</Text>
@@ -567,7 +569,7 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
                 <Ionicons name="checkmark-circle" size={60} color={C.accent} />
                 <Text style={s.repSentTitle}>제보해 주셔서 감사해요!</Text>
                 <Text style={s.repSentBody}>검토 후 정보를 업데이트할게요.</Text>
-                <TouchableOpacity style={s.repSentBtn} onPress={() => setShowReport(false)} activeOpacity={0.85}>
+                <TouchableOpacity style={s.repSentBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowReport(false); }} activeOpacity={0.85}>
                   <Text style={s.repSentBtnText}>확인</Text>
                 </TouchableOpacity>
               </View>
@@ -587,7 +589,7 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
                     <TouchableOpacity
                       key={t.key}
                       style={[s.repTypeChip, reportType === t.key && s.repTypeChipActive]}
-                      onPress={() => setReportType(t.key)}
+                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setReportType(t.key); }}
                       activeOpacity={0.8}
                     >
                       <Text style={[s.repTypeChipText, reportType === t.key && s.repTypeChipTextActive]}>
@@ -617,6 +619,7 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
                   activeOpacity={0.85}
                   disabled={reportLoading}
                   onPress={async () => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                     setReportLoading(true);
                     addGymInfoReport({
                       gymId: gym.id,

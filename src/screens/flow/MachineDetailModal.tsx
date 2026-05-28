@@ -13,6 +13,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { C, R, T } from '../../theme';
 import { Machine } from '../../data';
@@ -82,6 +83,7 @@ function CommentCard({
           {isMyReview && onDelete && (
             <TouchableOpacity
               onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
                 Alert.alert(
                   '리뷰 삭제',
                   '이 리뷰를 삭제할까요?',
@@ -319,13 +321,13 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
 
           {/* Nav header */}
           <View style={s.navHeader}>
-            <TouchableOpacity style={s.navBtn} onPress={onClose} activeOpacity={0.7}>
+            <TouchableOpacity style={s.navBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onClose(); }} activeOpacity={0.7}>
               <Ionicons name="chevron-back" size={20} color={C.text} />
             </TouchableOpacity>
             <Text style={s.navTitle} numberOfLines={1}>{machine.displayName ?? machine.name}</Text>
             <TouchableOpacity
               style={s.navBtn}
-              onPress={handleToggleFavorite}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); handleToggleFavorite(); }}
               activeOpacity={0.7}
             >
               <Ionicons
@@ -425,7 +427,7 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
                   {[1, 2, 3, 4, 5].map(n => (
                     <TouchableOpacity
                       key={n}
-                      onPress={() => setReviewRating(n)}
+                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setReviewRating(n); }}
                       hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                     >
                       <Ionicons
@@ -451,7 +453,7 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
                   style={[s.reviewSubmitBtn, !reviewText.trim() && { opacity: 0.35 }]}
                   activeOpacity={0.85}
                   disabled={!reviewText.trim()}
-                  onPress={submitReview}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); submitReview(); }}
                 >
                   <Ionicons name="send" size={15} color={C.bg} />
                   <Text style={s.reviewSubmitTxt}>리뷰 등록</Text>
@@ -460,7 +462,7 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
             ) : (
               <TouchableOpacity
                 style={s.loginPromptCard}
-                onPress={() => { onClose(); nav.navigate('Profile'); }}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onClose(); nav.navigate('Profile'); }}
                 activeOpacity={0.85}
               >
                 <Ionicons name="lock-closed-outline" size={18} color={C.textDim} />
@@ -503,7 +505,7 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
                     <TouchableOpacity
                       style={s.gymRow}
                       activeOpacity={0.75}
-                      onPress={() => openGymDetail(gym.id)}
+                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); openGymDetail(gym.id); }}
                     >
                       <View style={[s.gymDot, { backgroundColor: C.accent }]} />
                       <View style={{ flex: 1 }}>

@@ -10,6 +10,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { C, R, T } from '../../theme';
 import SelectableMachineCard, { SelectableMachineCardMachine } from '../../components/SelectableMachineCard';
 import MachineDetailModal from './MachineDetailModal';
@@ -52,7 +53,7 @@ export default function GymAllMachinesScreen({ visible, gymId, gymName, machines
 
         {/* Header */}
         <View style={s.header}>
-          <TouchableOpacity style={s.closeBtn} onPress={onClose} activeOpacity={0.7}>
+          <TouchableOpacity style={s.closeBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onClose(); }} activeOpacity={0.7}>
             <Ionicons name="chevron-back" size={20} color={C.text} />
           </TouchableOpacity>
           <Text style={s.headerTitle} numberOfLines={1}>{gymName} 머신</Text>
@@ -69,7 +70,7 @@ export default function GymAllMachinesScreen({ visible, gymId, gymName, machines
                 <TouchableOpacity
                   key={opt}
                   style={[s.filterChip, active && s.filterChipActive]}
-                  onPress={() => setActiveMuscle(opt)}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveMuscle(opt); }}
                   activeOpacity={0.75}
                 >
                   <Text style={[s.filterChipText, active && s.filterChipTextActive]}>{opt}</Text>
@@ -89,7 +90,7 @@ export default function GymAllMachinesScreen({ visible, gymId, gymName, machines
                 <TouchableOpacity
                   key={opt}
                   style={[s.filterChip, active && s.filterChipActive]}
-                  onPress={() => setActiveBrand(opt)}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveBrand(opt); }}
                   activeOpacity={0.75}
                 >
                   <Text style={[s.filterChipText, active && s.filterChipTextActive]}>{opt}</Text>
@@ -116,7 +117,7 @@ export default function GymAllMachinesScreen({ visible, gymId, gymName, machines
                   width={CARD_W}
                   selected={false}
                   completed={false}
-                  onSelect={() => setSelectedMachine(m)}
+                  onSelect={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSelectedMachine(m); }}
                 />
               ))}
             </View>

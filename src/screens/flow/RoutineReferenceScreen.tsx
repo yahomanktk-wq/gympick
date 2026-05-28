@@ -21,6 +21,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { C, R, T } from '../../theme';
 import { WorkoutLog } from '../../data/types';
 import { MACHINES } from '../../data';
@@ -80,7 +81,7 @@ function NavHeader({
   return (
     <View style={s.navHeader}>
       {onBack ? (
-        <TouchableOpacity style={s.navBtn} onPress={onBack} activeOpacity={0.7}>
+        <TouchableOpacity style={s.navBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onBack!(); }} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={20} color={C.text} />
         </TouchableOpacity>
       ) : (
@@ -89,7 +90,7 @@ function NavHeader({
       <Text style={s.navTitle} numberOfLines={1}>
         {title}
       </Text>
-      <TouchableOpacity style={s.navBtn} onPress={onClose} activeOpacity={0.7}>
+      <TouchableOpacity style={s.navBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onClose(); }} activeOpacity={0.7}>
         <Ionicons name="close" size={20} color={C.textSub} />
       </TouchableOpacity>
     </View>
@@ -137,7 +138,7 @@ function PastSessionCard({
   const muscles = [...new Set(session.machines.map((m) => m.targetMuscle))];
 
   return (
-    <TouchableOpacity style={s.card} onPress={onPress} activeOpacity={0.8}>
+    <TouchableOpacity style={s.card} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPress(); }} activeOpacity={0.8}>
       <View style={s.cardRow}>
         <View style={s.cardIcon}>
           <Ionicons name="calendar-outline" size={18} color={C.accent} />
@@ -180,7 +181,7 @@ function GymRoutineCard({
   onPress: () => void;
 }) {
   return (
-    <TouchableOpacity style={s.card} onPress={onPress} activeOpacity={0.8}>
+    <TouchableOpacity style={s.card} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPress(); }} activeOpacity={0.8}>
       <View style={s.cardRow}>
         <View style={[s.cardIcon, { backgroundColor: C.tagBrand.bg }]}>
           <Ionicons name="medal-outline" size={18} color={C.tagBrand.fg} />
@@ -212,7 +213,7 @@ function CommunityRoutineCard({
   onPress: () => void;
 }) {
   return (
-    <TouchableOpacity style={s.card} onPress={onPress} activeOpacity={0.8}>
+    <TouchableOpacity style={s.card} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPress(); }} activeOpacity={0.8}>
       <View style={s.cardRow}>
         <View style={[s.cardIcon, { backgroundColor: C.tagCategory.bg }]}>
           <Ionicons name="people-outline" size={18} color={C.tagCategory.fg} />
@@ -318,7 +319,7 @@ export default function RoutineReferenceScreen({
         <SectionHeader icon="add-circle-outline" label="Start Fresh" />
         <TouchableOpacity
           style={[s.card, s.startFreshCard]}
-          onPress={() => onSelectMachineIds([])}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onSelectMachineIds([]); }}
           activeOpacity={0.8}
         >
           <View style={s.cardRow}>
