@@ -13,6 +13,7 @@ import {
   Image,
   InteractionManager,
   Animated,
+  findNodeHandle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -905,8 +906,9 @@ function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onR
   onBack: () => void;
   onClose: () => void;
 }) {
-  const scrollRef      = useRef<ScrollView>(null);
-  const lastSetNodeRef = useRef<View | null>(null);
+  const scrollRef         = useRef<ScrollView>(null);
+  const scrollViewNodeRef = useRef<View>(null);
+  const lastSetNodeRef    = useRef<View | null>(null);
   const hasSets = sets.length > 0 && sets.some(s => s.weight > 0 || s.reps > 0);
   const completedSets = sets.slice(0, -1);
 
@@ -916,15 +918,15 @@ function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onR
 
   function scrollToNewSet() {
     setTimeout(() => {
-      const scrollNode = scrollRef.current?.getScrollableNode?.();
-      const setNode    = lastSetNodeRef.current;
-      if (!scrollNode || !setNode) {
+      const handle  = findNodeHandle(scrollViewNodeRef.current);
+      const setNode = lastSetNodeRef.current;
+      if (!handle || !setNode) {
         scrollRef.current?.scrollToEnd({ animated: true });
         return;
       }
-      // @ts-ignore: measureLayout은 타입 정의가 불완전하지만 RN에서 동작함
+      // @ts-ignore: measureLayout 타입 정의 불완전
       setNode.measureLayout(
-        scrollNode,
+        handle,
         (_x: number, y: number) => {
           scrollRef.current?.scrollTo({ y, animated: true });
         },
@@ -956,34 +958,36 @@ function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onR
           machineName={exercise.name}
         />
       )}
-      <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
-        <Text style={s.hint}>프리셋 또는 스테퍼로 입력하세요</Text>
-        <SetCard
-          ex={exercise}
-          sets={sets}
-          onChange={onChange}
-          onAdd={handleAdd}
-          onCopyPrev={handleCopyPrev}
-          onRemove={onRemove}
-          onLastSetRef={handleLastSetRef}
-        />
-
-        {/* Optional exercise note */}
-        <View style={s.noteCard}>
-          <Text style={s.noteLabel}>노트 (선택)</Text>
-          <TextInput
-            style={s.noteInput}
-            value={note}
-            onChangeText={onNoteChange}
-            placeholder="예: 팔꿈치 안으로, 시트 4번 조절…"
-            placeholderTextColor={C.textDim}
-            multiline
-            maxLength={200}
+      <View ref={scrollViewNodeRef} style={{ flex: 1 }}>
+        <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
+          <Text style={s.hint}>프리셋 또는 스테퍼로 입력하세요</Text>
+          <SetCard
+            ex={exercise}
+            sets={sets}
+            onChange={onChange}
+            onAdd={handleAdd}
+            onCopyPrev={handleCopyPrev}
+            onRemove={onRemove}
+            onLastSetRef={handleLastSetRef}
           />
-        </View>
 
-        <View style={{ height: 100 }} />
-      </ScrollView>
+          {/* Optional exercise note */}
+          <View style={s.noteCard}>
+            <Text style={s.noteLabel}>노트 (선택)</Text>
+            <TextInput
+              style={s.noteInput}
+              value={note}
+              onChangeText={onNoteChange}
+              placeholder="예: 팔꿈치 안으로, 시트 4번 조절…"
+              placeholderTextColor={C.textDim}
+              multiline
+              maxLength={200}
+            />
+          </View>
+
+          <View style={{ height: 100 }} />
+        </ScrollView>
+      </View>
       <View style={s.ctaBar}>
         <TouchableOpacity
           style={[s.ctaBtn, !hasSets && s.ctaDisabled]}
