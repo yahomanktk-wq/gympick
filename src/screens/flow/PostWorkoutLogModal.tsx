@@ -715,12 +715,25 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
 
 // --- Set Progress Banner (완료된 세트 요약 — SetLoggingStep 상단에 표시)
 
-function SetProgressBanner({ sets }: { sets: SetEntry[] }) {
+function SetProgressBanner({
+  sets,
+  machineName,
+  onLayout,
+}: {
+  sets: SetEntry[];
+  machineName: string;
+  onLayout?: (height: number) => void;
+}) {
   return (
-    <View style={s.setProgressBanner}>
+    <View
+      style={s.setProgressBanner}
+      onLayout={(e) => onLayout?.(e.nativeEvent.layout.height)}
+    >
       <View style={s.setProgressHeader}>
         <Ionicons name="checkmark-circle" size={13} color={C.accent} />
-        <Text style={s.setProgressHeaderText}>완료된 세트</Text>
+        <Text style={s.setProgressHeaderText} numberOfLines={1}>
+          완료된 세트{machineName ? ` · ${machineName}` : ''}
+        </Text>
         <View style={s.setProgressCountBadge}>
           <Text style={s.setProgressCountText}>{sets.length}</Text>
         </View>
@@ -892,23 +905,27 @@ function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onR
   onBack: () => void;
   onClose: () => void;
 }) {
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef       = useRef<ScrollView>(null);
+  const bannerHeightRef = useRef<number>(0);
   const hasSets = sets.length > 0 && sets.some(s => s.weight > 0 || s.reps > 0);
   const completedSets = sets.slice(0, -1);
 
+  function scrollToNewSet() {
+    setTimeout(() => {
+      const targetY = bannerHeightRef.current + 140;
+      scrollRef.current?.scrollTo({ y: targetY, animated: true });
+    }, 100);
+  }
+
   function handleAdd() {
     onAdd();
-    setTimeout(() => {
-      scrollRef.current?.scrollToEnd({ animated: true });
-    }, 100);
+    scrollToNewSet();
   }
 
   function handleCopyPrev() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onCopyPrev();
-    setTimeout(() => {
-      scrollRef.current?.scrollToEnd({ animated: true });
-    }, 100);
+    scrollToNewSet();
   }
 
   return (
@@ -916,7 +933,11 @@ function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onR
       <NavHeader title="세트 기록" onBack={onBack} onClose={onClose} />
       <StepBar total={5} current={2} />
       {completedSets.length > 0 && (
-        <SetProgressBanner sets={completedSets} />
+        <SetProgressBanner
+          sets={completedSets}
+          machineName={exercise.name}
+          onLayout={(height) => { bannerHeightRef.current = height; }}
+        />
       )}
       <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
         <Text style={s.hint}>프리셋 또는 스테퍼로 입력하세요</Text>
@@ -2985,27 +3006,27 @@ const s = StyleSheet.create({
   },
   setProgressList: {
     paddingHorizontal: 14,
-    paddingTop: 6,
+    paddingTop: 4,
   },
   setProgressRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 7,
+    paddingVertical: 5,
     borderBottomWidth: 1,
     borderBottomColor: C.border,
     gap: 0,
   },
   setProgressIndex: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: C.surfaceHigh,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 10,
   },
   setProgressIndexText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
     color: C.textSub,
   },
@@ -3016,13 +3037,13 @@ const s = StyleSheet.create({
     gap: 3,
   },
   setProgressKgValue: {
-    fontSize: 20,
+    fontSize: 15,
     fontWeight: '900',
     color: C.text,
     letterSpacing: -0.5,
   },
   setProgressKgUnit: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     color: C.textDim,
   },
@@ -3030,7 +3051,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 10,
   },
   setProgressSeparatorText: {
-    fontSize: 16,
+    fontSize: 13,
     color: C.textDim,
     fontWeight: '500',
   },
@@ -3041,13 +3062,13 @@ const s = StyleSheet.create({
     gap: 3,
   },
   setProgressRepsValue: {
-    fontSize: 20,
+    fontSize: 15,
     fontWeight: '900',
     color: C.text,
     letterSpacing: -0.5,
   },
   setProgressRepsUnit: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     color: C.textDim,
   },
