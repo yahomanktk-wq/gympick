@@ -43,6 +43,7 @@ import { insertFeedPost } from '../../lib/db/feedPosts';
 import XPGainPopup from '../../components/XPGainPopup';
 import { MachineLevelData } from '../../data/types';
 import GymPickLogo from '../../components/GymPickLogo';
+import WorkoutCameraOverlay from './WorkoutCameraOverlay';
 import RoutineReferenceScreen, { MachineExtraInfo } from './RoutineReferenceScreen';
 import TodayWorkoutListScreen from './TodayWorkoutListScreen';
 import MachineCard from '../../components/MachineCard';
@@ -97,6 +98,9 @@ const LOGO_STRIP_W = Math.round(LOGO_STRIP_H * (2805 / 279)); // ≈ 141px
 
 // Safe padding inside the overlay
 const OVERLAY_PAD = 20;
+
+// Overlay layout style variants
+type OverlayStyle = 'classic' | 'leftcol' | 'grid';
 
 // Fixed presets as specified
 const WEIGHT_PRESETS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 140, 160, 180, 200];
@@ -709,6 +713,48 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
   );
 }
 
+// --- Set Progress Banner (완료된 세트 요약 — SetLoggingStep 상단에 표시)
+
+function SetProgressBanner({ sets }: { sets: SetEntry[] }) {
+  return (
+    <View style={s.setProgressBanner}>
+      <View style={s.setProgressHeader}>
+        <Ionicons name="checkmark-circle" size={13} color={C.accent} />
+        <Text style={s.setProgressHeaderText}>완료된 세트</Text>
+        <View style={s.setProgressCountBadge}>
+          <Text style={s.setProgressCountText}>{sets.length}</Text>
+        </View>
+      </View>
+      <View style={s.setProgressList}>
+        {sets.map((set, idx) => (
+          <View
+            key={idx}
+            style={[
+              s.setProgressRow,
+              idx === sets.length - 1 && { borderBottomWidth: 0 },
+            ]}
+          >
+            <View style={s.setProgressIndex}>
+              <Text style={s.setProgressIndexText}>{idx + 1}</Text>
+            </View>
+            <View style={s.setProgressKgBlock}>
+              <Text style={s.setProgressKgValue}>{set.weight}</Text>
+              <Text style={s.setProgressKgUnit}>kg</Text>
+            </View>
+            <View style={s.setProgressSeparator}>
+              <Text style={s.setProgressSeparatorText}>×</Text>
+            </View>
+            <View style={s.setProgressRepsBlock}>
+              <Text style={s.setProgressRepsValue}>{set.reps}</Text>
+              <Text style={s.setProgressRepsUnit}>reps</Text>
+            </View>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 // --- Step 4: Log Sets (single exercise)
 
 function SetCard({ ex, sets, onChange, onAdd, onCopyPrev, onRemove }: {
@@ -848,6 +894,7 @@ function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onR
 }) {
   const scrollRef = useRef<ScrollView>(null);
   const hasSets = sets.length > 0 && sets.some(s => s.weight > 0 || s.reps > 0);
+  const completedSets = sets.slice(0, -1);
 
   function handleAdd() {
     onAdd();
@@ -857,6 +904,7 @@ function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onR
   }
 
   function handleCopyPrev() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onCopyPrev();
     setTimeout(() => {
       scrollRef.current?.scrollToEnd({ animated: true });
@@ -867,6 +915,9 @@ function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onR
     <SafeAreaView style={s.safe}>
       <NavHeader title="세트 기록" onBack={onBack} onClose={onClose} />
       <StepBar total={5} current={2} />
+      {completedSets.length > 0 && (
+        <SetProgressBanner sets={completedSets} />
+      )}
       <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
         <Text style={s.hint}>프리셋 또는 스테퍼로 입력하세요</Text>
         <SetCard
@@ -898,7 +949,10 @@ function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onR
         <TouchableOpacity
           style={[s.ctaBtn, !hasSets && s.ctaDisabled]}
           activeOpacity={0.85}
-          onPress={onSave}
+          onPress={() => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            onSave();
+          }}
           disabled={!hasSets}
         >
           <Ionicons name="checkmark" size={18} color={C.bg} />
@@ -925,9 +979,245 @@ const TEXT_COLORS = [
   { label: 'Purple', hex: '#AA00FF' },
 ];
 
+// --- Overlay layout components (module-level, exported for WorkoutCameraOverlay)
+
+interface OverlayProps {
+  exercises: ExerciseInfo[];
+  logs: Record<string, SetEntry[]>;
+  nickname: string;
+  timestamp: string;
+  muscleLabel: string;
+  tc: string;
+  photoW: number;
+  photoH: number;
+}
+
+export function ClassicOverlay({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH }: OverlayProps) {
+  const LOGO_STRIP_H_L = 14;
+  const LOGO_STRIP_W_L = Math.round(LOGO_STRIP_H_L * (2805 / 279));
+  const LOGO_EDGE_GAP  = 8;
+
+  const logoTlLeft = Math.round(LOGO_EDGE_GAP + LOGO_STRIP_H_L / 2 - LOGO_STRIP_W_L / 2);
+  const logoTlTop  = Math.round(OVERLAY_PAD   + LOGO_STRIP_W_L / 2 - LOGO_STRIP_H_L / 2);
+  const logoBrLeft = Math.round((photoW - LOGO_EDGE_GAP - LOGO_STRIP_H_L) + LOGO_STRIP_H_L / 2 - LOGO_STRIP_W_L / 2);
+  const logoBrTop  = Math.round((photoH - OVERLAY_PAD - LOGO_STRIP_W_L)   + LOGO_STRIP_W_L / 2 - LOGO_STRIP_H_L / 2);
+
+  return (
+    <>
+      <View style={[s.overlayLogoAbsolute, { left: logoTlLeft, top: logoTlTop, transform: [{ rotate: '90deg' }] }]}>
+        <GymPickLogo color={tc} width={LOGO_STRIP_W_L} height={LOGO_STRIP_H_L} />
+      </View>
+      <View style={[s.overlayLogoAbsolute, { left: logoBrLeft, top: logoBrTop, transform: [{ rotate: '270deg' }] }]}>
+        <GymPickLogo color={tc} width={LOGO_STRIP_W_L} height={LOGO_STRIP_H_L} />
+      </View>
+      <View style={s.overlayTopRight}>
+        <Text style={[s.overlayUsername, { color: tc }]}>{nickname}</Text>
+        <Text style={[s.overlayTimestamp, { color: tc }]}>{timestamp}</Text>
+      </View>
+      <View style={s.overlayBottomLeft}>
+        <Text style={[s.overlayMuscleTitle, { color: tc }]}>{muscleLabel}</Text>
+        <View style={s.sessionScroll}>
+          {exercises.slice(0, 7).map(ex => {
+            const sets     = logs[ex.id] ?? [];
+            const setsLine = sets.map(st => `${st.weight} x ${st.reps}`).join(' / ');
+            return (
+              <View key={ex.id} style={s.overlayExBlock}>
+                <Text style={[s.overlayExName, { color: tc }]} numberOfLines={1}>
+                  {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
+                </Text>
+                {setsLine ? (
+                  <Text style={[s.overlayExSet, { color: tc }]} numberOfLines={2}>{setsLine}</Text>
+                ) : null}
+              </View>
+            );
+          })}
+          {exercises.length > 7 && (
+            <Text style={[s.overlayExName, { color: tc, opacity: 0.6, marginTop: 2 }]}>
+              {`+${exercises.length - 7} more...`}
+            </Text>
+          )}
+        </View>
+      </View>
+    </>
+  );
+}
+
+export function LeftColOverlay({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH }: OverlayProps) {
+  const tsParts = timestamp.split('_');
+  const tsDate  = tsParts[0] ?? timestamp;
+  const tsTime  = tsParts[1] ?? '';
+
+  return (
+    <>
+      <View style={{
+        position: 'absolute',
+        top: OVERLAY_PAD,
+        left: OVERLAY_PAD,
+        right: photoW * 0.45,
+      }}>
+        <Text style={{
+          fontSize: 22,
+          fontWeight: '900',
+          color: tc,
+          letterSpacing: -0.5,
+          textDecorationLine: 'underline',
+        }} numberOfLines={2}>
+          {muscleLabel}
+        </Text>
+      </View>
+      <View style={{
+        position: 'absolute',
+        top: OVERLAY_PAD,
+        right: OVERLAY_PAD,
+        alignItems: 'flex-end',
+      }}>
+        <Text style={{ fontSize: 13, fontWeight: '900', color: tc, letterSpacing: 0.3 }}>
+          {nickname}
+        </Text>
+        <Text style={{ fontSize: 11, fontWeight: '700', color: tc, opacity: 0.85, marginTop: 2 }}>
+          {tsDate}
+        </Text>
+        {tsTime ? (
+          <Text style={{ fontSize: 11, fontWeight: '700', color: tc, opacity: 0.85 }}>
+            {tsTime}
+          </Text>
+        ) : null}
+      </View>
+      <View style={{
+        position: 'absolute',
+        top: OVERLAY_PAD + 52,
+        left: OVERLAY_PAD,
+        right: OVERLAY_PAD,
+        bottom: OVERLAY_PAD + 32,
+      }}>
+        {exercises.slice(0, 6).map(ex => {
+          const sets = logs[ex.id] ?? [];
+          return (
+            <View key={ex.id} style={{ marginBottom: 10 }}>
+              <Text style={{ fontSize: 10, fontWeight: '900', color: tc, letterSpacing: 0.3, marginBottom: 3 }} numberOfLines={1}>
+                {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
+              </Text>
+              {sets.map((st, si) => (
+                <Text key={si} style={{ fontSize: 9, fontWeight: '600', color: tc, opacity: 0.85, lineHeight: 14 }}>
+                  {`S${si + 1}  ${st.weight}kg × ${st.reps}`}
+                </Text>
+              ))}
+            </View>
+          );
+        })}
+        {exercises.length > 6 && (
+          <Text style={{ fontSize: 9, fontWeight: '700', color: tc, opacity: 0.6 }}>
+            {`+${exercises.length - 6} more...`}
+          </Text>
+        )}
+      </View>
+      {/* 우하단: GYM PICK 로고 (15% 축소) */}
+      <View style={{
+        position: 'absolute',
+        bottom: OVERLAY_PAD,
+        right: OVERLAY_PAD,
+      }}>
+        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.85)} height={Math.round(LOGO_STRIP_H * 0.85)} />
+      </View>
+    </>
+  );
+}
+
+export function GridOverlay({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH }: OverlayProps) {
+  const COL_COUNT = 3;
+  const COL_W     = Math.floor((photoW - OVERLAY_PAD * 2 - 16) / COL_COUNT);
+
+  return (
+    <>
+      <View style={{
+        position: 'absolute',
+        top: OVERLAY_PAD,
+        left: OVERLAY_PAD,
+        right: OVERLAY_PAD,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+      }}>
+        <Text style={{ fontSize: 13, fontWeight: '900', color: tc, letterSpacing: 0.3 }}>
+          {nickname}
+        </Text>
+        <Text style={{ fontSize: 10, fontWeight: '700', color: tc, opacity: 0.85 }}>
+          {timestamp}
+        </Text>
+      </View>
+      <View style={{
+        position: 'absolute',
+        top: OVERLAY_PAD + 36,
+        left: OVERLAY_PAD,
+        right: OVERLAY_PAD,
+        alignItems: 'center',
+      }}>
+        <Text style={{
+          fontSize: 20,
+          fontWeight: '900',
+          color: tc,
+          letterSpacing: -0.5,
+          textDecorationLine: 'underline',
+          textAlign: 'center',
+        }}>
+          {muscleLabel}
+        </Text>
+      </View>
+      <View style={{
+        position: 'absolute',
+        top: OVERLAY_PAD + 80,
+        left: OVERLAY_PAD,
+        right: OVERLAY_PAD,
+        bottom: OVERLAY_PAD + 32,
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        alignContent: 'flex-start',
+        justifyContent: 'center',
+      }}>
+        {exercises.slice(0, 9).map(ex => {
+          const sets = logs[ex.id] ?? [];
+          return (
+            <View key={ex.id} style={{ width: COL_W, marginBottom: 12, alignItems: 'center' }}>
+              <Text style={{ fontSize: 8, fontWeight: '700', color: tc, opacity: 0.7, letterSpacing: 0.5, textAlign: 'center' }}>
+                {`[${ex.brand.toUpperCase()}]`}
+              </Text>
+              <Text style={{ fontSize: 9, fontWeight: '900', color: tc, letterSpacing: 0.2, marginBottom: 3, lineHeight: 13, textAlign: 'center' }} numberOfLines={2}>
+                {ex.name.toUpperCase()}
+              </Text>
+              {sets.map((st, si) => (
+                <Text key={si} style={{ fontSize: 8, fontWeight: '600', color: tc, opacity: 0.85, lineHeight: 13, textAlign: 'center' }}>
+                  {`S${si + 1} ${st.weight}kg × ${st.reps}`}
+                </Text>
+              ))}
+            </View>
+          );
+        })}
+        {exercises.length > 9 && (
+          <View style={{ width: COL_W }}>
+            <Text style={{ fontSize: 8, fontWeight: '700', color: tc, opacity: 0.6 }}>
+              {`+${exercises.length - 9} more...`}
+            </Text>
+          </View>
+        )}
+      </View>
+      {/* 하단 중앙: GYM PICK 로고 (15% 축소) */}
+      <View style={{
+        position: 'absolute',
+        bottom: OVERLAY_PAD,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+      }}>
+        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.85)} height={Math.round(LOGO_STRIP_H * 0.85)} />
+      </View>
+    </>
+  );
+}
+
 // --- Step 5: Photo
 
-function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname, onColorChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose }: {
+function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname, onColorChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera }: {
   gym: GymWithMachines;
   exercises: ExerciseInfo[];
   logs: Record<string, SetEntry[]>;
@@ -936,14 +1226,18 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
   nickname?: string;
   onColorChange: (color: string) => void;
   onCapture: (aspect: [number, number]) => void;
+  onCameraCapture: (uri: string) => void;
   onCompositeUri:    (uri: string) => void;
   onRoutineCardUri?: (uri: string) => void;
   onSave: (captured?: string, capturedRoutineUri?: string) => void;
   onBack: () => void;
   onClose: () => void;
+  showCamera: boolean;
+  onSetShowCamera: (v: boolean) => void;
 }) {
-  const [textColor,    setTextColor]    = useState('#ffffff');
-  const [saveSuccess,  setSaveSuccess]  = useState(false);
+  const [textColor,     setTextColor]     = useState('#ffffff');
+  const [saveSuccess,   setSaveSuccess]   = useState(false);
+  const [overlayStyle,  setOverlayStyle]  = useState<OverlayStyle>('classic');
   const overlayRef = useRef<View>(null);
   const routineCardRef = useRef<View>(null);
 
@@ -1030,46 +1324,62 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
 
   const tc = textColor;
 
-  // Logo strip positioning math (rotate around center):
-  // 좌우 테두리 간격 통일 (OVERLAY_PAD = 20)
-  const LOGO_EDGE_GAP = 8;
-  const TL_VISUAL_X = LOGO_EDGE_GAP;
-  const TL_VISUAL_Y = OVERLAY_PAD;
-  const logoTlLeft = Math.round(TL_VISUAL_X + LOGO_STRIP_H / 2 - LOGO_STRIP_W / 2);
-  const logoTlTop  = Math.round(TL_VISUAL_Y + LOGO_STRIP_W / 2 - LOGO_STRIP_H / 2);
-
-  // Visual bottom-right of BR strip — uses dynamic photoH
-  const BR_VISUAL_X = PHOTO_W - LOGO_EDGE_GAP - LOGO_STRIP_H;
-  const BR_VISUAL_Y = photoH - OVERLAY_PAD - LOGO_STRIP_W;
-  const logoBrLeft = Math.round(BR_VISUAL_X + LOGO_STRIP_H / 2 - LOGO_STRIP_W / 2);
-  const logoBrTop  = Math.round(BR_VISUAL_Y + LOGO_STRIP_W / 2 - LOGO_STRIP_H / 2);
-
   return (
     <SafeAreaView style={s.safe}>
       <NavHeader title="운동 사진" onBack={onBack} onClose={onClose} />
       <StepBar total={5} current={3} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
-        <Text style={s.hint}>운동 후 사진을 찍어보세요 (선택)</Text>
-
         {/* No photo: show camera CTA as TouchableOpacity */}
-        {!photoTaken && (
+        {!photoTaken && !showCamera && (
           <TouchableOpacity
             style={[s.photoFrame, { height: photoH }]}
             activeOpacity={0.85}
-            onPress={() => onCapture([3, 4])}
+            onPress={() => {
+              Alert.alert(
+                '사진 선택',
+                '운동 사진을 추가하세요',
+                [
+                  {
+                    text: '카메라로 찍기',
+                    onPress: () => onSetShowCamera(true),
+                  },
+                  {
+                    text: '사진 선택',
+                    onPress: () => onCapture([3, 4]),
+                  },
+                  { text: '취소', style: 'cancel' },
+                ],
+              );
+            }}
           >
             <View style={s.photoCta}>
               <View style={s.photoCtaIcon}>
                 <Ionicons name="camera" size={30} color={C.textSub} />
               </View>
               <Text style={s.photoCtaTitle}>탭하여 사진 찍기</Text>
-              <Text style={s.photoCtaSub}>사진 없이 저장하기</Text>
             </View>
           </TouchableOpacity>
         )}
 
-        {/* Photo taken: overlay View separated from TouchableOpacity for captureRef */}
-        {photoTaken && (
+        {/* 인앱 카메라 오버레이: showCamera가 true면 photoTaken 상태와 무관하게 표시 */}
+        {showCamera && (
+          <WorkoutCameraOverlay
+            gym={gym}
+            exercises={exercises}
+            logs={logs}
+            nickname={nickname}
+            textColor={textColor}
+            overlayStyle={overlayStyle}
+            onCaptureDone={(uri) => {
+              onSetShowCamera(false);
+              onCameraCapture(uri);
+            }}
+            onCancel={() => onSetShowCamera(false)}
+          />
+        )}
+
+        {/* Photo taken: overlay View - showCamera 중에는 숨김 */}
+        {photoTaken && !showCamera && (
           <View
             ref={overlayRef}
             style={[s.photoFrame, s.photoFrameActive, { height: photoH, backgroundColor: 'transparent', borderWidth: 0, borderRadius: 20, overflow: 'hidden' }]}
@@ -1084,49 +1394,43 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
               />
             ) : null}
 
-            {/* Top-left logo: rotated 90° CW */}
-            <View style={[s.overlayLogoAbsolute, { left: logoTlLeft, top: logoTlTop, transform: [{ rotate: '90deg' }] }]}>
-              <GymPickLogo color={tc} width={LOGO_STRIP_W} height={LOGO_STRIP_H} />
-            </View>
-
-            {/* Bottom-right logo: rotated 270° CW */}
-            <View style={[s.overlayLogoAbsolute, { left: logoBrLeft, top: logoBrTop, transform: [{ rotate: '270deg' }] }]}>
-              <GymPickLogo color={tc} width={LOGO_STRIP_W} height={LOGO_STRIP_H} />
-            </View>
-
-            {/* Top-right: nickname + timestamp */}
-            <View style={s.overlayTopRight}>
-              <Text style={[s.overlayUsername, { color: tc }]}>{displayName}</Text>
-              <Text style={[s.overlayTimestamp, { color: tc }]}>{timestamp}</Text>
-            </View>
-
-            {/* Lower-left: muscle label + exercise list (View, not ScrollView — capture safe) */}
-            <View style={s.overlayBottomLeft}>
-              <Text style={[s.overlayMuscleTitle, { color: tc }]}>{muscleLabel}</Text>
-              <View style={s.sessionScroll}>
-                {exercises.slice(0, 7).map(ex => {
-                  const sets = logs[ex.id] ?? [];
-                  const setsLine = sets.map(st => `${st.weight} x ${st.reps}`).join(' / ');
-                  return (
-                    <View key={ex.id} style={s.overlayExBlock}>
-                      <Text style={[s.overlayExName, { color: tc }]} numberOfLines={1}>
-                        {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
-                      </Text>
-                      {setsLine ? (
-                        <Text style={[s.overlayExSet, { color: tc }]} numberOfLines={2}>
-                          {setsLine}
-                        </Text>
-                      ) : null}
-                    </View>
-                  );
-                })}
-                {exercises.length > 7 && (
-                  <Text style={[s.overlayExName, { color: tc, opacity: 0.6, marginTop: 2 }]}>
-                    {`+${exercises.length - 7} more...`}
-                  </Text>
-                )}
-              </View>
-            </View>
+            {/* 스타일별 오버레이 */}
+            {overlayStyle === 'classic' && (
+              <ClassicOverlay
+                exercises={exercises}
+                logs={logs}
+                nickname={displayName}
+                timestamp={timestamp}
+                muscleLabel={muscleLabel}
+                tc={tc}
+                photoW={PHOTO_W}
+                photoH={photoH}
+              />
+            )}
+            {overlayStyle === 'leftcol' && (
+              <LeftColOverlay
+                exercises={exercises}
+                logs={logs}
+                nickname={displayName}
+                timestamp={timestamp}
+                muscleLabel={muscleLabel}
+                tc={tc}
+                photoW={PHOTO_W}
+                photoH={photoH}
+              />
+            )}
+            {overlayStyle === 'grid' && (
+              <GridOverlay
+                exercises={exercises}
+                logs={logs}
+                nickname={displayName}
+                timestamp={timestamp}
+                muscleLabel={muscleLabel}
+                tc={tc}
+                photoW={PHOTO_W}
+                photoH={photoH}
+              />
+            )}
 
             {/* 테두리: overflow 클리핑 이후 absolute로 덮어 빈공간 방지 */}
             <View
@@ -1256,32 +1560,95 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
           </View>
         </View>
 
+        {/* 다시 찍기 버튼: 사진이 찍혔을 때만 */}
         {photoTaken && (
-          <>
-            <TouchableOpacity style={s.retakeRow} onPress={() => onCapture([3, 4])} activeOpacity={0.75}>
-              <Ionicons name="camera-reverse-outline" size={13} color={C.textSub} />
-              <Text style={s.retakeText}>다시 찍기</Text>
-            </TouchableOpacity>
+          <TouchableOpacity
+            style={s.retakeRow}
+            onPress={() => {
+              Alert.alert(
+                '다시 찍기',
+                '사진 촬영 방법을 선택하세요',
+                [
+                  { text: '카메라로 찍기', onPress: () => onSetShowCamera(true) },
+                  { text: '사진 선택',     onPress: () => onCapture([3, 4]) },
+                  { text: '취소', style: 'cancel' },
+                ],
+              );
+            }}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="camera-reverse-outline" size={13} color={C.textSub} />
+            <Text style={s.retakeText}>다시 찍기</Text>
+          </TouchableOpacity>
+        )}
 
-            {/* Text colour selector */}
-            <View style={s.colorPickerWrap}>
-              <Text style={s.colorPickerLabel}>텍스트 색상</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.colorPickerRow}>
-                {TEXT_COLORS.map(opt => (
-                  <TouchableOpacity
-                    key={opt.hex}
-                    style={[
-                      s.colorChip,
-                      { backgroundColor: opt.hex },
-                      textColor === opt.hex && s.colorChipActive,
-                    ]}
-                    onPress={() => { setTextColor(opt.hex); onColorChange(opt.hex); }}
-                    activeOpacity={0.8}
-                  />
-                ))}
-              </ScrollView>
+        {/* 텍스트 색상 + 레이아웃 스타일: 카메라 활성 중 또는 사진 찍힌 후 모두 표시 */}
+        {(photoTaken || showCamera) && (
+          <>
+          {/* 레이아웃 스타일 + 텍스트 색상 한 줄 */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 10 }}>
+            {/* 스타일 버튼 3개 */}
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              {([
+                { key: 'classic', label: '1' },
+                { key: 'leftcol', label: '2' },
+                { key: 'grid',    label: '3' },
+              ] as { key: OverlayStyle; label: string }[]).map(opt => (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[
+                    {
+                      width: 34,
+                      height: 34,
+                      borderRadius: R.pill,
+                      borderWidth: 1.5,
+                      borderColor: C.border,
+                      backgroundColor: C.surface,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    },
+                    overlayStyle === opt.key && {
+                      backgroundColor: C.accentBg,
+                      borderColor: C.accent,
+                    },
+                  ]}
+                  onPress={() => setOverlayStyle(opt.key)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[
+                    { fontSize: 13, fontWeight: '800', color: C.textSub },
+                    overlayStyle === opt.key && { color: C.accent },
+                  ]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
 
+            {/* 구분선 */}
+            <View style={{ width: 1, height: 28, backgroundColor: C.border }} />
+
+            {/* 컬러칩 가로 스크롤 */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ flexDirection: 'row', gap: 6, alignItems: 'center', paddingRight: 8 }}
+            >
+              {TEXT_COLORS.map(opt => (
+                <TouchableOpacity
+                  key={opt.hex}
+                  style={[
+                    s.colorChip,
+                    { backgroundColor: opt.hex },
+                    textColor === opt.hex && s.colorChipActive,
+                  ]}
+                  onPress={() => { setTextColor(opt.hex); onColorChange(opt.hex); }}
+                  activeOpacity={0.8}
+                />
+              ))}
+            </ScrollView>
+          </View>
           </>
         )}
 
@@ -1306,6 +1673,25 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
       </ScrollView>
       <View style={s.ctaBar}>
         <TouchableOpacity style={s.ctaBtn} activeOpacity={0.85} onPress={async () => {
+          if (!photoTaken) {
+            Alert.alert(
+              '사진을 등록해주세요',
+              '운동 사진을 등록해야 저장할 수 있어요.\n카메라로 찍거나 사진을 선택해주세요.',
+              [
+                {
+                  text: '카메라로 찍기',
+                  onPress: () => onSetShowCamera(true),
+                },
+                {
+                  text: '사진 선택',
+                  onPress: () => onCapture([3, 4]),
+                },
+                { text: '취소', style: 'cancel' },
+              ],
+            );
+            return;
+          }
+
           let captured: string | undefined;
           let capturedRoutineUri: string | undefined;
           if (photoTaken && overlayRef.current) {
@@ -1488,6 +1874,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   const [logs,              setLogs]              = useState<Record<string, SetEntry[]>>({});
   const [notes,             setNotes]             = useState<Record<string, string>>({});
   const [photoTaken,        setPhotoTaken]        = useState(false);
+  const [showCamera,        setShowCamera]        = useState(false);
   const [photoUri,          setPhotoUri]          = useState<string | null>(null);
   const [compositeUri,      setCompositeUri]      = useState<string | null>(null);
   const [routineCardUri,    setRoutineCardUri]    = useState<string | null>(null);
@@ -1552,6 +1939,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
       setNotes({});
       setPhotoTaken(false);
       setPhotoUri(null);
+      setShowCamera(false);
       setCompositeUri(null);
       setRoutineCardUri(null);
       setDetectedPRs([]);
@@ -1675,6 +2063,11 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
           const machineName = currentExercise?.name ?? currentExerciseId;
           setXpPopupData({ machineName, xpResult, levelData: updatedData, leveledUp, newLevel });
           setXpPopupVisible(true);
+          if (leveledUp) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          } else {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          }
         }
       }
     }
@@ -1796,12 +2189,13 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     }
 
     const workoutLog: WorkoutLog = {
-      id:          sessionId,
-      gymId:       gym.id,
-      gymName:     gym.name,
-      gymLocation: gym.location,
-      date:        new Date().toISOString(),
-      machines:    selectedExercises.map(ex => {
+      id:               sessionId,
+      gymId:            gym.id,
+      gymName:          gym.name,
+      gymLocation:      gym.location,
+      date:             new Date().toISOString(),
+      overlayTextColor: selectedColor,
+      machines:         selectedExercises.map(ex => {
         const exSets = logs[ex.id] ?? [];
         const maxSet = exSets.reduce<{ weight: number; reps: number } | null>(
           (best, s) => (!best || s.weight > best.weight ? s : best), null
@@ -1829,10 +2223,11 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     if (user && supabaseConfigured) {
       try {
         const savedSession = await insertWorkoutSession({
-          id:     sessionId,
-          userId: user.id,
-          gymId:  gym.id,
-          date:   workoutLog.date,
+          id:               sessionId,
+          userId:           user.id,
+          gymId:            gym.id,
+          date:             workoutLog.date,
+          overlayTextColor: selectedColor,
         });
         dbSessionId = savedSession?.id;
 
@@ -1934,91 +2329,42 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     await handleSaveWorkout(undefined, capturedRoutineUri);
   }
 
-  async function handleCapture(aspect: [number, number] = [3, 4]) {
+  async function handleCapture(_aspect: [number, number] = [3, 4]) {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    Alert.alert(
-      '사진 선택',
-      '운동 사진을 추가하세요',
-      [
-        {
-          text: '카메라로 찍기',
-          onPress: async () => {
-            const camStatus = await ImagePicker.requestCameraPermissionsAsync();
-            if (camStatus.status !== 'granted') {
-              Alert.alert('권한 필요', '카메라 접근 권한이 필요합니다.');
-              return;
-            }
-            const result = await ImagePicker.launchCameraAsync({
-              mediaTypes: ['images'],
-              allowsEditing: false,
-              quality: 0.9,
-            });
-            if (!result.canceled && result.assets[0]) {
-              setPhotoUri(result.assets[0].uri);
-              setPhotoTaken(true);
-            }
-          },
-        },
-        {
-          text: '사진 선택',
-          onPress: async () => {
-            if (status !== 'granted') {
-              Alert.alert('권한 필요', '사진 라이브러리 접근 권한이 필요합니다.');
-              return;
-            }
-            const result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ['images'],
-              allowsEditing: false,
-              quality: 0.9,
-              exif: true,
-            });
-            if (!result.canceled && result.assets[0]) {
-              const asset = result.assets[0];
+    if (status !== 'granted') {
+      Alert.alert('권한 필요', '사진 라이브러리 접근 권한이 필요합니다.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: false,
+      quality: 0.9,
+      exif: true,
+    });
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
 
-              // 당일 촬영 사진만 허용
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-              // creationTime (ms) 또는 exif DateTimeOriginal 로 날짜 확인
-              let photoDate: Date | null = null;
-              if (asset.exif?.DateTimeOriginal) {
-                // exif 형식: "2026:04:25 14:30:00"
-                const raw = asset.exif.DateTimeOriginal as string;
-                const [datePart, timePart] = raw.split(' ');
-                const [y, m, d] = datePart.split(':');
-                photoDate = new Date(`${y}-${m}-${d}T${timePart}`);
-              } else if ((asset as any).creationTime) {
-                photoDate = new Date((asset as any).creationTime);
-              }
+      let photoDate: Date | null = null;
+      if (asset.exif?.DateTimeOriginal) {
+        const raw = asset.exif.DateTimeOriginal as string;
+        const [datePart, timePart] = raw.split(' ');
+        const [y, m, d] = datePart.split(':');
+        photoDate = new Date(`${y}-${m}-${d}T${timePart}`);
+      } else if ((asset as any).creationTime) {
+        photoDate = new Date((asset as any).creationTime);
+      }
 
-              // 날짜 확인 불가하거나 오늘이 아니면 차단
-              if (!photoDate) {
-                Alert.alert(
-                  '사진 확인 불가',
-                  '촬영 날짜를 확인할 수 없는 사진은 업로드할 수 없어요.',
-                  [{ text: '확인' }],
-                );
-                return;
-              }
+      if (photoDate && photoDate < today) {
+        Alert.alert('오늘 사진만 가능해요', '운동 당일 촬영한 사진만 업로드할 수 있어요.');
+        return;
+      }
 
-              photoDate.setHours(0, 0, 0, 0);
-              if (photoDate.getTime() !== today.getTime()) {
-                Alert.alert(
-                  '오늘 사진만 선택 가능',
-                  '운동 인증샷은 오늘 촬영한 사진만 업로드할 수 있어요.',
-                  [{ text: '확인' }],
-                );
-                return;
-              }
-
-              setPhotoUri(asset.uri);
-              setPhotoTaken(true);
-            }
-          },
-        },
-        { text: '취소', style: 'cancel' },
-      ],
-    );
+      setPhotoUri(asset.uri);
+      setPhotoTaken(true);
+    }
   }
 
   function renderStep() {
@@ -2124,6 +2470,13 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             nickname={user?.nickname ?? user?.name ?? undefined}
             onColorChange={setSelectedColor}
             onCapture={(aspect) => handleCapture(aspect)}
+            onCameraCapture={(uri) => {
+              setShowCamera(false);
+              setPhotoUri(uri);
+              setPhotoTaken(true);
+            }}
+            showCamera={showCamera}
+            onSetShowCamera={setShowCamera}
             onCompositeUri={(uri) => setCompositeUri(uri)}
             onRoutineCardUri={(uri) => setRoutineCardUri(uri)}
             onSave={requestSaveWorkout}
@@ -2410,7 +2763,7 @@ const s = StyleSheet.create({
   colorPickerWrap:   { marginBottom: 20 },
   colorPickerLabel:  { fontSize: 9, fontWeight: '700', color: C.textDim, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 10 },
   colorPickerRow:    { flexDirection: 'row' },
-  colorChip:         { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: 'rgba(255,255,255,0.15)', marginRight: 14 },
+  colorChip:         { width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: 'rgba(255,255,255,0.15)', marginRight: 8 },
   colorChipActive:   { borderColor: C.accent, transform: [{ scale: 1.2 }] },
 
   // Done
@@ -2586,4 +2939,116 @@ const s = StyleSheet.create({
   prOverlayReps: { fontSize: 14, color: C.textSub, fontWeight: '600', marginBottom: 24 },
   prOverlayBtn:  { backgroundColor: C.accent, borderRadius: R.btn, paddingHorizontal: 32, paddingVertical: 14 },
   prOverlayBtnTxt:{ fontSize: 15, fontWeight: '900', color: C.bg },
+
+  // --- Set Progress Banner
+  setProgressBanner: {
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 2,
+    backgroundColor: C.surface,
+    borderRadius: R.card,
+    borderWidth: 1,
+    borderColor: C.border,
+    overflow: 'hidden',
+    paddingBottom: 4,
+  },
+  setProgressHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  setProgressHeaderText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '700',
+    color: C.textSub,
+    letterSpacing: 0.3,
+  },
+  setProgressCountBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: C.accentBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  setProgressCountText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: C.accent,
+  },
+  setProgressList: {
+    paddingHorizontal: 14,
+    paddingTop: 6,
+  },
+  setProgressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+    gap: 0,
+  },
+  setProgressIndex: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: C.surfaceHigh,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  setProgressIndexText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: C.textSub,
+  },
+  setProgressKgBlock: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 3,
+  },
+  setProgressKgValue: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: C.text,
+    letterSpacing: -0.5,
+  },
+  setProgressKgUnit: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: C.textDim,
+  },
+  setProgressSeparator: {
+    paddingHorizontal: 10,
+  },
+  setProgressSeparatorText: {
+    fontSize: 16,
+    color: C.textDim,
+    fontWeight: '500',
+  },
+  setProgressRepsBlock: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 3,
+  },
+  setProgressRepsValue: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: C.text,
+    letterSpacing: -0.5,
+  },
+  setProgressRepsUnit: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: C.textDim,
+  },
 });
