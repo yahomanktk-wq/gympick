@@ -905,36 +905,29 @@ function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onR
   onBack: () => void;
   onClose: () => void;
 }) {
-  const scrollRef     = useRef<ScrollView>(null);
-  const setLayoutsRef = useRef<number[]>([]);
+  const scrollRef        = useRef<ScrollView>(null);
+  const setLayoutsRef    = useRef<number[]>([]);
+  const pendingScrollIdx = useRef<number>(-1);
   const hasSets = sets.length > 0 && sets.some(s => s.weight > 0 || s.reps > 0);
   const completedSets = sets.slice(0, -1);
 
   function handleSetLayout(idx: number, y: number) {
     setLayoutsRef.current[idx] = y;
-  }
-
-  function scrollToNewSet() {
-    setTimeout(() => {
-      const layouts = setLayoutsRef.current;
-      const lastY   = layouts[layouts.length - 1];
-      if (lastY !== undefined) {
-        scrollRef.current?.scrollTo({ y: lastY, animated: true });
-      } else {
-        scrollRef.current?.scrollToEnd({ animated: true });
-      }
-    }, 100);
+    if (pendingScrollIdx.current === idx) {
+      pendingScrollIdx.current = -1;
+      scrollRef.current?.scrollTo({ y, animated: true });
+    }
   }
 
   function handleAdd() {
+    pendingScrollIdx.current = sets.length;
     onAdd();
-    scrollToNewSet();
   }
 
   function handleCopyPrev() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    pendingScrollIdx.current = sets.length;
     onCopyPrev();
-    scrollToNewSet();
   }
 
   return (
