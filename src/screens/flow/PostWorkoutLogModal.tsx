@@ -718,17 +718,12 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
 function SetProgressBanner({
   sets,
   machineName,
-  onLayout,
 }: {
   sets: SetEntry[];
   machineName: string;
-  onLayout?: (height: number) => void;
 }) {
   return (
-    <View
-      style={s.setProgressBanner}
-      onLayout={(e) => onLayout?.(e.nativeEvent.layout.height)}
-    >
+    <View style={s.setProgressBanner}>
       <View style={s.setProgressHeader}>
         <Ionicons name="checkmark-circle" size={13} color={C.accent} />
         <Text style={s.setProgressHeaderText} numberOfLines={1}>
@@ -770,13 +765,14 @@ function SetProgressBanner({
 
 // --- Step 4: Log Sets (single exercise)
 
-function SetCard({ ex, sets, onChange, onAdd, onCopyPrev, onRemove }: {
+function SetCard({ ex, sets, onChange, onAdd, onCopyPrev, onRemove, onLastSetRef }: {
   ex: ExerciseInfo;
   sets: SetEntry[];
   onChange: (idx: number, field: keyof SetEntry, val: number) => void;
   onAdd: () => void;
   onCopyPrev: () => void;
   onRemove: (idx: number) => void;
+  onLastSetRef?: (node: View | null) => void;
 }) {
   const col    = mp(ex.targetMuscle);
   const isFW   = ex.id.startsWith('fw');
@@ -819,7 +815,11 @@ function SetCard({ ex, sets, onChange, onAdd, onCopyPrev, onRemove }: {
       )}
 
       {sets.map((set, idx) => (
-        <View key={idx} style={s.setBlock}>
+        <View
+          key={idx}
+          style={s.setBlock}
+          ref={idx === sets.length - 1 ? onLastSetRef : undefined}
+        >
           <View style={s.setBlockHeader}>
             <Text style={s.setBlockLabel}>세트 {idx + 1}</Text>
             {sets.length > 1 && (
@@ -905,15 +905,33 @@ function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onR
   onBack: () => void;
   onClose: () => void;
 }) {
-  const scrollRef       = useRef<ScrollView>(null);
-  const bannerHeightRef = useRef<number>(0);
+  const scrollRef      = useRef<ScrollView>(null);
+  const lastSetNodeRef = useRef<View | null>(null);
   const hasSets = sets.length > 0 && sets.some(s => s.weight > 0 || s.reps > 0);
   const completedSets = sets.slice(0, -1);
 
+  function handleLastSetRef(node: View | null) {
+    lastSetNodeRef.current = node;
+  }
+
   function scrollToNewSet() {
     setTimeout(() => {
-      const targetY = bannerHeightRef.current + 140;
-      scrollRef.current?.scrollTo({ y: targetY, animated: true });
+      const scrollNode = scrollRef.current?.getScrollableNode?.();
+      const setNode    = lastSetNodeRef.current;
+      if (!scrollNode || !setNode) {
+        scrollRef.current?.scrollToEnd({ animated: true });
+        return;
+      }
+      // @ts-ignore: measureLayout은 타입 정의가 불완전하지만 RN에서 동작함
+      setNode.measureLayout(
+        scrollNode,
+        (_x: number, y: number) => {
+          scrollRef.current?.scrollTo({ y, animated: true });
+        },
+        () => {
+          scrollRef.current?.scrollToEnd({ animated: true });
+        },
+      );
     }, 100);
   }
 
@@ -936,7 +954,6 @@ function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onR
         <SetProgressBanner
           sets={completedSets}
           machineName={exercise.name}
-          onLayout={(height) => { bannerHeightRef.current = height; }}
         />
       )}
       <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
@@ -948,6 +965,7 @@ function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onR
           onAdd={handleAdd}
           onCopyPrev={handleCopyPrev}
           onRemove={onRemove}
+          onLastSetRef={handleLastSetRef}
         />
 
         {/* Optional exercise note */}
