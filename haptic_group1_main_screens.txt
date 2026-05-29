@@ -1,0 +1,97 @@
+# 태스크: 햅틱 추가 — 그룹 1 (메인 스크린)
+
+## 대상 파일
+- src/screens/HomeScreen.tsx
+- src/screens/FindGymScreen.tsx
+- src/screens/LogWorkoutScreen.tsx
+- src/screens/JournalScreen.tsx
+- src/screens/ProfileScreen.tsx
+- src/screens/PRHistoryScreen.tsx
+- src/screens/FavoritesScreen.tsx
+
+## 공통 규칙
+1. 각 파일 상단에 `import * as Haptics from 'expo-haptics';` 가 없으면 추가
+2. 이미 Haptics 호출이 있는 버튼은 스킵
+3. disabled 상태 버튼에는 추가하지 않음
+4. Switch 컴포넌트에는 추가하지 않음
+5. ScrollView/FlatList 안의 대형 카드(머신카드, 헬스장카드 전체 탭) 는 스킵
+6. 햅틱은 onPress 핸들러 첫 줄에 추가
+
+## 강도 기준
+- `Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)`
+  → 일반 탭, 필터 칩, 탭 전환, 토글, 목록 아이템 선택
+- `Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)`
+  → 저장, 확인, 다음 단계로 넘어가는 CTA, 즐겨찾기 추가
+- `Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)`
+  → 삭제, 초기화, 경고성 액션
+
+## 파일별 적용 대상
+
+### HomeScreen.tsx
+- 헬스장 카드 탭 (목록 아이템) → Light
+- 머신 카드 탭 → Light
+- "기록하기" 등 CTA 버튼 → Medium
+- 필터/카테고리 칩 → Light
+- 배너/프로모션 탭 → Light
+
+### FindGymScreen.tsx
+- 헬스장 목록 아이템 탭 → Light
+- 지도/목록 토글 버튼 → Light
+- 검색창 옆 필터 버튼 → Light
+- 필터 칩/태그 → Light
+- 지도 마커 탭 → Light
+
+### LogWorkoutScreen.tsx
+- 운동 시작 CTA → Medium
+- 목록 아이템 탭 → Light
+
+### JournalScreen.tsx
+- 운동일지 항목 탭 → Light
+- 날짜 선택 → Light
+- 필터 버튼 → Light
+- 삭제 버튼 → Heavy
+
+### ProfileScreen.tsx
+- 설정 항목 탭 → Light
+- 로그아웃 버튼 → Medium
+- 프로필 편집 저장 → Medium
+- 계정 삭제 → Heavy
+- DEV 역할 전환 버튼 → Light
+
+### PRHistoryScreen.tsx
+- PR 항목 탭 → Light
+- 필터 버튼 → Light
+
+### FavoritesScreen.tsx
+- 즐겨찾기 항목 탭 → Light
+- 즐겨찾기 해제 버튼 → Medium
+
+## 적용 방법 예시
+```tsx
+// 변경 전
+<TouchableOpacity onPress={handleSave}>
+
+// 변경 후
+<TouchableOpacity onPress={() => {
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  handleSave();
+}}>
+
+// 이미 인라인 함수인 경우
+// 변경 전
+<TouchableOpacity onPress={() => { doSomething(); }}>
+
+// 변경 후
+<TouchableOpacity onPress={() => {
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  doSomething();
+}}>
+```
+
+## 주의사항
+- 기존 onPress 로직을 절대 변경하지 말 것 (햅틱 한 줄만 추가)
+- 파일 내 다른 코드(스타일, 상태, 로직) 일절 건드리지 말 것
+- 타입스크립트 에러 없을 것
+
+## 완료 후
+git commit: "feat: 햅틱 추가 — 메인 스크린 (HomeScreen, FindGymScreen, LogWorkoutScreen, JournalScreen, ProfileScreen, PRHistoryScreen, FavoritesScreen)"

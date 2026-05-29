@@ -1,0 +1,199 @@
+# 태스크: 세트 스크롤 — measureLayout 완전 제거, onLayout 누적 방식으로 교체
+
+## 파일 경로
+`src/screens/flow/PostWorkoutLogModal.tsx`
+
+## 배경
+measureLayout 기반 구현이 "ref.measureLayout must be called with a ref to a native component"
+에러를 계속 발생시킴. measureLayout / findNodeHandle / getScrollableNode 관련 코드를
+전부 제거하고, onLayout 기반의 단순하고 안정적인 방식으로 완전히 교체한다.
+
+---
+
+## 새 구현 방식 개요
+
+각 setBlock이 렌더링될 때 onLayout으로 자신의 y좌표를 기록한다.
+세트 추가/복사 시 마지막으로 기록된 y좌표로 scrollTo한다.
+measureLayout, findNodeHandle, getScrollableNode, scrollViewNodeRef 는 모두 제거한다.
+
+---
+
+## 변경 상세
+
+### 1. findNodeHandle import 제거
+
+react-native import에서 findNodeHandle을 제거한다:
+
+```ts
+// 변경 전
+import {
+  ...
+  findNodeHandle,
+  ...
+} from 'react-native';
+
+// 변경 후
+// findNodeHandle 줄 삭제
+```
+
+### 2. SetCard props 변경
+
+onLastSetRef 콜백 prop을 제거하고, onSetLayout 콜백으로 교체한다:
+
+```ts
+// 변경 전
+function SetCard({ ex, sets, onChange, onAdd, onCopyPrev, onRemove, onLastSetRef }: {
+  ...
+  onLastSetRef?: (node: View | null) => void;
+})
+
+// 변경 후
+function SetCard({ ex, sets, onChange, onAdd, onCopyPrev, onRemove, onSetLayout }: {
+  ex: ExerciseInfo;
+  sets: SetEntry[];
+  onChange: (idx: number, field: keyof SetEntry, val: number) => void;
+  onAdd: () => void;
+  onCopyPrev: () => void;
+  onRemove: (idx: number) => void;
+  onSetLayout?: (idx: number, y: number) => void;
+})
+```
+
+### 3. SetCard 내 setBlock 렌더링 변경
+
+마지막 setBlock의 ref 연결을 제거하고, 모든 setBlock에 onLayout을 추가한다:
+
+```tsx
+// 변경 전
+{sets.map((set, idx) => (
+  <View
+    key={idx}
+    style={s.setBlock}
+    ref={idx === sets.length - 1 ? onLastSetRef : undefined}
+  >
+
+// 변경 후
+{sets.map((set, idx) => (
+  <View
+    key={idx}
+    style={s.setBlock}
+    onLayout={(e) => onSetLayout?.(idx, e.nativeEvent.layout.y)}
+  >
+```
+
+### 4. SetLoggingStep 내부 전면 교체
+
+#### 제거할 코드
+아래 항목들을 모두 제거한다:
+- `scrollViewNodeRef` ref
+- `lastSetNodeRef` ref
+- `handleLastSetRef` 함수
+- `findNodeHandle` 관련 코드
+- `measureLayout` 관련 코드
+- ScrollView를 감싸던 래퍼 `<View ref={scrollViewNodeRef}>` (ScrollView를 원래대로 복원)
+
+#### 추가할 코드
+
+```tsx
+// SetLoggingStep 함수 내부 상단에 추가
+const scrollRef     = useRef<ScrollView>(null);  // 기존 유지
+const setLayoutsRef = useRef<number[]>([]);       // 각 setBlock의 y좌표 누적
+
+function handleSetLayout(idx: number, y: number) {
+  setLayoutsRef.current[idx] = y;
+}
+
+function scrollToNewSet() {
+  setTimeout(() => {
+    const layouts = setLayoutsRef.current;
+    const lastY   = layouts[layouts.length - 1];
+    if (lastY !== undefined) {
+      scrollRef.current?.scrollTo({ y: lastY, animated: true });
+    } else {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }
+  }, 100);
+}
+
+function handleAdd() {
+  onAdd();
+  scrollToNewSet();
+}
+
+function handleCopyPrev() {
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  onCopyPrev();
+  scrollToNewSet();
+}
+```
+
+#### SetCard 호출부 변경
+
+```tsx
+// 변경 전
+<SetCard
+  ex={exercise}
+  sets={sets}
+  onChange={onChange}
+  onAdd={handleAdd}
+  onCopyPrev={handleCopyPrev}
+  onRemove={onRemove}
+  onLastSetRef={handleLastSetRef}
+/>
+
+// 변경 후
+<SetCard
+  ex={exercise}
+  sets={sets}
+  onChange={onChange}
+  onAdd={handleAdd}
+  onCopyPrev={handleCopyPrev}
+  onRemove={onRemove}
+  onSetLayout={handleSetLayout}
+/>
+```
+
+#### ScrollView 래퍼 View 제거 (이전 태스크에서 추가했다면)
+
+이전 태스크에서 ScrollView를 View로 감쌌다면 원래대로 복원:
+
+```tsx
+// 변경 전 (이전 태스크에서 추가된 래퍼)
+<View ref={scrollViewNodeRef} style={{ flex: 1 }}>
+  <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
+    ...
+  </ScrollView>
+</View>
+
+// 변경 후 (래퍼 제거, ScrollView 직접 렌더링)
+<ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
+  ...
+</ScrollView>
+```
+
+---
+
+## 동작 원리
+
+1. 각 setBlock이 렌더링/리렌더링될 때 onLayout 콜백 실행
+2. `setLayoutsRef.current[idx] = y` 로 각 세트의 ScrollView 내 y좌표 누적
+3. 세트 추가/복사 탭 → state 업데이트 → 100ms 후 scrollToNewSet 실행
+4. 이 시점에 새 세트 블록은 아직 렌더링 전이므로 layouts 배열의 마지막 값
+   = 직전 마지막 세트의 y좌표 = 새 세트가 렌더링될 위치와 거의 동일
+5. 해당 y로 scrollTo → 새 세트 최상단이 화면 상단(배너 하단)으로 이동
+6. measureLayout/findNodeHandle/네이티브 ref 불필요 → 에러 없음
+
+---
+
+## 검증 포인트
+1. 터미널에 measureLayout 관련 에러 없음
+2. 세트 추가 탭 → 새 세트 입력 영역이 배너 하단으로 스크롤됨
+3. 이전 세트 복사 탭 → 동일하게 동작
+4. 세트 제거(onRemove) 시에도 레이아웃 정상
+5. 타입스크립트 에러 없음
+
+---
+
+## 완료 후
+변경된 파일: `src/screens/flow/PostWorkoutLogModal.tsx` 1개만.
+git commit: "fix: 세트 스크롤 — measureLayout 제거, onLayout y좌표 누적 방식으로 교체"

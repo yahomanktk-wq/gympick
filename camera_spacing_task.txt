@@ -1,0 +1,122 @@
+# 태스크: WorkoutCameraOverlay 간격 개별 조정
+# 프로젝트 경로: D:\시작\gympick
+# 파일: src/screens/flow/WorkoutCameraOverlay.tsx
+# 확인이나 중단 없이 끝까지 완료해줘
+
+---
+
+## 목표
+- controls(돌아가기/플래시/힌트텍스트) ↔ 카메라 뷰파인더 사이 간격: 줄이기
+- 카메라 뷰파인더 ↔ 레이아웃 버튼+컬러칩 라인 사이 간격: 늘리기
+
+현재 container의 gap: 12 (또는 gap: 18) 이 모든 자식 간격을 동일하게 적용 중.
+gap을 제거하고 각 요소에 marginBottom을 개별 지정해서 간격을 분리 제어한다.
+
+---
+
+## 1. container에서 gap 제거
+
+기존:
+```tsx
+  container: {
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    gap: 12,   // 또는 gap: 18
+  },
+```
+
+변경 후:
+```tsx
+  container: {
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+```
+
+---
+
+## 2. controls View에 marginBottom 추가 (controls↔카메라 간격 축소)
+
+controls가 카메라 위에 있는 경우 (이전 태스크 적용 상태):
+controls의 marginBottom을 작게 설정한다.
+
+기존:
+```tsx
+  controls: {
+    width: PHOTO_W,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 4,   // 또는 paddingTop: 6, paddingBottom: 2
+  },
+```
+
+변경 후:
+```tsx
+  controls: {
+    width: PHOTO_W,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+```
+
+controls가 카메라 아래에 있는 경우 (이전 태스크 미적용 상태):
+hint Text에 marginBottom을 작게 설정하고, controls에 marginTop을 작게 설정한다.
+
+hint 스타일:
+```tsx
+  hint: {
+    fontSize: 12,
+    color: C.text,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+```
+
+controls 스타일:
+```tsx
+  controls: {
+    width: PHOTO_W,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+```
+
+---
+
+## 3. cameraWrap에 marginBottom 추가 (카메라↔컬러칩 간격 확대)
+
+기존:
+```tsx
+  cameraWrap: {
+    width: PHOTO_W,
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+  },
+```
+
+변경 후:
+```tsx
+  cameraWrap: {
+    width: PHOTO_W,
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+    marginBottom: 20,
+  },
+```
+
+---
+
+## 동작 확인 체크리스트
+
+1. 버튼/힌트 라인 ↔ 카메라 뷰파인더 간격이 기존보다 줄어듦 ✅
+2. 카메라 뷰파인더 ↔ 레이아웃 버튼+컬러칩 간격이 기존보다 넓어짐 ✅
+3. 전체 레이아웃이 자연스럽게 배치됨 ✅

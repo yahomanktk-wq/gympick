@@ -1,0 +1,554 @@
+# 태스크: 오운완 오버레이 레이아웃 스타일 2종 추가
+# 프로젝트 경로: D:\시작\gympick
+# 파일: src/screens/flow/PostWorkoutLogModal.tsx
+# 확인이나 중단 없이 끝까지 완료해줘
+
+---
+
+## 목표
+
+오운완 사진 단계에서 오버레이 레이아웃 스타일을 3종 중 선택할 수 있게 한다.
+스타일 선택 UI는 컬러칩 위에 배치한다.
+텍스트 색상은 기존과 동일하게 textColor(컬러칩) 값을 따른다.
+
+---
+
+## 3가지 스타일 정의
+
+### Style 1: Classic (기존 유지)
+- 좌하단: muscleLabel 대제목 + [브랜드] 머신명 + 세트 슬래시 나열
+- 우상단: 닉네임 + 타임스탬프
+- 좌우 세로 GymPick 로고
+
+### Style 2: Left Column (새로 추가 — Image 2 기준)
+레이아웃:
+- 좌상단: 타겟부위_day (대제목, 언더라인)
+- 우상단: 닉네임 + 타임스탬프 (우측 정렬, 줄바꿈)
+- 좌측 세로: [브랜드] → 머신명 → S1 60kg × 10 → S2 60kg × 10 ... 순서로 머신별 블록
+- 우하단: GYM PICK 로고
+
+### Style 3: Grid (새로 추가 — Image 1 기준)
+레이아웃:
+- 상단: 닉네임 (좌), 타임스탬프 (우)
+- 중앙 상단: 타겟부위_day (중앙, 언더라인)
+- 중앙: 머신 3열 그리드 ([브랜드] / 머신명 / S1 60kg × 10 / S2 ...)
+- 하단 중앙: GYM PICK 로고
+
+---
+
+## 1단계: 스타일 타입 및 상수 추가
+
+PostWorkoutLogModal.tsx 파일 상단 상수 영역에 추가:
+
+```tsx
+// Overlay style types
+type OverlayStyle = 'classic' | 'leftcol' | 'grid';
+```
+
+---
+
+## 2단계: WorkoutPhotoStep 내부 상태 추가
+
+기존:
+```tsx
+  const [textColor,     setTextColor]     = useState('#ffffff');
+  const [saveSuccess,   setSaveSuccess]   = useState(false);
+  const [showCamera,    setShowCamera]    = useState(false);
+```
+
+변경 후:
+```tsx
+  const [textColor,      setTextColor]      = useState('#ffffff');
+  const [saveSuccess,    setSaveSuccess]    = useState(false);
+  const [showCamera,     setShowCamera]     = useState(false);
+  const [overlayStyle,   setOverlayStyle]   = useState<OverlayStyle>('classic');
+```
+
+---
+
+## 3단계: 모듈 레벨에 오버레이 컴포넌트 3종 정의
+
+WorkoutPhotoStep 함수 바깥, 모듈 레벨에 아래 컴포넌트들을 추가한다.
+(함수 내부 정의 금지 — IME 버그 방지 원칙)
+
+### 공통 props 타입
+
+```tsx
+interface OverlayProps {
+  exercises: ExerciseInfo[];
+  logs: Record<string, SetEntry[]>;
+  nickname: string;
+  timestamp: string;
+  muscleLabel: string;
+  tc: string; // textColor
+  photoW: number;
+  photoH: number;
+}
+```
+
+### ClassicOverlay (기존 오버레이 그대로 추출)
+
+기존 overlayRef 내부의 오버레이 요소들을 그대로 컴포넌트로 추출한다.
+
+```tsx
+function ClassicOverlay({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH }: OverlayProps) {
+  const LOGO_STRIP_H_L = 14;
+  const LOGO_STRIP_W_L = Math.round(LOGO_STRIP_H_L * (2805 / 279));
+  const LOGO_EDGE_GAP  = 8;
+
+  const logoTlLeft = Math.round(LOGO_EDGE_GAP + LOGO_STRIP_H_L / 2 - LOGO_STRIP_W_L / 2);
+  const logoTlTop  = Math.round(OVERLAY_PAD   + LOGO_STRIP_W_L / 2 - LOGO_STRIP_H_L / 2);
+  const logoBrLeft = Math.round((photoW - LOGO_EDGE_GAP - LOGO_STRIP_H_L) + LOGO_STRIP_H_L / 2 - LOGO_STRIP_W_L / 2);
+  const logoBrTop  = Math.round((photoH - OVERLAY_PAD - LOGO_STRIP_W_L)   + LOGO_STRIP_W_L / 2 - LOGO_STRIP_H_L / 2);
+
+  return (
+    <>
+      {/* 좌상단 로고 90° */}
+      <View style={[s.overlayLogoAbsolute, { left: logoTlLeft, top: logoTlTop, transform: [{ rotate: '90deg' }] }]}>
+        <GymPickLogo color={tc} width={LOGO_STRIP_W_L} height={LOGO_STRIP_H_L} />
+      </View>
+      {/* 우하단 로고 270° */}
+      <View style={[s.overlayLogoAbsolute, { left: logoBrLeft, top: logoBrTop, transform: [{ rotate: '270deg' }] }]}>
+        <GymPickLogo color={tc} width={LOGO_STRIP_W_L} height={LOGO_STRIP_H_L} />
+      </View>
+      {/* 우상단: 닉네임 + 타임스탬프 */}
+      <View style={s.overlayTopRight}>
+        <Text style={[s.overlayUsername, { color: tc }]}>{nickname}</Text>
+        <Text style={[s.overlayTimestamp, { color: tc }]}>{timestamp}</Text>
+      </View>
+      {/* 좌하단: muscleLabel + 운동 목록 */}
+      <View style={s.overlayBottomLeft}>
+        <Text style={[s.overlayMuscleTitle, { color: tc }]}>{muscleLabel}</Text>
+        <View style={s.sessionScroll}>
+          {exercises.slice(0, 7).map(ex => {
+            const sets     = logs[ex.id] ?? [];
+            const setsLine = sets.map(st => `${st.weight} x ${st.reps}`).join(' / ');
+            return (
+              <View key={ex.id} style={s.overlayExBlock}>
+                <Text style={[s.overlayExName, { color: tc }]} numberOfLines={1}>
+                  {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
+                </Text>
+                {setsLine ? (
+                  <Text style={[s.overlayExSet, { color: tc }]} numberOfLines={2}>{setsLine}</Text>
+                ) : null}
+              </View>
+            );
+          })}
+          {exercises.length > 7 && (
+            <Text style={[s.overlayExName, { color: tc, opacity: 0.6, marginTop: 2 }]}>
+              {`+${exercises.length - 7} more...`}
+            </Text>
+          )}
+        </View>
+      </View>
+    </>
+  );
+}
+```
+
+### LeftColOverlay (Style 2 — Image 2 기준)
+
+```tsx
+function LeftColOverlay({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH }: OverlayProps) {
+  // timestamp를 날짜/시간 두 줄로 분리
+  const tsParts  = timestamp.split('_');
+  const tsDate   = tsParts[0] ?? timestamp;
+  const tsTime   = tsParts[1] ?? '';
+
+  return (
+    <>
+      {/* 좌상단: 타겟부위_day 대제목 (언더라인) */}
+      <View style={{
+        position: 'absolute',
+        top: OVERLAY_PAD,
+        left: OVERLAY_PAD,
+        right: photoW * 0.45,
+      }}>
+        <Text style={{
+          fontSize: 22,
+          fontWeight: '900',
+          color: tc,
+          letterSpacing: -0.5,
+          textDecorationLine: 'underline',
+        }} numberOfLines={2}>
+          {muscleLabel}
+        </Text>
+      </View>
+
+      {/* 우상단: 닉네임 + 날짜 + 시간 (우측 정렬, 줄바꿈) */}
+      <View style={{
+        position: 'absolute',
+        top: OVERLAY_PAD,
+        right: OVERLAY_PAD,
+        alignItems: 'flex-end',
+      }}>
+        <Text style={{ fontSize: 13, fontWeight: '900', color: tc, letterSpacing: 0.3 }}>
+          {nickname}
+        </Text>
+        <Text style={{ fontSize: 11, fontWeight: '700', color: tc, opacity: 0.85, marginTop: 2 }}>
+          {tsDate}
+        </Text>
+        {tsTime ? (
+          <Text style={{ fontSize: 11, fontWeight: '700', color: tc, opacity: 0.85 }}>
+            {tsTime}
+          </Text>
+        ) : null}
+      </View>
+
+      {/* 좌측 세로: 머신 블록 목록 */}
+      <View style={{
+        position: 'absolute',
+        top: OVERLAY_PAD + 52,
+        left: OVERLAY_PAD,
+        right: OVERLAY_PAD,
+        bottom: OVERLAY_PAD + 32,
+      }}>
+        {exercises.slice(0, 6).map(ex => {
+          const sets = logs[ex.id] ?? [];
+          return (
+            <View key={ex.id} style={{ marginBottom: 10 }}>
+              <Text style={{ fontSize: 9, fontWeight: '700', color: tc, opacity: 0.7, letterSpacing: 0.8 }}>
+                {`[${ex.brand.toUpperCase()}]`}
+              </Text>
+              <Text style={{ fontSize: 11, fontWeight: '900', color: tc, letterSpacing: 0.3, marginBottom: 2 }}>
+                {ex.name.toUpperCase()}
+              </Text>
+              {sets.map((st, si) => (
+                <Text key={si} style={{ fontSize: 9, fontWeight: '600', color: tc, opacity: 0.85, lineHeight: 14 }}>
+                  {`S${si + 1}  ${st.weight}kg × ${st.reps}`}
+                </Text>
+              ))}
+            </View>
+          );
+        })}
+        {exercises.length > 6 && (
+          <Text style={{ fontSize: 9, fontWeight: '700', color: tc, opacity: 0.6 }}>
+            {`+${exercises.length - 6} more...`}
+          </Text>
+        )}
+      </View>
+
+      {/* 우하단: GYM PICK 로고 */}
+      <View style={{
+        position: 'absolute',
+        bottom: OVERLAY_PAD,
+        right: OVERLAY_PAD,
+      }}>
+        <GymPickLogo color={tc} width={LOGO_STRIP_W} height={LOGO_STRIP_H} />
+      </View>
+    </>
+  );
+}
+```
+
+### GridOverlay (Style 3 — Image 1 기준)
+
+```tsx
+function GridOverlay({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH }: OverlayProps) {
+  const COL_COUNT  = 3;
+  const COL_W      = Math.floor((photoW - OVERLAY_PAD * 2 - 16) / COL_COUNT);
+
+  return (
+    <>
+      {/* 상단: 닉네임(좌) + 타임스탬프(우) */}
+      <View style={{
+        position: 'absolute',
+        top: OVERLAY_PAD,
+        left: OVERLAY_PAD,
+        right: OVERLAY_PAD,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+      }}>
+        <Text style={{ fontSize: 13, fontWeight: '900', color: tc, letterSpacing: 0.3 }}>
+          {nickname}
+        </Text>
+        <Text style={{ fontSize: 10, fontWeight: '700', color: tc, opacity: 0.85 }}>
+          {timestamp}
+        </Text>
+      </View>
+
+      {/* 중앙 상단: 타겟부위_day (중앙, 언더라인) */}
+      <View style={{
+        position: 'absolute',
+        top: OVERLAY_PAD + 36,
+        left: OVERLAY_PAD,
+        right: OVERLAY_PAD,
+        alignItems: 'center',
+      }}>
+        <Text style={{
+          fontSize: 20,
+          fontWeight: '900',
+          color: tc,
+          letterSpacing: -0.5,
+          textDecorationLine: 'underline',
+          textAlign: 'center',
+        }}>
+          {muscleLabel}
+        </Text>
+      </View>
+
+      {/* 3열 그리드: 머신 블록 */}
+      <View style={{
+        position: 'absolute',
+        top: OVERLAY_PAD + 80,
+        left: OVERLAY_PAD,
+        right: OVERLAY_PAD,
+        bottom: OVERLAY_PAD + 32,
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        alignContent: 'flex-start',
+      }}>
+        {exercises.slice(0, 9).map(ex => {
+          const sets = logs[ex.id] ?? [];
+          return (
+            <View key={ex.id} style={{ width: COL_W, marginBottom: 12 }}>
+              <Text style={{ fontSize: 8, fontWeight: '700', color: tc, opacity: 0.7, letterSpacing: 0.5 }}>
+                {`[${ex.brand.toUpperCase()}]`}
+              </Text>
+              <Text style={{ fontSize: 9, fontWeight: '900', color: tc, letterSpacing: 0.2, marginBottom: 3, lineHeight: 13 }} numberOfLines={2}>
+                {ex.name.toUpperCase()}
+              </Text>
+              {sets.map((st, si) => (
+                <Text key={si} style={{ fontSize: 8, fontWeight: '600', color: tc, opacity: 0.85, lineHeight: 13 }}>
+                  {`S${si + 1} ${st.weight}kg × ${st.reps}`}
+                </Text>
+              ))}
+            </View>
+          );
+        })}
+        {exercises.length > 9 && (
+          <View style={{ width: COL_W }}>
+            <Text style={{ fontSize: 8, fontWeight: '700', color: tc, opacity: 0.6 }}>
+              {`+${exercises.length - 9} more...`}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {/* 하단 중앙: GYM PICK 로고 */}
+      <View style={{
+        position: 'absolute',
+        bottom: OVERLAY_PAD,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+      }}>
+        <GymPickLogo color={tc} width={LOGO_STRIP_W} height={LOGO_STRIP_H} />
+      </View>
+    </>
+  );
+}
+```
+
+---
+
+## 4단계: 스타일 선택 UI 추가
+
+컬러칩 위에 스타일 선택 버튼 3개를 추가한다.
+`photoTaken || showCamera` 조건 블록 안, 컬러칩 View 바로 위에 삽입한다.
+
+기존:
+```tsx
+            {/* Text colour selector */}
+            <View style={s.colorPickerWrap}>
+```
+
+변경 후 (스타일 선택 UI를 컬러칩 위에 삽입):
+```tsx
+            {/* Overlay style selector */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={s.colorPickerLabel}>레이아웃 스타일</Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {([
+                  { key: 'classic', label: 'Classic' },
+                  { key: 'leftcol', label: 'Left Col' },
+                  { key: 'grid',    label: 'Grid' },
+                ] as { key: OverlayStyle; label: string }[]).map(opt => (
+                  <TouchableOpacity
+                    key={opt.key}
+                    style={[
+                      {
+                        paddingHorizontal: 14,
+                        paddingVertical: 8,
+                        borderRadius: R.pill,
+                        borderWidth: 1.5,
+                        borderColor: C.border,
+                        backgroundColor: C.surface,
+                      },
+                      overlayStyle === opt.key && {
+                        backgroundColor: C.accentBg,
+                        borderColor: C.accent,
+                      },
+                    ]}
+                    onPress={() => setOverlayStyle(opt.key)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[
+                      { fontSize: 12, fontWeight: '700', color: C.textSub },
+                      overlayStyle === opt.key && { color: C.accent },
+                    ]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Text colour selector */}
+            <View style={s.colorPickerWrap}>
+```
+
+---
+
+## 5단계: overlayRef 내부에서 스타일 분기 렌더링
+
+기존 overlayRef 내부의 오버레이 요소들(로고, 닉네임, 운동목록 등)을
+스타일에 따라 분기하도록 교체한다.
+
+기존 overlayRef View 내부에서 오버레이 요소들이 시작되는 부분
+(/* Top-left logo: rotated 90° CW */ 주석부터 /* 테두리 */ 바로 앞까지)을
+아래로 교체한다:
+
+```tsx
+            {/* 스타일별 오버레이 */}
+            {overlayStyle === 'classic' && (
+              <ClassicOverlay
+                exercises={exercises}
+                logs={logs}
+                nickname={displayName}
+                timestamp={timestamp}
+                muscleLabel={muscleLabel}
+                tc={tc}
+                photoW={PHOTO_W}
+                photoH={photoH}
+              />
+            )}
+            {overlayStyle === 'leftcol' && (
+              <LeftColOverlay
+                exercises={exercises}
+                logs={logs}
+                nickname={displayName}
+                timestamp={timestamp}
+                muscleLabel={muscleLabel}
+                tc={tc}
+                photoW={PHOTO_W}
+                photoH={photoH}
+              />
+            )}
+            {overlayStyle === 'grid' && (
+              <GridOverlay
+                exercises={exercises}
+                logs={logs}
+                nickname={displayName}
+                timestamp={timestamp}
+                muscleLabel={muscleLabel}
+                tc={tc}
+                photoW={PHOTO_W}
+                photoH={photoH}
+              />
+            )}
+```
+
+---
+
+## 6단계: WorkoutCameraOverlay.tsx에도 overlayStyle prop 추가
+
+카메라 뷰파인더에서도 스타일 미리보기가 실시간으로 반영되어야 한다.
+
+### WorkoutCameraOverlay Props 타입에 추가:
+```tsx
+  overlayStyle?: 'classic' | 'leftcol' | 'grid';
+```
+
+### WorkoutCameraOverlay 내부 오버레이 렌더링 분기:
+
+기존 오버레이 요소들(로고, 닉네임, 운동목록 등)을 아래로 교체:
+```tsx
+            {(!overlayStyle || overlayStyle === 'classic') && (
+              <ClassicOverlay
+                exercises={exercises}
+                logs={logs}
+                nickname={displayName}
+                timestamp={timestamp}
+                muscleLabel={muscleLabel}
+                tc={tc}
+                photoW={PHOTO_W}
+                photoH={PHOTO_H}
+              />
+            )}
+            {overlayStyle === 'leftcol' && (
+              <LeftColOverlay
+                exercises={exercises}
+                logs={logs}
+                nickname={displayName}
+                timestamp={timestamp}
+                muscleLabel={muscleLabel}
+                tc={tc}
+                photoW={PHOTO_W}
+                photoH={PHOTO_H}
+              />
+            )}
+            {overlayStyle === 'grid' && (
+              <GridOverlay
+                exercises={exercises}
+                logs={logs}
+                nickname={displayName}
+                timestamp={timestamp}
+                muscleLabel={muscleLabel}
+                tc={tc}
+                photoW={PHOTO_W}
+                photoH={PHOTO_H}
+              />
+            )}
+```
+
+단, ClassicOverlay, LeftColOverlay, GridOverlay 컴포넌트는
+PostWorkoutLogModal.tsx에 정의되어 있으므로
+WorkoutCameraOverlay.tsx에서 import해서 사용한다:
+
+```tsx
+import { ClassicOverlay, LeftColOverlay, GridOverlay } from './PostWorkoutLogModal';
+```
+
+PostWorkoutLogModal.tsx에서 세 컴포넌트를 export로 변경:
+```tsx
+export function ClassicOverlay(...) { ... }
+export function LeftColOverlay(...) { ... }
+export function GridOverlay(...) { ... }
+```
+
+### WorkoutCameraOverlay 호출부 (PostWorkoutLogModal)에 prop 추가:
+```tsx
+        {showCamera && (
+          <WorkoutCameraOverlay
+            ...
+            overlayStyle={overlayStyle}
+            ...
+          />
+        )}
+```
+
+---
+
+## 7단계: 동작 확인 체크리스트
+
+1. 사진 찍은 후 레이아웃 스타일 버튼 3개 표시됨 (Classic / Left Col / Grid) ✅
+2. 스타일 탭 → 오버레이 미리보기 즉시 변경됨 ✅
+3. 카메라 활성 중에도 스타일 버튼 표시되고 카메라 오버레이에 실시간 반영됨 ✅
+4. 텍스트 컬러칩 변경 → 선택된 스타일에 맞게 색상 변경됨 ✅
+5. 이미지 저장 → 선택된 스타일로 저장됨 ✅
+6. Classic 스타일 → 기존과 동일하게 동작 ✅
+7. Left Col 스타일 → [브랜드] / 머신명 / S1 60kg × 10 세로 나열 ✅
+8. Grid 스타일 → 3열 그리드로 머신 표시 ✅
+
+---
+
+## 주의사항
+
+- ClassicOverlay, LeftColOverlay, GridOverlay는 반드시 모듈 레벨에 정의 (함수 내부 정의 금지)
+- 세 컴포넌트는 export로 선언해서 WorkoutCameraOverlay에서 import 가능하게
+- overlayRef 내부의 기존 오버레이 요소들은 ClassicOverlay로 완전히 대체 (중복 렌더 방지)
+- OVERLAY_PAD, LOGO_STRIP_W, LOGO_STRIP_H, PHOTO_W 상수는 PostWorkoutLogModal.tsx의 모듈 레벨 상수 그대로 사용
+- WorkoutCameraOverlay의 PHOTO_H는 자체 상수(Math.round(PHOTO_W * (4/3))) 사용

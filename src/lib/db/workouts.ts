@@ -26,12 +26,13 @@ import { getNewSessions } from '../../data/sessionStore';
 //   workout_photos  - only core columns selected; extras treated as optional
 
 type SessionRow = {
-  id:          string;
-  user_id:     string;
-  gym_id:      string;
-  date:        string;
-  body_weight: number | null;
-  notes:       string | null;
+  id:                 string;
+  user_id:            string;
+  gym_id:             string;
+  date:               string;
+  body_weight:        number | null;
+  notes:              string | null;
+  overlay_text_color: string | null;
 };
 
 type EntryRow = {
@@ -69,12 +70,13 @@ type PhotoRow = {
 
 function rowToSession(r: SessionRow): WorkoutSession {
   return {
-    id:         r.id,
-    userId:     r.user_id,
-    gymId:      r.gym_id,
-    date:       r.date,
-    bodyWeight: r.body_weight ?? undefined,
-    notes:      r.notes ?? undefined,
+    id:               r.id,
+    userId:           r.user_id,
+    gymId:            r.gym_id,
+    date:             r.date,
+    bodyWeight:       r.body_weight ?? undefined,
+    notes:            r.notes ?? undefined,
+    overlayTextColor: r.overlay_text_color ?? undefined,
   };
 }
 
@@ -121,7 +123,7 @@ function rowToPhoto(r: PhotoRow): WorkoutPhoto {
 export async function fetchWorkoutSessions(userId: string): Promise<WorkoutSession[]> {
   const { data, error } = await supabase
     .from('workout_sessions')
-    .select('id, user_id, gym_id, date, body_weight, notes')
+    .select('id, user_id, gym_id, date, body_weight, notes, overlay_text_color')
     .eq('user_id', userId)
     .order('date', { ascending: false });
 
@@ -136,7 +138,7 @@ export async function fetchWorkoutSessions(userId: string): Promise<WorkoutSessi
 export async function fetchWorkoutSession(id: string): Promise<WorkoutSession | undefined> {
   const { data, error } = await supabase
     .from('workout_sessions')
-    .select('id, user_id, gym_id, date, body_weight, notes')
+    .select('id, user_id, gym_id, date, body_weight, notes, overlay_text_color')
     .eq('id', id)
     .single();
 
@@ -373,16 +375,17 @@ export async function fetchWorkoutLogs(userId: string): Promise<WorkoutLog[]> {
       });
 
       return {
-        id:          session.id,
-        gymId:       session.gymId,
-        gymName:     gym.name,
-        gymLocation: gym.location,
-        date:        session.date,
-        bodyWeight:  session.bodyWeight,
+        id:               session.id,
+        gymId:            session.gymId,
+        gymName:          gym.name,
+        gymLocation:      gym.location,
+        date:             session.date,
+        bodyWeight:       session.bodyWeight,
         machines,
-        hasPhoto:     photoMap.has(session.id),
-        compositeUri: photoMap.get(session.id)?.compositeUri,
-        photoUri:     photoMap.get(session.id)?.photoUri,
+        hasPhoto:         photoMap.has(session.id),
+        compositeUri:     photoMap.get(session.id)?.compositeUri,
+        photoUri:         photoMap.get(session.id)?.photoUri,
+        overlayTextColor: session.overlayTextColor ?? '#ffffff',
       };
     });
     const assembledIds = new Set(assembled.map(s => s.id));
@@ -398,17 +401,18 @@ export async function fetchWorkoutLogs(userId: string): Promise<WorkoutLog[]> {
 
 /** Insert a new workout session. Returns the inserted row or throws. */
 export async function insertWorkoutSession(
-  session: Omit<WorkoutSession, 'id'> & { id?: string },
+  session: Omit<WorkoutSession, 'id'> & { id?: string; overlayTextColor?: string },
 ): Promise<WorkoutSession> {
   const { data, error } = await supabase
     .from('workout_sessions')
     .insert({
-      id:          session.id,
-      user_id:     session.userId,
-      gym_id:      session.gymId,
-      date:        session.date,
-      body_weight: session.bodyWeight ?? null,
-      notes:       session.notes ?? null,
+      id:                 session.id,
+      user_id:            session.userId,
+      gym_id:             session.gymId,
+      date:               session.date,
+      body_weight:        session.bodyWeight ?? null,
+      notes:              session.notes ?? null,
+      overlay_text_color: session.overlayTextColor ?? '#ffffff',
     })
     .select()
     .single();

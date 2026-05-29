@@ -1,0 +1,145 @@
+# 태스크: deleteFeedPostBySession을 session_id 기준으로 변경
+# 프로젝트 경로: D:\시작\gympick
+# 확인이나 중단 없이 끝까지 완료해줘
+
+---
+
+## 문제
+
+deleteFeedPostBySession이 날짜 범위(00:00~23:59)로 삭제하기 때문에
+동일 날짜에 여러 운동일지가 있을 때 하나만 삭제해도 같은 날 모든 feed_post가 삭제된다.
+
+workout_feed_posts 테이블에 session_id 컬럼이 이미 있으므로
+session_id 기준으로 삭제하도록 변경한다.
+
+---
+
+## 수정 파일 2개
+- src/lib/db/feedPosts.ts
+- src/screens/JournalScreen.tsx
+
+---
+
+## 1단계: feedPosts.ts 수정
+
+### 1-1. deleteFeedPostBySession 함수 시그니처 및 구현 변경
+
+기존:
+```ts
+/** 유저의 특정 날짜 오운완 피드 삭제 */
+export async function deleteFeedPostBySession(
+  userId: string,
+  sessionDate: string,
+): Promise<void> {
+  try {
+    const dayStart = new Date(sessionDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(sessionDate);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    await supabase
+      .from('workout_feed_posts')
+      .delete()
+      .eq('user_id', userId)
+      .gte('created_at', dayStart.toISOString())
+      .lte('created_at', dayEnd.toISOString());
+  } catch (e) {
+    if (__DEV__) console.warn('[feedPosts] deleteFeedPostBySession 오류:', e);
+  }
+}
+```
+
+변경 후:
+```ts
+/** session_id로 오운완 피드 삭제 */
+export async function deleteFeedPostBySession(
+  userId: string,
+  sessionId: string,
+): Promise<void> {
+  try {
+    // session_id가 있으면 정확하게 삭제
+    const { data: bySession } = await supabase
+      .from('workout_feed_posts')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('session_id', sessionId)
+      .limit(1);
+
+    if (bySession?.length) {
+      await supabase
+        .from('workout_feed_posts')
+        .delete()
+        .eq('user_id', userId)
+        .eq('session_id', sessionId);
+      return;
+    }
+
+    // session_id가 없는 구버전 데이터 fallback: session의 date로 조회 후 삭제
+    // 단, 동일 날짜 여러 세션이 있을 경우 가장 오래된 것만 삭제
+    const { data: sessionData } = await supabase
+      .from('workout_sessions')
+      .select('date')
+      .eq('id', sessionId)
+      .single();
+
+    if (!sessionData?.date) return;
+
+    const dayStart = new Date(sessionData.date);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(sessionData.date);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    // 날짜 범위에서 session_id가 null인 것만 1개 삭제 (구버전 데이터 대응)
+    const { data: fallbackPosts } = await supabase
+      .from('workout_feed_posts')
+      .select('id')
+      .eq('user_id', userId)
+      .is('session_id', null)
+      .gte('created_at', dayStart.toISOString())
+      .lte('created_at', dayEnd.toISOString())
+      .order('created_at', { ascending: true })
+      .limit(1);
+
+    if (fallbackPosts?.length) {
+      await supabase
+        .from('workout_feed_posts')
+        .delete()
+        .eq('id', fallbackPosts[0].id);
+    }
+  } catch (e) {
+    if (__DEV__) console.warn('[feedPosts] deleteFeedPostBySession 오류:', e);
+  }
+}
+```
+
+---
+
+## 2단계: JournalScreen.tsx 수정
+
+onDelete 콜백에서 `deleteFeedPostBySession` 호출 시
+두 번째 인자를 `session.date`에서 `sessionId`로 변경한다.
+
+기존:
+```ts
+              const session = detailSessions.find(s => s.id === sessionId);
+              await deleteWorkoutSession(sessionId);
+              if (session && user?.id) {
+                await deleteFeedPostBySession(user.id, session.date);
+              }
+```
+
+변경 후:
+```ts
+              await deleteWorkoutSession(sessionId);
+              if (user?.id) {
+                await deleteFeedPostBySession(user.id, sessionId);
+              }
+```
+
+---
+
+## 동작 확인 체크리스트
+
+1. 동일 날짜에 운동일지 2개 작성 후 1개만 삭제 시 나머지 1개의 feed_post는 유지됨 ✅
+2. 단일 운동일지 삭제 시 해당 feed_post 정상 삭제됨 ✅
+3. session_id가 없는 구버전 데이터도 날짜 fallback으로 처리됨 ✅

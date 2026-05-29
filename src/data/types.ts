@@ -66,12 +66,13 @@ export interface GymMachineLink {
 // --- workout_sessions
 
 export interface WorkoutSession {
-  id:          string;
-  userId:      string;
-  gymId:       string;
-  date:        string;    // ISO 8601
-  bodyWeight?: number;    // kg
-  notes?:      string;
+  id:                string;
+  userId:            string;
+  gymId:             string;
+  date:              string;    // ISO 8601
+  bodyWeight?:       number;    // kg
+  notes?:            string;
+  overlayTextColor?: string;
 }
 
 // --- workout_entries
@@ -178,16 +179,17 @@ export interface LoggedMachineEntry {
 // Derived by joining WorkoutSession + WorkoutEntry + WorkoutSet + WorkoutPhoto + Gym.
 
 export interface WorkoutLog {
-  id:          string;
-  gymId:       string;
-  gymName:     string;
-  gymLocation: string;
-  date:        string;
-  bodyWeight?: number;
-  machines:    LoggedMachineEntry[];
-  hasPhoto:      boolean;
-  photoUri?:     string;   // local URI of the raw camera photo
-  compositeUri?: string;   // local URI of the overlay composite image (captureRef result)
+  id:                string;
+  gymId:             string;
+  gymName:           string;
+  gymLocation:       string;
+  date:              string;
+  bodyWeight?:       number;
+  machines:          LoggedMachineEntry[];
+  hasPhoto:          boolean;
+  photoUri?:         string;   // local URI of the raw camera photo
+  compositeUri?:     string;   // local URI of the overlay composite image (captureRef result)
+  overlayTextColor?: string;
 }
 
 // --- Workout Overlay Badges

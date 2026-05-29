@@ -1,0 +1,209 @@
+# 태스크: 컬러칩 복원 + 카메라 오버레이 실시간 색상 반영
+# 프로젝트 경로: D:\시작\gympick
+# 확인이나 중단 없이 끝까지 완료해줘
+
+---
+
+## 문제 원인
+
+`showCamera` 상태가 `WorkoutPhotoStep` 컴포넌트 내부에 있다.
+촬영 완료 후 부모에서 `photoTaken = true`로 바뀌어도
+`WorkoutPhotoStep`은 리렌더만 될 뿐 `showCamera`는 `true`로 유지된다.
+결과적으로 `photoTaken && (...)` 블록이 렌더링되어도
+카메라 뷰(`showCamera = true`)가 화면을 차지하고 있어서 컬러칩이 보이지 않는다.
+
+---
+
+## 수정 파일
+- `src/screens/flow/PostWorkoutLogModal.tsx`
+- `src/screens/flow/WorkoutCameraOverlay.tsx`
+
+---
+
+## 1단계: PostWorkoutLogModal.tsx 수정
+
+### 1-1. showCamera 상태를 부모(PostWorkoutLogModal)로 이동
+
+현재 `WorkoutPhotoStep` 함수 내부에 있는 상태:
+```tsx
+  const [showCamera,    setShowCamera]    = useState(false);
+```
+이 줄을 `WorkoutPhotoStep` 함수에서 제거한다.
+
+대신 `PostWorkoutLogModal` 메인 컴포넌트의 상태 선언 블록에 추가한다.
+`const [photoTaken, setPhotoTaken] = useState(false);` 바로 아래에 추가:
+```tsx
+  const [showCamera, setShowCamera] = useState(false);
+```
+
+### 1-2. visible 리셋 useEffect에 showCamera 초기화 추가
+
+기존:
+```tsx
+      setPhotoTaken(false);
+      setPhotoUri(null);
+```
+변경 후:
+```tsx
+      setPhotoTaken(false);
+      setPhotoUri(null);
+      setShowCamera(false);
+```
+
+### 1-3. WorkoutPhotoStep props 인터페이스에 showCamera 관련 props 추가
+
+`WorkoutPhotoStep` 함수 시그니처를 찾아서 props 타입 블록에 아래 두 줄 추가:
+```tsx
+  showCamera: boolean;
+  onSetShowCamera: (v: boolean) => void;
+```
+
+### 1-4. WorkoutPhotoStep 함수 인자에 추가
+
+```tsx
+function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname, onColorChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera }:
+```
+
+### 1-5. WorkoutPhotoStep 내부의 setShowCamera 호출을 onSetShowCamera로 교체
+
+파일 내 `WorkoutPhotoStep` 함수 안에서 `setShowCamera(` 를 모두 `onSetShowCamera(` 로 교체한다.
+총 4곳:
+- `onPress: () => setShowCamera(true)` (카메라로 찍기 Alert)
+- `onCancel={() => setShowCamera(false)}` (WorkoutCameraOverlay onCancel)
+- `setShowCamera(false)` (onCaptureDone 내부)
+- `onPress: () => setShowCamera(true)` (다시 찍기 Alert)
+
+### 1-6. case 'photo' 호출부에 props 추가
+
+기존:
+```tsx
+            onCameraCapture={(uri) => {
+              setPhotoUri(uri);
+              setPhotoTaken(true);
+            }}
+```
+변경 후:
+```tsx
+            onCameraCapture={(uri) => {
+              setShowCamera(false);
+              setPhotoUri(uri);
+              setPhotoTaken(true);
+            }}
+            showCamera={showCamera}
+            onSetShowCamera={setShowCamera}
+```
+
+---
+
+## 2단계: 컬러칩을 카메라 활성 상태에서도 표시
+
+### 2-1. 컬러칩 블록을 showCamera 중에도 표시되도록 수정
+
+현재 컬러칩은 `{photoTaken && (...)}` 블록 안에 있어서
+사진을 찍기 전에는 표시되지 않는다.
+
+카메라가 켜진 상태(`showCamera = true`)에서도 컬러칩이 보이면
+실시간으로 오버레이 색상을 바꿔가며 구도를 잡을 수 있다.
+
+`WorkoutPhotoStep` 렌더 부분에서 컬러칩 블록을 찾는다:
+```tsx
+        {photoTaken && (
+          <>
+            <TouchableOpacity
+              style={s.retakeRow}
+              ...
+            >
+            ...
+            {/* Text colour selector */}
+            <View style={s.colorPickerWrap}>
+              <Text style={s.colorPickerLabel}>텍스트 색상</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.colorPickerRow}>
+                {TEXT_COLORS.map(opt => (
+                  ...
+                ))}
+              </ScrollView>
+            </View>
+
+          </>
+        )}
+```
+
+이 블록을 아래와 같이 교체한다.
+컬러칩은 `photoTaken || showCamera` 일 때 표시하고,
+다시 찍기 버튼은 `photoTaken` 일 때만 표시한다:
+
+```tsx
+        {/* 다시 찍기 버튼: 사진이 찍혔을 때만 */}
+        {photoTaken && (
+          <TouchableOpacity
+            style={s.retakeRow}
+            onPress={() => {
+              Alert.alert(
+                '다시 찍기',
+                '사진 촬영 방법을 선택하세요',
+                [
+                  { text: '카메라로 찍기', onPress: () => onSetShowCamera(true) },
+                  { text: '사진 선택',     onPress: () => onCapture([3, 4]) },
+                  { text: '취소', style: 'cancel' },
+                ],
+              );
+            }}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="camera-reverse-outline" size={13} color={C.textSub} />
+            <Text style={s.retakeText}>다시 찍기</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* 텍스트 색상: 카메라 활성 중 또는 사진 찍힌 후 모두 표시 */}
+        {(photoTaken || showCamera) && (
+          <View style={s.colorPickerWrap}>
+            <Text style={s.colorPickerLabel}>텍스트 색상</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.colorPickerRow}>
+              {TEXT_COLORS.map(opt => (
+                <TouchableOpacity
+                  key={opt.hex}
+                  style={[
+                    s.colorChip,
+                    { backgroundColor: opt.hex },
+                    textColor === opt.hex && s.colorChipActive,
+                  ]}
+                  onPress={() => { setTextColor(opt.hex); onColorChange(opt.hex); }}
+                  activeOpacity={0.8}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        )}
+```
+
+---
+
+## 3단계: WorkoutCameraOverlay.tsx — textColor prop 실시간 반영 확인
+
+`WorkoutCameraOverlay`는 이미 `textColor`를 props로 받아서 오버레이에 적용하고 있다.
+부모의 `textColor` state가 바뀌면 prop이 바뀌고 → 오버레이가 즉시 리렌더된다.
+별도 수정 없이 실시간 반영된다.
+
+단, `WorkoutCameraOverlay` 내부에서 `textColor` prop을 `tc` 변수로 받고 있는지 확인한다.
+파일 내에서 `const tc = textColor;` 또는 직접 `textColor` 사용이 있으면 정상이다.
+
+---
+
+## 4단계: 동작 확인 체크리스트
+
+1. 오운완 사진 단계 진입 → 점선 카드만 보임 (컬러칩 없음) ✅
+2. "카메라로 찍기" 탭 → 카메라 뷰 표시 + 하단에 컬러칩 표시 ✅
+3. 카메라 활성 상태에서 컬러칩 탭 → 카메라 오버레이 텍스트 색상 실시간 변경 ✅
+4. 카메라 영역 탭하여 촬영 → 카메라 닫힘 + 오버레이 미리보기 + 컬러칩 유지 ✅
+5. 다시 찍기 탭 → Alert 표시 ✅
+6. 컬러칩 탭 → 오버레이 미리보기 텍스트 색상 실시간 변경 ✅
+7. 앱 재진입(visible 리셋) → showCamera = false 초기화 ✅
+
+---
+
+## 주의사항
+
+- `showCamera` 상태는 반드시 `PostWorkoutLogModal` 메인 컴포넌트에 있어야 한다
+- `WorkoutPhotoStep` 내부에 `showCamera` 상태가 남아있으면 안 된다 (중복 선언 제거)
+- `setShowCamera` 직접 호출 대신 `onSetShowCamera` prop을 통해서만 변경한다

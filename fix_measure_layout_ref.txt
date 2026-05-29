@@ -1,0 +1,155 @@
+# 태스크: measureLayout 네이티브 ref 에러 수정
+
+## 파일 경로
+`src/screens/flow/PostWorkoutLogModal.tsx`
+
+## 에러 내용
+```
+ERROR  Warning: ref.measureLayout must be called with a ref to a native component.
+```
+
+## 원인
+`scrollRef.current?.getScrollableNode()` 가 반환하는 값이
+`measureLayout`이 요구하는 네이티브 컴포넌트 ref 형식이 아님.
+
+## 해결 방법
+ScrollView에 별도 View ref(`scrollViewNodeRef`)를 달고,
+`findNodeHandle`로 네이티브 node handle을 얻어서 `measureLayout`에 넘긴다.
+
+---
+
+## 변경 상세
+
+### 1. import에 findNodeHandle 추가
+
+파일 상단 react-native import에 `findNodeHandle`를 추가한다:
+
+```ts
+// 변경 전 (예시 — 실제 import 목록에서 찾아서 추가)
+import {
+  View,
+  Text,
+  ...
+  ScrollView,
+  ...
+} from 'react-native';
+
+// 변경 후
+import {
+  View,
+  Text,
+  ...
+  ScrollView,
+  findNodeHandle,
+  ...
+} from 'react-native';
+```
+
+### 2. SetLoggingStep 내부 ref 교체
+
+기존의 `scrollRef` 하나만 있던 것을 아래처럼 교체한다:
+
+```tsx
+// 변경 전
+const scrollRef       = useRef<ScrollView>(null);
+const lastSetNodeRef  = useRef<View | null>(null);
+
+// 변경 후
+const scrollRef          = useRef<ScrollView>(null);
+const scrollViewNodeRef  = useRef<View>(null);   // ← 추가: 네이티브 node handle용
+const lastSetNodeRef     = useRef<View | null>(null);
+```
+
+### 3. scrollToNewSet 함수 교체
+
+```tsx
+// 변경 전
+function scrollToNewSet() {
+  setTimeout(() => {
+    const scrollNode = scrollRef.current?.getScrollableNode?.();
+    const setNode    = lastSetNodeRef.current;
+    if (!scrollNode || !setNode) {
+      scrollRef.current?.scrollToEnd({ animated: true });
+      return;
+    }
+    // @ts-ignore
+    setNode.measureLayout(
+      scrollNode,
+      (_x: number, y: number) => {
+        scrollRef.current?.scrollTo({ y, animated: true });
+      },
+      () => {
+        scrollRef.current?.scrollToEnd({ animated: true });
+      },
+    );
+  }, 100);
+}
+
+// 변경 후
+function scrollToNewSet() {
+  setTimeout(() => {
+    const handle  = findNodeHandle(scrollViewNodeRef.current);
+    const setNode = lastSetNodeRef.current;
+    if (!handle || !setNode) {
+      scrollRef.current?.scrollToEnd({ animated: true });
+      return;
+    }
+    // @ts-ignore: measureLayout 타입 정의 불완전
+    setNode.measureLayout(
+      handle,
+      (_x: number, y: number) => {
+        scrollRef.current?.scrollTo({ y, animated: true });
+      },
+      () => {
+        scrollRef.current?.scrollToEnd({ animated: true });
+      },
+    );
+  }, 100);
+}
+```
+
+### 4. ScrollView에 scrollViewNodeRef 연결
+
+SetLoggingStep의 ScrollView에 ref를 추가한다.
+ScrollView는 이미 `ref={scrollRef}`가 있으므로, `scrollViewNodeRef`는
+ScrollView를 감싸는 View에 달거나, ScrollView 자체에 innerRef 방식을 쓴다.
+
+가장 간단한 방법: ScrollView 바로 위에 View를 감싸고 거기에 ref를 단다.
+
+```tsx
+// 변경 전
+<ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
+  ...
+</ScrollView>
+
+// 변경 후
+<View ref={scrollViewNodeRef} style={{ flex: 1 }}>
+  <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
+    ...
+  </ScrollView>
+</View>
+```
+
+**중요:** 이 래퍼 View에 `style={{ flex: 1 }}`을 반드시 줘야 ScrollView 레이아웃이 깨지지 않는다.
+
+---
+
+## 동작 원리
+- `findNodeHandle(scrollViewNodeRef.current)` → 래퍼 View의 네이티브 node handle(숫자) 반환
+- `setNode.measureLayout(handle, ...)` → 래퍼 View 기준 setNode의 상대 y좌표 반환
+- 래퍼 View와 ScrollView가 동일한 위치/크기이므로 y좌표가 ScrollView 내 좌표와 일치
+
+---
+
+## 검증 포인트
+1. 터미널에 `measureLayout must be called with a ref to a native component` 에러 없음
+2. 세트 추가 탭 → 새 세트 최상단이 배너 하단 위치로 스크롤됨
+3. 이전 세트 복사 탭 → 동일하게 동작
+4. 기존 ScrollView 레이아웃(스크롤 범위, 높이) 변화 없음
+5. 타입스크립트 에러 없음
+
+---
+
+## 완료 후
+변경된 파일: `src/screens/flow/PostWorkoutLogModal.tsx` 1개만.
+git commit: "fix: measureLayout 네이티브 ref 에러 수정 — findNodeHandle 방식으로 교체"

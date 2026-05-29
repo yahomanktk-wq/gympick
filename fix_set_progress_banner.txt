@@ -1,0 +1,257 @@
+# 태스크: 세트 진행 요약 배너 개선 (3가지 수정)
+
+## 파일 경로
+`src/screens/flow/PostWorkoutLogModal.tsx`
+
+## 전제
+이전 태스크(add_set_progress_summary.txt)가 이미 완료되어
+SetProgressBanner 컴포넌트와 SetLoggingStep 수정이 적용된 상태이다.
+
+---
+
+## 수정 1: 배너 헤더에 현재 머신명 추가
+
+### 대상: SetProgressBanner 컴포넌트 props 및 렌더링
+
+SetProgressBanner에 `machineName: string` prop을 추가하고,
+헤더 텍스트를 "완료된 세트 · {머신명}" 형태로 변경한다.
+
+#### SetProgressBanner props 변경
+```ts
+// 변경 전
+function SetProgressBanner({ sets }: { sets: SetEntry[] }) {
+
+// 변경 후
+function SetProgressBanner({ sets, machineName }: { sets: SetEntry[]; machineName: string }) {
+```
+
+#### 헤더 텍스트 변경
+setProgressHeaderText 스타일을 사용하는 Text 컴포넌트를 아래처럼 수정:
+
+```tsx
+// 변경 전
+<Text style={s.setProgressHeaderText}>완료된 세트</Text>
+
+// 변경 후
+<Text style={s.setProgressHeaderText} numberOfLines={1}>
+  완료된 세트{machineName ? ` · ${machineName}` : ''}
+</Text>
+```
+
+#### SetLoggingStep에서 호출부 변경
+SetLoggingStep 안에서 SetProgressBanner를 렌더링하는 부분에 machineName prop 추가:
+
+```tsx
+// 변경 전
+{completedSets.length > 0 && (
+  <SetProgressBanner sets={completedSets} />
+)}
+
+// 변경 후
+{completedSets.length > 0 && (
+  <SetProgressBanner sets={completedSets} machineName={exercise.name} />
+)}
+```
+
+---
+
+## 수정 2: 각 세트 행 폰트 크기 축소
+
+### 대상: StyleSheet 내 setProgress 관련 스타일
+
+아래 스타일 값들을 수정한다 (숫자만 변경):
+
+```ts
+// setProgressKgValue: fontSize 20 → 15
+setProgressKgValue: {
+  fontSize: 15,          // 변경
+  fontWeight: '900',
+  color: C.text,
+  letterSpacing: -0.5,
+},
+
+// setProgressKgUnit: fontSize 11 → 10
+setProgressKgUnit: {
+  fontSize: 10,          // 변경
+  fontWeight: '600',
+  color: C.textDim,
+},
+
+// setProgressSeparatorText: fontSize 16 → 13
+setProgressSeparatorText: {
+  fontSize: 13,          // 변경
+  color: C.textDim,
+  fontWeight: '500',
+},
+
+// setProgressRepsValue: fontSize 20 → 15
+setProgressRepsValue: {
+  fontSize: 15,          // 변경
+  fontWeight: '900',
+  color: C.text,
+  letterSpacing: -0.5,
+},
+
+// setProgressRepsUnit: fontSize 11 → 10
+setProgressRepsUnit: {
+  fontSize: 10,          // 변경
+  fontWeight: '600',
+  color: C.textDim,
+},
+
+// setProgressIndex 원형 배지 크기도 축소
+setProgressIndex: {
+  width: 24,             // 변경 (28 → 24)
+  height: 24,            // 변경 (28 → 24)
+  borderRadius: 12,      // 변경 (14 → 12)
+  backgroundColor: C.surfaceHigh,
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginRight: 10,       // 변경 (12 → 10)
+},
+
+// setProgressIndexText
+setProgressIndexText: {
+  fontSize: 11,          // 변경 (12 → 11)
+  fontWeight: '800',
+  color: C.textSub,
+},
+
+// setProgressRow 세로 패딩도 살짝 축소
+setProgressRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingVertical: 5,    // 변경 (7 → 5)
+  borderBottomWidth: 1,
+  borderBottomColor: C.border,
+  gap: 0,
+},
+
+// setProgressList 상단 패딩 축소
+setProgressList: {
+  paddingHorizontal: 14,
+  paddingTop: 4,         // 변경 (6 → 4)
+},
+```
+
+---
+
+## 수정 3: 세트 추가/복사 시 배너 높이 측정 후 정확한 위치로 스크롤 (방법 B)
+
+### 개요
+SetProgressBanner 높이를 `onLayout`으로 측정해 ref에 저장하고,
+세트 추가/복사 시 `scrollTo({ y: bannerHeight + offset })`으로
+새 세트 입력 영역 시작 위치로 스크롤한다.
+
+### SetLoggingStep 수정
+
+#### imports 확인
+SetLoggingStep은 이미 `useRef`를 사용 중이므로 추가 import 불필요.
+`useRef` 두 개를 사용한다:
+- `scrollRef`: 기존 ScrollView ref
+- `bannerHeightRef`: 배너 높이 저장 (number, 초기값 0)
+
+#### SetLoggingStep 함수 내부 수정
+
+```tsx
+function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onRemove, onNoteChange, onSave, onFinish, onBack, onClose }: { ... }) {
+  const scrollRef       = useRef<ScrollView>(null);
+  const bannerHeightRef = useRef<number>(0);           // ← 추가
+  const hasSets = sets.length > 0 && sets.some(s => s.weight > 0 || s.reps > 0);
+
+  // 배너 아래 새 세트 위치로 스크롤하는 헬퍼
+  function scrollToNewSet() {
+    setTimeout(() => {
+      // 배너 높이 + 힌트 텍스트/머신 헤더 영역(약 120px) + 여유(20px) 만큼 스크롤
+      const targetY = bannerHeightRef.current + 140;
+      scrollRef.current?.scrollTo({ y: targetY, animated: true });
+    }, 100);
+  }
+
+  function handleAdd() {
+    onAdd();
+    scrollToNewSet();    // ← scrollToEnd 대신
+  }
+
+  function handleCopyPrev() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onCopyPrev();
+    scrollToNewSet();    // ← scrollToEnd 대신
+  }
+
+  const completedSets = sets.slice(0, -1);
+
+  return (
+    <SafeAreaView style={s.safe}>
+      <NavHeader title="세트 기록" onBack={onBack} onClose={onClose} />
+      <StepBar total={5} current={2} />
+      {completedSets.length > 0 && (
+        <SetProgressBanner
+          sets={completedSets}
+          machineName={exercise.name}
+          onLayout={(height) => { bannerHeightRef.current = height; }}   // ← 추가
+        />
+      )}
+      <ScrollView ref={scrollRef} ...>
+        ...
+      </ScrollView>
+      ...
+    </SafeAreaView>
+  );
+}
+```
+
+#### SetProgressBanner props에 onLayout 추가
+
+```tsx
+// 변경 전
+function SetProgressBanner({ sets, machineName }: { sets: SetEntry[]; machineName: string }) {
+
+// 변경 후
+function SetProgressBanner({
+  sets,
+  machineName,
+  onLayout,
+}: {
+  sets: SetEntry[];
+  machineName: string;
+  onLayout?: (height: number) => void;
+}) {
+```
+
+배너 최상위 View에 onLayout 핸들러 추가:
+
+```tsx
+// 변경 전
+<View style={s.setProgressBanner}>
+
+// 변경 후
+<View
+  style={s.setProgressBanner}
+  onLayout={(e) => onLayout?.(e.nativeEvent.layout.height)}
+>
+```
+
+### 스크롤 오프셋 설명
+- `bannerHeightRef.current`: 배너 자체 높이 (세트 수에 따라 동적)
+- `+ 140`: ScrollView 시작 후 새 세트 블록 상단까지의 고정 거리
+  (listPad paddingTop ≈ 20 + 힌트텍스트 ≈ 30 + SetCard 헤더(머신명/부위) ≈ 60 + 내 PR row ≈ 30)
+- 이 값은 실제 테스트 후 조정 가능 (너무 많이 스크롤되면 줄이고, 부족하면 늘린다)
+- `marginHorizontal: 16` + `marginTop: 10` 등 배너 외부 여백은 배너 onLayout height에 포함되지 않으므로
+  `+ 26` 추가 여유를 더해 총 `+ 140` 사용
+
+---
+
+## 검증 포인트
+1. 배너 헤더에 "완료된 세트 · {머신명}" 표시, 머신명 길어도 잘림 처리됨
+2. 각 세트 행이 이전보다 작게 표시됨 (폰트 20→15)
+3. 세트 추가 탭 → 배너가 화면에 유지되고 새 세트 입력 영역이 배너 아래로 스크롤됨
+4. 이전 세트 복사 탭 → 동일하게 동작
+5. 세트 수가 늘어나면 배너 높이가 커지고, 스크롤 위치도 그에 맞게 자동 조정됨
+6. 타입스크립트 에러 없음
+
+---
+
+## 완료 후
+변경된 파일: `src/screens/flow/PostWorkoutLogModal.tsx` 1개만.
+git commit: "fix: 세트 요약 배너 머신명 추가, 폰트 축소, 스크롤 위치 보정"

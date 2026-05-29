@@ -1,0 +1,95 @@
+# 태스크: 햅틱 추가 — 그룹 2 (모달 및 플로우 스크린)
+
+## 대상 파일
+- src/screens/flow/GymDetailModal.tsx
+- src/screens/flow/MachineDetailModal.tsx
+- src/screens/flow/RoutineReferenceScreen.tsx
+- src/screens/flow/TodayWorkoutListScreen.tsx
+- src/screens/flow/GymAllMachinesScreen.tsx
+- src/screens/flow/WorkoutCameraOverlay.tsx
+
+## 공통 규칙
+1. 각 파일 상단에 `import * as Haptics from 'expo-haptics';` 가 없으면 추가
+2. 이미 Haptics 호출이 있는 버튼은 스킵
+3. disabled 상태 버튼에는 추가하지 않음
+4. Switch 컴포넌트에는 추가하지 않음
+5. ScrollView/FlatList 안의 대형 카드(머신카드 전체 탭) 는 스킵
+6. 햅틱은 onPress 핸들러 첫 줄에 추가
+
+## 강도 기준
+- `Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)`
+  → 일반 탭, 필터 칩, 탭 전환, 즐겨찾기 토글, 목록 아이템
+- `Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)`
+  → 저장, 확인, 루틴 선택 완료, 운동 시작 CTA, 즐겨찾기 추가/제거
+- `Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)`
+  → 삭제, 리뷰 삭제, 경고성 액션
+
+## 파일별 적용 대상
+
+### GymDetailModal.tsx
+- 탭 전환 버튼 (머신 / 정보 / 커뮤니티) → Light
+- 즐겨찾기 버튼 → Medium
+- 정보 제보 버튼 → Light
+- 닫기(X) 버튼 → Light
+- 매니저 신청 버튼 → Medium
+- 머신 필터 칩 → Light
+- 공지사항 탭 → Light
+
+### MachineDetailModal.tsx
+- 닫기 버튼 → Light
+- 즐겨찾기 토글 → Medium
+- 리뷰 작성 버튼 → Medium
+- 리뷰 삭제 버튼 → Heavy
+- 이전/다음 머신 버튼 → Light
+
+### RoutineReferenceScreen.tsx
+- 루틴 선택 항목 탭 → Light
+- 루틴 선택 완료 CTA → Medium
+- 뒤로가기 버튼 → Light
+
+### TodayWorkoutListScreen.tsx
+- 운동 항목 탭 → Light
+- 운동 삭제 버튼 → Heavy
+- 완료 CTA → Medium
+
+### GymAllMachinesScreen.tsx
+- 필터 칩 → Light
+- 머신 카드 탭 → Light
+- 닫기 버튼 → Light
+
+### WorkoutCameraOverlay.tsx
+- 촬영 버튼 → Medium
+- 갤러리 선택 버튼 → Light
+- 닫기 버튼 → Light
+- 오버레이 스타일 선택 버튼 → Light
+- 재촬영 버튼 → Light
+
+## 적용 방법 예시
+```tsx
+// 변경 전
+<TouchableOpacity onPress={handleSave}>
+
+// 변경 후
+<TouchableOpacity onPress={() => {
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  handleSave();
+}}>
+
+// 이미 인라인 함수인 경우
+// 변경 전
+<TouchableOpacity onPress={() => { doSomething(); }}>
+
+// 변경 후
+<TouchableOpacity onPress={() => {
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  doSomething();
+}}>
+```
+
+## 주의사항
+- 기존 onPress 로직을 절대 변경하지 말 것 (햅틱 한 줄만 추가)
+- 파일 내 다른 코드(스타일, 상태, 로직) 일절 건드리지 말 것
+- 타입스크립트 에러 없을 것
+
+## 완료 후
+git commit: "feat: 햅틱 추가 — 모달 및 플로우 스크린 (GymDetailModal, MachineDetailModal, RoutineReferenceScreen, TodayWorkoutListScreen, GymAllMachinesScreen, WorkoutCameraOverlay)"

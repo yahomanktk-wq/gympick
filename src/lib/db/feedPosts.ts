@@ -257,23 +257,61 @@ export async function updateFeedPostPublic(
   }
 }
 
-/** 유저의 특정 날짜 오운완 피드 삭제 */
+/** session_id로 오운완 피드 삭제 */
 export async function deleteFeedPostBySession(
   userId: string,
-  sessionDate: string,
+  sessionId: string,
 ): Promise<void> {
   try {
-    const dayStart = new Date(sessionDate);
+    // session_id가 있으면 정확하게 삭제
+    const { data: bySession } = await supabase
+      .from('workout_feed_posts')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('session_id', sessionId)
+      .limit(1);
+
+    if (bySession?.length) {
+      await supabase
+        .from('workout_feed_posts')
+        .delete()
+        .eq('user_id', userId)
+        .eq('session_id', sessionId);
+      return;
+    }
+
+    // session_id가 없는 구버전 데이터 fallback: session의 date로 조회 후 삭제
+    // 단, 동일 날짜 여러 세션이 있을 경우 가장 오래된 것만 삭제
+    const { data: sessionData } = await supabase
+      .from('workout_sessions')
+      .select('date')
+      .eq('id', sessionId)
+      .single();
+
+    if (!sessionData?.date) return;
+
+    const dayStart = new Date(sessionData.date);
     dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(sessionDate);
+    const dayEnd = new Date(sessionData.date);
     dayEnd.setHours(23, 59, 59, 999);
 
-    await supabase
+    // 날짜 범위에서 session_id가 null인 것만 1개 삭제 (구버전 데이터 대응)
+    const { data: fallbackPosts } = await supabase
       .from('workout_feed_posts')
-      .delete()
+      .select('id')
       .eq('user_id', userId)
+      .is('session_id', null)
       .gte('created_at', dayStart.toISOString())
-      .lte('created_at', dayEnd.toISOString());
+      .lte('created_at', dayEnd.toISOString())
+      .order('created_at', { ascending: true })
+      .limit(1);
+
+    if (fallbackPosts?.length) {
+      await supabase
+        .from('workout_feed_posts')
+        .delete()
+        .eq('id', fallbackPosts[0].id);
+    }
   } catch (e) {
     if (__DEV__) console.warn('[feedPosts] deleteFeedPostBySession 오류:', e);
   }
