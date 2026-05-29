@@ -44,3 +44,8 @@ task*.txt
 "*.py" 
 ".env" 
 ".claude/" 
+"machine_card_image/" 
+"*_task.txt" 
+"fix_*.txt" 
+"haptic_*.txt" 
+"add_*.txt" 
