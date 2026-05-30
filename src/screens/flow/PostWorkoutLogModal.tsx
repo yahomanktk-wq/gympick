@@ -56,6 +56,7 @@ import { fetchGymsWithMachines } from '../../lib/db/gyms';
 import { brandLogos } from '../../constants/brandLogos';
 import { fetchSplitConfig } from '../../lib/db/splitRoutine';
 import { getTodayTarget, toEnMuscle } from '../../lib/splitUtils';
+import { useFonts } from 'expo-font';
 
 // --- Types
 
@@ -1402,13 +1403,25 @@ export function CenteredOverlay({ exercises, logs, nickname, timestamp, muscleLa
   return (
     <>
       <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD }}>
-        <Text style={{ fontSize: 13, fontWeight: '900', color: tc, letterSpacing: 0.3 }}>{nickname}</Text>
+        <Text style={{ fontSize: 13, fontWeight: '900', color: tc, letterSpacing: 0.3, fontFamily: 'MatSaleh' }}>
+          {nickname}
+        </Text>
       </View>
       <View style={{ position: 'absolute', top: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'flex-end' }}>
-        <Text style={{ fontSize: 10, fontWeight: '700', color: tc, opacity: 0.85 }}>{timestamp}</Text>
+        <Text style={{ fontSize: 10, fontWeight: '700', color: tc, opacity: 0.85, fontFamily: 'MatSaleh' }}>
+          {timestamp}
+        </Text>
       </View>
       <View style={{ position: 'absolute', top: OVERLAY_PAD + 44, left: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'center' }}>
-        <Text style={{ fontSize: 32, fontWeight: '900', color: tc, letterSpacing: -0.5, textDecorationLine: 'underline', textAlign: 'center' }}>
+        <Text style={{
+          fontSize: 32,
+          fontWeight: '900',
+          color: tc,
+          letterSpacing: -0.5,
+          textDecorationLine: 'underline',
+          textAlign: 'center',
+          fontFamily: 'MatchaCih',
+        }}>
           {muscleLabel}
         </Text>
       </View>
@@ -1427,17 +1440,34 @@ export function CenteredOverlay({ exercises, logs, nickname, timestamp, muscleLa
           const setsLine = sets.map(st => `${st.weight} × ${st.reps}`).join(' / ');
           return (
             <View key={ex.id} style={{ width: COL_W, marginBottom: 10 }}>
-              <Text style={{ fontSize: 9, fontWeight: '900', color: tc, letterSpacing: 0.3, marginBottom: 2 }} numberOfLines={1}>
+              <Text style={{
+                fontSize: 9,
+                fontWeight: '900',
+                color: tc,
+                letterSpacing: 0.3,
+                marginBottom: 2,
+                fontFamily: 'MatSaleh',
+              }} numberOfLines={1}>
                 {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
               </Text>
               {setsLine ? (
-                <Text style={{ fontSize: 8, fontWeight: '600', color: tc, opacity: 0.85 }} numberOfLines={1}>{setsLine}</Text>
+                <Text style={{
+                  fontSize: 8,
+                  fontWeight: '600',
+                  color: tc,
+                  opacity: 0.85,
+                  fontFamily: 'MatSaleh',
+                }} numberOfLines={1}>
+                  {setsLine}
+                </Text>
               ) : null}
             </View>
           );
         })}
         {exercises.length > 8 && (
-          <Text style={{ fontSize: 8, fontWeight: '700', color: tc, opacity: 0.6 }}>{`+${exercises.length - 8} more...`}</Text>
+          <Text style={{ fontSize: 8, fontWeight: '700', color: tc, opacity: 0.6, fontFamily: 'MatSaleh' }}>
+            {`+${exercises.length - 8} more...`}
+          </Text>
         )}
       </View>
       <View style={{ position: 'absolute', bottom: OVERLAY_PAD, left: 0, right: 0, alignItems: 'center' }}>
@@ -2411,6 +2441,11 @@ interface PostWorkoutLogModalProps {
 
 export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLogModalProps) {
   const { user } = useAuth();
+
+  const [fontsLoaded] = useFonts({
+    'MatchaCih': require('../../../assets/fonts/Matcha_Cih.ttf'),
+    'MatSaleh':  require('../../../assets/fonts/Mat_Saleh.ttf'),
+  });
 
   const [step,              setStep]              = useState<Step>('gym-select');
   const [selectedMuscles,   setSelectedMuscles]   = useState<Set<string>>(new Set());

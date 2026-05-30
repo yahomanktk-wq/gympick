@@ -1,6 +1,10 @@
 {
   "expo": {
     "name": "GYMPICK",
+    "assetBundlePatterns": [
+      "**/*",
+      "assets/fonts/*"
+    ],
     "slug": "gympick",
     "scheme": "gympick",
     "version": "1.0.3",
