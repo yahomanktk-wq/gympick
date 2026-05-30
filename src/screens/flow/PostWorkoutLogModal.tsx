@@ -1335,7 +1335,7 @@ export function GridOverlay({ exercises, logs, nickname, timestamp, muscleLabel,
         alignItems: 'center',
       }}>
         <Text style={{
-          fontSize: 20,
+          fontSize: 26,
           fontWeight: '900',
           color: tc,
           letterSpacing: -0.5,
@@ -1383,7 +1383,6 @@ export function GridOverlay({ exercises, logs, nickname, timestamp, muscleLabel,
           </View>
         )}
       </View>
-      {/* 하단 중앙: GYM PICK 로고 (15% 축소) */}
       <View style={{
         position: 'absolute',
         bottom: OVERLAY_PAD,
@@ -1391,7 +1390,7 @@ export function GridOverlay({ exercises, logs, nickname, timestamp, muscleLabel,
         right: 0,
         alignItems: 'center',
       }}>
-        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.85)} height={Math.round(LOGO_STRIP_H * 0.85)} />
+        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.68)} height={Math.round(LOGO_STRIP_H * 0.68)} />
       </View>
     </>
   );
@@ -1498,11 +1497,11 @@ export function SidebarOverlay({ exercises, logs, nickname, timestamp, muscleLab
           fontSize: 26,
           fontWeight: '900',
           color: tc,
-          letterSpacing: -0.5,
-          textDecorationLine: 'underline',
           transform: [{ rotate: '90deg' }],
           width: photoH * 0.35,
           textAlign: 'center',
+          letterSpacing: -0.3,
+          fontFamily: 'SportypoReguler',
         }} numberOfLines={1}>
           {muscleLabel}
         </Text>
@@ -2443,6 +2442,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     'MatSaleh':          require('../../../assets/fonts/Mat_Saleh.ttf'),
     'KCCGanpan':         require('../../../assets/fonts/KCC-Ganpan.ttf'),
     'QuicksilverItalic': require('../../../assets/fonts/Quicksilver_Italic.ttf'),
+    'SportypoReguler':   require('../../../assets/fonts/Sportypo-Reguler-Demo.ttf'),
   });
 
   const [step,              setStep]              = useState<Step>('gym-select');
