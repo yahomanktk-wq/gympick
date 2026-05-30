@@ -6,12 +6,13 @@ import {
   StyleSheet,
   Dimensions,
   ActivityIndicator,
+  PanResponder,
 } from 'react-native';
 import { CameraView, useCameraPermissions, type CameraView as CameraViewType } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { C, R } from '../../theme';
-import { ClassicOverlay, LeftColOverlay, GridOverlay } from './PostWorkoutLogModal';
+import { ClassicOverlay, LeftColOverlay, GridOverlay, CenteredOverlay, SidebarOverlay, TopBigOverlay, CenterListOverlay, BottomInfoOverlay } from './PostWorkoutLogModal';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const PHOTO_W = SCREEN_W - 32;
@@ -25,7 +26,7 @@ interface Props {
   logs: Record<string, { weight: number; reps: number }[]>;
   nickname?: string;
   textColor: string;
-  overlayStyle?: 'classic' | 'leftcol' | 'grid';
+  overlayStyle?: 'classic' | 'leftcol' | 'grid' | 'centered' | 'sidebar' | 'topbig' | 'centerlist' | 'bottominfo';
   onCaptureDone: (uri: string) => void;
   onCancel: () => void;
 }
@@ -44,7 +45,42 @@ export default function WorkoutCameraOverlay({
   const [flash,        setFlash]        = useState<'off' | 'on'>('off');
   const [capturing,    setCapturing]    = useState(false);
   const [cameraReady,  setCameraReady]  = useState(false);
+  const [zoom,         setZoom]         = useState(0);
+  const lastZoom        = useRef(0);
+  const currentZoomRef  = useRef(0);
+  const initialDistance = useRef<number | null>(null);
   const cameraRef = useRef<CameraViewType>(null);
+
+  function getTouchDistance(touches: any[]): number {
+    const [a, b] = touches;
+    const dx = a.pageX - b.pageX;
+    const dy = a.pageY - b.pageY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  const pinchResponder = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: (evt) => evt.nativeEvent.touches.length === 2,
+    onMoveShouldSetPanResponder:  (evt) => evt.nativeEvent.touches.length === 2,
+    onPanResponderGrant: (evt) => {
+      if (evt.nativeEvent.touches.length === 2) {
+        initialDistance.current = getTouchDistance(evt.nativeEvent.touches as any);
+      }
+    },
+    onPanResponderMove: (evt) => {
+      if (evt.nativeEvent.touches.length === 2 && initialDistance.current !== null) {
+        const currentDist = getTouchDistance(evt.nativeEvent.touches as any);
+        const ratio = currentDist / initialDistance.current;
+        const delta = (ratio - 1) * 0.3;
+        const newZoom = Math.min(0.8, Math.max(0, lastZoom.current + delta));
+        currentZoomRef.current = newZoom;
+        setZoom(newZoom);
+      }
+    },
+    onPanResponderRelease: () => {
+      lastZoom.current = currentZoomRef.current;
+      initialDistance.current = null;
+    },
+  })).current;
 
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -144,21 +180,26 @@ export default function WorkoutCameraOverlay({
       </View>
 
       {/* 카메라 뷰파인더 + 오버레이 미리보기 */}
-      <TouchableOpacity
-        activeOpacity={1}
-        onPress={handleTap}
+      <View
         style={[styles.cameraWrap, { height: PHOTO_H }]}
-        disabled={capturing || !cameraReady}
+        {...pinchResponder.panHandlers}
       >
-        {/* 실제 카메라 피드 */}
-        <CameraView
-          ref={cameraRef}
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={handleTap}
           style={StyleSheet.absoluteFill}
-          facing="back"
-          flash={flash}
-          onCameraReady={() => setCameraReady(true)}
-          pictureSize="Photo"
-        />
+          disabled={capturing || !cameraReady}
+        >
+          {/* 실제 카메라 피드 */}
+          <CameraView
+            ref={cameraRef}
+            style={StyleSheet.absoluteFill}
+            facing="back"
+            flash={flash}
+            zoom={zoom}
+            onCameraReady={() => setCameraReady(true)}
+            pictureSize="Photo"
+          />
 
         {/* 오버레이: 실시간 미리보기용 (캡처 대상 아님) */}
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -200,6 +241,66 @@ export default function WorkoutCameraOverlay({
               photoH={PHOTO_H}
             />
           )}
+          {overlayStyle === 'centered' && (
+            <CenteredOverlay
+              exercises={exercises}
+              logs={logs}
+              nickname={displayName}
+              timestamp={timestamp}
+              muscleLabel={muscleLabel}
+              tc={tc}
+              photoW={PHOTO_W}
+              photoH={PHOTO_H}
+            />
+          )}
+          {overlayStyle === 'sidebar' && (
+            <SidebarOverlay
+              exercises={exercises}
+              logs={logs}
+              nickname={displayName}
+              timestamp={timestamp}
+              muscleLabel={muscleLabel}
+              tc={tc}
+              photoW={PHOTO_W}
+              photoH={PHOTO_H}
+            />
+          )}
+          {overlayStyle === 'topbig' && (
+            <TopBigOverlay
+              exercises={exercises}
+              logs={logs}
+              nickname={displayName}
+              timestamp={timestamp}
+              muscleLabel={muscleLabel}
+              tc={tc}
+              photoW={PHOTO_W}
+              photoH={PHOTO_H}
+            />
+          )}
+          {overlayStyle === 'centerlist' && (
+            <CenterListOverlay
+              exercises={exercises}
+              logs={logs}
+              nickname={displayName}
+              timestamp={timestamp}
+              muscleLabel={muscleLabel}
+              tc={tc}
+              photoW={PHOTO_W}
+              photoH={PHOTO_H}
+            />
+          )}
+          {overlayStyle === 'bottominfo' && (
+            <BottomInfoOverlay
+              exercises={exercises}
+              logs={logs}
+              nickname={displayName}
+              timestamp={timestamp}
+              muscleLabel={muscleLabel}
+              tc={tc}
+              photoW={PHOTO_W}
+              photoH={PHOTO_H}
+            />
+          )}
 
           {/* 테두리 */}
           <View style={[styles.border, { borderColor: tc }]} />
@@ -218,7 +319,8 @@ export default function WorkoutCameraOverlay({
             </View>
           )}
         </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+      </View>
 
     </View>
   );
