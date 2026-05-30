@@ -1238,7 +1238,7 @@ export function LeftColOverlay({ exercises, logs, nickname, timestamp, muscleLab
         right: photoW * 0.45,
       }}>
         <Text style={{
-          fontSize: 22,
+          fontSize: 24,
           fontWeight: '900',
           color: tc,
           letterSpacing: -0.5,
@@ -1293,13 +1293,12 @@ export function LeftColOverlay({ exercises, logs, nickname, timestamp, muscleLab
           </Text>
         )}
       </View>
-      {/* 우하단: GYM PICK 로고 (15% 축소) */}
       <View style={{
         position: 'absolute',
         bottom: OVERLAY_PAD,
         right: OVERLAY_PAD,
       }}>
-        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.85)} height={Math.round(LOGO_STRIP_H * 0.85)} />
+        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.68)} height={Math.round(LOGO_STRIP_H * 0.68)} />
       </View>
     </>
   );
@@ -1498,11 +1497,11 @@ export function SidebarOverlay({ exercises, logs, nickname, timestamp, muscleLab
           fontWeight: '900',
           color: tc,
           transform: [{ rotate: '90deg' }],
-          width: photoH * 0.35,
+          width: photoH * 0.55,
           textAlign: 'center',
           letterSpacing: -0.3,
           fontFamily: 'SportypoReguler',
-        }} numberOfLines={1}>
+        }} adjustsFontSizeToFit minimumFontScale={0.5}>
           {muscleLabel}
         </Text>
       </View>
@@ -1537,7 +1536,7 @@ export function SidebarOverlay({ exercises, logs, nickname, timestamp, muscleLab
         )}
       </View>
       <View style={{ position: 'absolute', bottom: OVERLAY_PAD, left: 0, right: 0, alignItems: 'center' }}>
-        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.85)} height={Math.round(LOGO_STRIP_H * 0.85)} />
+        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.68)} height={Math.round(LOGO_STRIP_H * 0.68)} />
       </View>
     </>
   );
@@ -1552,10 +1551,9 @@ export function TopBigOverlay({ exercises, logs, nickname, timestamp, muscleLabe
         <Text style={{ fontSize: 10, fontWeight: '700', color: tc, opacity: 0.85 }}>{timestamp}</Text>
       </View>
       <View style={{ position: 'absolute', top: OVERLAY_PAD + 28, left: OVERLAY_PAD, right: OVERLAY_PAD }}>
-        <Text style={{ fontSize: 34, fontWeight: '900', color: tc, letterSpacing: -0.5, textDecorationLine: 'underline' }} numberOfLines={1}>
+        <Text style={{ fontSize: 34, fontWeight: '900', color: tc, letterSpacing: -0.5, fontFamily: 'VdeVacia' }} numberOfLines={1}>
           {muscleLabel}
         </Text>
-        <View style={{ height: 1.5, backgroundColor: tc, marginTop: 10, opacity: 0.5 }} />
       </View>
       <View style={{
         position: 'absolute',
@@ -1569,7 +1567,7 @@ export function TopBigOverlay({ exercises, logs, nickname, timestamp, muscleLabe
       }}>
         {exercises.slice(0, 8).map(ex => {
           const sets = logs[ex.id] ?? [];
-          const setsLine = sets.map(st => `${st.weight} × ${st.reps}`).join(' / ');
+          const setsLine = sets.map(st => `${st.weight}×${st.reps}`).join(' / ');
           return (
             <View key={ex.id} style={{ width: COL_W, marginBottom: 8 }}>
               <Text style={{ fontSize: 9, fontWeight: '900', color: tc, letterSpacing: 0.3, marginBottom: 1 }} numberOfLines={1}>
@@ -2443,6 +2441,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     'KCCGanpan':         require('../../../assets/fonts/KCC-Ganpan.ttf'),
     'QuicksilverItalic': require('../../../assets/fonts/Quicksilver_Italic.ttf'),
     'SportypoReguler':   require('../../../assets/fonts/Sportypo-Reguler-Demo.ttf'),
+    'VdeVacia':          require('../../../assets/fonts/V-de-vacia-deFharo.ttf'),
   });
 
   const [step,              setStep]              = useState<Step>('gym-select');
