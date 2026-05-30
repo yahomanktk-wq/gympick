@@ -1004,124 +1004,160 @@ const TEXT_COLORS = [
 
 function StyleThumbnail({ styleKey, isActive }: { styleKey: OverlayStyle; isActive: boolean }) {
   const fg = isActive ? C.accent : C.textDim;
-  const line = (top: number, left: number, width: number, height = 1.5) => (
+
+  const Line = ({ top, left, width, height = 1.5 }: { top: number; left: number; width: number; height?: number }) => (
     <View style={{ position: 'absolute', top, left, width, height, backgroundColor: fg, borderRadius: 1, opacity: 0.8 }} />
   );
-  const dot = (top: number, left: number, size = 4) => (
+
+  const Dot = ({ top, left, size = 4 }: { top: number; left: number; size?: number }) => (
     <View style={{ position: 'absolute', top, left, width: size, height: size, borderRadius: size / 2, backgroundColor: fg, opacity: 0.7 }} />
   );
 
-  switch (styleKey) {
-    case 'classic':
-      return (
-        <>
-          {dot(6, 32, 3)}
-          {line(22, 4, 32, 5)}
-          {line(31, 4, 24)}
-          {line(35, 4, 20)}
-          {line(39, 4, 22)}
-          {line(44, 4, 18)}
-          {line(48, 4, 20)}
-        </>
-      );
-    case 'leftcol':
-      return (
-        <>
-          {line(4, 4, 14, 3)}
-          <View style={{ position: 'absolute', left: 4, top: 16, width: 8, height: 52, backgroundColor: fg, borderRadius: 2, opacity: 0.15 }} />
-          {line(16, 30, 20)}
-          {line(22, 30, 16)}
-          {line(28, 30, 18)}
-          {line(35, 30, 20)}
-          {line(41, 30, 16)}
-          {line(47, 30, 18)}
-          {line(54, 30, 14)}
-          {line(60, 16, 28, 2)}
-        </>
-      );
-    case 'grid':
-      return (
-        <>
-          {line(6, 4, 16)}
-          {dot(6, 42, 3)}
-          {line(14, 14, 28, 4)}
-          {line(22, 4, 14)} {line(22, 22, 14)} {line(22, 40, 14)}
-          {line(26, 4, 10)} {line(26, 22, 10)} {line(26, 40, 10)}
-          {line(32, 4, 14)} {line(32, 22, 14)} {line(32, 40, 14)}
-          {line(36, 4, 10)} {line(36, 22, 10)} {line(36, 40, 10)}
-          {line(42, 4, 14)} {line(42, 22, 14)} {line(42, 40, 14)}
-          {line(68, 14, 28, 2)}
-        </>
-      );
-    case 'centered':
-      return (
-        <>
-          {line(6, 4, 14)}
-          {line(6, 38, 14)}
-          {line(18, 8, 40, 5)}
-          {line(28, 4, 22)} {line(28, 30, 22)}
-          {line(32, 4, 16)} {line(32, 30, 16)}
-          {line(38, 4, 22)} {line(38, 30, 22)}
-          {line(42, 4, 16)} {line(42, 30, 16)}
-          {line(48, 4, 22)} {line(48, 30, 22)}
-          {line(68, 14, 28, 2)}
-        </>
-      );
-    case 'sidebar':
-      return (
-        <>
-          {line(6, 4, 14)}
-          {line(10, 4, 10)}
-          {line(14, 4, 8)}
-          <View style={{ position: 'absolute', left: 4, top: 30, width: 6, height: 30, backgroundColor: fg, opacity: 0.12, borderRadius: 2 }} />
-          {line(10, 30, 24, 1.5)} {line(15, 26, 28, 1.5)}
-          {line(22, 22, 32, 1.5)} {line(27, 26, 28, 1.5)}
-          {line(34, 22, 32, 1.5)} {line(39, 26, 28, 1.5)}
-          {line(46, 22, 32, 1.5)} {line(51, 26, 28, 1.5)}
-          {line(68, 14, 28, 2)}
-        </>
-      );
-    case 'topbig':
-      return (
-        <>
-          {line(5, 4, 14)} {line(5, 38, 14)}
-          {line(13, 4, 48, 6)}
-          {line(22, 4, 48, 1)}
-          {line(28, 4, 22)} {line(28, 30, 22)}
-          {line(32, 4, 16)} {line(32, 30, 16)}
-          {line(38, 4, 22)} {line(38, 30, 22)}
-          {line(42, 4, 16)} {line(42, 30, 16)}
-          {line(48, 4, 22)} {line(48, 30, 22)}
-          {line(68, 14, 28, 2)}
-        </>
-      );
-    case 'centerlist':
-      return (
-        <>
-          {line(6, 14, 28, 2)}
-          <View style={{ position: 'absolute', left: 2, top: 14, width: 5, height: 52, backgroundColor: fg, opacity: 0.1, borderRadius: 2 }} />
-          <View style={{ position: 'absolute', right: 2, top: 14, width: 5, height: 52, backgroundColor: fg, opacity: 0.1, borderRadius: 2 }} />
-          {line(16, 12, 32)} {line(21, 12, 32)}
-          {line(28, 12, 32)} {line(33, 12, 32)}
-          {line(40, 12, 32)} {line(45, 12, 32)}
-          {line(52, 12, 32)} {line(57, 12, 32)}
-        </>
-      );
-    case 'bottominfo':
-      return (
-        <>
-          {line(5, 4, 48, 7)}
-          {line(17, 4, 32)} {line(22, 4, 24)}
-          {line(28, 4, 32)} {line(33, 4, 24)}
-          {line(39, 4, 32)} {line(44, 4, 24)}
-          {line(50, 4, 28)} {line(55, 4, 20)}
-          {line(68, 4, 20, 2)}
-          {line(66, 34, 18)} {line(70, 30, 24)}
-        </>
-      );
-    default:
-      return null;
+  const Bar = ({ top, left, width, height }: { top: number; left: number; width: number; height: number }) => (
+    <View style={{ position: 'absolute', top, left, width, height, backgroundColor: fg, borderRadius: 2, opacity: 0.12 }} />
+  );
+
+  if (styleKey === 'classic') {
+    return (
+      <View style={{ flex: 1, width: '100%' }}>
+        <Dot top={6} left={32} size={3} />
+        <Line top={22} left={4} width={32} height={5} />
+        <Line top={31} left={4} width={24} />
+        <Line top={35} left={4} width={20} />
+        <Line top={39} left={4} width={22} />
+        <Line top={44} left={4} width={18} />
+        <Line top={48} left={4} width={20} />
+      </View>
+    );
   }
+  if (styleKey === 'leftcol') {
+    return (
+      <View style={{ flex: 1, width: '100%' }}>
+        <Line top={4} left={4} width={14} height={3} />
+        <Bar top={16} left={4} width={8} height={52} />
+        <Line top={16} left={30} width={20} />
+        <Line top={22} left={30} width={16} />
+        <Line top={28} left={30} width={18} />
+        <Line top={35} left={30} width={20} />
+        <Line top={41} left={30} width={16} />
+        <Line top={47} left={30} width={18} />
+        <Line top={54} left={30} width={14} />
+        <Line top={68} left={16} width={28} height={2} />
+      </View>
+    );
+  }
+  if (styleKey === 'grid') {
+    return (
+      <View style={{ flex: 1, width: '100%' }}>
+        <Line top={6} left={4} width={16} />
+        <Dot top={6} left={42} size={3} />
+        <Line top={14} left={14} width={28} height={4} />
+        <Line top={22} left={4} width={14} />
+        <Line top={22} left={22} width={14} />
+        <Line top={22} left={40} width={14} />
+        <Line top={26} left={4} width={10} />
+        <Line top={26} left={22} width={10} />
+        <Line top={26} left={40} width={10} />
+        <Line top={32} left={4} width={14} />
+        <Line top={32} left={22} width={14} />
+        <Line top={32} left={40} width={14} />
+        <Line top={36} left={4} width={10} />
+        <Line top={36} left={22} width={10} />
+        <Line top={36} left={40} width={10} />
+        <Line top={68} left={14} width={28} height={2} />
+      </View>
+    );
+  }
+  if (styleKey === 'centered') {
+    return (
+      <View style={{ flex: 1, width: '100%' }}>
+        <Line top={6} left={4} width={14} />
+        <Line top={6} left={38} width={14} />
+        <Line top={18} left={8} width={40} height={5} />
+        <Line top={28} left={4} width={22} />
+        <Line top={28} left={30} width={22} />
+        <Line top={32} left={4} width={16} />
+        <Line top={32} left={30} width={16} />
+        <Line top={38} left={4} width={22} />
+        <Line top={38} left={30} width={22} />
+        <Line top={42} left={4} width={16} />
+        <Line top={42} left={30} width={16} />
+        <Line top={68} left={14} width={28} height={2} />
+      </View>
+    );
+  }
+  if (styleKey === 'sidebar') {
+    return (
+      <View style={{ flex: 1, width: '100%' }}>
+        <Line top={6} left={4} width={14} />
+        <Line top={10} left={4} width={10} />
+        <Line top={14} left={4} width={8} />
+        <Bar top={30} left={4} width={6} height={30} />
+        <Line top={10} left={30} width={24} />
+        <Line top={15} left={26} width={28} />
+        <Line top={22} left={22} width={32} />
+        <Line top={27} left={26} width={28} />
+        <Line top={34} left={22} width={32} />
+        <Line top={39} left={26} width={28} />
+        <Line top={46} left={22} width={32} />
+        <Line top={51} left={26} width={28} />
+        <Line top={68} left={14} width={28} height={2} />
+      </View>
+    );
+  }
+  if (styleKey === 'topbig') {
+    return (
+      <View style={{ flex: 1, width: '100%' }}>
+        <Line top={5} left={4} width={14} />
+        <Line top={5} left={38} width={14} />
+        <Line top={13} left={4} width={48} height={6} />
+        <Line top={22} left={4} width={48} height={1} />
+        <Line top={28} left={4} width={22} />
+        <Line top={28} left={30} width={22} />
+        <Line top={32} left={4} width={16} />
+        <Line top={32} left={30} width={16} />
+        <Line top={38} left={4} width={22} />
+        <Line top={38} left={30} width={22} />
+        <Line top={42} left={4} width={16} />
+        <Line top={42} left={30} width={16} />
+        <Line top={68} left={14} width={28} height={2} />
+      </View>
+    );
+  }
+  if (styleKey === 'centerlist') {
+    return (
+      <View style={{ flex: 1, width: '100%' }}>
+        <Line top={6} left={14} width={28} height={2} />
+        <Bar top={14} left={2} width={5} height={52} />
+        <Bar top={14} left={49} width={5} height={52} />
+        <Line top={16} left={12} width={32} />
+        <Line top={21} left={12} width={32} />
+        <Line top={28} left={12} width={32} />
+        <Line top={33} left={12} width={32} />
+        <Line top={40} left={12} width={32} />
+        <Line top={45} left={12} width={32} />
+        <Line top={52} left={12} width={32} />
+        <Line top={57} left={12} width={32} />
+      </View>
+    );
+  }
+  if (styleKey === 'bottominfo') {
+    return (
+      <View style={{ flex: 1, width: '100%' }}>
+        <Line top={5} left={4} width={48} height={7} />
+        <Line top={17} left={4} width={32} />
+        <Line top={22} left={4} width={24} />
+        <Line top={28} left={4} width={32} />
+        <Line top={33} left={4} width={24} />
+        <Line top={39} left={4} width={32} />
+        <Line top={44} left={4} width={24} />
+        <Line top={68} left={4} width={20} height={2} />
+        <Line top={66} left={34} width={18} />
+        <Line top={70} left={30} width={24} />
+      </View>
+    );
+  }
+  return null;
 }
 
 // --- Overlay layout components (module-level, exported for WorkoutCameraOverlay)
