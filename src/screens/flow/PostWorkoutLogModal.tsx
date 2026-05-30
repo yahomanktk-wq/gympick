@@ -1197,7 +1197,7 @@ export function ClassicOverlay({ exercises, logs, nickname, timestamp, muscleLab
         <Text style={[s.overlayTimestamp, { color: tc }]}>{timestamp}</Text>
       </View>
       <View style={s.overlayBottomLeft}>
-        <Text style={[s.overlayMuscleTitle, { color: tc }]}>{muscleLabel}</Text>
+        <Text style={[s.overlayMuscleTitle, { color: tc, fontFamily: 'QuicksilverItalic' }]}>{muscleLabel}</Text>
         <View style={s.sessionScroll}>
           {exercises.slice(0, 7).map(ex => {
             const sets     = logs[ex.id] ?? [];
@@ -1242,7 +1242,7 @@ export function LeftColOverlay({ exercises, logs, nickname, timestamp, muscleLab
           fontWeight: '900',
           color: tc,
           letterSpacing: -0.5,
-          textDecorationLine: 'underline',
+          fontFamily: 'QuicksilverItalic',
         }} numberOfLines={2}>
           {muscleLabel}
         </Text>
@@ -1339,8 +1339,8 @@ export function GridOverlay({ exercises, logs, nickname, timestamp, muscleLabel,
           fontWeight: '900',
           color: tc,
           letterSpacing: -0.5,
-          textDecorationLine: 'underline',
           textAlign: 'center',
+          fontFamily: 'QuicksilverItalic',
         }}>
           {muscleLabel}
         </Text>
@@ -2439,9 +2439,10 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   const { user } = useAuth();
 
   const [fontsLoaded] = useFonts({
-    'MatchaCih':  require('../../../assets/fonts/Matcha_Cih.ttf'),
-    'MatSaleh':   require('../../../assets/fonts/Mat_Saleh.ttf'),
-    'KCCGanpan':  require('../../../assets/fonts/KCC-Ganpan.ttf'),
+    'MatchaCih':         require('../../../assets/fonts/Matcha_Cih.ttf'),
+    'MatSaleh':          require('../../../assets/fonts/Mat_Saleh.ttf'),
+    'KCCGanpan':         require('../../../assets/fonts/KCC-Ganpan.ttf'),
+    'QuicksilverItalic': require('../../../assets/fonts/Quicksilver_Italic.ttf'),
   });
 
   const [step,              setStep]              = useState<Step>('gym-select');
