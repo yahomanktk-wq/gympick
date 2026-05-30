@@ -1403,22 +1403,20 @@ export function CenteredOverlay({ exercises, logs, nickname, timestamp, muscleLa
   return (
     <>
       <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD }}>
-        <Text style={{ fontSize: 13, fontWeight: '900', color: tc, letterSpacing: 0.3, fontFamily: 'MatSaleh' }}>
+        <Text style={{ fontSize: 13, color: tc, letterSpacing: 0.3, fontFamily: 'KCCGanpan' }}>
           {nickname}
         </Text>
       </View>
       <View style={{ position: 'absolute', top: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'flex-end' }}>
-        <Text style={{ fontSize: 10, fontWeight: '700', color: tc, opacity: 0.85, fontFamily: 'MatSaleh' }}>
+        <Text style={{ fontSize: 10, color: tc, opacity: 0.85, fontFamily: 'MatSaleh' }}>
           {timestamp}
         </Text>
       </View>
       <View style={{ position: 'absolute', top: OVERLAY_PAD + 44, left: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'center' }}>
         <Text style={{
           fontSize: 32,
-          fontWeight: '900',
           color: tc,
           letterSpacing: -0.5,
-          textDecorationLine: 'underline',
           textAlign: 'center',
           fontFamily: 'MatchaCih',
         }}>
@@ -1442,7 +1440,6 @@ export function CenteredOverlay({ exercises, logs, nickname, timestamp, muscleLa
             <View key={ex.id} style={{ width: COL_W, marginBottom: 10 }}>
               <Text style={{
                 fontSize: 9,
-                fontWeight: '900',
                 color: tc,
                 letterSpacing: 0.3,
                 marginBottom: 2,
@@ -1453,7 +1450,6 @@ export function CenteredOverlay({ exercises, logs, nickname, timestamp, muscleLa
               {setsLine ? (
                 <Text style={{
                   fontSize: 8,
-                  fontWeight: '600',
                   color: tc,
                   opacity: 0.85,
                   fontFamily: 'MatSaleh',
@@ -1465,13 +1461,13 @@ export function CenteredOverlay({ exercises, logs, nickname, timestamp, muscleLa
           );
         })}
         {exercises.length > 8 && (
-          <Text style={{ fontSize: 8, fontWeight: '700', color: tc, opacity: 0.6, fontFamily: 'MatSaleh' }}>
+          <Text style={{ fontSize: 8, color: tc, opacity: 0.6, fontFamily: 'MatSaleh' }}>
             {`+${exercises.length - 8} more...`}
           </Text>
         )}
       </View>
       <View style={{ position: 'absolute', bottom: OVERLAY_PAD, left: 0, right: 0, alignItems: 'center' }}>
-        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.85)} height={Math.round(LOGO_STRIP_H * 0.85)} />
+        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
       </View>
     </>
   );
@@ -2443,8 +2439,9 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   const { user } = useAuth();
 
   const [fontsLoaded] = useFonts({
-    'MatchaCih': require('../../../assets/fonts/Matcha_Cih.ttf'),
-    'MatSaleh':  require('../../../assets/fonts/Mat_Saleh.ttf'),
+    'MatchaCih':  require('../../../assets/fonts/Matcha_Cih.ttf'),
+    'MatSaleh':   require('../../../assets/fonts/Mat_Saleh.ttf'),
+    'KCCGanpan':  require('../../../assets/fonts/KCC-Ganpan.ttf'),
   });
 
   const [step,              setStep]              = useState<Step>('gym-select');
