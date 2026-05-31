@@ -1003,164 +1003,6 @@ const TEXT_COLORS = [
   { label: 'Purple', hex: '#AA00FF' },
 ];
 
-function StyleThumbnail({ styleKey, isActive }: { styleKey: OverlayStyle; isActive: boolean }) {
-  const fg = isActive ? C.accent : C.textDim;
-
-  const Line = ({ top, left, width, height = 1.5 }: { top: number; left: number; width: number; height?: number }) => (
-    <View style={{ position: 'absolute', top, left, width, height, backgroundColor: fg, borderRadius: 1, opacity: 0.8 }} />
-  );
-
-  const Dot = ({ top, left, size = 4 }: { top: number; left: number; size?: number }) => (
-    <View style={{ position: 'absolute', top, left, width: size, height: size, borderRadius: size / 2, backgroundColor: fg, opacity: 0.7 }} />
-  );
-
-  const Bar = ({ top, left, width, height }: { top: number; left: number; width: number; height: number }) => (
-    <View style={{ position: 'absolute', top, left, width, height, backgroundColor: fg, borderRadius: 2, opacity: 0.12 }} />
-  );
-
-  if (styleKey === 'classic') {
-    return (
-      <View style={{ flex: 1, width: '100%' }}>
-        <Dot top={6} left={32} size={3} />
-        <Line top={22} left={4} width={32} height={5} />
-        <Line top={31} left={4} width={24} />
-        <Line top={35} left={4} width={20} />
-        <Line top={39} left={4} width={22} />
-        <Line top={44} left={4} width={18} />
-        <Line top={48} left={4} width={20} />
-      </View>
-    );
-  }
-  if (styleKey === 'leftcol') {
-    return (
-      <View style={{ flex: 1, width: '100%' }}>
-        <Line top={4} left={4} width={14} height={3} />
-        <Bar top={16} left={4} width={8} height={52} />
-        <Line top={16} left={30} width={20} />
-        <Line top={22} left={30} width={16} />
-        <Line top={28} left={30} width={18} />
-        <Line top={35} left={30} width={20} />
-        <Line top={41} left={30} width={16} />
-        <Line top={47} left={30} width={18} />
-        <Line top={54} left={30} width={14} />
-        <Line top={68} left={16} width={28} height={2} />
-      </View>
-    );
-  }
-  if (styleKey === 'grid') {
-    return (
-      <View style={{ flex: 1, width: '100%' }}>
-        <Line top={6} left={4} width={16} />
-        <Dot top={6} left={42} size={3} />
-        <Line top={14} left={14} width={28} height={4} />
-        <Line top={22} left={4} width={14} />
-        <Line top={22} left={22} width={14} />
-        <Line top={22} left={40} width={14} />
-        <Line top={26} left={4} width={10} />
-        <Line top={26} left={22} width={10} />
-        <Line top={26} left={40} width={10} />
-        <Line top={32} left={4} width={14} />
-        <Line top={32} left={22} width={14} />
-        <Line top={32} left={40} width={14} />
-        <Line top={36} left={4} width={10} />
-        <Line top={36} left={22} width={10} />
-        <Line top={36} left={40} width={10} />
-        <Line top={68} left={14} width={28} height={2} />
-      </View>
-    );
-  }
-  if (styleKey === 'centered') {
-    return (
-      <View style={{ flex: 1, width: '100%' }}>
-        <Line top={6} left={4} width={14} />
-        <Line top={6} left={38} width={14} />
-        <Line top={18} left={8} width={40} height={5} />
-        <Line top={28} left={4} width={22} />
-        <Line top={28} left={30} width={22} />
-        <Line top={32} left={4} width={16} />
-        <Line top={32} left={30} width={16} />
-        <Line top={38} left={4} width={22} />
-        <Line top={38} left={30} width={22} />
-        <Line top={42} left={4} width={16} />
-        <Line top={42} left={30} width={16} />
-        <Line top={68} left={14} width={28} height={2} />
-      </View>
-    );
-  }
-  if (styleKey === 'sidebar') {
-    return (
-      <View style={{ flex: 1, width: '100%' }}>
-        <Line top={6} left={4} width={14} />
-        <Line top={10} left={4} width={10} />
-        <Line top={14} left={4} width={8} />
-        <Bar top={30} left={4} width={6} height={30} />
-        <Line top={10} left={30} width={24} />
-        <Line top={15} left={26} width={28} />
-        <Line top={22} left={22} width={32} />
-        <Line top={27} left={26} width={28} />
-        <Line top={34} left={22} width={32} />
-        <Line top={39} left={26} width={28} />
-        <Line top={46} left={22} width={32} />
-        <Line top={51} left={26} width={28} />
-        <Line top={68} left={14} width={28} height={2} />
-      </View>
-    );
-  }
-  if (styleKey === 'topbig') {
-    return (
-      <View style={{ flex: 1, width: '100%' }}>
-        <Line top={5} left={4} width={14} />
-        <Line top={5} left={38} width={14} />
-        <Line top={13} left={4} width={48} height={6} />
-        <Line top={22} left={4} width={48} height={1} />
-        <Line top={28} left={4} width={22} />
-        <Line top={28} left={30} width={22} />
-        <Line top={32} left={4} width={16} />
-        <Line top={32} left={30} width={16} />
-        <Line top={38} left={4} width={22} />
-        <Line top={38} left={30} width={22} />
-        <Line top={42} left={4} width={16} />
-        <Line top={42} left={30} width={16} />
-        <Line top={68} left={14} width={28} height={2} />
-      </View>
-    );
-  }
-  if (styleKey === 'centerlist') {
-    return (
-      <View style={{ flex: 1, width: '100%' }}>
-        <Line top={6} left={14} width={28} height={2} />
-        <Bar top={14} left={2} width={5} height={52} />
-        <Bar top={14} left={49} width={5} height={52} />
-        <Line top={16} left={12} width={32} />
-        <Line top={21} left={12} width={32} />
-        <Line top={28} left={12} width={32} />
-        <Line top={33} left={12} width={32} />
-        <Line top={40} left={12} width={32} />
-        <Line top={45} left={12} width={32} />
-        <Line top={52} left={12} width={32} />
-        <Line top={57} left={12} width={32} />
-      </View>
-    );
-  }
-  if (styleKey === 'bottominfo') {
-    return (
-      <View style={{ flex: 1, width: '100%' }}>
-        <Line top={5} left={4} width={48} height={7} />
-        <Line top={17} left={4} width={32} />
-        <Line top={22} left={4} width={24} />
-        <Line top={28} left={4} width={32} />
-        <Line top={33} left={4} width={24} />
-        <Line top={39} left={4} width={32} />
-        <Line top={44} left={4} width={24} />
-        <Line top={68} left={4} width={20} height={2} />
-        <Line top={66} left={34} width={18} />
-        <Line top={70} left={30} width={24} />
-      </View>
-    );
-  }
-  return null;
-}
-
 // --- Overlay layout components (module-level, exported for WorkoutCameraOverlay)
 
 interface OverlayProps {
@@ -2140,7 +1982,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
         {/* 텍스트 색상 + 레이아웃 스타일: 카메라 활성 중 또는 사진 찍힌 후 모두 표시 */}
         {(photoTaken || showCamera) && (
           <>
-          {/* 레이아웃 스타일: 가로 스크롤 썸네일 */}
+          {/* 레이아웃 스타일: DAY 텍스트 버튼 */}
           <View style={{ marginBottom: 10 }}>
             <Text style={{ fontSize: 9, fontWeight: '700', color: C.textDim, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8, paddingHorizontal: 2 }}>
               레이아웃
@@ -2151,15 +1993,15 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
               contentContainerStyle={{ flexDirection: 'row', gap: 8, paddingRight: 4 }}
             >
               {([
-                { key: 'classic',    label: '1', desc: '클래식' },
-                { key: 'leftcol',    label: '2', desc: '레프트' },
-                { key: 'grid',       label: '3', desc: '그리드' },
-                { key: 'centered',   label: '4', desc: '센터' },
-                { key: 'sidebar',    label: '5', desc: '사이드' },
-                { key: 'topbig',     label: '6', desc: '탑빅' },
-                { key: 'centerlist', label: '7', desc: '리스트' },
-                { key: 'bottominfo', label: '8', desc: '바텀' },
-              ] as { key: OverlayStyle; label: string; desc: string }[]).map(opt => {
+                { key: 'classic',    fontFamily: 'QuicksilverItalic' },
+                { key: 'leftcol',    fontFamily: 'QuicksilverItalic' },
+                { key: 'grid',       fontFamily: 'QuicksilverItalic' },
+                { key: 'centered',   fontFamily: 'MatchaCih'         },
+                { key: 'sidebar',    fontFamily: 'SportypoReguler'   },
+                { key: 'topbig',     fontFamily: 'VdeVacia'          },
+                { key: 'centerlist', fontFamily: 'MatchaCih'         },
+                { key: 'bottominfo', fontFamily: undefined            },
+              ] as { key: OverlayStyle; fontFamily: string | undefined }[]).map((opt, idx) => {
                 const isActive = overlayStyle === opt.key;
                 return (
                   <TouchableOpacity
@@ -2167,27 +2009,32 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
                     onPress={() => setOverlayStyle(opt.key)}
                     activeOpacity={0.8}
                     style={{
-                      width: 56,
-                      alignItems: 'center',
-                      gap: 4,
-                    }}
-                  >
-                    <View style={{
-                      width: 56,
-                      height: 80,
-                      borderRadius: 8,
-                      backgroundColor: isActive ? '#1a1a1a' : C.surface,
+                      paddingHorizontal: 14,
+                      paddingVertical: 10,
+                      borderRadius: 10,
                       borderWidth: isActive ? 2 : 1.5,
                       borderColor: isActive ? C.accent : C.border,
-                      overflow: 'hidden',
-                      justifyContent: 'center',
+                      backgroundColor: isActive ? '#1a1a1a' : C.surface,
                       alignItems: 'center',
-                      position: 'relative',
+                      justifyContent: 'center',
+                      minWidth: 52,
+                    }}
+                  >
+                    <Text style={{
+                      fontSize: 16,
+                      color: isActive ? C.accent : C.textSub,
+                      fontFamily: opt.fontFamily,
+                      letterSpacing: -0.3,
                     }}>
-                      <StyleThumbnail styleKey={opt.key} isActive={isActive} />
-                    </View>
-                    <Text style={{ fontSize: 9, fontWeight: isActive ? '800' : '600', color: isActive ? C.accent : C.textDim, textAlign: 'center' }}>
-                      {opt.label}
+                      DAY
+                    </Text>
+                    <Text style={{
+                      fontSize: 9,
+                      fontWeight: '700',
+                      color: isActive ? C.accent : C.textDim,
+                      marginTop: 4,
+                    }}>
+                      {idx + 1}
                     </Text>
                   </TouchableOpacity>
                 );
