@@ -2456,12 +2456,12 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     'SportypoReguler':   require('../../../assets/fonts/Sportypo-Reguler-Demo.ttf'),
     'VdeVacia':          require('../../../assets/fonts/V-de-vacia-deFharo.ttf'),
     'Oklahoma':          require('../../../assets/fonts/Oklahoma.ttf'),
-    'CollegeBoy':        require('../../../assets/fonts/College Boy.otf'),
+    'CollegeBoy':        require('../../../assets/fonts/College_Boy.otf'),
     'HonfleurHeavy':     require('../../../assets/fonts/Honfleur-Heavy.otf'),
-    'BlaccS':            require('../../../assets/fonts/BLACCS__.TTF'),
-    'Blacc':             require('../../../assets/fonts/BLACC___.TTF'),
-    'Flamer':            require('../../../assets/fonts/FLAMER.TTF'),
-    'HeavyHeapRg':       require('../../../assets/fonts/heavy heap rg.otf'),
+    'BlaccS':            require('../../../assets/fonts/BLACCS.TTF'),
+    'Blacc':             require('../../../assets/fonts/BLACC.TTF'),
+    'Flamer':            require('../../../assets/fonts/Flamer.TTF'),
+    'HeavyHeapRg':       require('../../../assets/fonts/heavy_heap_rg.otf'),
   });
 
   const [step,              setStep]              = useState<Step>('gym-select');
