@@ -1177,12 +1177,11 @@ export function GridOverlay({ exercises, logs, nickname, timestamp, muscleLabel,
         alignItems: 'center',
       }}>
         <Text style={{
-          fontSize: 26,
-          fontWeight: '900',
+          fontSize: 29,
           color: tc,
           letterSpacing: -0.5,
           textAlign: 'center',
-          fontFamily: 'QuicksilverItalic',
+          fontFamily: 'HonfleurHeavy',
         }}>
           {muscleLabel}
         </Text>
@@ -1438,27 +1437,31 @@ export function CenterListOverlay({ exercises, logs, nickname, timestamp, muscle
   const COL_W = Math.floor((photoW - OVERLAY_PAD * 2 - 12) / COL_COUNT);
   return (
     <>
+      {/* 상단 좌: 닉네임 */}
       <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD }}>
-        <Text style={{ fontSize: 13, color: tc, letterSpacing: 0.3, fontFamily: 'KCCGanpan' }}>
+        <Text style={{ fontSize: 13, color: tc, letterSpacing: 0.3, fontFamily: 'Blacc' }}>
           {nickname}
         </Text>
       </View>
+      {/* 상단 우: 날짜 */}
       <View style={{ position: 'absolute', top: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'flex-end' }}>
-        <Text style={{ fontSize: 10, color: tc, opacity: 0.85, fontFamily: 'MatSaleh' }}>
+        <Text style={{ fontSize: 10, color: tc, opacity: 0.85, fontFamily: 'Blacc' }}>
           {timestamp}
         </Text>
       </View>
+      {/* 중앙 타겟부위 - BlaccS 폰트 */}
       <View style={{ position: 'absolute', top: OVERLAY_PAD + 44, left: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'center' }}>
         <Text style={{
           fontSize: 32,
           color: tc,
           letterSpacing: -0.5,
           textAlign: 'center',
-          fontFamily: 'MatchaCih',
+          fontFamily: 'BlaccS',
         }}>
           {muscleLabel}
         </Text>
       </View>
+      {/* 2열 운동 목록 - Blacc 폰트 */}
       <View style={{
         position: 'absolute',
         top: OVERLAY_PAD + 44 + 52,
@@ -1479,7 +1482,7 @@ export function CenterListOverlay({ exercises, logs, nickname, timestamp, muscle
                 color: tc,
                 letterSpacing: 0.3,
                 marginBottom: 2,
-                fontFamily: 'MatSaleh',
+                fontFamily: 'Blacc',
               }} numberOfLines={1}>
                 {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
               </Text>
@@ -1488,7 +1491,7 @@ export function CenterListOverlay({ exercises, logs, nickname, timestamp, muscle
                   fontSize: 8,
                   color: tc,
                   opacity: 0.85,
-                  fontFamily: 'MatSaleh',
+                  fontFamily: 'Blacc',
                 }} numberOfLines={1}>
                   {setsLine}
                 </Text>
@@ -1497,11 +1500,12 @@ export function CenterListOverlay({ exercises, logs, nickname, timestamp, muscle
           );
         })}
         {exercises.length > 8 && (
-          <Text style={{ fontSize: 8, color: tc, opacity: 0.6, fontFamily: 'MatSaleh' }}>
+          <Text style={{ fontSize: 8, color: tc, opacity: 0.6, fontFamily: 'Blacc' }}>
             {`+${exercises.length - 8} more...`}
           </Text>
         )}
       </View>
+      {/* 하단 중앙 로고 */}
       <View style={{ position: 'absolute', bottom: OVERLAY_PAD, left: 0, right: 0, alignItems: 'center' }}>
         <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
       </View>
@@ -1512,11 +1516,18 @@ export function CenterListOverlay({ exercises, logs, nickname, timestamp, muscle
 export function BottomInfoOverlay({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH }: OverlayProps) {
   return (
     <>
+      {/* 상단 좌: 타겟부위 - Flamer 폰트, 밑줄 없음 */}
       <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD, right: OVERLAY_PAD }}>
-        <Text style={{ fontSize: 38, fontWeight: '900', color: tc, letterSpacing: -0.5, textDecorationLine: 'underline' }} numberOfLines={1}>
+        <Text style={{
+          fontSize: 38,
+          color: tc,
+          letterSpacing: -0.5,
+          fontFamily: 'Flamer',
+        }} numberOfLines={1}>
           {muscleLabel}
         </Text>
       </View>
+      {/* 운동 목록 - HeavyHeapRg 폰트 */}
       <View style={{
         position: 'absolute',
         top: OVERLAY_PAD + 60,
@@ -1529,25 +1540,42 @@ export function BottomInfoOverlay({ exercises, logs, nickname, timestamp, muscle
           const setsLine = sets.map(st => `${st.weight} × ${st.reps}`).join(' / ');
           return (
             <View key={ex.id} style={{ marginBottom: 10 }}>
-              <Text style={{ fontSize: 10, fontWeight: '900', color: tc, letterSpacing: 0.3, marginBottom: 1 }} numberOfLines={1}>
+              <Text style={{
+                fontSize: 10,
+                color: tc,
+                letterSpacing: 0.3,
+                marginBottom: 1,
+                fontFamily: 'HeavyHeapRg',
+              }} numberOfLines={1}>
                 {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
               </Text>
               {setsLine ? (
-                <Text style={{ fontSize: 9, fontWeight: '600', color: tc, opacity: 0.85 }} numberOfLines={1}>{setsLine}</Text>
+                <Text style={{
+                  fontSize: 9,
+                  color: tc,
+                  opacity: 0.85,
+                  fontFamily: 'HeavyHeapRg',
+                }} numberOfLines={1}>
+                  {setsLine}
+                </Text>
               ) : null}
             </View>
           );
         })}
         {exercises.length > 6 && (
-          <Text style={{ fontSize: 8, fontWeight: '700', color: tc, opacity: 0.6 }}>{`+${exercises.length - 6} more...`}</Text>
+          <Text style={{ fontSize: 8, color: tc, opacity: 0.6, fontFamily: 'HeavyHeapRg' }}>
+            {`+${exercises.length - 6} more...`}
+          </Text>
         )}
       </View>
+      {/* 좌하단 로고 */}
       <View style={{ position: 'absolute', bottom: OVERLAY_PAD, left: OVERLAY_PAD }}>
         <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
       </View>
+      {/* 우하단 닉네임 + 날짜 - HeavyHeapRg 폰트 */}
       <View style={{ position: 'absolute', bottom: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'flex-end' }}>
-        <Text style={{ fontSize: 12, fontWeight: '900', color: tc }}>{nickname}</Text>
-        <Text style={{ fontSize: 9, fontWeight: '700', color: tc, opacity: 0.85, marginTop: 2 }}>{timestamp}</Text>
+        <Text style={{ fontSize: 12, color: tc, fontFamily: 'HeavyHeapRg' }}>{nickname}</Text>
+        <Text style={{ fontSize: 9, color: tc, opacity: 0.85, marginTop: 2, fontFamily: 'HeavyHeapRg' }}>{timestamp}</Text>
       </View>
     </>
   );
@@ -2132,12 +2160,12 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
               {([
                 { key: 'classic',    fontFamily: 'QuicksilverItalic' },
                 { key: 'leftcol',    fontFamily: 'QuicksilverItalic' },
-                { key: 'grid',       fontFamily: 'QuicksilverItalic' },
+                { key: 'grid',       fontFamily: 'HonfleurHeavy'     },
                 { key: 'centered',   fontFamily: 'MatchaCih'         },
                 { key: 'sidebar',    fontFamily: 'SportypoReguler'   },
                 { key: 'topbig',     fontFamily: 'VdeVacia'          },
-                { key: 'centerlist', fontFamily: 'MatchaCih'         },
-                { key: 'bottominfo', fontFamily: undefined            },
+                { key: 'centerlist', fontFamily: 'BlaccS'            },
+                { key: 'bottominfo', fontFamily: 'Flamer'             },
                 { key: 'archday',    fontFamily: 'Oklahoma'          },
               ] as { key: OverlayStyle; fontFamily: string | undefined }[]).map((opt, idx) => {
                 const isActive = overlayStyle === opt.key;
@@ -2429,6 +2457,11 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     'VdeVacia':          require('../../../assets/fonts/V-de-vacia-deFharo.ttf'),
     'Oklahoma':          require('../../../assets/fonts/Oklahoma.ttf'),
     'CollegeBoy':        require('../../../assets/fonts/College Boy.otf'),
+    'HonfleurHeavy':     require('../../../assets/fonts/Honfleur-Heavy.otf'),
+    'BlaccS':            require('../../../assets/fonts/BLACCS__.TTF'),
+    'Blacc':             require('../../../assets/fonts/BLACC___.TTF'),
+    'Flamer':            require('../../../assets/fonts/FLAMER.TTF'),
+    'HeavyHeapRg':       require('../../../assets/fonts/heavy heap rg.otf'),
   });
 
   const [step,              setStep]              = useState<Step>('gym-select');
