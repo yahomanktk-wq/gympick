@@ -1644,7 +1644,7 @@ export function ArchDayOverlay({ exercises, logs, nickname, timestamp, muscleLab
       {/* 3열 운동 목록 - GridOverlay와 동일한 구조 */}
       <View style={{
         position: 'absolute',
-        top: OVERLAY_PAD + 28 + svgH - 10,
+        top: OVERLAY_PAD + 28 + svgH - 100,
         left: OVERLAY_PAD,
         right: OVERLAY_PAD,
         bottom: OVERLAY_PAD + 32,
