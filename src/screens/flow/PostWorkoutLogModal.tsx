@@ -1712,9 +1712,17 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
   const sortedMuscles = Object.entries(muscleCounts)
     .sort(([, a], [, b]) => b - a)
     .map(([m]) => m);
+  function toSingularMuscle(muscle: string): string {
+    const map: Record<string, string> = {
+      'LEGS':      'LEG',
+      'SHOULDERS': 'SHOULDER',
+    };
+    return map[muscle.toUpperCase()] ?? muscle;
+  }
+
   const muscleLabel = sortedMuscles.length > 1
-    ? sortedMuscles.slice(0, 2).join(' + ')
-    : `${sortedMuscles[0] ?? 'WORKOUT'} Day`;
+    ? sortedMuscles.slice(0, 2).map(toSingularMuscle).join(' + ')
+    : `${toSingularMuscle(sortedMuscles[0] ?? 'WORKOUT')} Day`;
 
   async function handleShare() {
     const lines: string[] = [`🏋️ ${muscleLabel.toUpperCase()}`, ''];
