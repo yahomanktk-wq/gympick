@@ -1298,7 +1298,7 @@ export function LeftColOverlay({ exercises, logs, nickname, timestamp, muscleLab
         bottom: OVERLAY_PAD,
         right: OVERLAY_PAD,
       }}>
-        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.68)} height={Math.round(LOGO_STRIP_H * 0.68)} />
+        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
       </View>
     </>
   );
@@ -1389,7 +1389,7 @@ export function GridOverlay({ exercises, logs, nickname, timestamp, muscleLabel,
         right: 0,
         alignItems: 'center',
       }}>
-        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.68)} height={Math.round(LOGO_STRIP_H * 0.68)} />
+        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
       </View>
     </>
   );
@@ -1536,7 +1536,7 @@ export function SidebarOverlay({ exercises, logs, nickname, timestamp, muscleLab
         )}
       </View>
       <View style={{ position: 'absolute', bottom: OVERLAY_PAD, left: 0, right: 0, alignItems: 'center' }}>
-        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.68)} height={Math.round(LOGO_STRIP_H * 0.68)} />
+        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
       </View>
     </>
   );
@@ -1584,83 +1584,83 @@ export function TopBigOverlay({ exercises, logs, nickname, timestamp, muscleLabe
         )}
       </View>
       <View style={{ position: 'absolute', bottom: OVERLAY_PAD, left: 0, right: 0, alignItems: 'center' }}>
-        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.85)} height={Math.round(LOGO_STRIP_H * 0.85)} />
+        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
       </View>
     </>
   );
 }
 
 export function CenterListOverlay({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH }: OverlayProps) {
+  const COL_COUNT = 2;
+  const COL_W = Math.floor((photoW - OVERLAY_PAD * 2 - 12) / COL_COUNT);
   return (
     <>
-      <View style={{ position: 'absolute', top: OVERLAY_PAD, left: 0, right: 0, alignItems: 'center' }}>
-        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.85)} height={Math.round(LOGO_STRIP_H * 0.85)} />
+      <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD }}>
+        <Text style={{ fontSize: 13, color: tc, letterSpacing: 0.3, fontFamily: 'KCCGanpan' }}>
+          {nickname}
+        </Text>
+      </View>
+      <View style={{ position: 'absolute', top: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'flex-end' }}>
+        <Text style={{ fontSize: 10, color: tc, opacity: 0.85, fontFamily: 'MatSaleh' }}>
+          {timestamp}
+        </Text>
+      </View>
+      <View style={{ position: 'absolute', top: OVERLAY_PAD + 44, left: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'center' }}>
+        <Text style={{
+          fontSize: 32,
+          color: tc,
+          letterSpacing: -0.5,
+          textAlign: 'center',
+          fontFamily: 'MatchaCih',
+        }}>
+          {muscleLabel}
+        </Text>
       </View>
       <View style={{
         position: 'absolute',
-        top: OVERLAY_PAD + 36,
-        left: Math.round(photoW * 0.12),
-        right: Math.round(photoW * 0.12),
-        bottom: OVERLAY_PAD + 24,
-        alignItems: 'center',
-        justifyContent: 'flex-start',
+        top: OVERLAY_PAD + 44 + 52,
+        left: OVERLAY_PAD,
+        right: OVERLAY_PAD,
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        alignContent: 'flex-start',
       }}>
-        {exercises.slice(0, 7).map(ex => {
+        {exercises.slice(0, 8).map(ex => {
           const sets = logs[ex.id] ?? [];
+          const setsLine = sets.map(st => `${st.weight} × ${st.reps}`).join(' / ');
           return (
-            <View key={ex.id} style={{ marginBottom: 14, alignItems: 'center', width: '100%' }}>
-              <Text style={{ fontSize: 10, fontWeight: '900', color: tc, letterSpacing: 0.3, textAlign: 'center' }} numberOfLines={1}>
-                {`[${ex.brand.toUpperCase()}]`}
+            <View key={ex.id} style={{ width: COL_W, marginBottom: 10 }}>
+              <Text style={{
+                fontSize: 9,
+                color: tc,
+                letterSpacing: 0.3,
+                marginBottom: 2,
+                fontFamily: 'MatSaleh',
+              }} numberOfLines={1}>
+                {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
               </Text>
-              <Text style={{ fontSize: 11, fontWeight: '900', color: tc, textAlign: 'center', marginBottom: 3 }} numberOfLines={1}>
-                {ex.name.toUpperCase()}
-              </Text>
-              {sets.map((st, si) => (
-                <Text key={si} style={{ fontSize: 9, fontWeight: '600', color: tc, opacity: 0.85, textAlign: 'center' }}>
-                  {`S${si + 1} ${st.weight}kg × ${st.reps}`}
+              {setsLine ? (
+                <Text style={{
+                  fontSize: 8,
+                  color: tc,
+                  opacity: 0.85,
+                  fontFamily: 'MatSaleh',
+                }} numberOfLines={1}>
+                  {setsLine}
                 </Text>
-              ))}
+              ) : null}
             </View>
           );
         })}
-        {exercises.length > 7 && (
-          <Text style={{ fontSize: 8, fontWeight: '700', color: tc, opacity: 0.6 }}>{`+${exercises.length - 7} more...`}</Text>
+        {exercises.length > 8 && (
+          <Text style={{ fontSize: 8, color: tc, opacity: 0.6, fontFamily: 'MatSaleh' }}>
+            {`+${exercises.length - 8} more...`}
+          </Text>
         )}
       </View>
-      <View style={{
-        position: 'absolute',
-        left: OVERLAY_PAD - 6,
-        top: photoH * 0.3,
-        width: 32,
-        alignItems: 'center',
-      }}>
-        <Text style={{
-          fontSize: 20,
-          fontWeight: '900',
-          color: tc,
-          textDecorationLine: 'underline',
-          transform: [{ rotate: '90deg' }],
-          width: photoH * 0.4,
-          textAlign: 'center',
-          letterSpacing: -0.3,
-        }} numberOfLines={1}>{muscleLabel}</Text>
-      </View>
-      <View style={{
-        position: 'absolute',
-        right: OVERLAY_PAD - 6,
-        top: photoH * 0.3,
-        width: 32,
-        alignItems: 'center',
-      }}>
-        <Text style={{
-          fontSize: 9,
-          fontWeight: '700',
-          color: tc,
-          opacity: 0.85,
-          transform: [{ rotate: '-90deg' }],
-          width: photoH * 0.4,
-          textAlign: 'center',
-        }} numberOfLines={1}>{timestamp}</Text>
+      <View style={{ position: 'absolute', bottom: OVERLAY_PAD, left: 0, right: 0, alignItems: 'center' }}>
+        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
       </View>
     </>
   );
@@ -1700,7 +1700,7 @@ export function BottomInfoOverlay({ exercises, logs, nickname, timestamp, muscle
         )}
       </View>
       <View style={{ position: 'absolute', bottom: OVERLAY_PAD, left: OVERLAY_PAD }}>
-        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.85)} height={Math.round(LOGO_STRIP_H * 0.85)} />
+        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
       </View>
       <View style={{ position: 'absolute', bottom: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'flex-end' }}>
         <Text style={{ fontSize: 12, fontWeight: '900', color: tc }}>{nickname}</Text>
