@@ -1582,15 +1582,17 @@ export function BottomInfoOverlay({ exercises, logs, nickname, timestamp, muscle
 }
 
 export function ArchDayOverlay({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH }: OverlayProps) {
-  const COL_COUNT = 2;
-  const COL_W = Math.floor((photoW - OVERLAY_PAD * 2 - 12) / COL_COUNT);
+  const COL_COUNT = 3;
+  const COL_W = Math.floor((photoW - OVERLAY_PAD * 2 - 16) / COL_COUNT);
 
+  // 아치형 SVG 설정
   const svgW = photoW;
   const svgH = Math.round(photoW * 0.55);
   const cx   = svgW / 2;
   const cy   = svgH + svgH * 0.1;
   const r    = svgH * 0.85;
 
+  // 반원 호 path (위쪽 아치)
   const startX = cx - r;
   const startY = cy;
   const endX   = cx + r;
@@ -1599,17 +1601,20 @@ export function ArchDayOverlay({ exercises, logs, nickname, timestamp, muscleLab
 
   return (
     <>
+      {/* 상단 좌: 닉네임 */}
       <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD }}>
         <Text style={{ fontSize: 13, color: tc, fontFamily: 'CollegeBoy', letterSpacing: 0.3 }}>
           {nickname}
         </Text>
       </View>
+      {/* 상단 우: 날짜 */}
       <View style={{ position: 'absolute', top: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'flex-end' }}>
         <Text style={{ fontSize: 10, color: tc, opacity: 0.85, fontFamily: 'CollegeBoy' }}>
           {timestamp}
         </Text>
       </View>
 
+      {/* 중앙 아치형 타겟부위 */}
       <View style={{
         position: 'absolute',
         top: OVERLAY_PAD + 28,
@@ -1636,45 +1641,51 @@ export function ArchDayOverlay({ exercises, logs, nickname, timestamp, muscleLab
         </Svg>
       </View>
 
+      {/* 3열 운동 목록 - GridOverlay와 동일한 구조 */}
       <View style={{
         position: 'absolute',
         top: OVERLAY_PAD + 28 + svgH - 10,
         left: OVERLAY_PAD,
         right: OVERLAY_PAD,
+        bottom: OVERLAY_PAD + 32,
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: 8,
         alignContent: 'flex-start',
+        justifyContent: 'center',
       }}>
-        {exercises.slice(0, 8).map(ex => {
+        {exercises.slice(0, 9).map(ex => {
           const sets = logs[ex.id] ?? [];
           return (
-            <View key={ex.id} style={{ width: COL_W, marginBottom: 10, alignItems: 'center' }}>
+            <View key={ex.id} style={{ width: COL_W, marginBottom: 12, alignItems: 'center' }}>
               <Text style={{
-                fontSize: 9,
-                color: tc,
-                letterSpacing: 0.3,
-                marginBottom: 2,
+                fontSize: 8,
                 fontFamily: 'CollegeBoy',
+                color: tc,
+                opacity: 0.7,
+                letterSpacing: 0.5,
                 textAlign: 'center',
-              }} numberOfLines={1}>
+              }}>
                 {`[${ex.brand.toUpperCase()}]`}
               </Text>
               <Text style={{
-                fontSize: 10,
-                color: tc,
+                fontSize: 9,
                 fontFamily: 'CollegeBoy',
+                color: tc,
+                letterSpacing: 0.2,
+                marginBottom: 3,
+                lineHeight: 13,
                 textAlign: 'center',
-                marginBottom: 2,
-              }} numberOfLines={1}>
+              }} numberOfLines={2}>
                 {ex.name.toUpperCase()}
               </Text>
               {sets.map((st, si) => (
                 <Text key={si} style={{
-                  fontSize: 9,
+                  fontSize: 8,
+                  fontFamily: 'CollegeBoy',
                   color: tc,
                   opacity: 0.85,
-                  fontFamily: 'CollegeBoy',
+                  lineHeight: 13,
                   textAlign: 'center',
                 }}>
                   {`S${si + 1} ${st.weight}kg × ${st.reps}`}
@@ -1683,13 +1694,16 @@ export function ArchDayOverlay({ exercises, logs, nickname, timestamp, muscleLab
             </View>
           );
         })}
-        {exercises.length > 8 && (
-          <Text style={{ fontSize: 8, color: tc, opacity: 0.6, fontFamily: 'CollegeBoy' }}>
-            {`+${exercises.length - 8} more...`}
-          </Text>
+        {exercises.length > 9 && (
+          <View style={{ width: COL_W }}>
+            <Text style={{ fontSize: 8, fontFamily: 'CollegeBoy', color: tc, opacity: 0.6 }}>
+              {`+${exercises.length - 9} more...`}
+            </Text>
+          </View>
         )}
       </View>
 
+      {/* 하단 중앙 로고 */}
       <View style={{ position: 'absolute', bottom: OVERLAY_PAD, left: 0, right: 0, alignItems: 'center' }}>
         <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
       </View>
