@@ -2458,9 +2458,9 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     'Oklahoma':          require('../../../assets/fonts/Oklahoma.ttf'),
     'CollegeBoy':        require('../../../assets/fonts/College_Boy.otf'),
     'HonfleurHeavy':     require('../../../assets/fonts/Honfleur-Heavy.otf'),
-    'BlaccS':            require('../../../assets/fonts/BLACCS.TTF'),
-    'Blacc':             require('../../../assets/fonts/BLACC.TTF'),
-    'Flamer':            require('../../../assets/fonts/Flamer.TTF'),
+    'BlaccS':            require('../../../assets/fonts/BLACCS.ttf'),
+    'Blacc':             require('../../../assets/fonts/BLACC.ttf'),
+    'Flamer':            require('../../../assets/fonts/Flamer.ttf'),
     'HeavyHeapRg':       require('../../../assets/fonts/heavy_heap_rg.otf'),
   });
 
