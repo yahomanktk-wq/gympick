@@ -57,6 +57,7 @@ import { brandLogos } from '../../constants/brandLogos';
 import { fetchSplitConfig } from '../../lib/db/splitRoutine';
 import { getTodayTarget, toEnMuscle } from '../../lib/splitUtils';
 import { useFonts } from 'expo-font';
+import Svg, { Path as SvgPath, Text as SvgText, TextPath, Defs } from 'react-native-svg';
 
 // --- Types
 
@@ -101,7 +102,7 @@ const LOGO_STRIP_W = Math.round(LOGO_STRIP_H * (2805 / 279)); // ≈ 141px
 const OVERLAY_PAD = 20;
 
 // Overlay layout style variants
-type OverlayStyle = 'classic' | 'leftcol' | 'grid' | 'centered' | 'sidebar' | 'topbig' | 'centerlist' | 'bottominfo';
+type OverlayStyle = 'classic' | 'leftcol' | 'grid' | 'centered' | 'sidebar' | 'topbig' | 'centerlist' | 'bottominfo' | 'archday';
 
 // Fixed presets as specified
 const WEIGHT_PRESETS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 140, 160, 180, 200];
@@ -1552,6 +1553,122 @@ export function BottomInfoOverlay({ exercises, logs, nickname, timestamp, muscle
   );
 }
 
+export function ArchDayOverlay({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH }: OverlayProps) {
+  const COL_COUNT = 2;
+  const COL_W = Math.floor((photoW - OVERLAY_PAD * 2 - 12) / COL_COUNT);
+
+  const svgW = photoW;
+  const svgH = Math.round(photoW * 0.55);
+  const cx   = svgW / 2;
+  const cy   = svgH + svgH * 0.1;
+  const r    = svgH * 0.85;
+
+  const startX = cx - r;
+  const startY = cy;
+  const endX   = cx + r;
+  const endY   = cy;
+  const archPath = `M ${startX} ${startY} A ${r} ${r} 0 0 1 ${endX} ${endY}`;
+
+  return (
+    <>
+      <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD }}>
+        <Text style={{ fontSize: 13, color: tc, fontFamily: 'CollegeBoy', letterSpacing: 0.3 }}>
+          {nickname}
+        </Text>
+      </View>
+      <View style={{ position: 'absolute', top: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'flex-end' }}>
+        <Text style={{ fontSize: 10, color: tc, opacity: 0.85, fontFamily: 'CollegeBoy' }}>
+          {timestamp}
+        </Text>
+      </View>
+
+      <View style={{
+        position: 'absolute',
+        top: OVERLAY_PAD + 28,
+        left: 0,
+        width: photoW,
+        height: svgH,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+        <Svg width={svgW} height={svgH}>
+          <Defs>
+            <SvgPath id="archPath" d={archPath} />
+          </Defs>
+          <SvgText
+            fill={tc}
+            fontSize={Math.round(photoW * 0.13)}
+            fontFamily="Oklahoma"
+            textAnchor="middle"
+          >
+            <TextPath href="#archPath" startOffset="50%">
+              {muscleLabel.toUpperCase()}
+            </TextPath>
+          </SvgText>
+        </Svg>
+      </View>
+
+      <View style={{
+        position: 'absolute',
+        top: OVERLAY_PAD + 28 + svgH - 10,
+        left: OVERLAY_PAD,
+        right: OVERLAY_PAD,
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        alignContent: 'flex-start',
+      }}>
+        {exercises.slice(0, 8).map(ex => {
+          const sets = logs[ex.id] ?? [];
+          return (
+            <View key={ex.id} style={{ width: COL_W, marginBottom: 10, alignItems: 'center' }}>
+              <Text style={{
+                fontSize: 9,
+                color: tc,
+                letterSpacing: 0.3,
+                marginBottom: 2,
+                fontFamily: 'CollegeBoy',
+                textAlign: 'center',
+              }} numberOfLines={1}>
+                {`[${ex.brand.toUpperCase()}]`}
+              </Text>
+              <Text style={{
+                fontSize: 10,
+                color: tc,
+                fontFamily: 'CollegeBoy',
+                textAlign: 'center',
+                marginBottom: 2,
+              }} numberOfLines={1}>
+                {ex.name.toUpperCase()}
+              </Text>
+              {sets.map((st, si) => (
+                <Text key={si} style={{
+                  fontSize: 9,
+                  color: tc,
+                  opacity: 0.85,
+                  fontFamily: 'CollegeBoy',
+                  textAlign: 'center',
+                }}>
+                  {`S${si + 1} ${st.weight}kg × ${st.reps}`}
+                </Text>
+              ))}
+            </View>
+          );
+        })}
+        {exercises.length > 8 && (
+          <Text style={{ fontSize: 8, color: tc, opacity: 0.6, fontFamily: 'CollegeBoy' }}>
+            {`+${exercises.length - 8} more...`}
+          </Text>
+        )}
+      </View>
+
+      <View style={{ position: 'absolute', bottom: OVERLAY_PAD, left: 0, right: 0, alignItems: 'center' }}>
+        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
+      </View>
+    </>
+  );
+}
+
 // --- Step 5: Photo
 
 function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname, onColorChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera }: {
@@ -1828,6 +1945,18 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
                 photoH={photoH}
               />
             )}
+            {overlayStyle === 'archday' && (
+              <ArchDayOverlay
+                exercises={exercises}
+                logs={logs}
+                nickname={displayName}
+                timestamp={timestamp}
+                muscleLabel={muscleLabel}
+                tc={tc}
+                photoW={PHOTO_W}
+                photoH={photoH}
+              />
+            )}
 
             {/* 테두리: overflow 클리핑 이후 absolute로 덮어 빈공간 방지 */}
             <View
@@ -2001,6 +2130,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
                 { key: 'topbig',     fontFamily: 'VdeVacia'          },
                 { key: 'centerlist', fontFamily: 'MatchaCih'         },
                 { key: 'bottominfo', fontFamily: undefined            },
+                { key: 'archday',    fontFamily: 'Oklahoma'          },
               ] as { key: OverlayStyle; fontFamily: string | undefined }[]).map((opt, idx) => {
                 const isActive = overlayStyle === opt.key;
                 return (
@@ -2289,6 +2419,8 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     'QuicksilverItalic': require('../../../assets/fonts/Quicksilver_Italic.ttf'),
     'SportypoReguler':   require('../../../assets/fonts/Sportypo-Reguler-Demo.ttf'),
     'VdeVacia':          require('../../../assets/fonts/V-de-vacia-deFharo.ttf'),
+    'Oklahoma':          require('../../../assets/fonts/Oklahoma.ttf'),
+    'CollegeBoy':        require('../../../assets/fonts/College Boy.otf'),
   });
 
   const [step,              setStep]              = useState<Step>('gym-select');

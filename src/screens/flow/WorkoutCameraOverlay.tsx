@@ -12,7 +12,7 @@ import { CameraView, useCameraPermissions, type CameraView as CameraViewType } f
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { C, R } from '../../theme';
-import { ClassicOverlay, LeftColOverlay, GridOverlay, CenteredOverlay, SidebarOverlay, TopBigOverlay, CenterListOverlay, BottomInfoOverlay } from './PostWorkoutLogModal';
+import { ClassicOverlay, LeftColOverlay, GridOverlay, CenteredOverlay, SidebarOverlay, TopBigOverlay, CenterListOverlay, BottomInfoOverlay, ArchDayOverlay } from './PostWorkoutLogModal';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const PHOTO_W = SCREEN_W - 32;
@@ -26,7 +26,7 @@ interface Props {
   logs: Record<string, { weight: number; reps: number }[]>;
   nickname?: string;
   textColor: string;
-  overlayStyle?: 'classic' | 'leftcol' | 'grid' | 'centered' | 'sidebar' | 'topbig' | 'centerlist' | 'bottominfo';
+  overlayStyle?: 'classic' | 'leftcol' | 'grid' | 'centered' | 'sidebar' | 'topbig' | 'centerlist' | 'bottominfo' | 'archday';
   onCaptureDone: (uri: string) => void;
   onCancel: () => void;
 }
@@ -297,6 +297,18 @@ export default function WorkoutCameraOverlay({
               timestamp={timestamp}
               muscleLabel={muscleLabel}
               tc={tc}
+              photoW={PHOTO_W}
+              photoH={PHOTO_H}
+            />
+          )}
+          {overlayStyle === 'archday' && (
+            <ArchDayOverlay
+              exercises={exercises}
+              logs={logs}
+              nickname={nickname}
+              timestamp={timestamp}
+              muscleLabel={muscleLabel}
+              tc={textColor}
               photoW={PHOTO_W}
               photoH={PHOTO_H}
             />
