@@ -2460,7 +2460,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     'HonfleurHeavy':     require('../../../assets/fonts/Honfleur-Heavy.otf'),
     'BlaccS':            require('../../../assets/fonts/BLACCS.ttf'),
     'Blacc':             require('../../../assets/fonts/BLACC.ttf'),
-    'Flamer':            require('../../../assets/fonts/Flamer.ttf'),
+    'Flamer':            require('../../../assets/fonts/flamer.ttf'),
     'HeavyHeapRg':       require('../../../assets/fonts/heavy_heap_rg.otf'),
   });
 
