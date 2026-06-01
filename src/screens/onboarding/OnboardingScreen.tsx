@@ -24,11 +24,32 @@ const LIME = '#C6FF00';
 // TODO: replace with actual screenshot
 const IMGS = {
   find:      require('../../assets/onboarding/slide_02_find.png'),
-  record:    require('../../assets/onboarding/slide_03_record.png'),
-  community: require('../../assets/onboarding/slide_04_community.png'),
+  nearby:    require('../../assets/onboarding/slide_03_nearby.png'),
+  record:    require('../../assets/onboarding/slide_04_record.png'),
+  ounwan:    require('../../assets/onboarding/slide_05_ounwan.png'),
+  photobook: require('../../assets/onboarding/slide_06_photobook.png'),
+  community: require('../../assets/onboarding/slide_07_community.png'),
 };
 
-const SLIDES = [
+type SlideKey = 'welcome' | 'find' | 'nearby' | 'record' | 'ounwan' | 'photobook' | 'community' | 'complete';
+
+interface ImageSlide {
+  key: SlideKey;
+  tag: string;
+  mainText: string;
+  subText: string;
+  btnLabel: string;
+  image: any;
+}
+interface PlainSlide {
+  key: 'welcome' | 'complete';
+  mainText: string;
+  subText: string;
+  btnLabel: string;
+}
+type SlideConfig = ImageSlide | PlainSlide;
+
+const SLIDES: SlideConfig[] = [
   {
     key: 'welcome',
     mainText: '헬스장 갈 때,\n픽하고 기록하자',
@@ -44,12 +65,36 @@ const SLIDES = [
     image: IMGS.find,
   },
   {
+    key: 'nearby',
+    tag: 'FIND',
+    mainText: '내 주변 헬스장 머신을\n한눈에 확인해요',
+    subText: '방문 전에 보유 머신을 미리 조회하고\n헬스장을 픽하세요',
+    btnLabel: '다음 →',
+    image: IMGS.nearby,
+  },
+  {
     key: 'record',
     tag: 'RECORD',
     mainText: '머신으로 기록,\n오운완으로 마무리',
     subText: '나만의 인증샷 템플릿으로 완성해요',
     btnLabel: '다음 →',
     image: IMGS.record,
+  },
+  {
+    key: 'ounwan',
+    tag: 'RECORD',
+    mainText: '오운완 인증샷을 만들고\n루틴을 저장해요',
+    subText: '완성된 루틴은 다음 운동에\n바로 불러올 수 있어요',
+    btnLabel: '다음 →',
+    image: IMGS.ounwan,
+  },
+  {
+    key: 'photobook',
+    tag: 'JOURNAL',
+    mainText: '운동일지가 쌓이면\n나만의 포토북이 돼요',
+    subText: '매일의 기록이 모여\n나의 성장 스토리가 됩니다',
+    btnLabel: '다음 →',
+    image: IMGS.photobook,
   },
   {
     key: 'community',
@@ -65,7 +110,9 @@ const SLIDES = [
     subText: '머신 기준으로 헬스장을 탐색하고\n운동을 기록해보세요',
     btnLabel: '짐픽 시작하기',
   },
-] as const;
+];
+
+const LAST = SLIDES.length - 1; // 7
 
 export default function OnboardingScreen({ navigation }: { navigation: any }) {
   const insets = useSafeAreaInsets();
@@ -79,13 +126,19 @@ export default function OnboardingScreen({ navigation }: { navigation: any }) {
   const btnScale     = useRef(new Animated.Value(1)).current;
   const checkScale   = useRef(new Animated.Value(0)).current;
   const textFade     = useRef(new Animated.Value(0)).current;
-  const dotAnims     = useRef([0, 1, 2, 3].map(() => new Animated.Value(6))).current;
+  // 7 dots for slides 2–8 (indices 1–7)
+  const dotAnims = useRef([0, 1, 2, 3, 4, 5, 6].map(() => new Animated.Value(6))).current;
 
   const animateDots = useCallback((to: number) => {
     if (to < 1) return;
+    const dotIdx = to - 1;
     Animated.parallel(
       dotAnims.map((a, i) =>
-        Animated.timing(a, { toValue: i === to - 1 ? 20 : 6, duration: 200, useNativeDriver: false })
+        Animated.timing(a, {
+          toValue: i === dotIdx ? 20 : 6,
+          duration: 200,
+          useNativeDriver: false,
+        })
       )
     ).start();
   }, [dotAnims]);
@@ -118,12 +171,18 @@ export default function OnboardingScreen({ navigation }: { navigation: any }) {
         transitioning.current = false;
         animateDots(next);
 
-        if (next === 4) {
+        // Complete slide (index 7) microinteractions
+        if (next === LAST) {
           checkScale.setValue(0);
           textFade.setValue(0);
           Animated.sequence([
             Animated.delay(200),
-            Animated.spring(checkScale, { toValue: 1.1, useNativeDriver: true, tension: 120, friction: 8 }),
+            Animated.spring(checkScale, {
+              toValue: 1.1,
+              useNativeDriver: true,
+              tension: 120,
+              friction: 8,
+            }),
           ]).start(() => {
             Animated.spring(checkScale, { toValue: 1.0, useNativeDriver: true }).start();
           });
@@ -145,10 +204,11 @@ export default function OnboardingScreen({ navigation }: { navigation: any }) {
         Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy),
       onPanResponderRelease: (_, { dx }) => {
         const cur = currentRef.current;
-        if (dx < -50 && cur < 4) {
+        if (dx < -50 && cur < LAST) {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           goToSlideRef.current(cur + 1);
-        } else if (dx > 50 && cur >= 2 && cur <= 4) {
+        } else if (dx > 50 && cur >= 1 && cur < LAST) {
+          // slides 2–7 (indices 1–6) can swipe back; slide 1 and complete cannot
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           goToSlideRef.current(cur - 1);
         }
@@ -169,7 +229,7 @@ export default function OnboardingScreen({ navigation }: { navigation: any }) {
 
   function onBtnPress() {
     const cur = currentRef.current;
-    if (cur === 4) { complete(); return; }
+    if (cur === LAST) { complete(); return; }
     if (cur > 0) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     goToSlide(cur + 1);
   }
@@ -209,11 +269,11 @@ export default function OnboardingScreen({ navigation }: { navigation: any }) {
       );
     }
 
-    // Image slides (find / record / community)
-    const s = slide as typeof SLIDES[1];
+    // Image slides
+    const imgSlide = slide as ImageSlide;
     return (
       <View style={ss.fill}>
-        <Image source={s.image} style={StyleSheet.absoluteFill} resizeMode="cover" />
+        <Image source={imgSlide.image} style={StyleSheet.absoluteFill} resizeMode="cover" />
         <LinearGradient
           colors={['transparent', 'rgba(0,0,0,0.97)']}
           style={ss.gradient}
@@ -221,7 +281,7 @@ export default function OnboardingScreen({ navigation }: { navigation: any }) {
           end={{ x: 0, y: 1 }}
         />
         <View style={[ss.imgBottom, { paddingBottom: 100 + insets.bottom }]}>
-          <Text style={ss.tag}>{s.tag}</Text>
+          <Text style={ss.tag}>{imgSlide.tag}</Text>
           <Text style={ss.imgMain}>{slide.mainText}</Text>
           <Text style={ss.imgSub}>{slide.subText}</Text>
         </View>
@@ -229,7 +289,7 @@ export default function OnboardingScreen({ navigation }: { navigation: any }) {
     );
   }
 
-  const activeDot = current - 1;
+  const activeDot = current - 1; // -1 when on slide 1 (no dots)
 
   return (
     <View style={ss.root} {...panResponder.panHandlers}>
@@ -249,7 +309,7 @@ export default function OnboardingScreen({ navigation }: { navigation: any }) {
         </Animated.View>
       )}
 
-      {/* Dot indicator (slides 2–5, i.e. index 1–4) */}
+      {/* Dot indicator — slides 2–8 (index 1–7), 7 dots */}
       {current > 0 && (
         <View style={ss.dotsWrap} pointerEvents="none">
           {dotAnims.map((anim, i) => (
@@ -303,7 +363,7 @@ const ss = StyleSheet.create({
     paddingHorizontal: 32,
   },
 
-  // Skip button
+  // Skip button (slide 1 only)
   skipBtn: {
     position: 'absolute',
     right: 20,
@@ -385,7 +445,7 @@ const ss = StyleSheet.create({
     lineHeight: 22,
   },
 
-  // Dots
+  // Dots (7개)
   dotsWrap: {
     position: 'absolute',
     bottom: 100,
@@ -394,7 +454,7 @@ const ss = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
   },
   dot: {
     height: 6,
@@ -409,7 +469,6 @@ const ss = StyleSheet.create({
     bottom: 0,
     paddingHorizontal: 24,
     paddingTop: 12,
-    backgroundColor: 'transparent',
   },
   btn: {
     backgroundColor: LIME,
