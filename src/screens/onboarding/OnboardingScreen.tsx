@@ -12,125 +12,66 @@ import {
   StatusBar,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import GymPickLogo from '../../components/GymPickLogo';
 
-const { width: SW } = Dimensions.get('window');
+const { width: SW, height: SH } = Dimensions.get('window');
 const LIME = '#C6FF00';
 
-// TODO: replace with actual screenshot
+// TODO: replace with actual screenshots
 const IMGS = {
-  find:      require('../../assets/onboarding/slide_02_find.png'),
-  nearby:    require('../../assets/onboarding/slide_03_nearby.png'),
-  record:    require('../../assets/onboarding/slide_04_record.png'),
-  ounwan:    require('../../assets/onboarding/slide_05_ounwan.png'),
-  photobook: require('../../assets/onboarding/slide_06_photobook.png'),
-  community: require('../../assets/onboarding/slide_07_community.png'),
+  machine_to_gym:  require('../../assets/onboarding/slide_02_machine_to_gym.webp'),
+  gym_to_machine:  require('../../assets/onboarding/slide_03_gym_to_machine.webp'),
+  machine_select:  require('../../assets/onboarding/slide_04_machine_select.webp'),
+  routine_input:   require('../../assets/onboarding/slide_05_routine_input.webp'),
+  ounwan_create:   require('../../assets/onboarding/slide_06_ounwan_create.webp'),
+  save_photobook:  require('../../assets/onboarding/slide_07_save_photobook.webp'),
+  today_ounwan:    require('../../assets/onboarding/slide_08_today_ounwan.webp'),
 };
 
-type SlideKey = 'welcome' | 'find' | 'nearby' | 'record' | 'ounwan' | 'photobook' | 'community' | 'complete';
+type SlideType = 'welcome' | 'image' | 'complete';
 
-interface ImageSlide {
-  key: SlideKey;
-  tag: string;
-  mainText: string;
-  subText: string;
-  btnLabel: string;
-  image: any;
-}
-interface PlainSlide {
-  key: 'welcome' | 'complete';
-  mainText: string;
-  subText: string;
+interface Slide {
+  type: SlideType;
+  image?: any;
   btnLabel: string;
 }
-type SlideConfig = ImageSlide | PlainSlide;
 
-const SLIDES: SlideConfig[] = [
-  {
-    key: 'welcome',
-    mainText: '헬스장 갈 때,\n픽하고 기록하자',
-    subText: '머신 중심 헬스 플랫폼',
-    btnLabel: '시작하기',
-  },
-  {
-    key: 'find',
-    tag: 'FIND',
-    mainText: '내 머신이 있는 헬스장 찾기',
-    subText: '없는 헬스장이나 머신 정보가 다르면\n직접 제보할 수 있어요',
-    btnLabel: '다음 →',
-    image: IMGS.find,
-  },
-  {
-    key: 'nearby',
-    tag: 'FIND',
-    mainText: '내 주변 헬스장 머신을\n한눈에 확인해요',
-    subText: '방문 전에 보유 머신을 미리 조회하고\n헬스장을 픽하세요',
-    btnLabel: '다음 →',
-    image: IMGS.nearby,
-  },
-  {
-    key: 'record',
-    tag: 'RECORD',
-    mainText: '머신으로 기록,\n오운완으로 마무리',
-    subText: '나만의 인증샷 템플릿으로 완성해요',
-    btnLabel: '다음 →',
-    image: IMGS.record,
-  },
-  {
-    key: 'ounwan',
-    tag: 'RECORD',
-    mainText: '오운완 인증샷을 만들고\n루틴을 저장해요',
-    subText: '완성된 루틴은 다음 운동에\n바로 불러올 수 있어요',
-    btnLabel: '다음 →',
-    image: IMGS.ounwan,
-  },
-  {
-    key: 'photobook',
-    tag: 'JOURNAL',
-    mainText: '운동일지가 쌓이면\n나만의 포토북이 돼요',
-    subText: '매일의 기록이 모여\n나의 성장 스토리가 됩니다',
-    btnLabel: '다음 →',
-    image: IMGS.photobook,
-  },
-  {
-    key: 'community',
-    tag: 'COMMUNITY',
-    mainText: '다른 사람들의 루틴 구경하기',
-    subText: '오운완 · 루틴 · 머신 사용법\n보고 따라하고 공유해요',
-    btnLabel: '다음 →',
-    image: IMGS.community,
-  },
-  {
-    key: 'complete',
-    mainText: '짐픽을 시작할 준비가 됐어요',
-    subText: '머신 기준으로 헬스장을 탐색하고\n운동을 기록해보세요',
-    btnLabel: '짐픽 시작하기',
-  },
+const SLIDES: Slide[] = [
+  { type: 'welcome',  btnLabel: '시작하기' },
+  { type: 'image',    btnLabel: '다음 →', image: IMGS.machine_to_gym },
+  { type: 'image',    btnLabel: '다음 →', image: IMGS.gym_to_machine },
+  { type: 'image',    btnLabel: '다음 →', image: IMGS.machine_select },
+  { type: 'image',    btnLabel: '다음 →', image: IMGS.routine_input },
+  { type: 'image',    btnLabel: '다음 →', image: IMGS.ounwan_create },
+  { type: 'image',    btnLabel: '다음 →', image: IMGS.save_photobook },
+  { type: 'image',    btnLabel: '다음 →', image: IMGS.today_ounwan },
+  { type: 'complete', btnLabel: '짐픽 시작하기' },
 ];
 
-const LAST = SLIDES.length - 1; // 7
+const LAST     = SLIDES.length - 1; // 8
+const DOT_COUNT = LAST - 1;         // 7 (슬라이드 2~8)
 
-export default function OnboardingScreen({ navigation }: { navigation: any }) {
-  const insets = useSafeAreaInsets();
-  const [current, setCurrent]   = useState(0);
-  const [incoming, setIncoming] = useState<number | null>(null);
-  const currentRef   = useRef(0);
+export default function OnboardingScreen({ navigation, route }: { navigation: any; route?: any }) {
+  const isReview  = route?.params?.isReview === true;
+  const insets    = useSafeAreaInsets();
+  const [current, setCurrent] = useState(0);
+  const currentRef    = useRef(0);
   const transitioning = useRef(false);
 
-  const outOpacity   = useRef(new Animated.Value(1)).current;
-  const inTranslateX = useRef(new Animated.Value(SW)).current;
-  const btnScale     = useRef(new Animated.Value(1)).current;
-  const checkScale   = useRef(new Animated.Value(0)).current;
-  const textFade     = useRef(new Animated.Value(0)).current;
-  // 7 dots for slides 2–8 (indices 1–7)
-  const dotAnims = useRef([0, 1, 2, 3, 4, 5, 6].map(() => new Animated.Value(6))).current;
+  const slideX     = useRef(new Animated.Value(0)).current;
+  const btnScale   = useRef(new Animated.Value(1)).current;
+  const checkScale = useRef(new Animated.Value(0)).current;
+  const textFade   = useRef(new Animated.Value(0)).current;
+
+  const dotAnims = useRef(
+    Array.from({ length: DOT_COUNT }, () => new Animated.Value(6))
+  ).current;
 
   const animateDots = useCallback((to: number) => {
-    if (to < 1) return;
+    if (to < 1 || to >= LAST) return;
     const dotIdx = to - 1;
     Animated.parallel(
       dotAnims.map((a, i) =>
@@ -146,54 +87,43 @@ export default function OnboardingScreen({ navigation }: { navigation: any }) {
   const goToSlide = useCallback((next: number) => {
     if (transitioning.current) return;
     transitioning.current = true;
-    inTranslateX.setValue(SW);
-    setIncoming(next);
 
-    requestAnimationFrame(() => {
-      Animated.parallel([
-        Animated.timing(outOpacity, {
-          toValue: 0,
-          duration: 280,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(inTranslateX, {
-          toValue: 0,
-          duration: 280,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        currentRef.current = next;
-        setCurrent(next);
-        setIncoming(null);
-        outOpacity.setValue(1);
-        transitioning.current = false;
-        animateDots(next);
+    slideX.setValue(SW);
+    setCurrent(next);
 
-        // Complete slide (index 7) microinteractions
-        if (next === LAST) {
-          checkScale.setValue(0);
-          textFade.setValue(0);
-          Animated.sequence([
-            Animated.delay(200),
-            Animated.spring(checkScale, {
-              toValue: 1.1,
-              useNativeDriver: true,
-              tension: 120,
-              friction: 8,
-            }),
-          ]).start(() => {
-            Animated.spring(checkScale, { toValue: 1.0, useNativeDriver: true }).start();
-          });
-          Animated.sequence([
-            Animated.delay(300),
-            Animated.timing(textFade, { toValue: 1, duration: 300, useNativeDriver: true }),
-          ]).start();
-        }
-      });
+    Animated.timing(slideX, {
+      toValue: 0,
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished) return;
+      currentRef.current = next;
+      transitioning.current = false;
+
+      requestAnimationFrame(() => animateDots(next));
+
+      if (next === LAST) {
+        checkScale.setValue(0);
+        textFade.setValue(0);
+        Animated.sequence([
+          Animated.delay(150),
+          Animated.spring(checkScale, {
+            toValue: 1.1,
+            useNativeDriver: true,
+            tension: 120,
+            friction: 8,
+          }),
+        ]).start(() => {
+          Animated.spring(checkScale, { toValue: 1.0, useNativeDriver: true }).start();
+        });
+        Animated.sequence([
+          Animated.delay(250),
+          Animated.timing(textFade, { toValue: 1, duration: 280, useNativeDriver: true }),
+        ]).start();
+      }
     });
-  }, [animateDots, outOpacity, inTranslateX, checkScale, textFade]);
+  }, [animateDots, slideX, checkScale, textFade]);
 
   const goToSlideRef = useRef(goToSlide);
   goToSlideRef.current = goToSlide;
@@ -208,7 +138,6 @@ export default function OnboardingScreen({ navigation }: { navigation: any }) {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           goToSlideRef.current(cur + 1);
         } else if (dx > 50 && cur >= 1 && cur < LAST) {
-          // slides 2–7 (indices 1–6) can swipe back; slide 1 and complete cannot
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           goToSlideRef.current(cur - 1);
         }
@@ -218,13 +147,21 @@ export default function OnboardingScreen({ navigation }: { navigation: any }) {
 
   async function complete() {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    await AsyncStorage.setItem('onboarding_completed', 'true');
-    navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+    if (isReview) {
+      navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+    } else {
+      await AsyncStorage.setItem('onboarding_completed', 'true');
+      navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+    }
   }
 
   async function skip() {
-    await AsyncStorage.setItem('onboarding_completed', 'true');
-    navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+    if (isReview) {
+      navigation.goBack();
+    } else {
+      await AsyncStorage.setItem('onboarding_completed', 'true');
+      navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+    }
   }
 
   function onBtnPress() {
@@ -237,7 +174,8 @@ export default function OnboardingScreen({ navigation }: { navigation: any }) {
   function renderContent(idx: number) {
     const slide = SLIDES[idx];
 
-    if (slide.key === 'welcome') {
+    // 1장 — 환영
+    if (slide.type === 'welcome') {
       return (
         <View style={[ss.fill, ss.center]} pointerEvents="box-none">
           <TouchableOpacity
@@ -249,68 +187,55 @@ export default function OnboardingScreen({ navigation }: { navigation: any }) {
           </TouchableOpacity>
           <GymPickLogo color="#ffffff" height={36} />
           <View style={{ height: 40 }} />
-          <Text style={ss.welcomeMain}>{slide.mainText}</Text>
-          <Text style={ss.welcomeSub}>{slide.subText}</Text>
+          <Text style={ss.welcomeMain}>{'헬스장 갈 때,\n픽하고 기록하자'}</Text>
+          <Text style={ss.welcomeSub}>머신 중심 헬스 플랫폼</Text>
         </View>
       );
     }
 
-    if (slide.key === 'complete') {
+    // 마지막 — 완료
+    if (slide.type === 'complete') {
       return (
         <View style={[ss.fill, ss.center]}>
           <Animated.View style={{ transform: [{ scale: checkScale }] }}>
             <Ionicons name="checkmark-circle" size={64} color={LIME} />
           </Animated.View>
           <Animated.View style={[ss.completeTextWrap, { opacity: textFade }]}>
-            <Text style={ss.completeMain}>{slide.mainText}</Text>
-            <Text style={ss.completeSub}>{slide.subText}</Text>
+            <Text style={ss.completeMain}>짐픽을 시작할 준비가 됐어요</Text>
+            <Text style={ss.completeSub}>{'머신 기준으로 헬스장을 탐색하고\n운동을 기록해보세요'}</Text>
           </Animated.View>
         </View>
       );
     }
 
-    // Image slides
-    const imgSlide = slide as ImageSlide;
+    // 이미지 슬라이드 — 텍스트 없이 풀스크린 이미지만
     return (
       <View style={ss.fill}>
-        <Image source={imgSlide.image} style={StyleSheet.absoluteFill} resizeMode="cover" />
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.97)']}
-          style={ss.gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
+        <Image
+          source={slide.image}
+          style={{ width: SW, height: SH }}
+          resizeMode="cover"
         />
-        <View style={[ss.imgBottom, { paddingBottom: 100 + insets.bottom }]}>
-          <Text style={ss.tag}>{imgSlide.tag}</Text>
-          <Text style={ss.imgMain}>{slide.mainText}</Text>
-          <Text style={ss.imgSub}>{slide.subText}</Text>
-        </View>
       </View>
     );
   }
 
-  const activeDot = current - 1; // -1 when on slide 1 (no dots)
+  // 도트: 슬라이드 2~8 (index 1~7)에서만 표시
+  const showDots = current > 0 && current < LAST;
 
   return (
     <View style={ss.root} {...panResponder.panHandlers}>
       <StatusBar barStyle="light-content" backgroundColor="#000000" translucent />
 
-      {/* Outgoing layer */}
-      <Animated.View style={[StyleSheet.absoluteFill, { opacity: outOpacity }]}>
+      {/* 슬라이드 레이어 */}
+      <Animated.View
+        style={[StyleSheet.absoluteFill, { transform: [{ translateX: slideX }] }]}
+      >
         {renderContent(current)}
       </Animated.View>
 
-      {/* Incoming layer */}
-      {incoming !== null && (
-        <Animated.View
-          style={[StyleSheet.absoluteFill, { transform: [{ translateX: inTranslateX }] }]}
-        >
-          {renderContent(incoming)}
-        </Animated.View>
-      )}
-
-      {/* Dot indicator — slides 2–8 (index 1–7), 7 dots */}
-      {current > 0 && (
+      {/* 도트 인디케이터 */}
+      {showDots && (
         <View style={ss.dotsWrap} pointerEvents="none">
           {dotAnims.map((anim, i) => (
             <Animated.View
@@ -319,7 +244,7 @@ export default function OnboardingScreen({ navigation }: { navigation: any }) {
                 ss.dot,
                 {
                   width: anim,
-                  backgroundColor: i === activeDot ? '#ffffff' : '#444444',
+                  backgroundColor: i === current - 1 ? '#ffffff' : '#444444',
                 },
               ]}
             />
@@ -327,7 +252,7 @@ export default function OnboardingScreen({ navigation }: { navigation: any }) {
         </View>
       )}
 
-      {/* CTA bar */}
+      {/* CTA 버튼 */}
       <View style={[ss.ctaBar, { paddingBottom: insets.bottom + 16 }]}>
         <Animated.View style={{ transform: [{ scale: btnScale }] }}>
           <TouchableOpacity
@@ -363,7 +288,7 @@ const ss = StyleSheet.create({
     paddingHorizontal: 32,
   },
 
-  // Skip button (slide 1 only)
+  // 건너뛰기
   skipBtn: {
     position: 'absolute',
     right: 20,
@@ -376,7 +301,7 @@ const ss = StyleSheet.create({
     color: '#888888',
   },
 
-  // Welcome slide
+  // 환영 슬라이드
   welcomeMain: {
     fontSize: 28,
     fontWeight: '700',
@@ -391,42 +316,7 @@ const ss = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // Image slides
-  gradient: {
-    position: 'absolute',
-    top: '45%',
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  imgBottom: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 28,
-  },
-  tag: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: LIME,
-    letterSpacing: 2,
-    marginBottom: 12,
-  },
-  imgMain: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#ffffff',
-    lineHeight: 30,
-    marginBottom: 10,
-  },
-  imgSub: {
-    fontSize: 14,
-    color: '#aaaaaa',
-    lineHeight: 21,
-  },
-
-  // Complete slide
+  // 완료 슬라이드
   completeTextWrap: {
     alignItems: 'center',
     marginTop: 24,
@@ -445,23 +335,23 @@ const ss = StyleSheet.create({
     lineHeight: 22,
   },
 
-  // Dots (7개)
+  // 도트 인디케이터
   dotsWrap: {
     position: 'absolute',
-    bottom: 100,
+    bottom: 116,
     left: 0,
     right: 0,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
   },
   dot: {
     height: 6,
     borderRadius: 3,
   },
 
-  // CTA bar
+  // CTA 버튼
   ctaBar: {
     position: 'absolute',
     left: 0,
