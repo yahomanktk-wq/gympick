@@ -759,6 +759,21 @@ export default function ProfileScreen() {
         )}
 
         <Text style={styles.version}>GymPick v1.0.0</Text>
+
+        {/* DEV only — onboarding reset */}
+        {__DEV__ && (
+          <TouchableOpacity
+            style={styles.devResetBtn}
+            onPress={async () => {
+              const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+              await AsyncStorage.removeItem('onboarding_completed');
+              Alert.alert('온보딩 초기화됨', '앱을 재시작하면 온보딩이 다시 표시돼요.');
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.devResetTxt}>DEV: 온보딩 초기화</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
       {/* ── Modals ── */}
@@ -1263,6 +1278,8 @@ const styles = StyleSheet.create({
   devRoleBtnText: { fontSize: 12, fontWeight: '700' },
 
   version: { textAlign: 'center', fontSize: 11, color: C.textDim, marginTop: 16, marginBottom: 4, fontWeight: '500' },
+  devResetBtn: { alignSelf: 'center', marginTop: 8, marginBottom: 4, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, backgroundColor: '#1a1a2e', borderWidth: 1, borderColor: '#333' },
+  devResetTxt: { fontSize: 11, color: '#ff6b6b', fontWeight: '600' },
 
   // Workout badge collection (task_3)
   workoutBadgeRow: {

@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as Linking from 'expo-linking';
 import * as SplashScreen from 'expo-splash-screen';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthProvider } from './src/context/AuthContext';
 import { supabase } from './src/lib/supabase';
 import TabNavigator from './src/navigation/TabNavigator';
@@ -14,6 +15,7 @@ import WorkoutAnalyticsScreen from './src/screens/WorkoutAnalyticsScreen';
 import MachineRankingScreen   from './src/screens/MachineRankingScreen';
 import MachineHistoryScreen   from './src/screens/MachineHistoryScreen';
 import ResetPasswordScreen from './src/screens/auth/ResetPasswordScreen';
+import OnboardingScreen from './src/screens/onboarding/OnboardingScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -22,10 +24,13 @@ SplashScreen.preventAutoHideAsync();
 export default function App() {
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [appReady, setAppReady] = useState(false);
+  const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
 
   useEffect(() => {
     const prepare = async () => {
       await new Promise(resolve => setTimeout(resolve, 1000));
+      const val = await AsyncStorage.getItem('onboarding_completed');
+      setOnboardingDone(val === 'true');
       setAppReady(true);
       await SplashScreen.hideAsync();
     };
@@ -71,13 +76,16 @@ export default function App() {
     }
   }
 
-  if (!appReady) return null;
+  if (!appReady || onboardingDone === null) return null;
 
   return (
     <AuthProvider>
       <SafeAreaProvider>
         <NavigationContainer>
           <Stack.Navigator screenOptions={{ headerShown: false, gestureEnabled: false }}>
+            {!onboardingDone ? (
+              <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+            ) : null}
             <Stack.Screen name="Main"              component={TabNavigator}            options={{ gestureEnabled: false }} />
             <Stack.Screen name="WorkoutFeed"      component={WorkoutFeedScreen}       options={{ gestureEnabled: true, fullScreenGestureEnabled: true }} />
             <Stack.Screen name="WorkoutAnalytics" component={WorkoutAnalyticsScreen}  options={{ gestureEnabled: true, fullScreenGestureEnabled: true }} />
