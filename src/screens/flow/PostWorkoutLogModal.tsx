@@ -2192,7 +2192,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
         )}
 
         {/* 루틴카드 — 캡처 전용 (화면 밖에 배치) */}
-        <View style={{ position: 'absolute', top: -9999, left: 0 }} pointerEvents="none">
+        <View style={{ position: 'absolute', top: -9999, left: -9999 }} pointerEvents="none">
           <View
             ref={routineCardRef}
             collapsable={false}
