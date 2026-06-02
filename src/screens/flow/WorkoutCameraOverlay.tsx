@@ -14,7 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { C, R } from '../../theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import GymPickLogo from '../../components/GymPickLogo';
-import { ArchDayOverlay, LeftColOverlayB, getFontSet, getLayoutType } from './PostWorkoutLogModal';
+import { ArchDayOverlay, LeftColOverlayB, ClassicOverlay, getFontSet, getLayoutType } from './PostWorkoutLogModal';
 
 const LOGO_STRIP_H = 14;
 const LOGO_STRIP_W = Math.round(LOGO_STRIP_H * (2805 / 279));
@@ -232,35 +232,54 @@ export default function WorkoutCameraOverlay({
             const commonProps = { exercises, logs, nickname: displayName, timestamp, muscleLabel, tc, photoW: PHOTO_W, photoH: PHOTO_H };
 
             if (layout === 'a') {
+              const LOGO_STRIP_H_L = 14;
+              const LOGO_STRIP_W_L = Math.round(LOGO_STRIP_H_L * (2805 / 279));
+              const LOGO_EDGE_GAP  = 8;
+
+              const logoTlLeft = Math.round(LOGO_EDGE_GAP + LOGO_STRIP_H_L / 2 - LOGO_STRIP_W_L / 2);
+              const logoTlTop  = Math.round(OVERLAY_PAD_C + LOGO_STRIP_W_L / 2 - LOGO_STRIP_H_L / 2);
+              const logoBrLeft = Math.round((PHOTO_W - LOGO_EDGE_GAP - LOGO_STRIP_H_L) + LOGO_STRIP_H_L / 2 - LOGO_STRIP_W_L / 2);
+              const logoBrTop  = Math.round((PHOTO_H  - OVERLAY_PAD_C - LOGO_STRIP_W_L) + LOGO_STRIP_W_L / 2 - LOGO_STRIP_H_L / 2);
+
               return (
                 <>
-                  <View style={{ position: 'absolute', top: OVERLAY_PAD_C, left: OVERLAY_PAD_C }}>
-                    <Text style={{ fontSize: 13, fontWeight: '900', color: tc, fontFamily: fs.nickname }}>{displayName}</Text>
+                  {/* 좌상단 세로 로고 */}
+                  <View style={{ position: 'absolute', left: logoTlLeft, top: logoTlTop, zIndex: 2, transform: [{ rotate: '90deg' }] }}>
+                    <GymPickLogo color={tc} width={LOGO_STRIP_W_L} height={LOGO_STRIP_H_L} />
                   </View>
-                  <View style={{ position: 'absolute', top: OVERLAY_PAD_C, right: OVERLAY_PAD_C }}>
-                    <Text style={{ fontSize: 10, color: tc, opacity: 0.85, fontFamily: fs.nickname }}>{timestamp}</Text>
+                  {/* 우하단 세로 로고 */}
+                  <View style={{ position: 'absolute', left: logoBrLeft, top: logoBrTop, zIndex: 2, transform: [{ rotate: '270deg' }] }}>
+                    <GymPickLogo color={tc} width={LOGO_STRIP_W_L} height={LOGO_STRIP_H_L} />
                   </View>
-                  <LinearGradient
-                    colors={['transparent', 'rgba(0,0,0,0.82)']}
-                    style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: PHOTO_H * 0.52, justifyContent: 'flex-end', paddingBottom: OVERLAY_PAD_C }}
-                  >
-                    <View style={{ paddingHorizontal: OVERLAY_PAD_C }}>
-                      <Text style={{ fontSize: 28, fontWeight: '900', color: tc, fontFamily: fs.muscle, marginBottom: 8 }} numberOfLines={1}>{muscleLabel}</Text>
-                      {exercises.slice(0, 5).map(ex => {
-                        const sets = logs[ex.id] ?? [];
-                        const setsLine = sets.map(st => `${st.weight} × ${st.reps}`).join(' / ');
+                  {/* 상단 우: 닉네임 + 날짜 */}
+                  <View style={{ position: 'absolute', top: OVERLAY_PAD_C, right: Math.max(0, OVERLAY_PAD_C + LOGO_STRIP_H + 4 - Math.round(PHOTO_W * 0.05)), alignItems: 'flex-end', zIndex: 3 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '900', color: tc, letterSpacing: 0.5, fontFamily: fs.nickname }}>{displayName}</Text>
+                    <Text style={{ fontSize: 10, fontWeight: '500', color: tc, opacity: 0.75, marginTop: 2, fontFamily: fs.nickname }}>{timestamp}</Text>
+                  </View>
+                  {/* 하단 좌: muscleLabel + 운동 목록 */}
+                  <View style={{ position: 'absolute', left: Math.max(0, OVERLAY_PAD_C + LOGO_STRIP_H + 4 - Math.round(PHOTO_W * 0.05)), right: OVERLAY_PAD_C, bottom: OVERLAY_PAD_C, zIndex: 3 }}>
+                    <Text style={{ fontSize: 24, fontWeight: '900', color: tc, letterSpacing: -0.5, marginBottom: 8, fontFamily: fs.muscle }}>{muscleLabel}</Text>
+                    <View style={{ maxHeight: 220 }}>
+                      {exercises.slice(0, 7).map(ex => {
+                        const sets     = logs[ex.id] ?? [];
+                        const setsLine = sets.map(st => `${st.weight} x ${st.reps}`).join(' / ');
                         return (
-                          <View key={ex.id} style={{ marginBottom: 4 }}>
-                            <Text style={{ fontSize: 9, fontWeight: '900', color: tc, fontFamily: fs.routine }} numberOfLines={1}>{`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}</Text>
-                            {setsLine ? <Text style={{ fontSize: 8, color: tc, opacity: 0.85, fontFamily: fs.routine }} numberOfLines={1}>{setsLine}</Text> : null}
+                          <View key={ex.id} style={{ marginBottom: 6 }}>
+                            <Text style={{ fontSize: 9, fontWeight: '900', color: tc, letterSpacing: 0.5, fontFamily: fs.routine }} numberOfLines={1}>
+                              {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
+                            </Text>
+                            {setsLine ? (
+                              <Text style={{ fontSize: 9, fontWeight: '500', color: tc, opacity: 0.8, marginTop: 1, fontFamily: fs.routine }} numberOfLines={2}>{setsLine}</Text>
+                            ) : null}
                           </View>
                         );
                       })}
-                      {exercises.length > 5 && <Text style={{ fontSize: 8, color: tc, opacity: 0.6 }}>{`+${exercises.length - 5} more...`}</Text>}
+                      {exercises.length > 7 && (
+                        <Text style={{ fontSize: 9, fontWeight: '900', color: tc, opacity: 0.6, marginTop: 2 }}>
+                          {`+${exercises.length - 7} more...`}
+                        </Text>
+                      )}
                     </View>
-                  </LinearGradient>
-                  <View style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, alignItems: 'center', justifyContent: 'center' }}>
-                    <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} style={{ transform: [{ rotate: '-90deg' }] }} />
                   </View>
                 </>
               );
