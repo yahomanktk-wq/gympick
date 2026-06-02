@@ -14,7 +14,7 @@ import {
   InteractionManager,
   Animated,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import ChestIcon     from '../../assets/muscle-icons/chest.svg';
 import BackIcon       from '../../assets/muscle-icons/back.svg';
@@ -3299,8 +3299,9 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
       presentationStyle="fullScreen"
       onRequestClose={goBack}
     >
-      <View style={{ flex: 1, backgroundColor: C.bg }}>
-        {renderStep()}
+      <SafeAreaProvider>
+        <View style={{ flex: 1, backgroundColor: C.bg }}>
+          {renderStep()}
 
         {/* 저장 중 로딩 팝업 */}
         {isSaving && (
@@ -3358,6 +3359,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
           />
         )}
       </View>
+      </SafeAreaProvider>
     </Modal>
 
     </>
