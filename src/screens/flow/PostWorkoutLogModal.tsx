@@ -1634,15 +1634,40 @@ export function LeftColOverlayB({ exercises, logs, nickname, timestamp, muscleLa
         <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
       </View>
 
-      {/* 중하단: 날짜 + 타겟부위_day + 운동 목록 */}
+      {/* 중하단: 날짜 → 타겟부위 → 운동 목록 */}
       <View style={{
         position: 'absolute',
         left: OVERLAY_PAD,
         right: OVERLAY_PAD,
         bottom: OVERLAY_PAD,
       }}>
+        {/* 날짜 */}
+        <Text style={{
+          fontSize: 11,
+          fontWeight: '700',
+          color: tc,
+          opacity: 0.75,
+          marginBottom: 4,
+          fontFamily: fontSet.nickname,
+        }}>
+          {timestamp}
+        </Text>
+
+        {/* 타겟부위_day — 크고 굵게, 밑줄 없음 */}
+        <Text style={{
+          fontSize: 40,
+          fontWeight: '900',
+          color: tc,
+          fontFamily: fontSet.muscle,
+          letterSpacing: -1,
+          lineHeight: 46,
+          marginBottom: 16,
+        }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+          {muscleLabel}
+        </Text>
+
         {/* 운동 목록 */}
-        <View style={{ marginBottom: 16 }}>
+        <View>
           {exercises.slice(0, 8).map(ex => {
             const sets = logs[ex.id] ?? [];
             const setsLine = sets.map(st => `${st.weight} × ${st.reps}`).join(' / ');
@@ -1678,31 +1703,6 @@ export function LeftColOverlayB({ exercises, logs, nickname, timestamp, muscleLa
             </Text>
           )}
         </View>
-
-        {/* 날짜 */}
-        <Text style={{
-          fontSize: 11,
-          fontWeight: '700',
-          color: tc,
-          opacity: 0.75,
-          marginBottom: 4,
-          fontFamily: fontSet.nickname,
-        }}>
-          {timestamp}
-        </Text>
-
-        {/* 타겟부위_day — 크고 굵게, 밑줄 */}
-        <Text style={{
-          fontSize: 40,
-          fontWeight: '900',
-          color: tc,
-          fontFamily: fontSet.muscle,
-          textDecorationLine: 'underline',
-          letterSpacing: -1,
-          lineHeight: 46,
-        }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
-          {muscleLabel}
-        </Text>
       </View>
     </>
   );
