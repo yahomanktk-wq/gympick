@@ -1342,7 +1342,7 @@ export function SidebarOverlay({ exercises, logs, nickname, timestamp, muscleLab
           width: photoH * 0.55,
           textAlign: 'center',
           letterSpacing: -0.3,
-          fontFamily: 'Sportypo-Reguler-Demo',
+          fontFamily: 'Sportypo_Reguler_Demo',
         }} adjustsFontSizeToFit minimumFontScale={0.5}>
           {muscleLabel}
         </Text>
@@ -1393,7 +1393,7 @@ export function TopBigOverlay({ exercises, logs, nickname, timestamp, muscleLabe
         <Text style={{ fontSize: 10, fontWeight: '700', color: tc, opacity: 0.85 }}>{timestamp}</Text>
       </View>
       <View style={{ position: 'absolute', top: OVERLAY_PAD + 28, left: OVERLAY_PAD, right: OVERLAY_PAD }}>
-        <Text style={{ fontSize: 34, fontWeight: '900', color: tc, letterSpacing: -0.5, fontFamily: 'V-de-vacia-deFharo' }} numberOfLines={1}>
+        <Text style={{ fontSize: 34, fontWeight: '900', color: tc, letterSpacing: -0.5, fontFamily: 'V_de_vacia_deFharo' }} numberOfLines={1}>
           {muscleLabel}
         </Text>
       </View>
@@ -2168,8 +2168,8 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
                 { key: 'leftcol',    fontFamily: 'Quicksilver_Italic'    },
                 { key: 'grid',       fontFamily: 'HonfleurHeavy'         },
                 { key: 'centered',   fontFamily: 'MatchaCih'             },
-                { key: 'sidebar',    fontFamily: 'Sportypo-Reguler-Demo' },
-                { key: 'topbig',     fontFamily: 'V-de-vacia-deFharo'    },
+                { key: 'sidebar',    fontFamily: 'Sportypo_Reguler_Demo' },
+                { key: 'topbig',     fontFamily: 'V_de_vacia_deFharo'    },
                 { key: 'centerlist', fontFamily: 'BlaccS'            },
                 { key: 'bottominfo', fontFamily: 'Flamer'             },
                 { key: 'archday',    fontFamily: 'Oklahoma'          },
@@ -2455,20 +2455,20 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   const { user } = useAuth();
 
   const [fontsLoaded] = useFonts({
-    'MatchaCih':               require('../../../assets/fonts/Matcha_Cih.ttf'),
-    'MatSaleh':                require('../../../assets/fonts/Mat_Saleh.ttf'),
-    'KCCGanpan':               require('../../../assets/fonts/KCC-Ganpan.ttf'),
-    'Quicksilver_Italic':      require('../../../assets/fonts/Quicksilver_Italic.ttf'),
-    'Sportypo-Reguler-Demo':   require('../../../assets/fonts/Sportypo-Reguler-Demo.ttf'),
-    'V-de-vacia-deFharo':      require('../../../assets/fonts/V-de-vacia-deFharo.ttf'),
-    'Oklahoma':                require('../../../assets/fonts/Oklahoma.ttf'),
-    'CollegeBoy':              require('../../../assets/fonts/College_Boy.otf'),
-    'HonfleurHeavy':           require('../../../assets/fonts/Honfleur-Heavy.otf'),
-    'BlaccS':                  require('../../../assets/fonts/BLACCS.ttf'),
-    'Blacc':                   require('../../../assets/fonts/BLACC.ttf'),
-    'Flamer':                  require('../../../assets/fonts/flamer.ttf'),
-    'HeavyHeapRg':             require('../../../assets/fonts/heavy_heap_rg.otf'),
-    'Stadium1956':             require('../../../assets/fonts/Stadium1956-Regular.otf'),
+    'MatchaCih':             require('../../../assets/fonts/matcha_cih.ttf'),
+    'MatSaleh':              require('../../../assets/fonts/mat_saleh.ttf'),
+    'KCCGanpan':             require('../../../assets/fonts/kcc_ganpan.ttf'),
+    'Quicksilver_Italic':    require('../../../assets/fonts/quicksilver_italic.ttf'),
+    'Sportypo_Reguler_Demo': require('../../../assets/fonts/sportypo_reguler_demo.ttf'),
+    'V_de_vacia_deFharo':    require('../../../assets/fonts/v_de_vacia_defharo.ttf'),
+    'Oklahoma':              require('../../../assets/fonts/oklahoma.ttf'),
+    'CollegeBoy':            require('../../../assets/fonts/college_boy.otf'),
+    'HonfleurHeavy':         require('../../../assets/fonts/honfleur_heavy.otf'),
+    'BlaccS':                require('../../../assets/fonts/blaccs.ttf'),
+    'Blacc':                 require('../../../assets/fonts/blacc.ttf'),
+    'Flamer':                require('../../../assets/fonts/flamer.ttf'),
+    'HeavyHeapRg':           require('../../../assets/fonts/heavy_heap_rg.otf'),
+    'Stadium1956':           require('../../../assets/fonts/stadium1956_regular.otf'),
   });
 
   const [step,              setStep]              = useState<Step>('gym-select');
