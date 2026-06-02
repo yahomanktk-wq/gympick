@@ -2033,103 +2033,55 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
                 photoH,
               };
 
-              // 유형 A: ClassicOverlay 기반
+              // 유형 A: ClassicOverlay 구조 복원
               if (layout === 'a') {
+                const LOGO_STRIP_H_L = 14;
+                const LOGO_STRIP_W_L = Math.round(LOGO_STRIP_H_L * (2805 / 279));
+                const LOGO_EDGE_GAP  = 8;
+
+                const logoTlLeft = Math.round(LOGO_EDGE_GAP + LOGO_STRIP_H_L / 2 - LOGO_STRIP_W_L / 2);
+                const logoTlTop  = Math.round(OVERLAY_PAD   + LOGO_STRIP_W_L / 2 - LOGO_STRIP_H_L / 2);
+                const logoBrLeft = Math.round((PHOTO_W - LOGO_EDGE_GAP - LOGO_STRIP_H_L) + LOGO_STRIP_H_L / 2 - LOGO_STRIP_W_L / 2);
+                const logoBrTop  = Math.round((photoH  - OVERLAY_PAD  - LOGO_STRIP_W_L)  + LOGO_STRIP_W_L / 2 - LOGO_STRIP_H_L / 2);
+
                 return (
                   <>
-                    {/* 상단 우: 닉네임 + 날짜 2줄 */}
-                    <View style={{ position: 'absolute', top: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'flex-end' }}>
-                      <Text style={{ fontSize: 13, fontWeight: '900', color: tc, fontFamily: fs.nickname }}>
-                        {displayName}
-                      </Text>
-                      <Text style={{ fontSize: 10, color: tc, opacity: 0.85, marginTop: 2, fontFamily: fs.nickname }}>
-                        {timestamp}
-                      </Text>
+                    {/* 좌상단 세로 로고 */}
+                    <View style={[s.overlayLogoAbsolute, { left: logoTlLeft, top: logoTlTop, transform: [{ rotate: '90deg' }] }]}>
+                      <GymPickLogo color={tc} width={LOGO_STRIP_W_L} height={LOGO_STRIP_H_L} />
                     </View>
-                    {/* 좌측 세로 GYM PICK 로고 */}
-                    <View style={{
-                      position: 'absolute',
-                      left: 0,
-                      top: 0,
-                      bottom: 0,
-                      width: 28,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      overflow: 'hidden',
-                    }}>
-                      <View style={{ transform: [{ rotate: '-90deg' }] }}>
-                        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
-                      </View>
+                    {/* 우하단 세로 로고 */}
+                    <View style={[s.overlayLogoAbsolute, { left: logoBrLeft, top: logoBrTop, transform: [{ rotate: '270deg' }] }]}>
+                      <GymPickLogo color={tc} width={LOGO_STRIP_W_L} height={LOGO_STRIP_H_L} />
                     </View>
-                    {/* 하단 그라디언트 오버레이 */}
-                    <LinearGradient
-                      colors={['transparent', 'rgba(0,0,0,0.82)']}
-                      style={{
-                        position: 'absolute',
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        height: photoH * 0.52,
-                        justifyContent: 'flex-end',
-                        paddingBottom: OVERLAY_PAD,
-                        paddingRight: 36,
-                      }}
-                    >
-                      <View style={{ paddingHorizontal: OVERLAY_PAD }}>
-                        <Text style={{
-                          fontSize: 38,
-                          fontWeight: '900',
-                          color: tc,
-                          fontFamily: fs.muscle,
-                          marginBottom: 8,
-                        }} numberOfLines={1}>
-                          {muscleLabel}
-                        </Text>
-                        {exercises.slice(0, 5).map(ex => {
-                          const sets = logs[ex.id] ?? [];
+                    {/* 상단 우: 닉네임 + 날짜 */}
+                    <View style={s.overlayTopRight}>
+                      <Text style={[s.overlayUsername, { color: tc, fontFamily: fs.nickname }]}>{displayName}</Text>
+                      <Text style={[s.overlayTimestamp, { color: tc, fontFamily: fs.nickname }]}>{timestamp}</Text>
+                    </View>
+                    {/* 하단 좌: muscleLabel + 운동 목록 */}
+                    <View style={s.overlayBottomLeft}>
+                      <Text style={[s.overlayMuscleTitle, { color: tc, fontFamily: fs.muscle }]}>{muscleLabel}</Text>
+                      <View style={s.sessionScroll}>
+                        {exercises.slice(0, 7).map(ex => {
+                          const sets     = logs[ex.id] ?? [];
                           const setsLine = sets.map(st => `${st.weight} x ${st.reps}`).join(' / ');
                           return (
-                            <View key={ex.id} style={{ marginBottom: 4 }}>
-                              <Text style={{
-                                fontSize: 9,
-                                fontWeight: '900',
-                                color: tc,
-                                fontFamily: fs.routine,
-                                letterSpacing: 0.3,
-                              }} numberOfLines={1}>
+                            <View key={ex.id} style={s.overlayExBlock}>
+                              <Text style={[s.overlayExName, { color: tc, fontFamily: fs.routine }]} numberOfLines={1}>
                                 {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
                               </Text>
                               {setsLine ? (
-                                <Text style={{
-                                  fontSize: 8,
-                                  color: tc,
-                                  opacity: 0.85,
-                                  fontFamily: fs.routine,
-                                }} numberOfLines={1}>
-                                  {setsLine}
-                                </Text>
+                                <Text style={[s.overlayExSet, { color: tc, fontFamily: fs.routine }]} numberOfLines={2}>{setsLine}</Text>
                               ) : null}
                             </View>
                           );
                         })}
-                        {exercises.length > 5 && (
-                          <Text style={{ fontSize: 8, color: tc, opacity: 0.6 }}>
-                            {`+${exercises.length - 5} more...`}
+                        {exercises.length > 7 && (
+                          <Text style={[s.overlayExName, { color: tc, opacity: 0.6, marginTop: 2 }]}>
+                            {`+${exercises.length - 7} more...`}
                           </Text>
                         )}
-                      </View>
-                    </LinearGradient>
-                    {/* 우측 하단 세로 GYM PICK 로고 */}
-                    <View style={{
-                      position: 'absolute',
-                      right: 0,
-                      bottom: OVERLAY_PAD * 2,
-                      width: 28,
-                      alignItems: 'center',
-                      overflow: 'hidden',
-                    }}>
-                      <View style={{ transform: [{ rotate: '90deg' }] }}>
-                        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
                       </View>
                     </View>
                   </>
