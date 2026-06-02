@@ -2037,37 +2037,74 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
               if (layout === 'a') {
                 return (
                   <>
-                    {/* 상단 좌: 닉네임 */}
-                    <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD }}>
+                    {/* 상단 우: 닉네임 + 날짜 2줄 */}
+                    <View style={{ position: 'absolute', top: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'flex-end' }}>
                       <Text style={{ fontSize: 13, fontWeight: '900', color: tc, fontFamily: fs.nickname }}>
                         {displayName}
                       </Text>
-                    </View>
-                    {/* 상단 우: 날짜 */}
-                    <View style={{ position: 'absolute', top: OVERLAY_PAD, right: OVERLAY_PAD }}>
-                      <Text style={{ fontSize: 10, color: tc, opacity: 0.85, fontFamily: fs.nickname }}>
+                      <Text style={{ fontSize: 10, color: tc, opacity: 0.85, marginTop: 2, fontFamily: fs.nickname }}>
                         {timestamp}
                       </Text>
                     </View>
-                    {/* 하단 오버레이 */}
+                    {/* 좌측 세로 GYM PICK 로고 */}
+                    <View style={{
+                      position: 'absolute',
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      width: 28,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      <View style={{ transform: [{ rotate: '180deg' }] }}>
+                        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_H * 0.595)} height={Math.round(LOGO_STRIP_W * 0.595)} style={{ transform: [{ rotate: '-90deg' }] }} />
+                      </View>
+                    </View>
+                    {/* 하단 그라디언트 오버레이 */}
                     <LinearGradient
                       colors={['transparent', 'rgba(0,0,0,0.82)']}
-                      style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: photoH * 0.52, justifyContent: 'flex-end', paddingBottom: OVERLAY_PAD }}
+                      style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: photoH * 0.52,
+                        justifyContent: 'flex-end',
+                        paddingBottom: OVERLAY_PAD,
+                        paddingRight: 36,
+                      }}
                     >
                       <View style={{ paddingHorizontal: OVERLAY_PAD }}>
-                        <Text style={{ fontSize: 28, fontWeight: '900', color: tc, fontFamily: fs.muscle, marginBottom: 8 }} numberOfLines={1}>
+                        <Text style={{
+                          fontSize: 28,
+                          fontWeight: '900',
+                          color: tc,
+                          fontFamily: fs.muscle,
+                          marginBottom: 8,
+                        }} numberOfLines={1}>
                           {muscleLabel}
                         </Text>
                         {exercises.slice(0, 5).map(ex => {
                           const sets = logs[ex.id] ?? [];
-                          const setsLine = sets.map(st => `${st.weight} × ${st.reps}`).join(' / ');
+                          const setsLine = sets.map(st => `${st.weight} x ${st.reps}`).join(' / ');
                           return (
                             <View key={ex.id} style={{ marginBottom: 4 }}>
-                              <Text style={{ fontSize: 9, fontWeight: '900', color: tc, fontFamily: fs.routine }} numberOfLines={1}>
+                              <Text style={{
+                                fontSize: 9,
+                                fontWeight: '900',
+                                color: tc,
+                                fontFamily: fs.routine,
+                                letterSpacing: 0.3,
+                              }} numberOfLines={1}>
                                 {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
                               </Text>
                               {setsLine ? (
-                                <Text style={{ fontSize: 8, color: tc, opacity: 0.85, fontFamily: fs.routine }} numberOfLines={1}>
+                                <Text style={{
+                                  fontSize: 8,
+                                  color: tc,
+                                  opacity: 0.85,
+                                  fontFamily: fs.routine,
+                                }} numberOfLines={1}>
                                   {setsLine}
                                 </Text>
                               ) : null}
@@ -2075,13 +2112,23 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
                           );
                         })}
                         {exercises.length > 5 && (
-                          <Text style={{ fontSize: 8, color: tc, opacity: 0.6 }}>{`+${exercises.length - 5} more...`}</Text>
+                          <Text style={{ fontSize: 8, color: tc, opacity: 0.6 }}>
+                            {`+${exercises.length - 5} more...`}
+                          </Text>
                         )}
                       </View>
                     </LinearGradient>
-                    {/* GYM PICK 세로 우측 */}
-                    <View style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, alignItems: 'center', justifyContent: 'center' }}>
-                      <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} style={{ transform: [{ rotate: '-90deg' }] }} />
+                    {/* 우측 하단 세로 GYM PICK 로고 */}
+                    <View style={{
+                      position: 'absolute',
+                      right: 4,
+                      bottom: OVERLAY_PAD,
+                      width: 28,
+                      alignItems: 'center',
+                    }}>
+                      <View style={{ transform: [{ rotate: '-90deg' }] }}>
+                        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
+                      </View>
                     </View>
                   </>
                 );
