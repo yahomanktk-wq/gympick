@@ -1040,7 +1040,7 @@ export function ClassicOverlay({ exercises, logs, nickname, timestamp, muscleLab
         <Text style={[s.overlayTimestamp, { color: tc }]}>{timestamp}</Text>
       </View>
       <View style={s.overlayBottomLeft}>
-        <Text style={[s.overlayMuscleTitle, { color: tc, fontFamily: 'Quicksilver_Italic' }]}>{muscleLabel}</Text>
+        <Text style={[s.overlayMuscleTitle, { color: tc, fontFamily: 'Quicksilver-Italic' }]}>{muscleLabel}</Text>
         <View style={s.sessionScroll}>
           {exercises.slice(0, 7).map(ex => {
             const sets     = logs[ex.id] ?? [];
@@ -1085,7 +1085,7 @@ export function LeftColOverlay({ exercises, logs, nickname, timestamp, muscleLab
           fontWeight: '900',
           color: tc,
           letterSpacing: -0.5,
-          fontFamily: 'Quicksilver_Italic',
+          fontFamily: 'Quicksilver-Italic',
         }} numberOfLines={2}>
           {muscleLabel}
         </Text>
@@ -1181,7 +1181,7 @@ export function GridOverlay({ exercises, logs, nickname, timestamp, muscleLabel,
           color: tc,
           letterSpacing: -0.5,
           textAlign: 'center',
-          fontFamily: 'HonfleurHeavy',
+          fontFamily: 'Honfleur-Heavy',
         }}>
           {muscleLabel}
         </Text>
@@ -1243,12 +1243,12 @@ export function CenteredOverlay({ exercises, logs, nickname, timestamp, muscleLa
   return (
     <>
       <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD }}>
-        <Text style={{ fontSize: 13, color: tc, letterSpacing: 0.3, fontFamily: 'KCCGanpan' }}>
+        <Text style={{ fontSize: 13, color: tc, letterSpacing: 0.3, fontFamily: 'KCC-Ganpan' }}>
           {nickname}
         </Text>
       </View>
       <View style={{ position: 'absolute', top: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'flex-end' }}>
-        <Text style={{ fontSize: 10, color: tc, opacity: 0.85, fontFamily: 'MatSaleh' }}>
+        <Text style={{ fontSize: 10, color: tc, opacity: 0.85, fontFamily: 'Mat Saleh' }}>
           {timestamp}
         </Text>
       </View>
@@ -1258,7 +1258,7 @@ export function CenteredOverlay({ exercises, logs, nickname, timestamp, muscleLa
           color: tc,
           letterSpacing: -0.5,
           textAlign: 'center',
-          fontFamily: 'MatchaCih',
+          fontFamily: 'Matcha Cih',
         }}>
           {muscleLabel}
         </Text>
@@ -1283,7 +1283,7 @@ export function CenteredOverlay({ exercises, logs, nickname, timestamp, muscleLa
                 color: tc,
                 letterSpacing: 0.3,
                 marginBottom: 2,
-                fontFamily: 'MatSaleh',
+                fontFamily: 'Mat Saleh',
               }} numberOfLines={1}>
                 {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
               </Text>
@@ -1292,7 +1292,7 @@ export function CenteredOverlay({ exercises, logs, nickname, timestamp, muscleLa
                   fontSize: 8,
                   color: tc,
                   opacity: 0.85,
-                  fontFamily: 'MatSaleh',
+                  fontFamily: 'Mat Saleh',
                 }} numberOfLines={1}>
                   {setsLine}
                 </Text>
@@ -1301,7 +1301,7 @@ export function CenteredOverlay({ exercises, logs, nickname, timestamp, muscleLa
           );
         })}
         {exercises.length > 8 && (
-          <Text style={{ fontSize: 8, color: tc, opacity: 0.6, fontFamily: 'MatSaleh' }}>
+          <Text style={{ fontSize: 8, color: tc, opacity: 0.6, fontFamily: 'Mat Saleh' }}>
             {`+${exercises.length - 8} more...`}
           </Text>
         )}
@@ -1342,7 +1342,7 @@ export function SidebarOverlay({ exercises, logs, nickname, timestamp, muscleLab
           width: photoH * 0.55,
           textAlign: 'center',
           letterSpacing: -0.3,
-          fontFamily: 'Sportypo_Reguler_Demo',
+          fontFamily: 'SportypoReguler',
         }} adjustsFontSizeToFit minimumFontScale={0.5}>
           {muscleLabel}
         </Text>
@@ -1393,7 +1393,7 @@ export function TopBigOverlay({ exercises, logs, nickname, timestamp, muscleLabe
         <Text style={{ fontSize: 10, fontWeight: '700', color: tc, opacity: 0.85 }}>{timestamp}</Text>
       </View>
       <View style={{ position: 'absolute', top: OVERLAY_PAD + 28, left: OVERLAY_PAD, right: OVERLAY_PAD }}>
-        <Text style={{ fontSize: 34, fontWeight: '900', color: tc, letterSpacing: -0.5, fontFamily: 'V_de_vacia_deFharo' }} numberOfLines={1}>
+        <Text style={{ fontSize: 34, fontWeight: '900', color: tc, letterSpacing: -0.5, fontFamily: 'Vdevaca-Bold' }} numberOfLines={1}>
           {muscleLabel}
         </Text>
       </View>
@@ -1439,13 +1439,13 @@ export function CenterListOverlay({ exercises, logs, nickname, timestamp, muscle
     <>
       {/* 상단 좌: 닉네임 */}
       <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD }}>
-        <Text style={{ fontSize: 13, color: tc, letterSpacing: 0.3, fontFamily: 'Blacc' }}>
+        <Text style={{ fontSize: 13, color: tc, letterSpacing: 0.3, fontFamily: 'BlackwoodCastle' }}>
           {nickname}
         </Text>
       </View>
       {/* 상단 우: 날짜 */}
       <View style={{ position: 'absolute', top: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'flex-end' }}>
-        <Text style={{ fontSize: 10, color: tc, opacity: 0.85, fontFamily: 'Blacc' }}>
+        <Text style={{ fontSize: 10, color: tc, opacity: 0.85, fontFamily: 'BlackwoodCastle' }}>
           {timestamp}
         </Text>
       </View>
@@ -1456,7 +1456,7 @@ export function CenterListOverlay({ exercises, logs, nickname, timestamp, muscle
           color: tc,
           letterSpacing: -0.5,
           textAlign: 'center',
-          fontFamily: 'BlaccS',
+          fontFamily: 'BlackwoodCastleShadow',
         }}>
           {muscleLabel}
         </Text>
@@ -1482,7 +1482,7 @@ export function CenterListOverlay({ exercises, logs, nickname, timestamp, muscle
                 color: tc,
                 letterSpacing: 0.3,
                 marginBottom: 2,
-                fontFamily: 'Blacc',
+                fontFamily: 'BlackwoodCastle',
               }} numberOfLines={1}>
                 {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
               </Text>
@@ -1491,7 +1491,7 @@ export function CenterListOverlay({ exercises, logs, nickname, timestamp, muscle
                   fontSize: 8,
                   color: tc,
                   opacity: 0.85,
-                  fontFamily: 'Blacc',
+                  fontFamily: 'BlackwoodCastle',
                 }} numberOfLines={1}>
                   {setsLine}
                 </Text>
@@ -1500,7 +1500,7 @@ export function CenterListOverlay({ exercises, logs, nickname, timestamp, muscle
           );
         })}
         {exercises.length > 8 && (
-          <Text style={{ fontSize: 8, color: tc, opacity: 0.6, fontFamily: 'Blacc' }}>
+          <Text style={{ fontSize: 8, color: tc, opacity: 0.6, fontFamily: 'BlackwoodCastle' }}>
             {`+${exercises.length - 8} more...`}
           </Text>
         )}
@@ -1545,7 +1545,7 @@ export function BottomInfoOverlay({ exercises, logs, nickname, timestamp, muscle
                 color: tc,
                 letterSpacing: 0.3,
                 marginBottom: 1,
-                fontFamily: 'HeavyHeapRg',
+                fontFamily: 'HeavyHeapRg-Regular',
               }} numberOfLines={1}>
                 {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
               </Text>
@@ -1554,7 +1554,7 @@ export function BottomInfoOverlay({ exercises, logs, nickname, timestamp, muscle
                   fontSize: 9,
                   color: tc,
                   opacity: 0.85,
-                  fontFamily: 'HeavyHeapRg',
+                  fontFamily: 'HeavyHeapRg-Regular',
                 }} numberOfLines={1}>
                   {setsLine}
                 </Text>
@@ -1563,7 +1563,7 @@ export function BottomInfoOverlay({ exercises, logs, nickname, timestamp, muscle
           );
         })}
         {exercises.length > 6 && (
-          <Text style={{ fontSize: 8, color: tc, opacity: 0.6, fontFamily: 'HeavyHeapRg' }}>
+          <Text style={{ fontSize: 8, color: tc, opacity: 0.6, fontFamily: 'HeavyHeapRg-Regular' }}>
             {`+${exercises.length - 6} more...`}
           </Text>
         )}
@@ -1574,8 +1574,8 @@ export function BottomInfoOverlay({ exercises, logs, nickname, timestamp, muscle
       </View>
       {/* 우하단 닉네임 + 날짜 - HeavyHeapRg 폰트 */}
       <View style={{ position: 'absolute', bottom: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'flex-end' }}>
-        <Text style={{ fontSize: 12, color: tc, fontFamily: 'HeavyHeapRg' }}>{nickname}</Text>
-        <Text style={{ fontSize: 9, color: tc, opacity: 0.85, marginTop: 2, fontFamily: 'HeavyHeapRg' }}>{timestamp}</Text>
+        <Text style={{ fontSize: 12, color: tc, fontFamily: 'HeavyHeapRg-Regular' }}>{nickname}</Text>
+        <Text style={{ fontSize: 9, color: tc, opacity: 0.85, marginTop: 2, fontFamily: 'HeavyHeapRg-Regular' }}>{timestamp}</Text>
       </View>
     </>
   );
@@ -2164,15 +2164,15 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
               contentContainerStyle={{ flexDirection: 'row', gap: 8, paddingRight: 4 }}
             >
               {([
-                { key: 'classic',    fontFamily: 'Quicksilver_Italic'    },
-                { key: 'leftcol',    fontFamily: 'Quicksilver_Italic'    },
-                { key: 'grid',       fontFamily: 'HonfleurHeavy'         },
-                { key: 'centered',   fontFamily: 'MatchaCih'             },
-                { key: 'sidebar',    fontFamily: 'Sportypo_Reguler_Demo' },
-                { key: 'topbig',     fontFamily: 'V_de_vacia_deFharo'    },
-                { key: 'centerlist', fontFamily: 'BlaccS'            },
-                { key: 'bottominfo', fontFamily: 'Flamer'             },
-                { key: 'archday',    fontFamily: 'Oklahoma'          },
+                { key: 'classic',    fontFamily: 'Quicksilver-Italic'      },
+                { key: 'leftcol',    fontFamily: 'Quicksilver-Italic'      },
+                { key: 'grid',       fontFamily: 'Honfleur-Heavy'          },
+                { key: 'centered',   fontFamily: 'Matcha Cih'              },
+                { key: 'sidebar',    fontFamily: 'SportypoReguler'         },
+                { key: 'topbig',     fontFamily: 'Vdevaca-Bold'            },
+                { key: 'centerlist', fontFamily: 'BlackwoodCastleShadow'   },
+                { key: 'bottominfo', fontFamily: 'Flamer'                  },
+                { key: 'archday',    fontFamily: 'Stadium1956-Regular'     },
               ] as { key: OverlayStyle; fontFamily: string | undefined }[]).map((opt, idx) => {
                 const isActive = overlayStyle === opt.key;
                 return (
@@ -2455,20 +2455,20 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   const { user } = useAuth();
 
   const [fontsLoaded] = useFonts({
-    'MatchaCih':             require('../../../assets/fonts/matcha_cih.ttf'),
-    'MatSaleh':              require('../../../assets/fonts/mat_saleh.ttf'),
-    'KCCGanpan':             require('../../../assets/fonts/kcc_ganpan.ttf'),
-    'Quicksilver_Italic':    require('../../../assets/fonts/quicksilver_italic.ttf'),
-    'Sportypo_Reguler_Demo': require('../../../assets/fonts/sportypo_reguler_demo.ttf'),
-    'V_de_vacia_deFharo':    require('../../../assets/fonts/v_de_vacia_defharo.ttf'),
-    'Oklahoma':              require('../../../assets/fonts/oklahoma.ttf'),
-    'CollegeBoy':            require('../../../assets/fonts/college_boy.otf'),
-    'HonfleurHeavy':         require('../../../assets/fonts/honfleur_heavy.otf'),
-    'BlaccS':                require('../../../assets/fonts/blaccs.ttf'),
-    'Blacc':                 require('../../../assets/fonts/blacc.ttf'),
-    'Flamer':                require('../../../assets/fonts/flamer.ttf'),
-    'HeavyHeapRg':           require('../../../assets/fonts/heavy_heap_rg.otf'),
-    'Stadium1956':           require('../../../assets/fonts/stadium1956_regular.otf'),
+    'KCC-Ganpan':               require('../../../assets/fonts/kcc_ganpan.ttf'),
+    'Mat Saleh':                require('../../../assets/fonts/mat_saleh.ttf'),
+    'Matcha Cih':               require('../../../assets/fonts/matcha_cih.ttf'),
+    'Oklahoma':                 require('../../../assets/fonts/oklahoma.ttf'),
+    'Quicksilver-Italic':       require('../../../assets/fonts/quicksilver_italic.ttf'),
+    'SportypoReguler':          require('../../../assets/fonts/sportypo_reguler_demo.ttf'),
+    'Stadium1956-Regular':      require('../../../assets/fonts/stadium1956_regular.otf'),
+    'Vdevaca-Bold':             require('../../../assets/fonts/v_de_vacia_defharo.ttf'),
+    'BlackwoodCastle':          require('../../../assets/fonts/blacc.ttf'),
+    'BlackwoodCastleShadow':    require('../../../assets/fonts/blaccs.ttf'),
+    'CollegeBoy':               require('../../../assets/fonts/college_boy.otf'),
+    'Flamer':                   require('../../../assets/fonts/flamer.ttf'),
+    'HeavyHeapRg-Regular':      require('../../../assets/fonts/heavy_heap_rg.otf'),
+    'Honfleur-Heavy':           require('../../../assets/fonts/honfleur_heavy.otf'),
   });
 
   const [step,              setStep]              = useState<Step>('gym-select');
