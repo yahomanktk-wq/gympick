@@ -33,8 +33,8 @@ import SimpleLineChart from '../components/SimpleLineChart';
 const MUSCLE_FG: Record<string, string> = {
   Chest:          '#5ba4ff',
   Back:           '#a78bfa',
-  Legs:           '#fb923c',
-  Shoulders:      '#ffd166',
+  Leg:           '#fb923c',
+  Shoulder:      '#ffd166',
   Arms:           '#06d6a0',
   Core:           '#06d6a0',
   'Full Body':    '#a8dadc',

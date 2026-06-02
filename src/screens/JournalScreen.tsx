@@ -103,8 +103,8 @@ function computeNumWeeks(sessions: WorkoutLog[]): number {
 const MUSCLE_COLORS: Record<string, { fg: string; bg: string }> = {
   Chest:       C.tagMachine,
   Back:        C.tagBrand,
-  Legs:        C.tagMuscle,
-  Shoulders:   { fg: '#ffd166', bg: '#ffd16618' },
+  Leg:        C.tagMuscle,
+  Shoulder:   { fg: '#ffd166', bg: '#ffd16618' },
   Arms:        C.tagCategory,
   Core:        { fg: '#06d6a0', bg: '#06d6a018' },
   'Full Body': { fg: '#a8dadc', bg: '#a8dadc18' },

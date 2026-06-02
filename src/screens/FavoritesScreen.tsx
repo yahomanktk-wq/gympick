@@ -32,8 +32,8 @@ const CARD_W = (SCREEN_W - 32 - 8) / 2;
 const MUSCLE_COLORS: Record<string, { fg: string; bg: string }> = {
   Chest:       { fg: '#5ba4ff', bg: '#5ba4ff18' },
   Back:        { fg: '#b36bff', bg: '#b36bff18' },
-  Legs:        { fg: '#ff7c47', bg: '#ff7c4718' },
-  Shoulders:   { fg: '#ffd166', bg: '#ffd16618' },
+  Leg:        { fg: '#ff7c47', bg: '#ff7c4718' },
+  Shoulder:   { fg: '#ffd166', bg: '#ffd16618' },
   Arms:        { fg: '#3dd68c', bg: '#3dd68c18' },
   Core:        { fg: '#06d6a0', bg: '#06d6a018' },
   'Full Body': { fg: '#a8dadc', bg: '#a8dadc18' },
@@ -43,7 +43,7 @@ function mp(muscle: string) {
   return MUSCLE_COLORS[muscle] ?? { fg: C.textSub, bg: C.border };
 }
 
-const MUSCLE_OPTIONS = ['전체', 'Chest', 'Back', 'Shoulders', 'Arms', 'Legs'] as const;
+const MUSCLE_OPTIONS = ['전체', 'Chest', 'Back', 'Shoulder', 'Arms', 'Leg'] as const;
 
 // --- Filter pill row
 

@@ -21,8 +21,8 @@ type SvgComponent = React.FC<{ width?: number; height?: number; color?: string }
 const MUSCLE_COLORS: Record<string, { fg: string; bg: string }> = {
   Chest:     { fg: '#5ba4ff', bg: '#5ba4ff18' },
   Back:      { fg: '#cc5de8', bg: '#cc5de818' },
-  Legs:      { fg: '#ff922b', bg: '#ff922b18' },
-  Shoulders: { fg: '#ffd166', bg: '#ffd16618' },
+  Leg:      { fg: '#ff922b', bg: '#ff922b18' },
+  Shoulder: { fg: '#ffd166', bg: '#ffd16618' },
   Arms:      { fg: '#3dd68c', bg: '#3dd68c18' },
   Glutes:    { fg: '#ff9ecd', bg: '#ff9ecd18' },
 };
@@ -34,9 +34,9 @@ function mp(muscle: string) {
 const BODY_PARTS: { name: string; sub: string; SvgIcon: SvgComponent }[] = [
   { name: 'Chest',     sub: 'Pectorals',         SvgIcon: ChestIcon     },
   { name: 'Back',      sub: 'Lats & Rhomboids',  SvgIcon: BackIcon      },
-  { name: 'Shoulders', sub: 'Deltoids',           SvgIcon: ShouldersIcon },
+  { name: 'Shoulder', sub: 'Deltoids',           SvgIcon: ShouldersIcon },
   { name: 'Arms',      sub: 'Biceps & Triceps',   SvgIcon: ArmsIcon      },
-  { name: 'Legs',      sub: 'Quads & Hamstrings', SvgIcon: LegsIcon      },
+  { name: 'Leg',      sub: 'Quads & Hamstrings', SvgIcon: LegsIcon      },
   { name: 'Glutes',    sub: 'Glutes & Hip',       SvgIcon: GlutesIcon    },
 ];
 

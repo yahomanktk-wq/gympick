@@ -670,8 +670,8 @@ function MachineCatalogView({
   const MC: Record<string, { fg: string; bg: string }> = {
     Chest:       { fg: '#ff6b6b', bg: '#ff6b6b18' },
     Back:        { fg: '#5ba4ff', bg: '#5ba4ff18' },
-    Legs:        { fg: '#3dd68c', bg: '#3dd68c18' },
-    Shoulders:   { fg: '#ffb547', bg: '#ffb54718' },
+    Leg:        { fg: '#3dd68c', bg: '#3dd68c18' },
+    Shoulder:   { fg: '#ffb547', bg: '#ffb54718' },
     Arms:        { fg: '#ff7eb3', bg: '#ff7eb318' },
     'Full Body': { fg: '#a78bfa', bg: '#a78bfa18' },
     Core:        { fg: '#ffd166', bg: '#ffd16618' },

@@ -10,12 +10,12 @@ import { getRankings, OlympicRank } from '../../data/olympicStore';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
-const BODY_PARTS = ['ALL', 'Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Glutes'] as const;
+const BODY_PARTS = ['ALL', 'Chest', 'Back', 'Leg', 'Shoulder', 'Arms', 'Glutes'] as const;
 type BodyPartFilter = (typeof BODY_PARTS)[number];
 
 const MUSCLE_COLORS: Record<string, string> = {
-  Chest: '#5ba4ff', Back: '#cc5de8', Legs: '#ff922b',
-  Shoulders: '#ffd166', Arms: '#3dd68c', Glutes: '#ff9ecd',
+  Chest: '#5ba4ff', Back: '#cc5de8', Leg: '#ff922b',
+  Shoulder: '#ffd166', Arms: '#3dd68c', Glutes: '#ff9ecd',
 };
 
 const MEDAL: Record<number, { icon: IoniconName; color: string }> = {
@@ -76,7 +76,7 @@ export default function OlympicRankingScreen({ gymId, onBack, onClose }: Props) 
 
   const ranks = useMemo(() => {
     const bodyParts = activeBodyPart === 'ALL'
-      ? ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Glutes']
+      ? ['Chest', 'Back', 'Leg', 'Shoulder', 'Arms', 'Glutes']
       : [activeBodyPart];
 
     const combined: OlympicRank[] = [];

@@ -19,7 +19,7 @@ const { width: SCREEN_W } = Dimensions.get('window');
 const GRID_GAP = 8;
 const CARD_W   = (SCREEN_W - 32 - GRID_GAP) / 2;
 
-const MUSCLE_OPTIONS = ['전체', 'Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Glutes', 'Other'];
+const MUSCLE_OPTIONS = ['전체', 'Chest', 'Back', 'Leg', 'Shoulder', 'Arms', 'Glutes', 'Other'];
 
 interface Props {
   visible:  boolean;

@@ -4,8 +4,8 @@ import { SplitType, WorkoutSplit, WeekdaySplit, SequentialSplit } from '../data/
 export const MUSCLE_EN_TO_KO: Record<string, string> = {
   'Chest':     '가슴',
   'Back':      '등',
-  'Legs':      '하체',
-  'Shoulders': '어깨',
+  'Leg':      '하체',
+  'Shoulder': '어깨',
   'Arms':      '팔',
   'Core':      '코어',
   'Cardio':    '유산소',
@@ -17,8 +17,8 @@ export const MUSCLE_EN_TO_KO: Record<string, string> = {
 export const MUSCLE_KO_TO_EN: Record<string, string> = {
   '가슴': 'Chest',
   '등':   'Back',
-  '하체': 'Legs',
-  '어깨': 'Shoulders',
+  '하체': 'Leg',
+  '어깨': 'Shoulder',
   '팔':   'Arms',
   '코어': 'Core',
   '유산소': 'Cardio',

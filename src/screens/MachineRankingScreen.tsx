@@ -21,10 +21,10 @@ import { MACHINES } from '../data/machines';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const ALL_TABS = ['ALL', 'CHEST', 'BACK', 'LEGS', 'SHOULDERS', 'ARMS', 'GLUTES'] as const;
+const ALL_TABS = ['ALL', 'CHEST', 'BACK', 'Leg', 'Shoulder', 'ARMS', 'GLUTES'] as const;
 type TabValue = typeof ALL_TABS[number];
 
-const MUSCLE_ORDER = ['CHEST', 'BACK', 'LEGS', 'SHOULDERS', 'ARMS', 'GLUTES'];
+const MUSCLE_ORDER = ['CHEST', 'BACK', 'Leg', 'Shoulder', 'ARMS', 'GLUTES'];
 
 const RANK_EMOJI: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
 

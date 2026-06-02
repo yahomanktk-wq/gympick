@@ -49,8 +49,8 @@ export interface TodayWorkoutListScreenProps {
 const MUSCLE_COLORS: Record<string, { fg: string; bg: string }> = {
   Chest:       { fg: '#4dabf7', bg: '#4dabf718' },
   Back:        { fg: '#cc5de8', bg: '#cc5de818' },
-  Legs:        { fg: '#ff922b', bg: '#ff922b18' },
-  Shoulders:   { fg: '#ffd166', bg: '#ffd16618' },
+  Leg:        { fg: '#ff922b', bg: '#ff922b18' },
+  Shoulder:   { fg: '#ffd166', bg: '#ffd16618' },
   Arms:        { fg: '#51cf66', bg: '#51cf6618' },
   Core:        { fg: '#06d6a0', bg: '#06d6a018' },
   'Full Body': { fg: '#a8dadc', bg: '#a8dadc18' },

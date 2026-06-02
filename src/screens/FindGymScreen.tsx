@@ -53,11 +53,11 @@ const CATEGORY_ORDER: Record<string, string[]> = {
     'Pull Down', 'High Row', 'Middle Row', 'Low Row',
     'T-Bar', 'Pullover', 'Chin Dip', 'Back_Etc',
   ],
-  Legs: [
+  Leg: [
     'Leg Press', 'Hack Squat', 'Pendulum Squat', 'Squat Machine',
     'Leg Curl', 'Leg Extention', 'Calf', 'Viking Press', 'Leg_Etc',
   ],
-  Shoulders: [
+  Shoulder: [
     'Shoulder Press', 'Raise_Side Lateral', 'Rear Delt',
     'Rear Delt / Pec Fly', 'Shoulder_Etc',
   ],
@@ -77,8 +77,8 @@ const CATEGORY_ORDER: Record<string, string[]> = {
 const MUSCLE_COLORS: Record<string, { fg: string; bg: string }> = {
   Chest:          C.tagMachine,
   Back:           C.tagBrand,
-  Legs:           C.tagMuscle,
-  Shoulders:      { fg: '#ffd166', bg: '#ffd16618' },
+  Leg:           C.tagMuscle,
+  Shoulder:      { fg: '#ffd166', bg: '#ffd16618' },
   Arms:           C.tagCategory,
   Core:           { fg: '#06d6a0', bg: '#06d6a018' },
   'Full Body':    { fg: '#a8dadc', bg: '#a8dadc18' },
@@ -355,7 +355,7 @@ export default function FindGymScreen() {
   // --- Derived filter options
 
   // Muscle chips built dynamically from actual machine data — always matches what's in the DB
-  const MUSCLE_ORDER = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Glutes', 'Other'];
+  const MUSCLE_ORDER = ['Chest', 'Back', 'Leg', 'Shoulder', 'Arms', 'Glutes', 'Other'];
 
   const muscleOptions = useMemo(() => {
     const unique = [...new Set(

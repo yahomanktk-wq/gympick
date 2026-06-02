@@ -21,8 +21,8 @@ const CARD_GAP = 6;
 const CARD_W  = Math.floor((SCREEN_W - H_PAD * 2 - CARD_GAP) / 2);
 
 const MUSCLE_COLORS: Record<string, string> = {
-  Chest: '#5ba4ff', Back: '#cc5de8', Legs: '#ff922b',
-  Shoulders: '#ffd166', Arms: '#3dd68c',
+  Chest: '#5ba4ff', Back: '#cc5de8', Leg: '#ff922b',
+  Shoulder: '#ffd166', Arms: '#3dd68c',
 };
 
 function shuffle<T>(arr: T[]): T[] {

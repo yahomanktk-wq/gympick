@@ -37,7 +37,7 @@ export const WORKOUT_ENTRIES: WorkoutEntry[] = [
   { id: 'we03', sessionId: 'ws1', machineId: 'm01', machineName: 'Cable Machine', machineBrand: 'Life Fitness',    targetMuscle: 'Back',      exerciseKind: M,  order: 3 },
   // ws2 - Back + Legs + Full Body
   { id: 'we04', sessionId: 'ws2', machineId: 'm04', machineName: 'Lat Pulldown',  machineBrand: 'Hammer Strength', targetMuscle: 'Back',      exerciseKind: M,  order: 1 },
-  { id: 'we05', sessionId: 'ws2', machineId: 'm06', machineName: 'Hack Squat',    machineBrand: 'Hammer Strength', targetMuscle: 'Legs',      exerciseKind: M,  order: 2 },
+  { id: 'we05', sessionId: 'ws2', machineId: 'm06', machineName: 'Hack Squat',    machineBrand: 'Hammer Strength', targetMuscle: 'Leg',      exerciseKind: M,  order: 2 },
   { id: 'we06', sessionId: 'ws2', machineId: 'm13', machineName: 'Power Rack',    machineBrand: 'Eleiko',          targetMuscle: 'Full Body', exerciseKind: FW, order: 3 },
   // ws3 - Chest + Back
   { id: 'we07', sessionId: 'ws3', machineId: 'm02', machineName: 'Chest Press',   machineBrand: 'Life Fitness',    targetMuscle: 'Chest',     exerciseKind: M,  order: 1 },
@@ -46,14 +46,14 @@ export const WORKOUT_ENTRIES: WorkoutEntry[] = [
   { id: 'we09', sessionId: 'ws4', machineId: 'm07', machineName: 'Treadmill',     machineBrand: 'Technogym',       targetMuscle: 'Full Body', exerciseKind: M,  order: 1 },
   { id: 'we10', sessionId: 'ws4', machineId: 'm01', machineName: 'Cable Machine', machineBrand: 'Life Fitness',    targetMuscle: 'Back',      exerciseKind: M,  order: 2 },
   // ws5 - Legs
-  { id: 'we11', sessionId: 'ws5', machineId: 'm06', machineName: 'Hack Squat',    machineBrand: 'Hammer Strength', targetMuscle: 'Legs',      exerciseKind: M,  order: 1 },
-  { id: 'we12', sessionId: 'ws5', machineId: 'm03', machineName: 'Leg Press',     machineBrand: 'Life Fitness',    targetMuscle: 'Legs',      exerciseKind: M,  order: 2 },
+  { id: 'we11', sessionId: 'ws5', machineId: 'm06', machineName: 'Hack Squat',    machineBrand: 'Hammer Strength', targetMuscle: 'Leg',      exerciseKind: M,  order: 1 },
+  { id: 'we12', sessionId: 'ws5', machineId: 'm03', machineName: 'Leg Press',     machineBrand: 'Life Fitness',    targetMuscle: 'Leg',      exerciseKind: M,  order: 2 },
   // ws6 - Chest + Back
   { id: 'we13', sessionId: 'ws6', machineId: 'm02', machineName: 'Chest Press',   machineBrand: 'Life Fitness',    targetMuscle: 'Chest',     exerciseKind: M,  order: 1 },
   { id: 'we14', sessionId: 'ws6', machineId: 'm05', machineName: 'Incline Press', machineBrand: 'Hammer Strength', targetMuscle: 'Chest',     exerciseKind: M,  order: 2 },
   { id: 'we15', sessionId: 'ws6', machineId: 'm01', machineName: 'Cable Machine', machineBrand: 'Life Fitness',    targetMuscle: 'Back',      exerciseKind: M,  order: 3 },
   // ws7 - Legs + Back
-  { id: 'we16', sessionId: 'ws7', machineId: 'm06', machineName: 'Hack Squat',    machineBrand: 'Hammer Strength', targetMuscle: 'Legs',      exerciseKind: M,  order: 1 },
+  { id: 'we16', sessionId: 'ws7', machineId: 'm06', machineName: 'Hack Squat',    machineBrand: 'Hammer Strength', targetMuscle: 'Leg',      exerciseKind: M,  order: 1 },
   { id: 'we17', sessionId: 'ws7', machineId: 'm04', machineName: 'Lat Pulldown',  machineBrand: 'Hammer Strength', targetMuscle: 'Back',      exerciseKind: M,  order: 2 },
 ];
 

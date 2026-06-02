@@ -38,11 +38,11 @@ let votes: OlympicVote[] = [
   { id: 'v10', machineId: 'body_master_back_2', opponentId: 'arsenal_back_1',  bodyPart: 'Back', round: '8강', gymId: 'g02', createdAt: '2026-03-05T10:10:00Z' },
 
   // LEGS votes
-  { id: 'v11', machineId: 'atlantis_leg_1',  opponentId: 'gym80_leg_14',    bodyPart: 'Legs', round: '8강', gymId: 'g01', createdAt: '2026-03-06T07:00:00Z' },
-  { id: 'v12', machineId: 'atlantis_leg_1',  opponentId: 'gymleco_leg_4',   bodyPart: 'Legs', round: '4강', gymId: 'g01', createdAt: '2026-03-06T07:10:00Z' },
-  { id: 'v13', machineId: 'gym80_leg_14',    opponentId: 'atlantis_leg_12', bodyPart: 'Legs', round: '8강', gymId: 'g01', createdAt: '2026-03-06T08:00:00Z' },
-  { id: 'v14', machineId: 'atlantis_leg_12', opponentId: 'atlantis_leg_1',  bodyPart: 'Legs', round: '결승', gymId: null,   createdAt: '2026-03-07T09:00:00Z' },
-  { id: 'v15', machineId: 'gymleco_leg_4',   opponentId: 'dynamic_leg_6',   bodyPart: 'Legs', round: '8강', gymId: 'g02', createdAt: '2026-03-07T09:30:00Z' },
+  { id: 'v11', machineId: 'atlantis_leg_1',  opponentId: 'gym80_leg_14',    bodyPart: 'Leg', round: '8강', gymId: 'g01', createdAt: '2026-03-06T07:00:00Z' },
+  { id: 'v12', machineId: 'atlantis_leg_1',  opponentId: 'gymleco_leg_4',   bodyPart: 'Leg', round: '4강', gymId: 'g01', createdAt: '2026-03-06T07:10:00Z' },
+  { id: 'v13', machineId: 'gym80_leg_14',    opponentId: 'atlantis_leg_12', bodyPart: 'Leg', round: '8강', gymId: 'g01', createdAt: '2026-03-06T08:00:00Z' },
+  { id: 'v14', machineId: 'atlantis_leg_12', opponentId: 'atlantis_leg_1',  bodyPart: 'Leg', round: '결승', gymId: null,   createdAt: '2026-03-07T09:00:00Z' },
+  { id: 'v15', machineId: 'gymleco_leg_4',   opponentId: 'dynamic_leg_6',   bodyPart: 'Leg', round: '8강', gymId: 'g02', createdAt: '2026-03-07T09:30:00Z' },
 
   // ARMS votes
   { id: 'v16', machineId: 'cybex_arm_10',    opponentId: 'cybex_arm_11',    bodyPart: 'Arms', round: '8강', gymId: 'g01', createdAt: '2026-03-08T10:00:00Z' },

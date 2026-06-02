@@ -138,7 +138,7 @@ export default function GymStatsView({ gymId, totalMachines }: GymStatsViewProps
   const totalUsage = machineStats.reduce((sum, m) => sum + m.usageCount, 0);
   const maxUsage   = machineStats.length > 0 ? machineStats[0].usageCount : 1;
 
-  const MUSCLE_ORDER = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Glutes', 'Other'];
+  const MUSCLE_ORDER = ['Chest', 'Back', 'Leg', 'Shoulder', 'Arms', 'Glutes', 'Other'];
   const muscleKeys = Object.keys(topByMuscle).sort((a, b) => {
     const ai = MUSCLE_ORDER.indexOf(a);
     const bi = MUSCLE_ORDER.indexOf(b);

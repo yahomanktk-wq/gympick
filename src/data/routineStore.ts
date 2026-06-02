@@ -6,7 +6,7 @@ export interface Routine {
   name: string;
   userId: string;
   gymId: string;
-  bodyPart: string; // e.g. 'Chest', 'Back', 'Legs', etc.
+  bodyPart: string; // e.g. 'Chest', 'Back', 'Leg', etc.
   createdAt: string; // ISO date string
 }
 
@@ -128,7 +128,7 @@ const GYM_ROUTINES: GymRoutine[] = [
     id: 'gr03',
     gymId: 'g02',
     name: 'Leg Strength Builder',
-    bodyPart: 'Legs',
+    bodyPart: 'Leg',
     machineIds: ['gymleco_leg_4'],
     authorLabel: 'Trainer Lee',
   },
@@ -172,7 +172,7 @@ const COMMUNITY_ROUTINES: CommunityRoutine[] = [
     id: 'cr03',
     gymId: 'g02',
     name: 'Leg Day (Beginner)',
-    bodyPart: 'Legs',
+    bodyPart: 'Leg',
     machineIds: ['gymleco_leg_4'],
     sharedByLabel: 'Sam L.',
   },

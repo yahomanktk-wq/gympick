@@ -15,7 +15,7 @@ import type { OlympicRankingEntry } from '../lib/db/olympicRankings';
 // ── Constants ───────────────────────────────────────────────────────────────
 
 const WEEKLY_THRESHOLD = 100;
-const RANKING_MUSCLES  = ['CHEST', 'BACK', 'LEGS', 'SHOULDERS', 'ARMS', 'GLUTES'];
+const RANKING_MUSCLES  = ['CHEST', 'BACK', 'LEG', 'SHOULDER', 'ARMS', 'GLUTES'];
 
 const MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
 
@@ -99,8 +99,8 @@ function GymRow({ entry, onPress }: { entry: GymRankingEntry; onPress: () => voi
 // ── Olympic Ranking Row ──────────────────────────────────────────────────────
 
 const OLYMPIC_MUSCLE_COLORS: Record<string, string> = {
-  Chest: '#5ba4ff', Back: '#cc5de8', Legs: '#ff922b',
-  Shoulders: '#ffd166', Arms: '#3dd68c', Glutes: '#ff9ecd',
+  Chest: '#5ba4ff', Back: '#cc5de8', Leg: '#ff922b',
+  Shoulder: '#ffd166', Arms: '#3dd68c', Glutes: '#ff9ecd',
 };
 
 function OlympicRankingRow({ entry, onPress }: { entry: OlympicRankingEntry; onPress: () => void }) {

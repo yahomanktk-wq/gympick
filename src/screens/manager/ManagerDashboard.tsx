@@ -97,10 +97,10 @@ const STATUS_META: Record<GymStatus, { label: string; color: string; bg: string 
 const MUSCLE_COLORS: Record<string, { fg: string; bg: string }> = {
   Back:        C.tagMachine,
   Chest:       C.tagMuscle,
-  Legs:        C.tagCategory,
+  Leg:        C.tagCategory,
   Core:        C.tagBrand,
   Glutes:      C.tagMuscle,
-  Shoulders:   C.tagBrand,
+  Shoulder:   C.tagBrand,
   'Full Body': C.tagCategory,
   Arms:        C.tagCategory,
 };
@@ -112,7 +112,7 @@ function uid() { return Math.random().toString(36).slice(2, 9); }
 
 const CATALOG_MUSCLES = [...new Set(MACHINES.map(m => m.targetMuscle))].sort();
 const CATALOG_BRANDS  = [...new Set(MACHINES.map(m => m.brand))].sort();
-const BODY_PARTS = ['전체', 'Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Glutes', 'Other'];
+const BODY_PARTS = ['전체', 'Chest', 'Back', 'Leg', 'Shoulder', 'Arms', 'Glutes', 'Other'];
 
 // Seed routine mock data
 function makeMockRoutines(gymId: string): ManagerGymRoutine[] {

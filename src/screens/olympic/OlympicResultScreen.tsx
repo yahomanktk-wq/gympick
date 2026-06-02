@@ -13,8 +13,8 @@ const { width: SCREEN_W } = Dimensions.get('window');
 const WINNER_CARD_W = Math.min(SCREEN_W - 64, 280);
 
 const MUSCLE_COLORS: Record<string, string> = {
-  Chest: '#5ba4ff', Back: '#cc5de8', Legs: '#ff922b',
-  Shoulders: '#ffd166', Arms: '#3dd68c',
+  Chest: '#5ba4ff', Back: '#cc5de8', Leg: '#ff922b',
+  Shoulder: '#ffd166', Arms: '#3dd68c',
 };
 
 interface Props {

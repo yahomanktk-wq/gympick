@@ -14,14 +14,14 @@ export const MOCK_MACHINE_RANKINGS: MachineRankingEntry[] = [
   { rank: 3, machineId: 'm06', machineName: 'Assisted Pull-Up',    brandName: 'Matrix',        muscle: 'BACK',      usageCount:  620, usageChange: 'down' },
 
   // LEGS
-  { rank: 1, machineId: 'm07', machineName: 'Leg Press',           brandName: 'Technogym',     muscle: 'LEGS',      usageCount: 1560, usageChange: 'up'   },
-  { rank: 2, machineId: 'm08', machineName: 'Leg Extension',       brandName: 'Life Fitness',  muscle: 'LEGS',      usageCount: 1020, usageChange: 'down' },
-  { rank: 3, machineId: 'm09', machineName: 'Leg Curl',            brandName: 'Hammer Strength', muscle: 'LEGS',    usageCount:  780, usageChange: 'same' },
+  { rank: 1, machineId: 'm07', machineName: 'Leg Press',           brandName: 'Technogym',     muscle: 'LEG',      usageCount: 1560, usageChange: 'up'   },
+  { rank: 2, machineId: 'm08', machineName: 'Leg Extension',       brandName: 'Life Fitness',  muscle: 'LEG',      usageCount: 1020, usageChange: 'down' },
+  { rank: 3, machineId: 'm09', machineName: 'Leg Curl',            brandName: 'Hammer Strength', muscle: 'LEG',    usageCount:  780, usageChange: 'same' },
 
   // SHOULDERS
-  { rank: 1, machineId: 'm10', machineName: 'Shoulder Press',      brandName: 'Life Fitness',  muscle: 'SHOULDERS', usageCount:  890, usageChange: 'same' },
-  { rank: 2, machineId: 'm11', machineName: 'Lateral Raise Machine', brandName: 'Matrix',      muscle: 'SHOULDERS', usageCount:  650, usageChange: 'up'   },
-  { rank: 3, machineId: 'm12', machineName: 'Rear Delt Fly',       brandName: 'Technogym',     muscle: 'SHOULDERS', usageCount:  420, usageChange: 'down' },
+  { rank: 1, machineId: 'm10', machineName: 'Shoulder Press',      brandName: 'Life Fitness',  muscle: 'SHOULDER', usageCount:  890, usageChange: 'same' },
+  { rank: 2, machineId: 'm11', machineName: 'Lateral Raise Machine', brandName: 'Matrix',      muscle: 'SHOULDER', usageCount:  650, usageChange: 'up'   },
+  { rank: 3, machineId: 'm12', machineName: 'Rear Delt Fly',       brandName: 'Technogym',     muscle: 'SHOULDER', usageCount:  420, usageChange: 'down' },
 
   // ARMS
   { rank: 1, machineId: 'm13', machineName: 'Preacher Curl',       brandName: 'Hammer Strength', muscle: 'ARMS',    usageCount:  730, usageChange: 'down' },

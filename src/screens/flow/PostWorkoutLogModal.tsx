@@ -118,8 +118,8 @@ const ALL_MACHINES_MAP: Record<string, Machine> = Object.fromEntries(
 const MUSCLE_COLORS: Record<string, { fg: string; bg: string }> = {
   Chest:            C.tagMachine,
   Back:             C.tagBrand,
-  Legs:             C.tagMuscle,
-  Shoulders:        { fg: '#ffd166', bg: '#ffd16618' },
+  Leg:             C.tagMuscle,
+  Shoulder:        { fg: '#ffd166', bg: '#ffd16618' },
   Arms:             C.tagCategory,
   Core:             { fg: '#06d6a0', bg: '#06d6a018' },
   'Full Body':      { fg: '#a8dadc', bg: '#a8dadc18' },
@@ -138,9 +138,9 @@ type SvgComponent = React.FC<{ width?: number; height?: number; color?: string }
 const MUSCLE_GROUPS: { name: string; sub: string; SvgIcon: SvgComponent }[] = [
   { name: 'Chest',        sub: 'Pectorals',              SvgIcon: ChestIcon     },
   { name: 'Back',         sub: 'Lats & Rhomboids',       SvgIcon: BackIcon      },
-  { name: 'Shoulders',    sub: 'Deltoids',               SvgIcon: ShouldersIcon },
+  { name: 'Shoulder',    sub: 'Deltoids',               SvgIcon: ShouldersIcon },
   { name: 'Arms',         sub: 'Biceps & Triceps',       SvgIcon: ArmsIcon      },
-  { name: 'Legs',         sub: 'Quads & Hamstrings',     SvgIcon: LegsIcon      },
+  { name: 'Leg',         sub: 'Quads & Hamstrings',     SvgIcon: LegsIcon      },
   { name: 'Hip (Glutes)', sub: 'Glutes & Hip Abductors', SvgIcon: GlutesIcon    },
 ];
 
@@ -1754,17 +1754,9 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
   const sortedMuscles = Object.entries(muscleCounts)
     .sort(([, a], [, b]) => b - a)
     .map(([m]) => m);
-  function toSingularMuscle(muscle: string): string {
-    const map: Record<string, string> = {
-      'LEGS':      'LEG',
-      'SHOULDERS': 'SHOULDER',
-    };
-    return map[muscle.toUpperCase()] ?? muscle;
-  }
-
   const muscleLabel = sortedMuscles.length > 1
-    ? sortedMuscles.slice(0, 2).map(toSingularMuscle).join(' + ')
-    : `${toSingularMuscle(sortedMuscles[0] ?? 'WORKOUT')} Day`;
+    ? sortedMuscles.slice(0, 2).join(' + ')
+    : `${sortedMuscles[0] ?? 'WORKOUT'} Day`;
 
   async function handleShare() {
     const lines: string[] = [`🏋️ ${muscleLabel.toUpperCase()}`, ''];

@@ -9,8 +9,8 @@ const COLOR_SECONDARY = '#FF7043';
 const COLOR_STROKE    = '#BBBBBB';
 
 // ── 근육 그룹 분류 ────────────────────────────────────────────────────────────
-const FRONT_MUSCLES = ['CHEST', 'SHOULDERS', 'ARMS', 'LEGS', 'CORE', 'OTHER'];
-const BACK_MUSCLES  = ['BACK', 'GLUTES', 'LEGS'];
+const FRONT_MUSCLES = ['CHEST', 'SHOULDER', 'ARMS', 'LEG', 'CORE', 'OTHER'];
+const BACK_MUSCLES  = ['BACK', 'GLUTES', 'LEG'];
 
 type Props = {
   activeMuscles: string[];
@@ -29,9 +29,9 @@ function getColor(muscle: string, actives: string[]): string {
 
 function FrontSilhouette({ actives }: { actives: string[] }) {
   const chestC      = getColor('CHEST',     actives);
-  const shoulderC   = getColor('SHOULDERS', actives);
+  const shoulderC   = getColor('SHOULDER', actives);
   const armsC       = getColor('ARMS',      actives);
-  const legsC       = getColor('LEGS',      actives);
+  const legsC       = getColor('LEG',      actives);
   const coreC       = actives.includes('CORE') || actives.includes('OTHER')
     ? getColor('CORE', actives.includes('CORE') ? actives : actives.map(a => a === 'OTHER' ? 'CORE' : a))
     : COLOR_INACTIVE;
@@ -79,7 +79,7 @@ function FrontSilhouette({ actives }: { actives: string[] }) {
 function BackSilhouette({ actives }: { actives: string[] }) {
   const backC    = getColor('BACK',   actives);
   const glutesC  = getColor('GLUTES', actives);
-  const legsC    = getColor('LEGS',   actives);
+  const legsC    = getColor('LEG',   actives);
 
   return (
     <Svg width="100%" height="100%" viewBox="0 0 60 160">
