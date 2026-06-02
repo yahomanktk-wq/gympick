@@ -2055,9 +2055,10 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
                       width: 28,
                       alignItems: 'center',
                       justifyContent: 'center',
+                      overflow: 'hidden',
                     }}>
-                      <View style={{ transform: [{ rotate: '180deg' }] }}>
-                        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_H * 0.595)} height={Math.round(LOGO_STRIP_W * 0.595)} style={{ transform: [{ rotate: '-90deg' }] }} />
+                      <View style={{ transform: [{ rotate: '-90deg' }] }}>
+                        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
                       </View>
                     </View>
                     {/* 하단 그라디언트 오버레이 */}
@@ -2121,12 +2122,13 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
                     {/* 우측 하단 세로 GYM PICK 로고 */}
                     <View style={{
                       position: 'absolute',
-                      right: 4,
-                      bottom: OVERLAY_PAD,
+                      right: 0,
+                      bottom: OVERLAY_PAD * 2,
                       width: 28,
                       alignItems: 'center',
+                      overflow: 'hidden',
                     }}>
-                      <View style={{ transform: [{ rotate: '-90deg' }] }}>
+                      <View style={{ transform: [{ rotate: '90deg' }] }}>
                         <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
                       </View>
                     </View>
