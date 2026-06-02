@@ -1907,7 +1907,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
         Alert.alert('저장 실패', '저장에 실패했습니다.');
         return;
       }
-      const capturedUri = await captureRef(overlayRef, { format: 'webp', quality: 0.9, result: 'tmpfile' });
+      const capturedUri = await captureRef(overlayRef, { format: 'webp', quality: 0.9, result: 'tmpfile', width: PHOTO_W, height: photoH });
       onCompositeUri(capturedUri);
       await MediaLibrary.saveToLibraryAsync(capturedUri);
 
@@ -2077,7 +2077,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
                     >
                       <View style={{ paddingHorizontal: OVERLAY_PAD }}>
                         <Text style={{
-                          fontSize: 28,
+                          fontSize: 38,
                           fontWeight: '900',
                           color: tc,
                           fontFamily: fs.muscle,
@@ -2503,7 +2503,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
               await new Promise(resolve => requestAnimationFrame(resolve));
               await new Promise<void>(resolve => InteractionManager.runAfterInteractions(() => resolve()));
               if (overlayRef.current) {
-                captured = await captureRef(overlayRef, { format: 'webp', quality: 0.9, result: 'tmpfile' });
+                captured = await captureRef(overlayRef, { format: 'webp', quality: 0.9, result: 'tmpfile', width: PHOTO_W, height: photoH });
                 onCompositeUri(captured);
               }
               if (routineCardRef.current) {
