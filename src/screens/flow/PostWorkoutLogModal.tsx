@@ -1040,7 +1040,7 @@ export function ClassicOverlay({ exercises, logs, nickname, timestamp, muscleLab
         <Text style={[s.overlayTimestamp, { color: tc }]}>{timestamp}</Text>
       </View>
       <View style={s.overlayBottomLeft}>
-        <Text style={[s.overlayMuscleTitle, { color: tc, fontFamily: 'QuicksilverItalic' }]}>{muscleLabel}</Text>
+        <Text style={[s.overlayMuscleTitle, { color: tc, fontFamily: 'Quicksilver_Italic' }]}>{muscleLabel}</Text>
         <View style={s.sessionScroll}>
           {exercises.slice(0, 7).map(ex => {
             const sets     = logs[ex.id] ?? [];
@@ -1085,7 +1085,7 @@ export function LeftColOverlay({ exercises, logs, nickname, timestamp, muscleLab
           fontWeight: '900',
           color: tc,
           letterSpacing: -0.5,
-          fontFamily: 'QuicksilverItalic',
+          fontFamily: 'Quicksilver_Italic',
         }} numberOfLines={2}>
           {muscleLabel}
         </Text>
@@ -1342,7 +1342,7 @@ export function SidebarOverlay({ exercises, logs, nickname, timestamp, muscleLab
           width: photoH * 0.55,
           textAlign: 'center',
           letterSpacing: -0.3,
-          fontFamily: 'SportypoReguler',
+          fontFamily: 'Sportypo-Reguler-Demo',
         }} adjustsFontSizeToFit minimumFontScale={0.5}>
           {muscleLabel}
         </Text>
@@ -1393,7 +1393,7 @@ export function TopBigOverlay({ exercises, logs, nickname, timestamp, muscleLabe
         <Text style={{ fontSize: 10, fontWeight: '700', color: tc, opacity: 0.85 }}>{timestamp}</Text>
       </View>
       <View style={{ position: 'absolute', top: OVERLAY_PAD + 28, left: OVERLAY_PAD, right: OVERLAY_PAD }}>
-        <Text style={{ fontSize: 34, fontWeight: '900', color: tc, letterSpacing: -0.5, fontFamily: 'VdeVacia' }} numberOfLines={1}>
+        <Text style={{ fontSize: 34, fontWeight: '900', color: tc, letterSpacing: -0.5, fontFamily: 'V-de-vacia-deFharo' }} numberOfLines={1}>
           {muscleLabel}
         </Text>
       </View>
@@ -2164,12 +2164,12 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
               contentContainerStyle={{ flexDirection: 'row', gap: 8, paddingRight: 4 }}
             >
               {([
-                { key: 'classic',    fontFamily: 'QuicksilverItalic' },
-                { key: 'leftcol',    fontFamily: 'QuicksilverItalic' },
-                { key: 'grid',       fontFamily: 'HonfleurHeavy'     },
-                { key: 'centered',   fontFamily: 'MatchaCih'         },
-                { key: 'sidebar',    fontFamily: 'SportypoReguler'   },
-                { key: 'topbig',     fontFamily: 'VdeVacia'          },
+                { key: 'classic',    fontFamily: 'Quicksilver_Italic'    },
+                { key: 'leftcol',    fontFamily: 'Quicksilver_Italic'    },
+                { key: 'grid',       fontFamily: 'HonfleurHeavy'         },
+                { key: 'centered',   fontFamily: 'MatchaCih'             },
+                { key: 'sidebar',    fontFamily: 'Sportypo-Reguler-Demo' },
+                { key: 'topbig',     fontFamily: 'V-de-vacia-deFharo'    },
                 { key: 'centerlist', fontFamily: 'BlaccS'            },
                 { key: 'bottominfo', fontFamily: 'Flamer'             },
                 { key: 'archday',    fontFamily: 'Oklahoma'          },
@@ -2455,19 +2455,20 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   const { user } = useAuth();
 
   const [fontsLoaded] = useFonts({
-    'MatchaCih':         require('../../../assets/fonts/Matcha_Cih.ttf'),
-    'MatSaleh':          require('../../../assets/fonts/Mat_Saleh.ttf'),
-    'KCCGanpan':         require('../../../assets/fonts/KCC-Ganpan.ttf'),
-    'QuicksilverItalic': require('../../../assets/fonts/Quicksilver_Italic.ttf'),
-    'SportypoReguler':   require('../../../assets/fonts/Sportypo-Reguler-Demo.ttf'),
-    'VdeVacia':          require('../../../assets/fonts/V-de-vacia-deFharo.ttf'),
-    'Oklahoma':          require('../../../assets/fonts/Oklahoma.ttf'),
-    'CollegeBoy':        require('../../../assets/fonts/College_Boy.otf'),
-    'HonfleurHeavy':     require('../../../assets/fonts/Honfleur-Heavy.otf'),
-    'BlaccS':            require('../../../assets/fonts/BLACCS.ttf'),
-    'Blacc':             require('../../../assets/fonts/BLACC.ttf'),
-    'Flamer':            require('../../../assets/fonts/flamer.ttf'),
-    'HeavyHeapRg':       require('../../../assets/fonts/heavy_heap_rg.otf'),
+    'MatchaCih':               require('../../../assets/fonts/Matcha_Cih.ttf'),
+    'MatSaleh':                require('../../../assets/fonts/Mat_Saleh.ttf'),
+    'KCCGanpan':               require('../../../assets/fonts/KCC-Ganpan.ttf'),
+    'Quicksilver_Italic':      require('../../../assets/fonts/Quicksilver_Italic.ttf'),
+    'Sportypo-Reguler-Demo':   require('../../../assets/fonts/Sportypo-Reguler-Demo.ttf'),
+    'V-de-vacia-deFharo':      require('../../../assets/fonts/V-de-vacia-deFharo.ttf'),
+    'Oklahoma':                require('../../../assets/fonts/Oklahoma.ttf'),
+    'CollegeBoy':              require('../../../assets/fonts/College_Boy.otf'),
+    'HonfleurHeavy':           require('../../../assets/fonts/Honfleur-Heavy.otf'),
+    'BlaccS':                  require('../../../assets/fonts/BLACCS.ttf'),
+    'Blacc':                   require('../../../assets/fonts/BLACC.ttf'),
+    'Flamer':                  require('../../../assets/fonts/flamer.ttf'),
+    'HeavyHeapRg':             require('../../../assets/fonts/heavy_heap_rg.otf'),
+    'Stadium1956':             require('../../../assets/fonts/Stadium1956-Regular.otf'),
   });
 
   const [step,              setStep]              = useState<Step>('gym-select');
