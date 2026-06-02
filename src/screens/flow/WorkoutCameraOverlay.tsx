@@ -12,7 +12,13 @@ import { CameraView, useCameraPermissions, type CameraView as CameraViewType } f
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { C, R } from '../../theme';
-import { ClassicOverlay, LeftColOverlay, GridOverlay, CenteredOverlay, SidebarOverlay, TopBigOverlay, CenterListOverlay, BottomInfoOverlay, ArchDayOverlay } from './PostWorkoutLogModal';
+import { LinearGradient } from 'expo-linear-gradient';
+import GymPickLogo from '../../components/GymPickLogo';
+import { ArchDayOverlay, LeftColOverlayB, getFontSet, getLayoutType } from './PostWorkoutLogModal';
+
+const LOGO_STRIP_H = 14;
+const LOGO_STRIP_W = Math.round(LOGO_STRIP_H * (2805 / 279));
+const OVERLAY_PAD_C = 20;
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const PHOTO_W = SCREEN_W - 32;
@@ -26,7 +32,7 @@ interface Props {
   logs: Record<string, { weight: number; reps: number }[]>;
   nickname?: string;
   textColor: string;
-  overlayStyle?: 'classic' | 'leftcol' | 'grid' | 'centered' | 'sidebar' | 'topbig' | 'centerlist' | 'bottominfo' | 'archday';
+  overlayStyle?: 's1a' | 's1b' | 's1c' | 's2a' | 's2b' | 's2c' | 's3a' | 's3b' | 's3c' | 's4a' | 's4b' | 's4c' | 's5a' | 's5b' | 's5c' | 'archday';
   onCaptureDone: (uri: string) => void;
   onCancel: () => void;
 }
@@ -205,114 +211,98 @@ export default function WorkoutCameraOverlay({
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
 
           {/* 스타일별 오버레이 분기 */}
-          {(!overlayStyle || overlayStyle === 'classic') && (
-            <ClassicOverlay
-              exercises={exercises}
-              logs={logs}
-              nickname={displayName}
-              timestamp={timestamp}
-              muscleLabel={muscleLabel}
-              tc={tc}
-              photoW={PHOTO_W}
-              photoH={PHOTO_H}
-            />
-          )}
-          {overlayStyle === 'leftcol' && (
-            <LeftColOverlay
-              exercises={exercises}
-              logs={logs}
-              nickname={displayName}
-              timestamp={timestamp}
-              muscleLabel={muscleLabel}
-              tc={tc}
-              photoW={PHOTO_W}
-              photoH={PHOTO_H}
-            />
-          )}
-          {overlayStyle === 'grid' && (
-            <GridOverlay
-              exercises={exercises}
-              logs={logs}
-              nickname={displayName}
-              timestamp={timestamp}
-              muscleLabel={muscleLabel}
-              tc={tc}
-              photoW={PHOTO_W}
-              photoH={PHOTO_H}
-            />
-          )}
-          {overlayStyle === 'centered' && (
-            <CenteredOverlay
-              exercises={exercises}
-              logs={logs}
-              nickname={displayName}
-              timestamp={timestamp}
-              muscleLabel={muscleLabel}
-              tc={tc}
-              photoW={PHOTO_W}
-              photoH={PHOTO_H}
-            />
-          )}
-          {overlayStyle === 'sidebar' && (
-            <SidebarOverlay
-              exercises={exercises}
-              logs={logs}
-              nickname={displayName}
-              timestamp={timestamp}
-              muscleLabel={muscleLabel}
-              tc={tc}
-              photoW={PHOTO_W}
-              photoH={PHOTO_H}
-            />
-          )}
-          {overlayStyle === 'topbig' && (
-            <TopBigOverlay
-              exercises={exercises}
-              logs={logs}
-              nickname={displayName}
-              timestamp={timestamp}
-              muscleLabel={muscleLabel}
-              tc={tc}
-              photoW={PHOTO_W}
-              photoH={PHOTO_H}
-            />
-          )}
-          {overlayStyle === 'centerlist' && (
-            <CenterListOverlay
-              exercises={exercises}
-              logs={logs}
-              nickname={displayName}
-              timestamp={timestamp}
-              muscleLabel={muscleLabel}
-              tc={tc}
-              photoW={PHOTO_W}
-              photoH={PHOTO_H}
-            />
-          )}
-          {overlayStyle === 'bottominfo' && (
-            <BottomInfoOverlay
-              exercises={exercises}
-              logs={logs}
-              nickname={displayName}
-              timestamp={timestamp}
-              muscleLabel={muscleLabel}
-              tc={tc}
-              photoW={PHOTO_W}
-              photoH={PHOTO_H}
-            />
-          )}
-          {overlayStyle === 'archday' && (
-            <ArchDayOverlay
-              exercises={exercises}
-              logs={logs}
-              nickname={nickname}
-              timestamp={timestamp}
-              muscleLabel={muscleLabel}
-              tc={textColor}
-              photoW={PHOTO_W}
-              photoH={PHOTO_H}
-            />
-          )}
+          {(() => {
+            const style = overlayStyle ?? 's1a';
+            if (style === 'archday') {
+              return (
+                <ArchDayOverlay
+                  exercises={exercises}
+                  logs={logs}
+                  nickname={nickname}
+                  timestamp={timestamp}
+                  muscleLabel={muscleLabel}
+                  tc={textColor}
+                  photoW={PHOTO_W}
+                  photoH={PHOTO_H}
+                />
+              );
+            }
+            const fs = getFontSet(style);
+            const layout = getLayoutType(style);
+            const commonProps = { exercises, logs, nickname: displayName, timestamp, muscleLabel, tc, photoW: PHOTO_W, photoH: PHOTO_H };
+
+            if (layout === 'a') {
+              return (
+                <>
+                  <View style={{ position: 'absolute', top: OVERLAY_PAD_C, left: OVERLAY_PAD_C }}>
+                    <Text style={{ fontSize: 13, fontWeight: '900', color: tc, fontFamily: fs.nickname }}>{displayName}</Text>
+                  </View>
+                  <View style={{ position: 'absolute', top: OVERLAY_PAD_C, right: OVERLAY_PAD_C }}>
+                    <Text style={{ fontSize: 10, color: tc, opacity: 0.85, fontFamily: fs.nickname }}>{timestamp}</Text>
+                  </View>
+                  <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.82)']}
+                    style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: PHOTO_H * 0.52, justifyContent: 'flex-end', paddingBottom: OVERLAY_PAD_C }}
+                  >
+                    <View style={{ paddingHorizontal: OVERLAY_PAD_C }}>
+                      <Text style={{ fontSize: 28, fontWeight: '900', color: tc, fontFamily: fs.muscle, marginBottom: 8 }} numberOfLines={1}>{muscleLabel}</Text>
+                      {exercises.slice(0, 5).map(ex => {
+                        const sets = logs[ex.id] ?? [];
+                        const setsLine = sets.map(st => `${st.weight} × ${st.reps}`).join(' / ');
+                        return (
+                          <View key={ex.id} style={{ marginBottom: 4 }}>
+                            <Text style={{ fontSize: 9, fontWeight: '900', color: tc, fontFamily: fs.routine }} numberOfLines={1}>{`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}</Text>
+                            {setsLine ? <Text style={{ fontSize: 8, color: tc, opacity: 0.85, fontFamily: fs.routine }} numberOfLines={1}>{setsLine}</Text> : null}
+                          </View>
+                        );
+                      })}
+                      {exercises.length > 5 && <Text style={{ fontSize: 8, color: tc, opacity: 0.6 }}>{`+${exercises.length - 5} more...`}</Text>}
+                    </View>
+                  </LinearGradient>
+                  <View style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 22, alignItems: 'center', justifyContent: 'center' }}>
+                    <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} style={{ transform: [{ rotate: '-90deg' }] }} />
+                  </View>
+                </>
+              );
+            }
+            if (layout === 'b') {
+              return <LeftColOverlayB {...commonProps} fontSet={fs} />;
+            }
+            if (layout === 'c') {
+              const COL_COUNT = 3;
+              const COL_W = Math.floor((PHOTO_W - OVERLAY_PAD_C * 2 - 16) / COL_COUNT);
+              return (
+                <>
+                  <View style={{ position: 'absolute', top: OVERLAY_PAD_C, left: OVERLAY_PAD_C, right: OVERLAY_PAD_C, flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 13, fontWeight: '900', color: tc, fontFamily: fs.nickname }}>{displayName}</Text>
+                    <Text style={{ fontSize: 10, color: tc, opacity: 0.85, fontFamily: fs.nickname }}>{timestamp}</Text>
+                  </View>
+                  <View style={{ position: 'absolute', top: OVERLAY_PAD_C + 28, left: OVERLAY_PAD_C, right: OVERLAY_PAD_C, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 29, fontWeight: '900', color: tc, fontFamily: fs.muscle, textAlign: 'center' }} numberOfLines={1}>{muscleLabel}</Text>
+                  </View>
+                  <View style={{ position: 'absolute', top: OVERLAY_PAD_C + 28 + 48, left: OVERLAY_PAD_C, right: OVERLAY_PAD_C, flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignContent: 'flex-start' }}>
+                    {exercises.slice(0, 9).map(ex => {
+                      const sets = logs[ex.id] ?? [];
+                      return (
+                        <View key={ex.id} style={{ width: COL_W, marginBottom: 10 }}>
+                          <Text style={{ fontSize: 8, color: tc, opacity: 0.7, fontFamily: fs.routine, letterSpacing: 0.5 }} numberOfLines={1}>{`[${ex.brand.toUpperCase()}]`}</Text>
+                          <Text style={{ fontSize: 9, fontWeight: '900', color: tc, fontFamily: fs.routine, marginBottom: 2 }} numberOfLines={2}>{ex.name.toUpperCase()}</Text>
+                          {sets.map((st, si) => (
+                            <Text key={si} style={{ fontSize: 8, color: tc, opacity: 0.85, fontFamily: fs.routine }}>{`S${si + 1} ${st.weight}kg × ${st.reps}`}</Text>
+                          ))}
+                        </View>
+                      );
+                    })}
+                    {exercises.length > 9 && <Text style={{ fontSize: 8, color: tc, opacity: 0.6 }}>{`+${exercises.length - 9} more...`}</Text>}
+                  </View>
+                  <View style={{ position: 'absolute', bottom: OVERLAY_PAD_C, left: 0, right: 0, alignItems: 'center' }}>
+                    <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
+                  </View>
+                </>
+              );
+            }
+            return null;
+          })()}
 
           {/* 테두리 */}
           <View style={[styles.border, { borderColor: tc }]} />
