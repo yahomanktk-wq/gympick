@@ -1613,82 +1613,96 @@ export function BottomInfoOverlay({ exercises, logs, nickname, timestamp, muscle
   );
 }
 
-// 유형 B용: 운동루틴 형식 '[PRIME] CHEST PRESS 60 x 10 / 60 x 10' 한 줄
 export function LeftColOverlayB({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH, fontSet }: OverlayProps & { fontSet: FontSet }) {
-  const tsParts = timestamp.split('_');
-  const tsDate  = tsParts[0] ?? timestamp;
-  const tsTime  = tsParts[1] ?? '';
-
   return (
     <>
-      {/* 상단 좌: 닉네임 + 날짜 */}
+      {/* 좌상단: 닉네임 */}
       <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD }}>
-        <Text style={{ fontSize: 13, fontWeight: '900', color: tc, letterSpacing: 0.3, fontFamily: fontSet.nickname }}>
+        <Text style={{
+          fontSize: 15,
+          fontWeight: '900',
+          color: tc,
+          letterSpacing: 0.3,
+          fontFamily: fontSet.nickname,
+        }}>
           {nickname}
         </Text>
-        <Text style={{ fontSize: 10, fontWeight: '700', color: tc, opacity: 0.85, marginTop: 2, fontFamily: fontSet.nickname }}>
-          {tsDate}
-        </Text>
-        {tsTime ? (
-          <Text style={{ fontSize: 10, fontWeight: '700', color: tc, opacity: 0.85, fontFamily: fontSet.nickname }}>
-            {tsTime}
-          </Text>
-        ) : null}
       </View>
-      {/* 좌측 세로 타겟부위 */}
+
+      {/* 우상단: GYM PICK 가로 로고 */}
+      <View style={{ position: 'absolute', top: OVERLAY_PAD, right: OVERLAY_PAD }}>
+        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
+      </View>
+
+      {/* 중하단: 날짜 + 타겟부위_day + 운동 목록 */}
       <View style={{
         position: 'absolute',
-        left: OVERLAY_PAD - 8,
-        top: photoH * 0.38,
-        width: 40,
-        alignItems: 'center',
+        left: OVERLAY_PAD,
+        right: OVERLAY_PAD,
+        bottom: OVERLAY_PAD,
       }}>
+        {/* 운동 목록 */}
+        <View style={{ marginBottom: 16 }}>
+          {exercises.slice(0, 8).map(ex => {
+            const sets = logs[ex.id] ?? [];
+            const setsLine = sets.map(st => `${st.weight} × ${st.reps}`).join(' / ');
+            return (
+              <View key={ex.id} style={{ marginBottom: 10 }}>
+                <Text style={{
+                  fontSize: 11,
+                  fontWeight: '900',
+                  color: tc,
+                  letterSpacing: 0.5,
+                  fontFamily: fontSet.routine,
+                }} numberOfLines={1}>
+                  {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
+                </Text>
+                {setsLine ? (
+                  <Text style={{
+                    fontSize: 11,
+                    fontWeight: '500',
+                    color: tc,
+                    opacity: 0.85,
+                    marginTop: 2,
+                    fontFamily: fontSet.routine,
+                  }} numberOfLines={1}>
+                    {setsLine}
+                  </Text>
+                ) : null}
+              </View>
+            );
+          })}
+          {exercises.length > 8 && (
+            <Text style={{ fontSize: 9, color: tc, opacity: 0.6, fontFamily: fontSet.routine }}>
+              {`+${exercises.length - 8} more...`}
+            </Text>
+          )}
+        </View>
+
+        {/* 날짜 */}
         <Text style={{
-          fontSize: 24,
+          fontSize: 11,
+          fontWeight: '700',
+          color: tc,
+          opacity: 0.75,
+          marginBottom: 4,
+          fontFamily: fontSet.nickname,
+        }}>
+          {timestamp}
+        </Text>
+
+        {/* 타겟부위_day — 크고 굵게, 밑줄 */}
+        <Text style={{
+          fontSize: 40,
           fontWeight: '900',
           color: tc,
           fontFamily: fontSet.muscle,
-          transform: [{ rotate: '90deg' }],
-          width: photoH * 0.35,
-          textAlign: 'center',
-        }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+          textDecorationLine: 'underline',
+          letterSpacing: -1,
+          lineHeight: 46,
+        }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
           {muscleLabel}
         </Text>
-      </View>
-      {/* 운동 목록: [브랜드] 머신명 세트1 / 세트2 형식, 타겟부위 아래 배치 */}
-      <View style={{
-        position: 'absolute',
-        top: OVERLAY_PAD + 60,
-        left: OVERLAY_PAD + 32,
-        right: OVERLAY_PAD,
-        bottom: OVERLAY_PAD + 28,
-      }}>
-        {exercises.slice(0, 8).map(ex => {
-          const sets = logs[ex.id] ?? [];
-          const setsLine = sets.map(st => `${st.weight} x ${st.reps}`).join(' / ');
-          return (
-            <View key={ex.id} style={{ marginBottom: 8 }}>
-              <Text style={{
-                fontSize: 9,
-                fontWeight: '900',
-                color: tc,
-                letterSpacing: 0.3,
-                fontFamily: fontSet.routine,
-              }} numberOfLines={1}>
-                {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}${setsLine ? '  ' + setsLine : ''}`}
-              </Text>
-            </View>
-          );
-        })}
-        {exercises.length > 8 && (
-          <Text style={{ fontSize: 8, color: tc, opacity: 0.6, fontFamily: fontSet.routine }}>
-            {`+${exercises.length - 8} more...`}
-          </Text>
-        )}
-      </View>
-      {/* 하단 우측 로고 */}
-      <View style={{ position: 'absolute', bottom: OVERLAY_PAD, right: OVERLAY_PAD }}>
-        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
       </View>
     </>
   );
