@@ -1659,6 +1659,7 @@ export function LeftColOverlayB({ exercises, logs, nickname, timestamp, muscleLa
           fontWeight: '900',
           color: tc,
           fontFamily: fontSet.muscle,
+          fontWeight: fontSet.muscle === 'BasicFont' ? '900' : undefined,
           letterSpacing: -1,
           lineHeight: 46,
           marginBottom: 16,
@@ -2075,7 +2076,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
                     </View>
                     {/* 하단 좌: muscleLabel + 운동 목록 */}
                     <View style={s.overlayBottomLeft}>
-                      <Text style={[s.overlayMuscleTitle, { color: tc, fontFamily: fs.muscle }]}>{muscleLabel}</Text>
+                      <Text style={[s.overlayMuscleTitle, { color: tc, fontFamily: fs.muscle, ...(fs.muscle === 'BasicFont' && { fontWeight: '900' }) }]}>{muscleLabel}</Text>
                       <View style={s.sessionScroll}>
                         {exercises.slice(0, 7).map(ex => {
                           const sets     = logs[ex.id] ?? [];
@@ -2125,7 +2126,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
                     </View>
                     {/* 타겟부위 */}
                     <View style={{ position: 'absolute', top: OVERLAY_PAD + 28, left: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'center' }}>
-                      <Text style={{ fontSize: 29, fontWeight: '900', color: tc, fontFamily: fs.muscle, textAlign: 'center' }} numberOfLines={1}>
+                      <Text style={{ fontSize: 29, fontWeight: fs.muscle === 'BasicFont' ? '900' : undefined, color: tc, fontFamily: fs.muscle, textAlign: 'center' }} numberOfLines={1}>
                         {muscleLabel}
                       </Text>
                     </View>
