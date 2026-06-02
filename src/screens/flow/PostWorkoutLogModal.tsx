@@ -14,7 +14,7 @@ import {
   InteractionManager,
   Animated,
 } from 'react-native';
-import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import ChestIcon     from '../../assets/muscle-icons/chest.svg';
 import BackIcon       from '../../assets/muscle-icons/back.svg';
@@ -274,7 +274,7 @@ function MuscleSelectStep({ selected, onToggle, onNext, onBack, onClose, isRestD
   isRestDay?: boolean;
 }) {
   return (
-    <SafeAreaView style={s.safe}>
+    <SafeAreaView style={s.safe} edges={["top", "bottom"]}>
       <NavHeader title="어떤 부위를 운동했나요?" onBack={onBack} onClose={onClose} />
       <StepBar total={5} current={1} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
@@ -372,7 +372,7 @@ function GymSelectStep({ onSelect, onClose }: {
   }
 
   return (
-    <SafeAreaView style={s.safe}>
+    <SafeAreaView style={s.safe} edges={["top", "bottom"]}>
       <NavHeader title="어디서 운동했나요?" onClose={onClose} />
       <StepBar total={5} current={0} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
@@ -552,7 +552,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
   }
 
   return (
-    <SafeAreaView style={s.safe}>
+    <SafeAreaView style={s.safe} edges={["top", "bottom"]}>
       <NavHeader title="머신 선택" onBack={onBack} onClose={onClose} />
       <StepBar total={5} current={2} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
@@ -965,7 +965,7 @@ function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onR
   }
 
   return (
-    <SafeAreaView style={s.safe}>
+    <SafeAreaView style={s.safe} edges={["top", "bottom"]}>
       <NavHeader title="세트 기록" onBack={onBack} onClose={onClose} />
       <StepBar total={5} current={2} />
       {completedSets.length > 0 && (
@@ -1949,7 +1949,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
   const tc = textColor;
 
   return (
-    <SafeAreaView style={s.safe}>
+    <SafeAreaView style={s.safe} edges={["top", "bottom"]}>
       <NavHeader title="운동 사진" onBack={onBack} onClose={onClose} />
       <StepBar total={5} current={3} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
@@ -2521,7 +2521,7 @@ function WorkoutDoneStep({ gym, exercises, logs, detectedPRs, selectedMuscles, o
   }
 
   return (
-    <SafeAreaView style={s.safe}>
+    <SafeAreaView style={s.safe} edges={["top", "bottom"]}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
         <View style={s.doneHero}>
           <View style={s.doneCheck}>
@@ -3299,8 +3299,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
       presentationStyle="fullScreen"
       onRequestClose={goBack}
     >
-      <SafeAreaProvider>
-        <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <View style={{ flex: 1, backgroundColor: C.bg }}>
           {renderStep()}
 
         {/* 저장 중 로딩 팝업 */}
@@ -3359,7 +3358,6 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
           />
         )}
       </View>
-      </SafeAreaProvider>
     </Modal>
 
     </>
