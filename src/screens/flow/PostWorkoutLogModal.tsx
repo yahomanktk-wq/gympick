@@ -109,6 +109,7 @@ type OverlayStyle =
   | 's3a' | 's3b' | 's3c'
   | 's4a' | 's4b' | 's4c'
   | 's5a' | 's5b' | 's5c'
+  | 's6d'
   | 'archday';
 
 type FontSet = {
@@ -123,6 +124,7 @@ const FONT_SETS: Record<number, FontSet> = {
   3: { muscle: 'BasicFont',                routine: 'Abrakadaboom',         nickname: 'KERISKEDU_Line'       },
   4: { muscle: 'BlackwoodCastleShadow',    routine: 'BlackwoodCastle',      nickname: 'HeirofLightRegular'   },
   5: { muscle: 'Flamer',                   routine: 'HeavyHeapRg-Regular',  nickname: 'BMkkubulimTTF-Regular'},
+  6: { muscle: 'biergartenlt',             routine: undefined,              nickname: undefined              },
 };
 
 export function getFontSet(style: OverlayStyle): FontSet {
@@ -131,9 +133,10 @@ export function getFontSet(style: OverlayStyle): FontSet {
   return FONT_SETS[setNum] ?? FONT_SETS[1];
 }
 
-export function getLayoutType(style: OverlayStyle): 'a' | 'b' | 'c' | 'archday' {
+export function getLayoutType(style: OverlayStyle): 'a' | 'b' | 'c' | 'd' | 'archday' {
   if (style === 'archday') return 'archday';
-  return style.charAt(2) as 'a' | 'b' | 'c';
+  const t = style.charAt(2);
+  return (t === 'a' || t === 'b' || t === 'c' || t === 'd') ? t : 'a';
 }
 
 // Fixed presets as specified
@@ -1709,6 +1712,142 @@ export function LeftColOverlayB({ exercises, logs, nickname, timestamp, muscleLa
   );
 }
 
+export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH, fontSet }: OverlayProps & { fontSet: FontSet }) {
+  const COL_COUNT = 3;
+  const COL_W     = Math.floor((photoW - OVERLAY_PAD * 2 - 16) / COL_COUNT);
+
+  const pureLabel = muscleLabel.replace(/_?day$/i, '').replace(/\s*day$/i, '').trim();
+
+  return (
+    <>
+      {/* 좌상단: 닉네임 */}
+      <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD }}>
+        <Text style={{
+          fontSize: 14,
+          fontWeight: '900',
+          color: tc,
+          letterSpacing: 0.3,
+          fontFamily: fontSet.nickname,
+        }}>
+          {nickname}
+        </Text>
+      </View>
+
+      {/* 우상단: 날짜 */}
+      <View style={{ position: 'absolute', top: OVERLAY_PAD, right: OVERLAY_PAD }}>
+        <Text style={{
+          fontSize: 12,
+          fontWeight: '700',
+          color: tc,
+          opacity: 0.85,
+          fontFamily: fontSet.nickname,
+        }}>
+          {timestamp}
+        </Text>
+      </View>
+
+      {/* 중앙 그룹: 타겟부위 + 3열 루틴 — 세로 중앙 정렬 */}
+      <View style={{
+        position: 'absolute',
+        top: OVERLAY_PAD + 30,
+        bottom: OVERLAY_PAD + 30,
+        left: OVERLAY_PAD,
+        right: OVERLAY_PAD,
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}>
+        {/* 타겟부위 — 최대한 크게, 한 줄 */}
+        <Text
+          style={{
+            fontFamily: fontSet.muscle,
+            fontWeight: '900',
+            color: tc,
+            textAlign: 'center',
+            letterSpacing: -1,
+            marginBottom: 20,
+          }}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.3}
+        >
+          {pureLabel}
+        </Text>
+
+        {/* 3열 루틴 그리드 */}
+        <View style={{
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+          gap: 8,
+          width: '100%',
+        }}>
+          {exercises.slice(0, 9).map(ex => {
+            const sets = logs[ex.id] ?? [];
+            return (
+              <View key={ex.id} style={{ width: COL_W, alignItems: 'center', marginBottom: 12 }}>
+                <Text style={{
+                  fontSize: 8,
+                  fontWeight: '700',
+                  color: tc,
+                  opacity: 0.7,
+                  letterSpacing: 0.5,
+                  textAlign: 'center',
+                  fontFamily: fontSet.routine,
+                }}>
+                  {`[${ex.brand.toUpperCase()}]`}
+                </Text>
+                <Text style={{
+                  fontSize: 9,
+                  fontWeight: '900',
+                  color: tc,
+                  letterSpacing: 0.2,
+                  marginBottom: 3,
+                  lineHeight: 13,
+                  textAlign: 'center',
+                  fontFamily: fontSet.routine,
+                }} numberOfLines={2}>
+                  {ex.name.toUpperCase()}
+                </Text>
+                {sets.map((st, si) => (
+                  <Text key={si} style={{
+                    fontSize: 8,
+                    fontWeight: '600',
+                    color: tc,
+                    opacity: 0.85,
+                    lineHeight: 13,
+                    textAlign: 'center',
+                    fontFamily: fontSet.routine,
+                  }}>
+                    {`S${si + 1} ${st.weight}kg × ${st.reps}`}
+                  </Text>
+                ))}
+              </View>
+            );
+          })}
+          {exercises.length > 9 && (
+            <View style={{ width: COL_W }}>
+              <Text style={{ fontSize: 8, fontWeight: '700', color: tc, opacity: 0.6, textAlign: 'center' }}>
+                {`+${exercises.length - 9} more...`}
+              </Text>
+            </View>
+          )}
+        </View>
+      </View>
+
+      {/* 하단 중앙: GYM PICK 로고 */}
+      <View style={{
+        position: 'absolute',
+        bottom: OVERLAY_PAD,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+      }}>
+        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
+      </View>
+    </>
+  );
+}
+
 export function ArchDayOverlay({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH }: OverlayProps) {
   const COL_COUNT = 3;
   const COL_W = Math.floor((photoW - OVERLAY_PAD * 2 - 16) / COL_COUNT);
@@ -2113,6 +2252,23 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
                 );
               }
 
+              // 유형 D: GridOverlayD
+              if (layout === 'd') {
+                return (
+                  <GridOverlayD
+                    exercises={exercises}
+                    logs={logs}
+                    nickname={displayName}
+                    timestamp={timestamp}
+                    muscleLabel={muscleLabel}
+                    tc={tc}
+                    photoW={PHOTO_W}
+                    photoH={photoH}
+                    fontSet={fs}
+                  />
+                );
+              }
+
               // 유형 C: GridOverlay 기반
               if (layout === 'c') {
                 const COL_COUNT = 3;
@@ -2353,10 +2509,12 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
                 { key: 's5a', set: 5, type: 'A', muscle: 'Flamer' },
                 { key: 's5b', set: 5, type: 'B', muscle: 'Flamer' },
                 { key: 's5c', set: 5, type: 'C', muscle: 'Flamer' },
+                { key: 's6d', set: 6, type: 'D', muscle: 'biergartenlt' },
                 { key: 'archday', set: 0, type: '9', muscle: 'Stadium1956-Regular' },
               ] as { key: OverlayStyle; set: number; type: string; muscle: string }[]).map((opt, idx) => {
                 const isActive = overlayStyle === opt.key;
                 const isArchday = opt.key === 'archday';
+                const isTypeD   = opt.type === 'D';
                 return (
                   <TouchableOpacity
                     key={opt.key}
@@ -2367,7 +2525,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
                       paddingVertical: 10,
                       borderRadius: 10,
                       borderWidth: isActive ? 2 : 1.5,
-                      borderColor: isActive ? C.accent : isArchday ? '#fb923c50' : C.border,
+                      borderColor: isActive ? C.accent : isArchday ? '#fb923c50' : isTypeD ? '#a78bfa50' : C.border,
                       backgroundColor: isActive ? '#1a1a1a' : C.surface,
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -2656,6 +2814,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     'KERISKEDU_Line':           require('../../../assets/fonts/keriskedu_line.ttf'),
     'HeirofLightRegular':       require('../../../assets/fonts/heiroflightregular.ttf'),
     'BMkkubulimTTF-Regular':    require('../../../assets/fonts/bmkkubulim.ttf'),
+    'biergartenlt':             require('../../../assets/fonts/biergartenlt.ttf'),
   });
 
   const [step,              setStep]              = useState<Step>('gym-select');

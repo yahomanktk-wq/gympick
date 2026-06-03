@@ -14,7 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { C, R } from '../../theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import GymPickLogo from '../../components/GymPickLogo';
-import { ArchDayOverlay, LeftColOverlayB, ClassicOverlay, getFontSet, getLayoutType } from './PostWorkoutLogModal';
+import { ArchDayOverlay, LeftColOverlayB, ClassicOverlay, GridOverlayD, getFontSet, getLayoutType } from './PostWorkoutLogModal';
 
 const LOGO_STRIP_H = 14;
 const LOGO_STRIP_W = Math.round(LOGO_STRIP_H * (2805 / 279));
@@ -32,7 +32,7 @@ interface Props {
   logs: Record<string, { weight: number; reps: number }[]>;
   nickname?: string;
   textColor: string;
-  overlayStyle?: 's1a' | 's1b' | 's1c' | 's2a' | 's2b' | 's2c' | 's3a' | 's3b' | 's3c' | 's4a' | 's4b' | 's4c' | 's5a' | 's5b' | 's5c' | 'archday';
+  overlayStyle?: 's1a' | 's1b' | 's1c' | 's2a' | 's2b' | 's2c' | 's3a' | 's3b' | 's3c' | 's4a' | 's4b' | 's4c' | 's5a' | 's5b' | 's5c' | 's6d' | 'archday';
   onCaptureDone: (uri: string) => void;
   onCancel: () => void;
 }
@@ -286,6 +286,19 @@ export default function WorkoutCameraOverlay({
             }
             if (layout === 'b') {
               return <LeftColOverlayB {...commonProps} fontSet={fs} />;
+            }
+            if (layout === 'd') {
+              return <GridOverlayD
+                exercises={exercises}
+                logs={logs}
+                nickname={displayName}
+                timestamp={timestamp}
+                muscleLabel={muscleLabel}
+                tc={tc}
+                photoW={PHOTO_W}
+                photoH={PHOTO_H}
+                fontSet={fs}
+              />;
             }
             if (layout === 'c') {
               const COL_COUNT = 3;
