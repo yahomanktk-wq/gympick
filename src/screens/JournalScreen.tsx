@@ -494,7 +494,7 @@ function SessionDetailModal({
 
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }} edges={['top']}>
         <View style={det.header}>
           <View style={{ flex: 1 }}>
             <Text style={det.gymName} numberOfLines={1}>{firstSession.gymName}</Text>
@@ -885,7 +885,7 @@ export default function JournalScreen() {
   const totalVol      = sessions.reduce((a, s) => a + sessionVolume(s), 0);
 
   return (
-    <SafeAreaView style={st.safe}>
+    <SafeAreaView style={st.safe} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
 
       <View style={st.header}>

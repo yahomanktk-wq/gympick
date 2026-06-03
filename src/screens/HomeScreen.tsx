@@ -379,7 +379,7 @@ export default function HomeScreen() {
   const handleFeedPress = useCallback(() => nav.navigate('WorkoutFeed'), [nav]);
 
   return (
-    <SafeAreaView style={st.safe}>
+    <SafeAreaView style={st.safe} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={st.scroll}>
 

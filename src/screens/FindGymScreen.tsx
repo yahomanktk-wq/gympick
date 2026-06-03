@@ -511,7 +511,7 @@ export default function FindGymScreen() {
   // --- Render
 
   return (
-    <SafeAreaView style={s.safe}>
+    <SafeAreaView style={s.safe} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
 
       {/* Fixed header + filters */}
