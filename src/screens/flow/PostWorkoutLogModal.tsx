@@ -1204,60 +1204,62 @@ export function GridOverlay({ exercises, logs, nickname, timestamp, muscleLabel,
           {timestamp}
         </Text>
       </View>
+      {/* 중앙 그룹: 타겟부위 + 루틴 — 세로 중앙 정렬 */}
       <View style={{
         position: 'absolute',
-        top: OVERLAY_PAD + 36,
+        top: OVERLAY_PAD + 30,
+        bottom: OVERLAY_PAD + 30,
         left: OVERLAY_PAD,
         right: OVERLAY_PAD,
+        justifyContent: 'center',
         alignItems: 'center',
       }}>
+        {/* 타겟부위 */}
         <Text style={{
           fontSize: 46,
           color: tc,
           letterSpacing: -0.5,
           textAlign: 'center',
           fontFamily: 'Honfleur-Heavy',
+          marginBottom: 57,
         }}>
           {muscleLabel}
         </Text>
-      </View>
-      <View style={{
-        position: 'absolute',
-        top: OVERLAY_PAD + 93,
-        left: OVERLAY_PAD,
-        right: OVERLAY_PAD,
-        bottom: OVERLAY_PAD + 32,
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 8,
-        alignContent: 'center',
-        justifyContent: 'center',
-      }}>
-        {exercises.slice(0, 9).map(ex => {
-          const sets = logs[ex.id] ?? [];
-          return (
-            <View key={ex.id} style={{ width: COL_W, marginBottom: 12, alignItems: 'center' }}>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: tc, opacity: 0.7, letterSpacing: 0.5, textAlign: 'center' }}>
-                {`[${ex.brand.toUpperCase()}]`}
-              </Text>
-              <Text style={{ fontSize: 16, fontWeight: '900', color: tc, letterSpacing: 0.2, marginBottom: 3, lineHeight: 22, textAlign: 'center' }} numberOfLines={2}>
-                {ex.name.toUpperCase()}
-              </Text>
-              {sets.map((st, si) => (
-                <Text key={si} style={{ fontSize: 14, fontWeight: '600', color: tc, opacity: 0.85, lineHeight: 22, textAlign: 'center' }}>
-                  {`S${si + 1} ${st.weight}kg × ${st.reps}`}
+
+        {/* 3열 루틴 그리드 */}
+        <View style={{
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          gap: 8,
+          justifyContent: 'center',
+          width: '100%',
+        }}>
+          {exercises.slice(0, 9).map(ex => {
+            const sets = logs[ex.id] ?? [];
+            return (
+              <View key={ex.id} style={{ width: COL_W, marginBottom: 12, alignItems: 'center' }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: tc, opacity: 0.7, letterSpacing: 0.5, textAlign: 'center' }}>
+                  {`[${ex.brand.toUpperCase()}]`}
                 </Text>
-              ))}
+                <Text style={{ fontSize: 16, fontWeight: '900', color: tc, letterSpacing: 0.2, marginBottom: 3, lineHeight: 22, textAlign: 'center' }} numberOfLines={2}>
+                  {ex.name.toUpperCase()}
+                </Text>
+                {sets.map((st, si) => (
+                  <Text key={si} style={{ fontSize: 14, fontWeight: '600', color: tc, opacity: 0.85, lineHeight: 22, textAlign: 'center' }}>
+                    {`S${si + 1} ${st.weight}kg × ${st.reps}`}
+                  </Text>
+                ))}
+              </View>
+            );
+          })}
+          {exercises.length > 9 && (
+            <View style={{ width: COL_W }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: tc, opacity: 0.6, textAlign: 'center' }}>
+                {`+${exercises.length - 9} more...`}
+              </Text>
             </View>
-          );
-        })}
-        {exercises.length > 9 && (
-          <View style={{ width: COL_W }}>
-            <Text style={{ fontSize: 14, fontWeight: '700', color: tc, opacity: 0.6, textAlign: 'center' }}>
-              {`+${exercises.length - 9} more...`}
-            </Text>
-          </View>
-        )}
+          )}
+        </View>
       </View>
       <View style={{
         position: 'absolute',
