@@ -32,7 +32,7 @@ interface Props {
   logs: Record<string, { weight: number; reps: number }[]>;
   nickname?: string;
   textColor: string;
-  overlayStyle?: 's1a' | 's1b' | 's1c' | 's2a' | 's2b' | 's2c' | 's3a' | 's3b' | 's3c' | 's4a' | 's4b' | 's4c' | 's5a' | 's5b' | 's5c' | 's6d' | 'archday';
+  overlayStyle?: 's1a' | 's1b' | 's1c' | 's1d' | 's2a' | 's2b' | 's2c' | 's2d' | 's3a' | 's3b' | 's3c' | 's3d' | 's4a' | 's4b' | 's4c' | 's4d' | 's5a' | 's5b' | 's5c' | 's5d' | 's6a' | 's6b' | 's6c' | 's6d' | 'archday';
   onCaptureDone: (uri: string) => void;
   onCancel: () => void;
 }

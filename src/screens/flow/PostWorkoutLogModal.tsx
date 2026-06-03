@@ -104,12 +104,12 @@ const OVERLAY_PAD = 20;
 
 // Overlay layout style variants
 type OverlayStyle =
-  | 's1a' | 's1b' | 's1c'
-  | 's2a' | 's2b' | 's2c'
-  | 's3a' | 's3b' | 's3c'
-  | 's4a' | 's4b' | 's4c'
-  | 's5a' | 's5b' | 's5c'
-  | 's6d'
+  | 's1a' | 's1b' | 's1c' | 's1d'
+  | 's2a' | 's2b' | 's2c' | 's2d'
+  | 's3a' | 's3b' | 's3c' | 's3d'
+  | 's4a' | 's4b' | 's4c' | 's4d'
+  | 's5a' | 's5b' | 's5c' | 's5d'
+  | 's6a' | 's6b' | 's6c' | 's6d'
   | 'archday';
 
 type FontSet = {
@@ -1763,12 +1763,14 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
             fontWeight: '900',
             color: tc,
             textAlign: 'center',
-            letterSpacing: -1,
+            letterSpacing: -2,
             marginBottom: 20,
+            fontSize: photoW - 20,
+            width: photoW - 20,
           }}
           numberOfLines={1}
           adjustsFontSizeToFit
-          minimumFontScale={0.3}
+          minimumFontScale={0.05}
         >
           {pureLabel}
         </Text>
@@ -2497,18 +2499,26 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
                 { key: 's1a', set: 1, type: 'A', muscle: 'Quicksilver-Italic' },
                 { key: 's1b', set: 1, type: 'B', muscle: 'Quicksilver-Italic' },
                 { key: 's1c', set: 1, type: 'C', muscle: 'Quicksilver-Italic' },
+                { key: 's1d', set: 1, type: 'D', muscle: 'Quicksilver-Italic' },
                 { key: 's2a', set: 2, type: 'A', muscle: 'Matcha Cih' },
                 { key: 's2b', set: 2, type: 'B', muscle: 'Matcha Cih' },
                 { key: 's2c', set: 2, type: 'C', muscle: 'Matcha Cih' },
+                { key: 's2d', set: 2, type: 'D', muscle: 'Matcha Cih' },
                 { key: 's3a', set: 3, type: 'A', muscle: 'BasicFont' },
                 { key: 's3b', set: 3, type: 'B', muscle: 'BasicFont' },
                 { key: 's3c', set: 3, type: 'C', muscle: 'BasicFont' },
+                { key: 's3d', set: 3, type: 'D', muscle: 'BasicFont' },
                 { key: 's4a', set: 4, type: 'A', muscle: 'BlackwoodCastleShadow' },
                 { key: 's4b', set: 4, type: 'B', muscle: 'BlackwoodCastleShadow' },
                 { key: 's4c', set: 4, type: 'C', muscle: 'BlackwoodCastleShadow' },
+                { key: 's4d', set: 4, type: 'D', muscle: 'BlackwoodCastleShadow' },
                 { key: 's5a', set: 5, type: 'A', muscle: 'Flamer' },
                 { key: 's5b', set: 5, type: 'B', muscle: 'Flamer' },
                 { key: 's5c', set: 5, type: 'C', muscle: 'Flamer' },
+                { key: 's5d', set: 5, type: 'D', muscle: 'Flamer' },
+                { key: 's6a', set: 6, type: 'A', muscle: 'biergartenlt' },
+                { key: 's6b', set: 6, type: 'B', muscle: 'biergartenlt' },
+                { key: 's6c', set: 6, type: 'C', muscle: 'biergartenlt' },
                 { key: 's6d', set: 6, type: 'D', muscle: 'biergartenlt' },
                 { key: 'archday', set: 0, type: '9', muscle: 'Stadium1956-Regular' },
               ] as { key: OverlayStyle; set: number; type: string; muscle: string }[]).map((opt, idx) => {
@@ -2530,7 +2540,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
                       alignItems: 'center',
                       justifyContent: 'center',
                       minWidth: 48,
-                      marginLeft: (!isArchday && idx > 0 && idx % 3 === 0) ? 8 : 0,
+                      marginLeft: (!isArchday && idx > 0 && idx % 4 === 0) ? 8 : 0,
                     }}
                   >
                     <Text style={{
