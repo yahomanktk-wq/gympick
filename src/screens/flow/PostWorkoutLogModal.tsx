@@ -2535,7 +2535,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
                       paddingVertical: 10,
                       borderRadius: 10,
                       borderWidth: isActive ? 2 : 1.5,
-                      borderColor: isActive ? C.accent : isArchday ? '#fb923c50' : isTypeD ? '#a78bfa50' : C.border,
+                      borderColor: isActive ? C.accent : isArchday ? '#fb923c50' : C.border,
                       backgroundColor: isActive ? '#1a1a1a' : C.surface,
                       alignItems: 'center',
                       justifyContent: 'center',
