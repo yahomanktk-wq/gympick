@@ -1212,7 +1212,7 @@ export function GridOverlay({ exercises, logs, nickname, timestamp, muscleLabel,
         alignItems: 'center',
       }}>
         <Text style={{
-          fontSize: 29,
+          fontSize: 46,
           color: tc,
           letterSpacing: -0.5,
           textAlign: 'center',
@@ -1223,28 +1223,28 @@ export function GridOverlay({ exercises, logs, nickname, timestamp, muscleLabel,
       </View>
       <View style={{
         position: 'absolute',
-        top: OVERLAY_PAD + 80,
+        top: OVERLAY_PAD + 93,
         left: OVERLAY_PAD,
         right: OVERLAY_PAD,
         bottom: OVERLAY_PAD + 32,
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: 8,
-        alignContent: 'flex-start',
+        alignContent: 'center',
         justifyContent: 'center',
       }}>
         {exercises.slice(0, 9).map(ex => {
           const sets = logs[ex.id] ?? [];
           return (
             <View key={ex.id} style={{ width: COL_W, marginBottom: 12, alignItems: 'center' }}>
-              <Text style={{ fontSize: 8, fontWeight: '700', color: tc, opacity: 0.7, letterSpacing: 0.5, textAlign: 'center' }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: tc, opacity: 0.7, letterSpacing: 0.5, textAlign: 'center' }}>
                 {`[${ex.brand.toUpperCase()}]`}
               </Text>
-              <Text style={{ fontSize: 9, fontWeight: '900', color: tc, letterSpacing: 0.2, marginBottom: 3, lineHeight: 13, textAlign: 'center' }} numberOfLines={2}>
+              <Text style={{ fontSize: 16, fontWeight: '900', color: tc, letterSpacing: 0.2, marginBottom: 3, lineHeight: 22, textAlign: 'center' }} numberOfLines={2}>
                 {ex.name.toUpperCase()}
               </Text>
               {sets.map((st, si) => (
-                <Text key={si} style={{ fontSize: 8, fontWeight: '600', color: tc, opacity: 0.85, lineHeight: 13, textAlign: 'center' }}>
+                <Text key={si} style={{ fontSize: 14, fontWeight: '600', color: tc, opacity: 0.85, lineHeight: 22, textAlign: 'center' }}>
                   {`S${si + 1} ${st.weight}kg × ${st.reps}`}
                 </Text>
               ))}
@@ -1253,7 +1253,7 @@ export function GridOverlay({ exercises, logs, nickname, timestamp, muscleLabel,
         })}
         {exercises.length > 9 && (
           <View style={{ width: COL_W }}>
-            <Text style={{ fontSize: 8, fontWeight: '700', color: tc, opacity: 0.6 }}>
+            <Text style={{ fontSize: 14, fontWeight: '700', color: tc, opacity: 0.6, textAlign: 'center' }}>
               {`+${exercises.length - 9} more...`}
             </Text>
           </View>
