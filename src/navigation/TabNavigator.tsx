@@ -73,8 +73,8 @@ export default function TabNavigator() {
         tabBarShowLabel: false,
         tabBarStyle: {
           ...tabSt.bar,
-          height:        Platform.OS === 'ios' ? 80 : 56 + insets.bottom,
-          paddingBottom: Platform.OS === 'ios' ? 16 : insets.bottom > 0 ? insets.bottom : 8,
+          height:        Platform.OS === 'ios' ? 80 + insets.bottom : 56 + insets.bottom,
+          paddingBottom: Platform.OS === 'ios' ? insets.bottom + 16 : insets.bottom > 0 ? insets.bottom : 8,
         },
         tabBarIcon:      ({ focused }) => (
           <TabItem name={route.name as keyof TabParamList} focused={focused} />
