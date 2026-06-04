@@ -470,41 +470,48 @@ function SessionDetailModal({
       return;
     }
     try {
-      let compositeAsset: MediaLibrary.Asset | null = null;
+      const savedAssets: MediaLibrary.Asset[] = [];
+
+      // 1. 인증샷 저장 (URL 지원되는 saveToLibraryAsync 사용)
       if (session.compositeUri) {
-        compositeAsset = await MediaLibrary.createAssetAsync(session.compositeUri);
+        await MediaLibrary.saveToLibraryAsync(session.compositeUri);
+        const { assets } = await MediaLibrary.getAssetsAsync({ first: 1, sortBy: MediaLibrary.SortBy.creationTime });
+        if (assets.length > 0) savedAssets.push(assets[0]);
       } else if (session.photoUri) {
         const pNode = photoRefs.current[session.id];
         if (pNode) {
           const uri = await captureRef(pNode, { format: 'png', quality: 0.95, result: 'tmpfile' });
-          compositeAsset = await MediaLibrary.createAssetAsync(uri);
+          await MediaLibrary.saveToLibraryAsync(uri);
+          const { assets } = await MediaLibrary.getAssetsAsync({ first: 1, sortBy: MediaLibrary.SortBy.creationTime });
+          if (assets.length > 0) savedAssets.push(assets[0]);
         }
       }
 
+      // 2. 루틴카드 페이지별 캡처 및 저장
       const pageRefs = routinePageRefs.current[session.id] ?? [];
-      const pageAssets: MediaLibrary.Asset[] = [];
       for (const ref of pageRefs) {
         if (ref) {
           await new Promise(resolve => requestAnimationFrame(resolve));
+          await new Promise(resolve => setTimeout(resolve, 100));
           const pageUri = await captureRef(ref, {
             format: 'png', quality: 0.95, result: 'tmpfile',
             width: PHOTO_W_J, height: ROUTINE_CARD_H_J,
           });
-          const asset = await MediaLibrary.createAssetAsync(pageUri);
-          pageAssets.push(asset);
+          await MediaLibrary.saveToLibraryAsync(pageUri);
+          const { assets } = await MediaLibrary.getAssetsAsync({ first: 1, sortBy: MediaLibrary.SortBy.creationTime });
+          if (assets.length > 0) savedAssets.push(assets[0]);
         }
       }
 
-      const allAssets = [...(compositeAsset ? [compositeAsset] : []), ...pageAssets];
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      if (Platform.OS === 'ios' && allAssets.length > 0) {
-        const instagramUrl = `instagram://library?LocalIdentifier=${allAssets[0].id}`;
-        const canOpen = await Linking.canOpenURL(instagramUrl);
-        if (canOpen) {
+      // 3. 인스타그램 실행
+      if (Platform.OS === 'ios' && savedAssets.length > 0) {
+        const instagramUrl = `instagram://library?LocalIdentifier=${savedAssets[0].id}`;
+        try {
           await Linking.openURL(instagramUrl);
-        } else {
-          Alert.alert('저장 완료', `${allAssets.length}장이 갤러리에 저장되었습니다.\n인스타그램 앱에서 업로드해주세요.`);
+        } catch {
+          Alert.alert('저장 완료', `${savedAssets.length}장이 갤러리에 저장되었습니다.\n인스타그램 앱에서 업로드해주세요.`);
         }
       } else {
         const canShare = await Sharing.isAvailableAsync();
@@ -514,12 +521,12 @@ function SessionDetailModal({
             dialogTitle: '인스타그램에 공유',
           });
         } else {
-          Alert.alert('저장 완료', `${allAssets.length}장이 갤러리에 저장되었습니다.\n인스타그램 앱에서 업로드해주세요.`);
+          Alert.alert('저장 완료', `${savedAssets.length}장이 갤러리에 저장되었습니다.\n인스타그램 앱에서 업로드해주세요.`);
         }
       }
     } catch (e) {
       if (__DEV__) console.warn('[JournalScreen] handleInstagramShare 오류:', e);
-      Alert.alert('공유 실패', '다시 시도해 주세요.');
+      Alert.alert('공유 실패', `오류: ${String(e)}`);
     }
   }
 
