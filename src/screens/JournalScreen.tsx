@@ -11,7 +11,10 @@ import {
   Image,
   ActivityIndicator,
   Alert,
+  Linking,
+  Platform,
 } from 'react-native';
+import * as Sharing from 'expo-sharing';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as MediaLibrary from 'expo-media-library';
 import { captureRef } from 'react-native-view-shot';
@@ -380,6 +383,10 @@ function SessionDetailModal({
 }) {
   const photoRefs      = useRef<Record<string, View | null>>({});
   const routineCardRefs = useRef<Record<string, View | null>>({});
+  const PHOTO_W_J         = Dimensions.get('window').width - 32;
+  const ROUTINE_CARD_H_J  = Math.round(PHOTO_W_J * 4 / 3);
+  const RC_ITEMS_PER_PAGE = Math.max(1, Math.floor((ROUTINE_CARD_H_J - 70 - 36) / 90));
+  const routinePageRefs   = useRef<Record<string, (View | null)[]>>({});
   const [photoHeights, setPhotoHeights] = useState<Record<string, number>>({});
   const [publicStatusMap, setPublicStatusMap] = useState<
     Record<string, { postId: string; isPublic: boolean } | null>
@@ -453,6 +460,66 @@ function SessionDetailModal({
     } catch (e) {
       if (__DEV__) console.warn('[JournalScreen] handleSave 오류:', e);
       Alert.alert('저장 실패', '다시 시도해 주세요.');
+    }
+  }
+
+  async function handleInstagramShare(session: WorkoutLog) {
+    const { status } = await MediaLibrary.requestPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('권한 필요', '사진 저장을 위해 미디어 라이브러리 접근 권한이 필요합니다.');
+      return;
+    }
+    try {
+      let compositeAsset: MediaLibrary.Asset | null = null;
+      if (session.compositeUri) {
+        compositeAsset = await MediaLibrary.createAssetAsync(session.compositeUri);
+      } else if (session.photoUri) {
+        const pNode = photoRefs.current[session.id];
+        if (pNode) {
+          const uri = await captureRef(pNode, { format: 'png', quality: 0.95, result: 'tmpfile' });
+          compositeAsset = await MediaLibrary.createAssetAsync(uri);
+        }
+      }
+
+      const pageRefs = routinePageRefs.current[session.id] ?? [];
+      const pageAssets: MediaLibrary.Asset[] = [];
+      for (const ref of pageRefs) {
+        if (ref) {
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          const pageUri = await captureRef(ref, {
+            format: 'png', quality: 0.95, result: 'tmpfile',
+            width: PHOTO_W_J, height: ROUTINE_CARD_H_J,
+          });
+          const asset = await MediaLibrary.createAssetAsync(pageUri);
+          pageAssets.push(asset);
+        }
+      }
+
+      const allAssets = [...(compositeAsset ? [compositeAsset] : []), ...pageAssets];
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      if (Platform.OS === 'ios' && allAssets.length > 0) {
+        const instagramUrl = `instagram://library?LocalIdentifier=${allAssets[0].id}`;
+        const canOpen = await Linking.canOpenURL(instagramUrl);
+        if (canOpen) {
+          await Linking.openURL(instagramUrl);
+        } else {
+          Alert.alert('저장 완료', `${allAssets.length}장이 갤러리에 저장되었습니다.\n인스타그램 앱에서 업로드해주세요.`);
+        }
+      } else {
+        const canShare = await Sharing.isAvailableAsync();
+        if (session.compositeUri && canShare) {
+          await Sharing.shareAsync(session.compositeUri, {
+            mimeType: 'image/webp',
+            dialogTitle: '인스타그램에 공유',
+          });
+        } else {
+          Alert.alert('저장 완료', `${allAssets.length}장이 갤러리에 저장되었습니다.\n인스타그램 앱에서 업로드해주세요.`);
+        }
+      }
+    } catch (e) {
+      if (__DEV__) console.warn('[JournalScreen] handleInstagramShare 오류:', e);
+      Alert.alert('공유 실패', '다시 시도해 주세요.');
     }
   }
 
@@ -598,6 +665,15 @@ function SessionDetailModal({
                   >
                     <Ionicons name="download-outline" size={16} color={C.text} />
                     <Text style={det.photoActionTxt}>저장</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[det.photoActionBtn, { flex: 1 }]}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); handleInstagramShare(session); }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="logo-instagram" size={16} color={C.accent} />
+                    <Text style={[det.photoActionTxt, { color: C.accent }]}>인스타그램</Text>
                   </TouchableOpacity>
 
                   {publicStatusMap[session.id] !== undefined && publicStatusMap[session.id] !== null && (
@@ -777,6 +853,104 @@ function SessionDetailModal({
                     <GymPickLogo color="#000000" width={60} height={6} />
                   </View>
                 </View>
+
+                {/* 인스타 공유용 루틴카드 페이지 분할 */}
+                {(() => {
+                  const machines_list = machines ?? [];
+                  const pc = Math.ceil(machines_list.length / RC_ITEMS_PER_PAGE);
+                  return Array.from({ length: pc }).map((_, pageIdx) => {
+                    const pageMachines = machines_list.slice(
+                      pageIdx * RC_ITEMS_PER_PAGE,
+                      (pageIdx + 1) * RC_ITEMS_PER_PAGE,
+                    );
+                    return (
+                      <View
+                        key={`rpage-${session.id}-${pageIdx}`}
+                        style={{ position: 'absolute', top: -9999, left: -9999 }}
+                        pointerEvents="none"
+                      >
+                        <View
+                          ref={el => {
+                            if (!routinePageRefs.current[session.id]) {
+                              routinePageRefs.current[session.id] = [];
+                            }
+                            routinePageRefs.current[session.id][pageIdx] = el as View | null;
+                          }}
+                          collapsable={false}
+                          style={{
+                            width: PHOTO_W_J,
+                            height: ROUTINE_CARD_H_J,
+                            backgroundColor: '#FFFFFF',
+                            borderWidth: 3,
+                            borderColor: session.overlayTextColor ?? '#ffffff',
+                            borderRadius: 16,
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {/* 헤더 */}
+                          <View style={{ paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFFFFF' }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                              <Text style={{ fontSize: 15, fontWeight: '900', color: '#111111', flex: 1, marginRight: 8 }} numberOfLines={1}>
+                                {session.gymName}
+                              </Text>
+                              <View style={{ backgroundColor: session.overlayTextColor ?? '#ffffff', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 }}>
+                                <Text style={{ fontSize: 10, fontWeight: '800', color: '#000000', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                                  {pc > 1 ? `${pageIdx + 1}/${pc}` : (machines_list[0]?.targetMuscle ?? 'WORKOUT')}
+                                </Text>
+                              </View>
+                            </View>
+                            <Text style={{ fontSize: 11, color: '#888888', fontWeight: '500' }}>
+                              {(() => {
+                                const d = new Date(session.date);
+                                const pad = (n: number) => String(n).padStart(2, '0');
+                                const ENG_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                                return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}(${ENG_DAYS[d.getDay()]})_${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                              })()}
+                            </Text>
+                          </View>
+                          <View style={{ height: 1, backgroundColor: '#E5E5E5' }} />
+                          <View style={{ flex: 1, overflow: 'hidden' }}>
+                            {pageMachines.map((m, i) => {
+                              const brandKey  = m.machineBrand.toUpperCase().replace(/\s+/g, '_');
+                              const brandLogo = brandLogos[brandKey];
+                              const imageUrl  = `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${m.machineId}.webp`;
+                              return (
+                                <React.Fragment key={m.machineId}>
+                                  {i > 0 && <View style={{ height: 1, backgroundColor: '#E5E5E5' }} />}
+                                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', padding: 12, gap: 10 }}>
+                                    <View style={{ width: 64, height: 64, borderRadius: 10, overflow: 'hidden', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E5E5' }}>
+                                      <ExpoImage source={{ uri: imageUrl }} style={{ width: '100%', height: '100%', backgroundColor: '#FFFFFF' }} contentFit="contain" />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#000000', lineHeight: 16, marginBottom: 4 }} numberOfLines={2}>
+                                        {m.machineName.toUpperCase()}
+                                      </Text>
+                                      {brandLogo ? (
+                                        <ExpoImage source={brandLogo} style={{ width: 56, height: 18 }} contentFit="contain" />
+                                      ) : (
+                                        <Text style={{ fontSize: 10, color: '#333333' }}>{m.machineBrand}</Text>
+                                      )}
+                                    </View>
+                                    <View style={{ alignItems: 'flex-end', minWidth: 80 }}>
+                                      {Array.from({ length: m.sets }).map((_, si) => (
+                                        <Text key={si} style={{ fontSize: 11, fontWeight: '600', color: '#000000', lineHeight: 18 }}>
+                                          {m.weight > 0 ? `${m.weight}kg` : '--'} × {m.reps}
+                                        </Text>
+                                      ))}
+                                    </View>
+                                  </View>
+                                </React.Fragment>
+                              );
+                            })}
+                          </View>
+                          <View style={{ paddingHorizontal: 16, paddingVertical: 10, alignItems: 'flex-end', backgroundColor: '#FFFFFF' }}>
+                            <GymPickLogo color="#000000" width={60} height={6} />
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  });
+                })()}
               </View>
             );
           })}

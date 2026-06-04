@@ -7,14 +7,16 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Share,
   Dimensions,
   Alert,
   Image,
   InteractionManager,
   Animated,
+  Linking,
+  Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Sharing from 'expo-sharing';
+import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import ChestIcon     from '../../assets/muscle-icons/chest.svg';
 import BackIcon       from '../../assets/muscle-icons/back.svg';
@@ -2007,6 +2009,10 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
   const [overlayStyle,  setOverlayStyle]  = useState<OverlayStyle>('s1a');
   const overlayRef = useRef<View>(null);
   const routineCardRef = useRef<View>(null);
+  const ROUTINE_CARD_H    = Math.round(PHOTO_W * 4 / 3);
+  const RC_ITEMS_PER_PAGE = Math.max(1, Math.floor((ROUTINE_CARD_H - 70 - 36) / 90));
+  const pageCount         = Math.ceil(exercises.length / RC_ITEMS_PER_PAGE);
+  const routinePageRefs   = useRef<(View | null)[]>([]);
 
   const photoH = Math.round(PHOTO_W * 4 / 3);
 
@@ -2028,20 +2034,6 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
   const muscleLabel = sortedMuscles.length > 1
     ? sortedMuscles.slice(0, 2).join(' + ')
     : `${sortedMuscles[0] ?? 'WORKOUT'} Day`;
-
-  async function handleShare() {
-    const lines: string[] = [`🏋️ ${muscleLabel.toUpperCase()}`, ''];
-    for (const ex of exercises) {
-      const exSets = logs[ex.id] ?? [];
-      const setsLine = exSets.map(st => `${st.weight} x ${st.reps}`).join(' / ');
-      lines.push(`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`);
-      if (setsLine) lines.push(setsLine);
-    }
-    lines.push('', `📍 ${gym.name}`, '', 'GymPick으로 기록됨');
-    try {
-      await Share.share({ message: lines.join('\n'), title: 'GymPick Workout' });
-    } catch (_) {}
-  }
 
   async function handleSaveImage() {
     console.log('[handleSaveImage] called');
@@ -2086,6 +2078,78 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
     } catch (error) {
       console.error('[GymPick] 이미지 저장 오류:', error);
       Alert.alert('저장에 실패했습니다', '다시 시도해 주세요.');
+    }
+  }
+
+  async function handleInstagramShare() {
+    if (!photoUri || !overlayRef.current) {
+      Alert.alert('사진 없음', '먼저 사진을 찍어주세요.');
+      return;
+    }
+    try {
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('권한 필요', '사진 저장을 위해 미디어 라이브러리 접근 권한이 필요합니다.');
+        return;
+      }
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      await new Promise<void>(resolve => InteractionManager.runAfterInteractions(() => resolve()));
+
+      const capturedUri = await captureRef(overlayRef, {
+        format: 'png', quality: 0.95, result: 'tmpfile',
+        width: PHOTO_W, height: photoH,
+      });
+
+      const pageUris: string[] = [];
+      for (let i = 0; i < pageCount; i++) {
+        const ref = routinePageRefs.current[i];
+        if (ref) {
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          const pageUri = await captureRef(ref, {
+            format: 'png', quality: 0.95, result: 'tmpfile',
+            width: PHOTO_W, height: ROUTINE_CARD_H,
+          });
+          pageUris.push(pageUri);
+        }
+      }
+
+      const allUris = [capturedUri, ...pageUris];
+      const assets: MediaLibrary.Asset[] = [];
+      for (const uri of allUris) {
+        const asset = await MediaLibrary.createAssetAsync(uri);
+        assets.push(asset);
+      }
+
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      if (Platform.OS === 'ios') {
+        const instagramUrl = `instagram://library?LocalIdentifier=${assets[0].id}`;
+        const canOpen = await Linking.canOpenURL(instagramUrl);
+        if (canOpen) {
+          await Linking.openURL(instagramUrl);
+        } else {
+          Alert.alert(
+            '저장 완료',
+            `${allUris.length}장이 갤러리에 저장되었습니다.\n인스타그램 앱에서 업로드해주세요.`
+          );
+        }
+      } else {
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(capturedUri, {
+            mimeType: 'image/webp',
+            dialogTitle: '인스타그램에 공유',
+          });
+        } else {
+          Alert.alert(
+            '저장 완료',
+            `${allUris.length}장이 갤러리에 저장되었습니다.\n인스타그램 앱에서 업로드해주세요.`
+          );
+        }
+      }
+    } catch (error) {
+      console.error('[GymPick] 인스타그램 공유 오류:', error);
+      Alert.alert('공유에 실패했습니다', '다시 시도해 주세요.');
     }
   }
 
@@ -2462,6 +2526,93 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
           </View>
         </View>
 
+        {/* 인스타 공유용 루틴카드 페이지 분할 */}
+        {Array.from({ length: pageCount }).map((_, pageIdx) => {
+          const pageExercises = exercises.slice(
+            pageIdx * RC_ITEMS_PER_PAGE,
+            (pageIdx + 1) * RC_ITEMS_PER_PAGE,
+          );
+          return (
+            <View
+              key={`rpage-${pageIdx}`}
+              style={{ position: 'absolute', top: -9999, left: -9999 }}
+              pointerEvents="none"
+            >
+              <View
+                ref={el => { routinePageRefs.current[pageIdx] = el; }}
+                collapsable={false}
+                style={{
+                  width: PHOTO_W,
+                  height: ROUTINE_CARD_H,
+                  backgroundColor: '#FFFFFF',
+                  borderWidth: 3,
+                  borderColor: textColor,
+                  borderRadius: 16,
+                  overflow: 'hidden',
+                }}
+              >
+                {/* 헤더 */}
+                <View style={{ paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFFFFF' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '900', color: '#111111', flex: 1, marginRight: 8 }} numberOfLines={1}>
+                      {gym.name}
+                    </Text>
+                    <View style={{ backgroundColor: textColor, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                        {muscleLabel.replace(' Day', '')}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 11, color: '#888888', fontWeight: '500' }}>
+                    {timestamp}{pageCount > 1 ? `  (${pageIdx + 1}/${pageCount})` : ''}
+                  </Text>
+                </View>
+                <View style={{ height: 1, backgroundColor: '#E5E5E5' }} />
+                {/* 머신 목록 */}
+                <View style={{ flex: 1, overflow: 'hidden' }}>
+                  {pageExercises.map((ex, i) => {
+                    const exSets    = logs[ex.id] ?? [];
+                    const brandKey  = ex.brand.toUpperCase().replace(/\s+/g, '_');
+                    const brandLogo = brandLogos[brandKey];
+                    const imageUrl  = `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${ex.id}.webp`;
+                    return (
+                      <React.Fragment key={ex.id}>
+                        {i > 0 && <View style={{ height: 1, backgroundColor: '#E5E5E5' }} />}
+                        <View style={{ flexDirection: 'row', alignItems: 'flex-start', padding: 12, gap: 10 }}>
+                          <View style={{ width: 64, height: 64, borderRadius: 10, overflow: 'hidden', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E5E5' }}>
+                            <Image source={{ uri: imageUrl }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#000000', lineHeight: 16, marginBottom: 4 }} numberOfLines={2}>
+                              {ex.name.toUpperCase()}
+                            </Text>
+                            {brandLogo ? (
+                              <Image source={brandLogo} style={{ width: 56, height: 18 }} resizeMode="contain" />
+                            ) : (
+                              <Text style={{ fontSize: 10, color: '#333333' }}>{ex.brand}</Text>
+                            )}
+                          </View>
+                          <View style={{ alignItems: 'flex-end', justifyContent: 'flex-start', minWidth: 80 }}>
+                            {exSets.map((st, si) => (
+                              <Text key={si} style={{ fontSize: 11, fontWeight: '600', color: '#000000', lineHeight: 18 }}>
+                                {st.weight > 0 ? `${st.weight}kg` : '--'} × {st.reps}
+                              </Text>
+                            ))}
+                          </View>
+                        </View>
+                      </React.Fragment>
+                    );
+                  })}
+                </View>
+                {/* 푸터 */}
+                <View style={{ paddingHorizontal: 16, paddingVertical: 10, alignItems: 'flex-end', backgroundColor: '#FFFFFF' }}>
+                  <GymPickLogo color="#000000" width={60} height={6} />
+                </View>
+              </View>
+            </View>
+          );
+        })}
+
         {/* 다시 찍기 버튼: 사진이 찍혔을 때만 */}
         {photoTaken && (
           <TouchableOpacity
@@ -2593,20 +2744,20 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
           </>
         )}
 
-        {/* Share / Save Image row */}
+        {/* 저장 / 인스타그램 버튼 */}
         <View style={s.shareRow}>
-          <TouchableOpacity style={s.shareBtn} activeOpacity={0.8} onPress={handleShare}>
-            <Ionicons name="share-social-outline" size={16} color={C.accent} />
-            <Text style={s.shareBtnTxt}>공유</Text>
-          </TouchableOpacity>
           <TouchableOpacity style={s.shareBtn} activeOpacity={0.8} onPress={() => {
-            console.log('[saveBtn] tapped');
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             handleSaveImage();
           }}>
             <Ionicons name="image-outline" size={16} color={C.textSub} />
             <Text style={[s.shareBtnTxt, { color: C.textSub }]}>
               {saveSuccess ? '저장됨 ✓' : '이미지 저장'}
             </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.shareBtn} activeOpacity={0.8} onPress={handleInstagramShare}>
+            <Ionicons name="logo-instagram" size={16} color={C.accent} />
+            <Text style={s.shareBtnTxt}>인스타그램</Text>
           </TouchableOpacity>
         </View>
 
@@ -3470,6 +3621,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
       presentationStyle="fullScreen"
       onRequestClose={goBack}
     >
+      <SafeAreaProvider>
       <View style={{ flex: 1, backgroundColor: C.bg }}>
           {renderStep()}
 
@@ -3529,6 +3681,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
           />
         )}
       </View>
+      </SafeAreaProvider>
     </Modal>
 
     </>

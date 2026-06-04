@@ -26,7 +26,8 @@
         "NSCameraUsageDescription": "머신을 스캔하여 자동으로 인식하기 위해 카메라 접근이 필요합니다.",
         "NSPhotoLibraryUsageDescription": "운동 완료 사진을 저장하거나 프로필 사진을 설정하기 위해 사진 라이브러리 접근이 필요합니다.",
         "NSPhotoLibraryAddUsageDescription": "운동 완료 카드 이미지를 사진 앱에 저장하기 위해 접근이 필요합니다.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "LSApplicationQueriesSchemes": ["instagram"]
       }
     },
     "android": {
