@@ -446,14 +446,14 @@ function SessionDetailModal({
       } else if (session.photoUri) {
         const pNode = photoRefs.current[session.id];
         if (pNode) {
-          const uri = await captureRef(pNode, { format: 'png', quality: 0.95, result: 'tmpfile' });
+          const uri = await captureRef(pNode, { format: 'jpg', quality: 0.95, result: 'tmpfile' });
           await MediaLibrary.saveToLibraryAsync(uri);
         }
       }
       const rcNode = routineCardRefs.current[session.id];
       if (rcNode) {
         await new Promise(resolve => requestAnimationFrame(resolve));
-        const routineUri = await captureRef(rcNode, { format: 'png', quality: 0.95, result: 'tmpfile' });
+        const routineUri = await captureRef(rcNode, { format: 'jpg', quality: 0.95, result: 'tmpfile' });
         await MediaLibrary.saveToLibraryAsync(routineUri);
       }
       Alert.alert('저장 완료', '인증샷과 운동 루틴 카드가 저장되었습니다.');
@@ -480,7 +480,7 @@ function SessionDetailModal({
       } else if (session.photoUri) {
         const pNode = photoRefs.current[session.id];
         if (pNode) {
-          const uri = await captureRef(pNode, { format: 'png', quality: 0.95, result: 'tmpfile' });
+          const uri = await captureRef(pNode, { format: 'jpg', quality: 0.95, result: 'tmpfile' });
           await MediaLibrary.saveToLibraryAsync(uri);
           const { assets } = await MediaLibrary.getAssetsAsync({ first: 1, sortBy: MediaLibrary.SortBy.creationTime });
           if (assets.length > 0) savedAssets.push(assets[0]);
@@ -494,7 +494,7 @@ function SessionDetailModal({
           await new Promise(resolve => requestAnimationFrame(resolve));
           await new Promise(resolve => setTimeout(resolve, 100));
           const pageUri = await captureRef(ref, {
-            format: 'png', quality: 0.95, result: 'tmpfile',
+            format: 'jpg', quality: 0.95, result: 'tmpfile',
             width: PHOTO_W_J, height: ROUTINE_CARD_H_J,
           });
           await MediaLibrary.saveToLibraryAsync(pageUri);
