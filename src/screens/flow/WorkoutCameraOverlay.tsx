@@ -15,6 +15,7 @@ import { C, R } from '../../theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import GymPickLogo from '../../components/GymPickLogo';
 import { ArchDayOverlay, LeftColOverlayB, ClassicOverlay, GridOverlayD, getFontSet, getLayoutType } from './PostWorkoutLogModal';
+import { useFonts } from 'expo-font';
 
 const LOGO_STRIP_H = 14;
 const LOGO_STRIP_W = Math.round(LOGO_STRIP_H * (2805 / 279));
@@ -52,6 +53,26 @@ export default function WorkoutCameraOverlay({
   const [capturing,    setCapturing]    = useState(false);
   const [cameraReady,  setCameraReady]  = useState(false);
   const [zoom,         setZoom]         = useState(0);
+
+  useFonts({
+    'KCC-Ganpan':               require('../../../assets/fonts/kcc_ganpan.ttf'),
+    'Mat Saleh':                require('../../../assets/fonts/mat_saleh.ttf'),
+    'Matcha Cih':               require('../../../assets/fonts/matcha_cih.ttf'),
+    'Quicksilver-Italic':       require('../../../assets/fonts/quicksilver_italic.ttf'),
+    'Stadium1956-Regular':      require('../../../assets/fonts/stadium1956_regular.otf'),
+    'BlackwoodCastle':          require('../../../assets/fonts/blacc.ttf'),
+    'BlackwoodCastleShadow':    require('../../../assets/fonts/blaccs.ttf'),
+    'CollegeBoy':               require('../../../assets/fonts/college_boy.otf'),
+    'Flamer':                   require('../../../assets/fonts/flamer.ttf'),
+    'HeavyHeapRg-Regular':      require('../../../assets/fonts/heavy_heap_rg.otf'),
+    'Honfleur-Heavy':           require('../../../assets/fonts/honfleur_heavy.otf'),
+    'BasicFont':                require('../../../assets/fonts/basif.ttf'),
+    'Abrakadaboom':             require('../../../assets/fonts/abrakadaboom.ttf'),
+    'KERISKEDU_Line':           require('../../../assets/fonts/keriskedu_line.ttf'),
+    'HeirofLightRegular':       require('../../../assets/fonts/heiroflightregular.ttf'),
+    'BMkkubulimTTF-Regular':    require('../../../assets/fonts/bmkkubulim.ttf'),
+    'biergartenlt':             require('../../../assets/fonts/biergartenlt.ttf'),
+  });
   const lastZoom        = useRef(0);
   const currentZoomRef  = useRef(0);
   const initialDistance = useRef<number | null>(null);
