@@ -7,7 +7,7 @@
     ],
     "slug": "gympick",
     "scheme": "gympick",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -20,7 +20,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.gympick.app",
       "usesAppleSignIn": true,
-      "buildNumber": "15",
+      "buildNumber": "16",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "주변 헬스장을 찾기 위해 현재 위치가 필요합니다. 위치 정보는 헬스장 검색 목적으로만 사용됩니다.",
         "NSCameraUsageDescription": "머신을 스캔하여 자동으로 인식하기 위해 카메라 접근이 필요합니다.",
@@ -41,7 +41,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.gympick.app",
-      "versionCode": 5,
+      "versionCode": 6,
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
