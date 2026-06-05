@@ -1856,77 +1856,57 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
 }
 
 export function GridOverlayC({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH, fontSet }: OverlayProps & { fontSet: FontSet }) {
-  const OVERLAY_PAD_C = 20;
   const COL_COUNT = 3;
-  const COL_W = Math.floor((photoW - OVERLAY_PAD_C * 2 - 16) / COL_COUNT);
+  const COL_W = Math.floor((photoW - OVERLAY_PAD * 2 - 16) / COL_COUNT);
 
   return (
     <>
       {/* 상단: 닉네임 좌, 날짜 우 */}
-      <View style={{ position: 'absolute', top: OVERLAY_PAD_C, left: OVERLAY_PAD_C, right: OVERLAY_PAD_C, flexDirection: 'row', justifyContent: 'space-between' }}>
+      <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD, right: OVERLAY_PAD, flexDirection: 'row', justifyContent: 'space-between' }}>
         <Text style={{ fontSize: 13, fontWeight: '900', color: tc, fontFamily: fontSet.nickname }}>{nickname}</Text>
         <Text style={{ fontSize: 10, color: tc, opacity: 0.85, fontFamily: fontSet.nickname }}>{timestamp}</Text>
       </View>
-
-      {/* 중앙 그룹: 타겟부위 + 3열 루틴 */}
-      <View style={{
-        position: 'absolute',
-        top: OVERLAY_PAD_C + 30,
-        bottom: OVERLAY_PAD_C + 30,
-        left: OVERLAY_PAD_C,
-        right: OVERLAY_PAD_C,
-        justifyContent: 'center',
-        alignItems: 'center',
-      }}>
-        <Text style={{
-          fontSize: 46,
-          color: tc,
-          letterSpacing: -0.5,
-          textAlign: 'center',
-          fontFamily: fontSet.muscle,
-          marginBottom: 57,
-          ...(fontSet.muscle === 'BasicFont' && { fontWeight: '900' }),
-        }}>
+      {/* 타겟부위 */}
+      <View style={{ position: 'absolute', top: OVERLAY_PAD + 28, left: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'center' }}>
+        <Text style={{ fontSize: 29, fontWeight: fontSet.muscle === 'BasicFont' ? '900' : undefined, color: tc, fontFamily: fontSet.muscle, textAlign: 'center' }} numberOfLines={1}>
           {muscleLabel}
         </Text>
-
-        <View style={{
-          flexDirection: 'row',
-          flexWrap: 'wrap',
-          gap: 8,
-          justifyContent: 'center',
-          width: '100%',
-        }}>
-          {exercises.slice(0, 9).map(ex => {
-            const sets = logs[ex.id] ?? [];
-            return (
-              <View key={ex.id} style={{ width: COL_W, marginBottom: 12, alignItems: 'center' }}>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: tc, opacity: 0.7, letterSpacing: 0.5, textAlign: 'center', fontFamily: fontSet.routine }}>
-                  {`[${ex.brand.toUpperCase()}]`}
-                </Text>
-                <Text style={{ fontSize: 16, fontWeight: '900', color: tc, letterSpacing: 0.2, marginBottom: 3, lineHeight: 22, textAlign: 'center', fontFamily: fontSet.routine }} numberOfLines={2}>
-                  {ex.name.toUpperCase()}
-                </Text>
-                {sets.map((st, si) => (
-                  <Text key={si} style={{ fontSize: 14, fontWeight: '600', color: tc, opacity: 0.85, lineHeight: 22, textAlign: 'center', fontFamily: fontSet.routine }}>
-                    {`S${si + 1} ${st.weight}kg × ${st.reps}`}
-                  </Text>
-                ))}
-              </View>
-            );
-          })}
-          {exercises.length > 9 && (
-            <View style={{ width: COL_W }}>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: tc, opacity: 0.6, textAlign: 'center', fontFamily: fontSet.routine }}>
-                {`+${exercises.length - 9} more...`}
-              </Text>
-            </View>
-          )}
-        </View>
       </View>
-
+      {/* 3열 운동 목록 */}
+      <View style={{
+        position: 'absolute',
+        top: OVERLAY_PAD + 28 + 48,
+        left: OVERLAY_PAD,
+        right: OVERLAY_PAD,
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        alignContent: 'flex-start',
+      }}>
+        {exercises.slice(0, 9).map(ex => {
+          const sets = logs[ex.id] ?? [];
+          return (
+            <View key={ex.id} style={{ width: COL_W, marginBottom: 10 }}>
+              <Text style={{ fontSize: 8, color: tc, opacity: 0.7, fontFamily: fontSet.routine, letterSpacing: 0.5 }} numberOfLines={1}>
+                {`[${ex.brand.toUpperCase()}]`}
+              </Text>
+              <Text style={{ fontSize: 9, fontWeight: '900', color: tc, fontFamily: fontSet.routine, marginBottom: 2 }} numberOfLines={2}>
+                {ex.name.toUpperCase()}
+              </Text>
+              {sets.map((st, si) => (
+                <Text key={si} style={{ fontSize: 8, color: tc, opacity: 0.85, fontFamily: fontSet.routine }}>
+                  {`S${si + 1} ${st.weight}kg × ${st.reps}`}
+                </Text>
+              ))}
+            </View>
+          );
+        })}
+        {exercises.length > 9 && (
+          <Text style={{ fontSize: 8, color: tc, opacity: 0.6 }}>{`+${exercises.length - 9} more...`}</Text>
+        )}
+      </View>
       {/* 하단 중앙 로고 */}
-      <View style={{ position: 'absolute', bottom: OVERLAY_PAD_C, left: 0, right: 0, alignItems: 'center' }}>
+      <View style={{ position: 'absolute', bottom: OVERLAY_PAD, left: 0, right: 0, alignItems: 'center' }}>
         <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
       </View>
     </>
