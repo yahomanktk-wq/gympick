@@ -833,17 +833,11 @@ function SetCard({ ex, sets, onChange, onAdd, onCopyPrev, onRemove, onSetLayout 
           <Ionicons name={isFW ? 'fitness-outline' : 'barbell'} size={18} color={col.fg} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={s.logExName}>{ex.name}</Text>
+          <Text style={s.logExName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{ex.name}</Text>
           <Text style={s.logExBrand}>{ex.brand}</Text>
         </View>
-        {isNewPR && (
-          <View style={s.newPRBadge}>
-            <Text style={s.newPRBadgeTxt}>🔥 신기록</Text>
-          </View>
-        )}
-        <View style={[s.logMusclePill, { backgroundColor: col.bg }]}>
-          <Text style={[s.logMusclePillText, { color: col.fg }]}>{ex.targetMuscle}</Text>
-        </View>
+        {/* 신기록 배지 제거 */}
+        {/* 타겟부위 칩 제거 */}
       </View>
 
       {/* Your PR reference */}
