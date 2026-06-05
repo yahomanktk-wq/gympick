@@ -1,0 +1,142 @@
+# 태스크: 레이아웃 선택 UI 썸네일 → DAY 텍스트 버튼으로 교체
+# 프로젝트 경로: D:\시작\gympick
+# 확인이나 중단 없이 끝까지 완료해줘
+
+---
+
+## 목표
+- 가로 스크롤 썸네일 카드(56×80) 제거
+- 각 스타일의 타겟부위 폰트로 'DAY' 텍스트를 표시하는 버튼으로 교체
+- StyleThumbnail 컴포넌트 제거
+
+---
+
+## 폰트-스타일 매핑
+- classic    (1번): QuicksilverItalic
+- leftcol    (2번): QuicksilverItalic
+- grid       (3번): QuicksilverItalic
+- centered   (4번): MatchaCih
+- sidebar    (5번): SportypoReguler
+- topbig     (6번): VdeVacia
+- centerlist (7번): MatchaCih
+- bottominfo (8번): 시스템 기본 폰트 (fontFamily 없음)
+
+---
+
+## STEP 1: 레이아웃 선택 UI 블록 교체
+
+`src/screens/flow/PostWorkoutLogModal.tsx` 에서
+아래 블록 전체를 찾는다:
+
+```
+          {/* 레이아웃 스타일: 가로 스크롤 썸네일 */}
+          <View style={{ marginBottom: 10 }}>
+```
+
+부터
+
+```
+          </View>
+
+          {/* 컬러칩 */}
+```
+
+바로 위까지의 블록 전체를 아래 코드로 교체한다:
+
+```tsx
+          {/* 레이아웃 스타일: DAY 텍스트 버튼 */}
+          <View style={{ marginBottom: 10 }}>
+            <Text style={{ fontSize: 9, fontWeight: '700', color: C.textDim, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8, paddingHorizontal: 2 }}>
+              레이아웃
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ flexDirection: 'row', gap: 8, paddingRight: 4 }}
+            >
+              {([
+                { key: 'classic',    fontFamily: 'QuicksilverItalic' },
+                { key: 'leftcol',    fontFamily: 'QuicksilverItalic' },
+                { key: 'grid',       fontFamily: 'QuicksilverItalic' },
+                { key: 'centered',   fontFamily: 'MatchaCih'         },
+                { key: 'sidebar',    fontFamily: 'SportypoReguler'   },
+                { key: 'topbig',     fontFamily: 'VdeVacia'          },
+                { key: 'centerlist', fontFamily: 'MatchaCih'         },
+                { key: 'bottominfo', fontFamily: undefined            },
+              ] as { key: OverlayStyle; fontFamily: string | undefined }[]).map((opt, idx) => {
+                const isActive = overlayStyle === opt.key;
+                return (
+                  <TouchableOpacity
+                    key={opt.key}
+                    onPress={() => setOverlayStyle(opt.key)}
+                    activeOpacity={0.8}
+                    style={{
+                      paddingHorizontal: 14,
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                      borderWidth: isActive ? 2 : 1.5,
+                      borderColor: isActive ? C.accent : C.border,
+                      backgroundColor: isActive ? '#1a1a1a' : C.surface,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      minWidth: 52,
+                    }}
+                  >
+                    <Text style={{
+                      fontSize: 16,
+                      color: isActive ? C.accent : C.textSub,
+                      fontFamily: opt.fontFamily,
+                      letterSpacing: -0.3,
+                    }}>
+                      DAY
+                    </Text>
+                    <Text style={{
+                      fontSize: 9,
+                      fontWeight: '700',
+                      color: isActive ? C.accent : C.textDim,
+                      marginTop: 4,
+                    }}>
+                      {idx + 1}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+```
+
+---
+
+## STEP 2: StyleThumbnail 컴포넌트 제거
+
+`src/screens/flow/PostWorkoutLogModal.tsx` 에서
+`function StyleThumbnail` 함수 전체를 찾아서 삭제한다.
+
+함수 시작:
+```
+function StyleThumbnail({ styleKey, isActive }: { styleKey: OverlayStyle; isActive: boolean }) {
+```
+
+함수 끝 (닫는 `}`) 까지 전체 삭제.
+
+---
+
+## STEP 3: 동작 확인 체크리스트
+
+1. 썸네일 카드(56×80) 제거됨 ✅
+2. 각 버튼에 'DAY' 텍스트가 해당 스타일 폰트로 표시 ✅
+3. 선택된 버튼에 accent 테두리 + 어두운 배경 ✅
+4. 버튼 하단에 스타일 번호(1~8) 표시 ✅
+5. 가로 스크롤 유지 ✅
+6. 컬러칩 UI 변경 없음 ✅
+7. StyleThumbnail 관련 TypeScript 에러 없음 ✅
+
+---
+
+## STEP 4: Git 커밋
+
+```
+cd D:\시작\gympick
+git add src/screens/flow/PostWorkoutLogModal.tsx
+git commit -m "feat: 레이아웃 선택 UI 썸네일 → 폰트별 DAY 텍스트 버튼으로 교체"
+```

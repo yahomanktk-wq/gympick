@@ -1,0 +1,240 @@
+# 태스크: 매니저 신청 시 이메일 알림 (Supabase Edge Function + Resend)
+# 프로젝트 경로: D:\시작\gympick
+# 확인이나 중단 없이 끝까지 완료해줘
+
+---
+
+## 구현 흐름
+1. Supabase Edge Function 생성 (notify-manager-request)
+2. Supabase Database Webhook 설정 (manager_requests INSERT 시 Edge Function 호출)
+3. Resend API로 이메일 발송
+
+---
+
+## STEP 1: Supabase CLI로 Edge Function 생성
+
+터미널에서 아래 명령어 실행:
+
+```bash
+cd D:\시작\gympick
+npx supabase functions new notify-manager-request
+```
+
+`supabase/functions/notify-manager-request/index.ts` 파일이 생성된다.
+
+---
+
+## STEP 2: Edge Function 코드 작성
+
+`supabase/functions/notify-manager-request/index.ts` 파일을 아래 코드로 교체한다:
+
+```typescript
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+
+const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
+const ADMIN_EMAIL    = 'gympick.official@gmail.com';
+
+serve(async (req: Request) => {
+  try {
+    const body = await req.json();
+
+    // Supabase Database Webhook payload 구조
+    const record = body?.record;
+    if (!record) {
+      return new Response(JSON.stringify({ error: 'No record found' }), { status: 400 });
+    }
+
+    const gymName       = record.gym_name       ?? '(헬스장명 없음)';
+    const applicantName = record.applicant_name  ?? '(이름 없음)';
+    const phone         = record.phone           ?? '(전화번호 없음)';
+    const message       = record.message         ?? '(메시지 없음)';
+    const createdAt     = record.created_at      ?? '';
+    const userId        = record.user_id         ?? '';
+
+    const emailHtml = `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
+        <h2 style="color: #C6FF00; background: #000; padding: 16px; border-radius: 8px;">
+          🏋️ GymPick 매니저 신청 접수
+        </h2>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 16px;">
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold; width: 120px;">헬스장명</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">${gymName}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold;">신청자</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">${applicantName}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold;">전화번호</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">${phone}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold;">메시지</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">${message}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold;">유저 ID</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">${userId}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; font-weight: bold;">신청 일시</td>
+            <td style="padding: 10px;">${new Date(createdAt).toLocaleString('ko-KR')}</td>
+          </tr>
+        </table>
+        <div style="margin-top: 24px; padding: 16px; background: #f5f5f5; border-radius: 8px;">
+          <p style="margin: 0; font-size: 13px; color: #666;">
+            Supabase 대시보드에서 manager_requests 테이블을 확인하고 승인/거절 처리해주세요.
+          </p>
+        </div>
+      </div>
+    `;
+
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from:    'GymPick <onboarding@resend.dev>',
+        to:      [ADMIN_EMAIL],
+        subject: `[GymPick] 매니저 신청 접수 - ${gymName} / ${applicantName}`,
+        html:    emailHtml,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error('Resend error:', data);
+      return new Response(JSON.stringify({ error: data }), { status: 500 });
+    }
+
+    return new Response(JSON.stringify({ success: true, data }), { status: 200 });
+
+  } catch (err) {
+    console.error('Edge Function error:', err);
+    return new Response(JSON.stringify({ error: String(err) }), { status: 500 });
+  }
+});
+```
+
+---
+
+## STEP 3: Resend API Key를 Supabase Secret으로 등록
+
+터미널에서 아래 명령어 실행:
+
+```bash
+npx supabase secrets set RESEND_API_KEY=re_E5PosRth_DaN1dNVkUfWLwVADiAnjwuYh
+```
+
+---
+
+## STEP 4: Edge Function 배포
+
+터미널에서 아래 명령어 실행:
+
+```bash
+npx supabase functions deploy notify-manager-request --project-ref okrouzqqvfioodfieljv
+```
+
+배포 완료 메시지 확인 후 다음 단계 진행.
+
+---
+
+## STEP 5: Supabase Database Webhook 설정
+
+Supabase 대시보드에서 직접 설정해야 한다.
+Claude Code는 아래 SQL을 Supabase SQL Editor에서 실행한다:
+
+```sql
+-- manager_requests 테이블 INSERT 시 Edge Function 호출하는 Webhook 생성
+SELECT
+  supabase_functions.http_request(
+    'https://okrouzqqvfioodfieljv.supabase.co/functions/v1/notify-manager-request',
+    'POST',
+    '{"Content-Type": "application/json", "Authorization": "Bearer ' || current_setting('app.service_role_key', true) || '"}',
+    '{}',
+    '5000'
+  );
+```
+
+위 SQL 방식 대신 아래 방법으로 Webhook을 생성한다.
+Supabase 대시보드 → Database → Webhooks → Create Webhook:
+
+이 설정은 Claude Code가 직접 할 수 없으므로
+아래 내용을 터미널에서 SQL로 실행한다:
+
+```sql
+-- supabase SQL editor에서 실행
+INSERT INTO supabase_functions.hooks (
+  hook_table_id,
+  hook_name,
+  hook_events,
+  request_payload
+)
+SELECT
+  c.oid,
+  'notify-manager-request-hook',
+  ARRAY['INSERT']::text[],
+  '{}'
+FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'public'
+  AND c.relname = 'manager_requests';
+```
+
+만약 위 SQL이 실패하면 아래 대안 방법으로 진행한다:
+
+### 대안: pg_net + trigger 방식
+
+```sql
+-- 1. pg_net extension 활성화 (이미 활성화되어 있을 수 있음)
+CREATE EXTENSION IF NOT EXISTS pg_net;
+
+-- 2. Webhook trigger 함수 생성
+CREATE OR REPLACE FUNCTION notify_manager_request_webhook()
+RETURNS TRIGGER AS $$
+BEGIN
+  PERFORM net.http_post(
+    url := 'https://okrouzqqvfioodfieljv.supabase.co/functions/v1/notify-manager-request',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9rcm91enFxdmZpb29kZmllbGp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ2MjI2NDEsImV4cCI6MjA2MDE5ODY0MX0.sCGsAnAXHaJJMYfGCMV3Mn3FRNfCcVHMqpMV1BGKLBU'
+    ),
+    body := jsonb_build_object('record', row_to_json(NEW))
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 3. Trigger 생성
+DROP TRIGGER IF EXISTS on_manager_request_insert ON public.manager_requests;
+CREATE TRIGGER on_manager_request_insert
+  AFTER INSERT ON public.manager_requests
+  FOR EACH ROW
+  EXECUTE FUNCTION notify_manager_request_webhook();
+```
+
+위 SQL을 Supabase SQL Editor에서 실행한다.
+
+---
+
+## STEP 6: 동작 확인 체크리스트
+
+1. Edge Function 배포 완료 ✅
+2. RESEND_API_KEY Secret 등록 완료 ✅
+3. manager_requests INSERT 트리거 생성 완료 ✅
+4. 테스트: 앱에서 매니저 신청 → gympick.official@gmail.com 수신 확인 ✅
+
+---
+
+## STEP 7: Git 커밋
+
+```
+cd D:\시작\gympick
+git add supabase/functions/notify-manager-request/index.ts
+git commit -m "feat: 매니저 신청 이메일 알림 Edge Function 추가 (Resend)"
+```

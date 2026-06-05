@@ -1,0 +1,30 @@
+# 태스크: 스타일 9 운동루틴 위치 수정
+# 프로젝트 경로: D:\시작\gympick
+# 확인이나 중단 없이 끝까지 완료해줘
+
+---
+
+## STEP 1: ArchDayOverlay 운동루틴 top 값 수정
+
+`src/screens/flow/PostWorkoutLogModal.tsx` 에서
+`ArchDayOverlay` 함수 내부 3열 운동 목록 View를 찾는다.
+
+찾는 코드:
+```tsx
+        top: OVERLAY_PAD + 28 + svgH - 60,
+```
+
+변경 후:
+```tsx
+        top: OVERLAY_PAD + 28 + svgH - 100,
+```
+
+---
+
+## STEP 2: Git 커밋
+
+```
+cd D:\시작\gympick
+git add src/screens/flow/PostWorkoutLogModal.tsx
+git commit -m "fix: 스타일 9 운동루틴 위치 svgH - 100으로 수정"
+```

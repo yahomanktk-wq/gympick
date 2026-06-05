@@ -1,0 +1,59 @@
+# 태스크: app.json 버전 업데이트
+
+## 파일 경로
+`app.json` (프로젝트 루트)
+
+## 변경 내용
+
+### 1. version 업데이트
+```json
+"version": "1.0.3",
+```
+
+### 2. iOS buildNumber 업데이트
+```json
+"buildNumber": "10",
+```
+
+### 3. Android versionCode 추가
+android 블록 안에 `"package": "com.gympick.app",` 바로 아래에 추가:
+```json
+"versionCode": 2,
+```
+
+## 변경 전/후
+
+### version
+```json
+// 변경 전
+"version": "1.0.2",
+
+// 변경 후
+"version": "1.0.3",
+```
+
+### buildNumber
+```json
+// 변경 전
+"buildNumber": "9",
+
+// 변경 후
+"buildNumber": "10",
+```
+
+### versionCode (신규 추가)
+```json
+// 변경 전
+"package": "com.gympick.app",
+"permissions": [
+
+// 변경 후
+"package": "com.gympick.app",
+"versionCode": 2,
+"permissions": [
+```
+
+## 완료 후
+git add app.json
+git commit -m "chore: 버전 1.0.3으로 업데이트 (iOS buildNumber 10, Android versionCode 2)"
+git push

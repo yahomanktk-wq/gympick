@@ -1,0 +1,29 @@
+# 태스크: app.json buildNumber, versionCode 수정
+
+## 파일 경로
+`app.json` (프로젝트 루트)
+
+## 변경 내용
+
+### 1. iOS buildNumber
+```json
+// 변경 전
+"buildNumber": "10",
+
+// 변경 후
+"buildNumber": "15",
+```
+
+### 2. Android versionCode
+```json
+// 변경 전
+"versionCode": 2,
+
+// 변경 후
+"versionCode": 5,
+```
+
+## 완료 후
+git add app.json
+git commit -m "chore: iOS buildNumber 15, Android versionCode 5로 업데이트"
+git push

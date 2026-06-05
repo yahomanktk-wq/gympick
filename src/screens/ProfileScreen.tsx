@@ -728,6 +728,7 @@ export default function ProfileScreen() {
                     setShowSplitSetup(true);
                   }
                   : s.label === '단위 (kg / lbs)' ? () => handleSettingPress(s.label)
+                  : s.label === '도움말 및 피드백' ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); nav.navigate('Onboarding', { isReview: true }); }
                   : undefined
                 }
               />

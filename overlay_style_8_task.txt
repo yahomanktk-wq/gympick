@@ -1,0 +1,817 @@
+# 태스크: 오운완 레이아웃 스타일 8개로 확장 + 썸네일 선택 UI
+# 프로젝트 경로: D:\시작\gympick
+# 확인이나 중단 없이 끝까지 완료해줘
+
+---
+
+## 목표
+1. `PostWorkoutLogModal.tsx`의 오버레이 스타일을 3개 → 8개로 확장
+2. 스타일 선택 UI를 숫자 원형 버튼 → 가로 스크롤 썸네일 카드로 교체
+3. 컬러칩을 썸네일 아래 별도 줄로 분리
+
+---
+
+## 파일 경로
+`src/screens/flow/PostWorkoutLogModal.tsx`
+
+---
+
+## STEP 1: OverlayStyle 타입 확장
+
+### 현재 코드 찾기
+```
+type OverlayStyle = 'classic' | 'leftcol' | 'grid';
+```
+
+### 변경 후
+```tsx
+type OverlayStyle = 'classic' | 'leftcol' | 'grid' | 'centered' | 'sidebar' | 'topbig' | 'centerlist' | 'bottominfo';
+```
+
+---
+
+## STEP 2: 신규 오버레이 컴포넌트 5개 추가
+
+`GridOverlay` 함수 끝난 직후 (약 line 1239) 아래 5개 컴포넌트를 추가한다.
+컴포넌트는 반드시 모듈 레벨에 정의한다 (함수 내부 정의 금지).
+
+### 2-1. CenteredOverlay (005 스타일)
+- 상단 좌: 닉네임, 상단 우: 날짜
+- 중앙: 타겟부위 타이틀 크게 (underline)
+- 타이틀 아래: 2열 운동 목록 (브랜드+머신명 굵게, 세트 한 줄로)
+- 하단 중앙: GYM PICK 로고
+
+```tsx
+export function CenteredOverlay({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH }: OverlayProps) {
+  const COL_COUNT = 2;
+  const COL_W = Math.floor((photoW - OVERLAY_PAD * 2 - 12) / COL_COUNT);
+  return (
+    <>
+      {/* 상단 좌: 닉네임 */}
+      <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD }}>
+        <Text style={{ fontSize: 13, fontWeight: '900', color: tc, letterSpacing: 0.3 }}>{nickname}</Text>
+      </View>
+      {/* 상단 우: 날짜 */}
+      <View style={{ position: 'absolute', top: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'flex-end' }}>
+        <Text style={{ fontSize: 10, fontWeight: '700', color: tc, opacity: 0.85 }}>{timestamp}</Text>
+      </View>
+      {/* 중앙 타이틀 */}
+      <View style={{ position: 'absolute', top: OVERLAY_PAD + 44, left: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'center' }}>
+        <Text style={{ fontSize: 32, fontWeight: '900', color: tc, letterSpacing: -0.5, textDecorationLine: 'underline', textAlign: 'center' }}>
+          {muscleLabel}
+        </Text>
+      </View>
+      {/* 2열 운동 목록 */}
+      <View style={{
+        position: 'absolute',
+        top: OVERLAY_PAD + 44 + 52,
+        left: OVERLAY_PAD,
+        right: OVERLAY_PAD,
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        alignContent: 'flex-start',
+      }}>
+        {exercises.slice(0, 8).map(ex => {
+          const sets = logs[ex.id] ?? [];
+          const setsLine = sets.map(st => `${st.weight} × ${st.reps}`).join(' / ');
+          return (
+            <View key={ex.id} style={{ width: COL_W, marginBottom: 10 }}>
+              <Text style={{ fontSize: 9, fontWeight: '900', color: tc, letterSpacing: 0.3, marginBottom: 2 }} numberOfLines={1}>
+                {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
+              </Text>
+              {setsLine ? (
+                <Text style={{ fontSize: 8, fontWeight: '600', color: tc, opacity: 0.85 }} numberOfLines={1}>{setsLine}</Text>
+              ) : null}
+            </View>
+          );
+        })}
+        {exercises.length > 8 && (
+          <Text style={{ fontSize: 8, fontWeight: '700', color: tc, opacity: 0.6 }}>{`+${exercises.length - 8} more...`}</Text>
+        )}
+      </View>
+      {/* 하단 중앙 로고 */}
+      <View style={{ position: 'absolute', bottom: OVERLAY_PAD, left: 0, right: 0, alignItems: 'center' }}>
+        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.85)} height={Math.round(LOGO_STRIP_H * 0.85)} />
+      </View>
+    </>
+  );
+}
+```
+
+### 2-2. SidebarOverlay (006 스타일)
+- 좌측: 닉네임, 날짜(작게), 중간쯤에 타겟부위 세로 회전 텍스트
+- 우측: 운동 목록 세로 나열 (브랜드+머신명 우측 정렬, 세트 우측 정렬)
+- 하단 중앙: GYM PICK 로고
+
+```tsx
+export function SidebarOverlay({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH }: OverlayProps) {
+  const tsParts = timestamp.split('_');
+  const tsDate  = tsParts[0] ?? timestamp;
+  const tsTime  = tsParts[1] ?? '';
+  const SIDEBAR_W = Math.round(photoW * 0.22);
+  return (
+    <>
+      {/* 좌측 상단: 닉네임 + 날짜 */}
+      <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD }}>
+        <Text style={{ fontSize: 13, fontWeight: '900', color: tc, letterSpacing: 0.3 }}>{nickname}</Text>
+        <Text style={{ fontSize: 10, fontWeight: '700', color: tc, opacity: 0.85, marginTop: 2 }}>{tsDate}</Text>
+        {tsTime ? (
+          <Text style={{ fontSize: 10, fontWeight: '700', color: tc, opacity: 0.85 }}>{tsTime}</Text>
+        ) : null}
+      </View>
+      {/* 좌측 중간: 타겟부위 세로 */}
+      <View style={{
+        position: 'absolute',
+        left: OVERLAY_PAD - 8,
+        top: photoH * 0.38,
+        width: 40,
+        alignItems: 'center',
+      }}>
+        <Text style={{
+          fontSize: 26,
+          fontWeight: '900',
+          color: tc,
+          letterSpacing: -0.5,
+          textDecorationLine: 'underline',
+          transform: [{ rotate: '90deg' }],
+          width: photoH * 0.35,
+          textAlign: 'center',
+        }} numberOfLines={1}>
+          {muscleLabel}
+        </Text>
+      </View>
+      {/* 우측: 운동 목록 우측 정렬 */}
+      <View style={{
+        position: 'absolute',
+        top: OVERLAY_PAD,
+        right: OVERLAY_PAD,
+        left: SIDEBAR_W + OVERLAY_PAD,
+        bottom: OVERLAY_PAD + 24,
+        alignItems: 'flex-end',
+      }}>
+        {exercises.slice(0, 8).map(ex => {
+          const sets = logs[ex.id] ?? [];
+          return (
+            <View key={ex.id} style={{ marginBottom: 12, alignItems: 'flex-end' }}>
+              <Text style={{ fontSize: 9, fontWeight: '900', color: tc, letterSpacing: 0.3, textAlign: 'right' }} numberOfLines={1}>
+                {`[${ex.brand.toUpperCase()}]`}
+              </Text>
+              <Text style={{ fontSize: 10, fontWeight: '900', color: tc, textAlign: 'right' }} numberOfLines={1}>
+                {ex.name.toUpperCase()}
+              </Text>
+              {sets.map((st, si) => (
+                <Text key={si} style={{ fontSize: 9, fontWeight: '600', color: tc, opacity: 0.85, textAlign: 'right' }}>
+                  {`S${si + 1} ${st.weight}kg × ${st.reps}`}
+                </Text>
+              ))}
+            </View>
+          );
+        })}
+        {exercises.length > 8 && (
+          <Text style={{ fontSize: 8, fontWeight: '700', color: tc, opacity: 0.6 }}>{`+${exercises.length - 8} more...`}</Text>
+        )}
+      </View>
+      {/* 하단 중앙 로고 */}
+      <View style={{ position: 'absolute', bottom: OVERLAY_PAD, left: 0, right: 0, alignItems: 'center' }}>
+        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.85)} height={Math.round(LOGO_STRIP_H * 0.85)} />
+      </View>
+    </>
+  );
+}
+```
+
+### 2-3. TopBigOverlay (007 스타일)
+- 상단: 닉네임 좌, 날짜 우
+- 바로 아래: 타겟부위 타이틀 크게 (underline)
+- 타이틀 아래 구분선
+- 2열 운동 목록 (머신명 굵게, 세트 한 줄로)
+- 하단 중앙: GYM PICK 로고
+
+```tsx
+export function TopBigOverlay({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH }: OverlayProps) {
+  const COL_W = Math.floor((photoW - OVERLAY_PAD * 2 - 12) / 2);
+  return (
+    <>
+      {/* 상단: 닉네임 + 날짜 */}
+      <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD, right: OVERLAY_PAD, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <Text style={{ fontSize: 13, fontWeight: '900', color: tc, letterSpacing: 0.3 }}>{nickname}</Text>
+        <Text style={{ fontSize: 10, fontWeight: '700', color: tc, opacity: 0.85 }}>{timestamp}</Text>
+      </View>
+      {/* 타이틀 */}
+      <View style={{ position: 'absolute', top: OVERLAY_PAD + 28, left: OVERLAY_PAD, right: OVERLAY_PAD }}>
+        <Text style={{ fontSize: 34, fontWeight: '900', color: tc, letterSpacing: -0.5, textDecorationLine: 'underline' }} numberOfLines={1}>
+          {muscleLabel}
+        </Text>
+        {/* 구분선 */}
+        <View style={{ height: 1.5, backgroundColor: tc, marginTop: 10, opacity: 0.5 }} />
+      </View>
+      {/* 2열 운동 목록 */}
+      <View style={{
+        position: 'absolute',
+        top: OVERLAY_PAD + 28 + 64,
+        left: OVERLAY_PAD,
+        right: OVERLAY_PAD,
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 10,
+        alignContent: 'flex-start',
+      }}>
+        {exercises.slice(0, 8).map(ex => {
+          const sets = logs[ex.id] ?? [];
+          const setsLine = sets.map(st => `${st.weight} × ${st.reps}`).join(' / ');
+          return (
+            <View key={ex.id} style={{ width: COL_W, marginBottom: 8 }}>
+              <Text style={{ fontSize: 9, fontWeight: '900', color: tc, letterSpacing: 0.3, marginBottom: 1 }} numberOfLines={1}>
+                {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
+              </Text>
+              {setsLine ? (
+                <Text style={{ fontSize: 8, fontWeight: '600', color: tc, opacity: 0.85 }} numberOfLines={1}>{setsLine}</Text>
+              ) : null}
+            </View>
+          );
+        })}
+        {exercises.length > 8 && (
+          <Text style={{ fontSize: 8, fontWeight: '700', color: tc, opacity: 0.6 }}>{`+${exercises.length - 8} more...`}</Text>
+        )}
+      </View>
+      {/* 하단 중앙 로고 */}
+      <View style={{ position: 'absolute', bottom: OVERLAY_PAD, left: 0, right: 0, alignItems: 'center' }}>
+        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.85)} height={Math.round(LOGO_STRIP_H * 0.85)} />
+      </View>
+    </>
+  );
+}
+```
+
+### 2-4. CenterListOverlay (008 스타일)
+- 상단 중앙: GYM PICK 로고
+- 중앙 정렬 운동 목록 (S1/S2/S3 형식)
+- 좌측 세로: 타겟부위 회전 텍스트
+- 우측 세로: 날짜 회전 텍스트
+
+```tsx
+export function CenterListOverlay({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH }: OverlayProps) {
+  return (
+    <>
+      {/* 상단 중앙: 로고 */}
+      <View style={{ position: 'absolute', top: OVERLAY_PAD, left: 0, right: 0, alignItems: 'center' }}>
+        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.85)} height={Math.round(LOGO_STRIP_H * 0.85)} />
+      </View>
+      {/* 중앙 운동 목록 */}
+      <View style={{
+        position: 'absolute',
+        top: OVERLAY_PAD + 36,
+        left: Math.round(photoW * 0.12),
+        right: Math.round(photoW * 0.12),
+        bottom: OVERLAY_PAD + 24,
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+      }}>
+        {exercises.slice(0, 7).map(ex => {
+          const sets = logs[ex.id] ?? [];
+          return (
+            <View key={ex.id} style={{ marginBottom: 14, alignItems: 'center', width: '100%' }}>
+              <Text style={{ fontSize: 10, fontWeight: '900', color: tc, letterSpacing: 0.3, textAlign: 'center' }} numberOfLines={1}>
+                {`[${ex.brand.toUpperCase()}]`}
+              </Text>
+              <Text style={{ fontSize: 11, fontWeight: '900', color: tc, textAlign: 'center', marginBottom: 3 }} numberOfLines={1}>
+                {ex.name.toUpperCase()}
+              </Text>
+              {sets.map((st, si) => (
+                <Text key={si} style={{ fontSize: 9, fontWeight: '600', color: tc, opacity: 0.85, textAlign: 'center' }}>
+                  {`S${si + 1} ${st.weight}kg × ${st.reps}`}
+                </Text>
+              ))}
+            </View>
+          );
+        })}
+        {exercises.length > 7 && (
+          <Text style={{ fontSize: 8, fontWeight: '700', color: tc, opacity: 0.6 }}>{`+${exercises.length - 7} more...`}</Text>
+        )}
+      </View>
+      {/* 좌측 세로: 타겟부위 */}
+      <View style={{
+        position: 'absolute',
+        left: OVERLAY_PAD - 6,
+        top: photoH * 0.3,
+        width: 32,
+        alignItems: 'center',
+      }}>
+        <Text style={{
+          fontSize: 20,
+          fontWeight: '900',
+          color: tc,
+          textDecorationLine: 'underline',
+          transform: [{ rotate: '90deg' }],
+          width: photoH * 0.4,
+          textAlign: 'center',
+          letterSpacing: -0.3,
+        }} numberOfLines={1}>{muscleLabel}</Text>
+      </View>
+      {/* 우측 세로: 날짜 */}
+      <View style={{
+        position: 'absolute',
+        right: OVERLAY_PAD - 6,
+        top: photoH * 0.3,
+        width: 32,
+        alignItems: 'center',
+      }}>
+        <Text style={{
+          fontSize: 9,
+          fontWeight: '700',
+          color: tc,
+          opacity: 0.85,
+          transform: [{ rotate: '-90deg' }],
+          width: photoH * 0.4,
+          textAlign: 'center',
+        }} numberOfLines={1}>{timestamp}</Text>
+      </View>
+    </>
+  );
+}
+```
+
+### 2-5. BottomInfoOverlay (009 스타일)
+- 상단 좌: 타겟부위 타이틀 크게 (underline)
+- 타이틀 아래: 운동 목록 좌측 정렬 (머신명 굵게, 세트 한 줄)
+- 좌하단: GYM PICK 로고
+- 우하단: 닉네임 + 날짜
+
+```tsx
+export function BottomInfoOverlay({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH }: OverlayProps) {
+  return (
+    <>
+      {/* 상단 좌: 타이틀 */}
+      <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD, right: OVERLAY_PAD }}>
+        <Text style={{ fontSize: 38, fontWeight: '900', color: tc, letterSpacing: -0.5, textDecorationLine: 'underline' }} numberOfLines={1}>
+          {muscleLabel}
+        </Text>
+      </View>
+      {/* 운동 목록 좌측 */}
+      <View style={{
+        position: 'absolute',
+        top: OVERLAY_PAD + 60,
+        left: OVERLAY_PAD,
+        right: OVERLAY_PAD,
+        bottom: OVERLAY_PAD + 44,
+      }}>
+        {exercises.slice(0, 6).map(ex => {
+          const sets = logs[ex.id] ?? [];
+          const setsLine = sets.map(st => `${st.weight} × ${st.reps}`).join(' / ');
+          return (
+            <View key={ex.id} style={{ marginBottom: 10 }}>
+              <Text style={{ fontSize: 10, fontWeight: '900', color: tc, letterSpacing: 0.3, marginBottom: 1 }} numberOfLines={1}>
+                {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
+              </Text>
+              {setsLine ? (
+                <Text style={{ fontSize: 9, fontWeight: '600', color: tc, opacity: 0.85 }} numberOfLines={1}>{setsLine}</Text>
+              ) : null}
+            </View>
+          );
+        })}
+        {exercises.length > 6 && (
+          <Text style={{ fontSize: 8, fontWeight: '700', color: tc, opacity: 0.6 }}>{`+${exercises.length - 6} more...`}</Text>
+        )}
+      </View>
+      {/* 좌하단: 로고 */}
+      <View style={{ position: 'absolute', bottom: OVERLAY_PAD, left: OVERLAY_PAD }}>
+        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.85)} height={Math.round(LOGO_STRIP_H * 0.85)} />
+      </View>
+      {/* 우하단: 닉네임 + 날짜 */}
+      <View style={{ position: 'absolute', bottom: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'flex-end' }}>
+        <Text style={{ fontSize: 12, fontWeight: '900', color: tc }}>{nickname}</Text>
+        <Text style={{ fontSize: 9, fontWeight: '700', color: tc, opacity: 0.85, marginTop: 2 }}>{timestamp}</Text>
+      </View>
+    </>
+  );
+}
+```
+
+---
+
+## STEP 3: WorkoutPhotoStep 내 오버레이 렌더링 추가
+
+`PostWorkoutLogModal.tsx`의 WorkoutPhotoStep 함수 내부에서
+아래 코드 블록을 찾는다:
+
+```tsx
+            {overlayStyle === 'grid' && (
+              <GridOverlay
+                exercises={exercises}
+                logs={logs}
+                nickname={displayName}
+                timestamp={timestamp}
+                muscleLabel={muscleLabel}
+                tc={tc}
+                photoW={PHOTO_W}
+                photoH={photoH}
+              />
+            )}
+```
+
+이 블록 바로 뒤에 아래 5개를 추가한다:
+
+```tsx
+            {overlayStyle === 'centered' && (
+              <CenteredOverlay
+                exercises={exercises}
+                logs={logs}
+                nickname={displayName}
+                timestamp={timestamp}
+                muscleLabel={muscleLabel}
+                tc={tc}
+                photoW={PHOTO_W}
+                photoH={photoH}
+              />
+            )}
+            {overlayStyle === 'sidebar' && (
+              <SidebarOverlay
+                exercises={exercises}
+                logs={logs}
+                nickname={displayName}
+                timestamp={timestamp}
+                muscleLabel={muscleLabel}
+                tc={tc}
+                photoW={PHOTO_W}
+                photoH={photoH}
+              />
+            )}
+            {overlayStyle === 'topbig' && (
+              <TopBigOverlay
+                exercises={exercises}
+                logs={logs}
+                nickname={displayName}
+                timestamp={timestamp}
+                muscleLabel={muscleLabel}
+                tc={tc}
+                photoW={PHOTO_W}
+                photoH={photoH}
+              />
+            )}
+            {overlayStyle === 'centerlist' && (
+              <CenterListOverlay
+                exercises={exercises}
+                logs={logs}
+                nickname={displayName}
+                timestamp={timestamp}
+                muscleLabel={muscleLabel}
+                tc={tc}
+                photoW={PHOTO_W}
+                photoH={photoH}
+              />
+            )}
+            {overlayStyle === 'bottominfo' && (
+              <BottomInfoOverlay
+                exercises={exercises}
+                logs={logs}
+                nickname={displayName}
+                timestamp={timestamp}
+                muscleLabel={muscleLabel}
+                tc={tc}
+                photoW={PHOTO_W}
+                photoH={photoH}
+              />
+            )}
+```
+
+---
+
+## STEP 4: WorkoutCameraOverlay에도 5개 스타일 추가
+
+`src/screens/flow/WorkoutCameraOverlay.tsx` 파일을 열어서
+기존 `overlayStyle === 'grid'` 블록 이후에
+STEP 3과 동일한 패턴으로 5개 스타일 렌더링을 추가한다.
+(파일 구조가 다를 수 있으므로 `overlayStyle === 'grid'` 를 기준으로 찾아서 추가)
+
+---
+
+## STEP 5: 스타일 선택 UI 교체 — 썸네일 가로 스크롤
+
+### 현재 코드 찾기 (WorkoutPhotoStep 내부)
+아래 블록 전체를 찾는다:
+
+```tsx
+          {/* 레이아웃 스타일 + 텍스트 색상 한 줄 */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 10 }}>
+            {/* 스타일 버튼 3개 */}
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              {([
+                { key: 'classic', label: '1' },
+                { key: 'leftcol', label: '2' },
+                { key: 'grid',    label: '3' },
+              ] as { key: OverlayStyle; label: string }[]).map(opt => (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[
+                    {
+                      width: 34,
+                      height: 34,
+                      borderRadius: R.pill,
+                      borderWidth: 1.5,
+                      borderColor: C.border,
+                      backgroundColor: C.surface,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    },
+                    overlayStyle === opt.key && {
+                      backgroundColor: C.accentBg,
+                      borderColor: C.accent,
+                    },
+                  ]}
+                  onPress={() => setOverlayStyle(opt.key)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[
+                    { fontSize: 13, fontWeight: '800', color: C.textSub },
+                    overlayStyle === opt.key && { color: C.accent },
+                  ]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* 구분선 */}
+            <View style={{ width: 1, height: 28, backgroundColor: C.border }} />
+
+            {/* 컬러칩 가로 스크롤 */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ flexDirection: 'row', gap: 6, alignItems: 'center', paddingRight: 8 }}
+            >
+              {TEXT_COLORS.map(opt => (
+                <TouchableOpacity
+                  key={opt.hex}
+                  style={[
+                    s.colorChip,
+                    { backgroundColor: opt.hex },
+                    textColor === opt.hex && s.colorChipActive,
+                  ]}
+                  onPress={() => { setTextColor(opt.hex); onColorChange(opt.hex); }}
+                  activeOpacity={0.8}
+                />
+              ))}
+            </ScrollView>
+          </View>
+```
+
+### 교체할 코드
+
+위 블록 전체를 아래로 교체한다:
+
+```tsx
+          {/* 레이아웃 스타일: 가로 스크롤 썸네일 */}
+          <View style={{ marginBottom: 10 }}>
+            <Text style={{ fontSize: 9, fontWeight: '700', color: C.textDim, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8, paddingHorizontal: 2 }}>
+              레이아웃
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ flexDirection: 'row', gap: 8, paddingRight: 4 }}
+            >
+              {([
+                { key: 'classic',    label: '1', desc: '클래식' },
+                { key: 'leftcol',    label: '2', desc: '레프트' },
+                { key: 'grid',       label: '3', desc: '그리드' },
+                { key: 'centered',   label: '4', desc: '센터' },
+                { key: 'sidebar',    label: '5', desc: '사이드' },
+                { key: 'topbig',     label: '6', desc: '탑빅' },
+                { key: 'centerlist', label: '7', desc: '리스트' },
+                { key: 'bottominfo', label: '8', desc: '바텀' },
+              ] as { key: OverlayStyle; label: string; desc: string }[]).map(opt => {
+                const isActive = overlayStyle === opt.key;
+                return (
+                  <TouchableOpacity
+                    key={opt.key}
+                    onPress={() => setOverlayStyle(opt.key)}
+                    activeOpacity={0.8}
+                    style={{
+                      width: 56,
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    {/* 썸네일 카드 */}
+                    <View style={{
+                      width: 56,
+                      height: 80,
+                      borderRadius: 8,
+                      backgroundColor: isActive ? '#1a1a1a' : C.surface,
+                      borderWidth: isActive ? 2 : 1.5,
+                      borderColor: isActive ? C.accent : C.border,
+                      overflow: 'hidden',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      position: 'relative',
+                    }}>
+                      <StyleThumbnail styleKey={opt.key} isActive={isActive} />
+                    </View>
+                    {/* 번호 + 이름 */}
+                    <Text style={{ fontSize: 9, fontWeight: isActive ? '800' : '600', color: isActive ? C.accent : C.textDim, textAlign: 'center' }}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          {/* 컬러칩 */}
+          <View style={{ marginBottom: 16 }}>
+            <Text style={{ fontSize: 9, fontWeight: '700', color: C.textDim, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8, paddingHorizontal: 2 }}>
+              텍스트 색상
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ flexDirection: 'row', gap: 6, alignItems: 'center', paddingRight: 8 }}
+            >
+              {TEXT_COLORS.map(opt => (
+                <TouchableOpacity
+                  key={opt.hex}
+                  style={[
+                    s.colorChip,
+                    { backgroundColor: opt.hex },
+                    textColor === opt.hex && s.colorChipActive,
+                  ]}
+                  onPress={() => { setTextColor(opt.hex); onColorChange(opt.hex); }}
+                  activeOpacity={0.8}
+                />
+              ))}
+            </ScrollView>
+          </View>
+```
+
+---
+
+## STEP 6: StyleThumbnail 컴포넌트 추가
+
+STEP 5에서 사용하는 `StyleThumbnail` 컴포넌트를 모듈 레벨에 추가한다.
+위치: `TEXT_COLORS` 상수 바로 아래 (약 line 1003 이후).
+
+각 스타일의 특징을 작은 도형/선으로 표현하는 미니어처 뷰이다.
+
+```tsx
+function StyleThumbnail({ styleKey, isActive }: { styleKey: OverlayStyle; isActive: boolean }) {
+  const fg = isActive ? C.accent : C.textDim;
+  const line = (top: number, left: number, width: number, height = 1.5) => (
+    <View style={{ position: 'absolute', top, left, width, height, backgroundColor: fg, borderRadius: 1, opacity: 0.8 }} />
+  );
+  const dot = (top: number, left: number, size = 4) => (
+    <View style={{ position: 'absolute', top, left, width: size, height: size, borderRadius: size / 2, backgroundColor: fg, opacity: 0.7 }} />
+  );
+  const block = (top: number, left: number, width: number, height: number) => (
+    <View style={{ position: 'absolute', top, left, width, height, backgroundColor: fg, borderRadius: 1, opacity: 0.15 }} />
+  );
+
+  switch (styleKey) {
+    case 'classic':
+      // 상단 우: 작은 텍스트 점, 하단 좌: 큰 타이틀 + 목록
+      return (
+        <>
+          {dot(6, 32, 3)}
+          {line(22, 4, 32, 5)}  {/* 타이틀 */}
+          {line(31, 4, 24)}
+          {line(35, 4, 20)}
+          {line(39, 4, 22)}
+          {line(44, 4, 18)}
+          {line(48, 4, 20)}
+        </>
+      );
+    case 'leftcol':
+      // 좌측 세로 타이틀 + 우측 목록
+      return (
+        <>
+          {line(4, 4, 14, 3)}  {/* 좌상단 닉네임 */}
+          {/* 좌측 세로 타이틀 */}
+          <View style={{ position: 'absolute', left: 4, top: 16, width: 8, height: 52, backgroundColor: fg, borderRadius: 2, opacity: 0.15 }} />
+          {line(16, 30, 20)}
+          {line(22, 30, 16)}
+          {line(28, 30, 18)}
+          {line(35, 30, 20)}
+          {line(41, 30, 16)}
+          {line(47, 30, 18)}
+          {line(54, 30, 14)}
+          {line(60, 16, 28, 2)} {/* 하단 로고 */}
+        </>
+      );
+    case 'grid':
+      // 상단 닉네임/날짜, 중앙 타이틀, 3열 그리드
+      return (
+        <>
+          {line(6, 4, 16)}
+          {dot(6, 42, 3)}
+          {line(14, 14, 28, 4)} {/* 타이틀 */}
+          {line(22, 4, 14)} {line(22, 22, 14)} {line(22, 40, 14)}
+          {line(26, 4, 10)} {line(26, 22, 10)} {line(26, 40, 10)}
+          {line(32, 4, 14)} {line(32, 22, 14)} {line(32, 40, 14)}
+          {line(36, 4, 10)} {line(36, 22, 10)} {line(36, 40, 10)}
+          {line(42, 4, 14)} {line(42, 22, 14)} {line(42, 40, 14)}
+          {line(68, 14, 28, 2)} {/* 로고 */}
+        </>
+      );
+    case 'centered':
+      // 상단 좌/우, 중앙 타이틀, 2열 목록
+      return (
+        <>
+          {line(6, 4, 14)}
+          {line(6, 38, 14)}
+          {line(18, 8, 40, 5)} {/* 타이틀 중앙 */}
+          {line(28, 4, 22)} {line(28, 30, 22)}
+          {line(32, 4, 16)} {line(32, 30, 16)}
+          {line(38, 4, 22)} {line(38, 30, 22)}
+          {line(42, 4, 16)} {line(42, 30, 16)}
+          {line(48, 4, 22)} {line(48, 30, 22)}
+          {line(68, 14, 28, 2)}
+        </>
+      );
+    case 'sidebar':
+      // 좌 상단 정보, 우측 목록 우정렬
+      return (
+        <>
+          {line(6, 4, 14)}
+          {line(10, 4, 10)}
+          {line(14, 4, 8)}
+          {/* 세로 타이틀 */}
+          <View style={{ position: 'absolute', left: 4, top: 30, width: 6, height: 30, backgroundColor: fg, opacity: 0.12, borderRadius: 2 }} />
+          {line(10, 30, 24, 1.5)} {line(15, 26, 28, 1.5)}
+          {line(22, 22, 32, 1.5)} {line(27, 26, 28, 1.5)}
+          {line(34, 22, 32, 1.5)} {line(39, 26, 28, 1.5)}
+          {line(46, 22, 32, 1.5)} {line(51, 26, 28, 1.5)}
+          {line(68, 14, 28, 2)}
+        </>
+      );
+    case 'topbig':
+      // 상단 닉/날짜, 큰 타이틀, 구분선, 2열
+      return (
+        <>
+          {line(5, 4, 14)} {line(5, 38, 14)}
+          {line(13, 4, 48, 6)} {/* 큰 타이틀 */}
+          {line(22, 4, 48, 1)} {/* 구분선 */}
+          {line(28, 4, 22)} {line(28, 30, 22)}
+          {line(32, 4, 16)} {line(32, 30, 16)}
+          {line(38, 4, 22)} {line(38, 30, 22)}
+          {line(42, 4, 16)} {line(42, 30, 16)}
+          {line(48, 4, 22)} {line(48, 30, 22)}
+          {line(68, 14, 28, 2)}
+        </>
+      );
+    case 'centerlist':
+      // 상단 로고, 중앙 목록, 양측 세로 텍스트
+      return (
+        <>
+          {line(6, 14, 28, 2)} {/* 상단 로고 */}
+          {/* 세로 텍스트 좌우 */}
+          <View style={{ position: 'absolute', left: 2, top: 14, width: 5, height: 52, backgroundColor: fg, opacity: 0.1, borderRadius: 2 }} />
+          <View style={{ position: 'absolute', right: 2, top: 14, width: 5, height: 52, backgroundColor: fg, opacity: 0.1, borderRadius: 2 }} />
+          {line(16, 12, 32)} {line(21, 12, 32)}
+          {line(28, 12, 32)} {line(33, 12, 32)}
+          {line(40, 12, 32)} {line(45, 12, 32)}
+          {line(52, 12, 32)} {line(57, 12, 32)}
+        </>
+      );
+    case 'bottominfo':
+      // 상단 큰 타이틀, 좌측 목록, 하단 로고+닉네임
+      return (
+        <>
+          {line(5, 4, 48, 7)} {/* 큰 타이틀 */}
+          {line(17, 4, 32)} {line(22, 4, 24)}
+          {line(28, 4, 32)} {line(33, 4, 24)}
+          {line(39, 4, 32)} {line(44, 4, 24)}
+          {line(50, 4, 28)} {line(55, 4, 20)}
+          {line(68, 4, 20, 2)} {/* 좌하단 로고 */}
+          {line(66, 34, 18)} {line(70, 30, 24)} {/* 우하단 닉/날짜 */}
+        </>
+      );
+    default:
+      return null;
+  }
+}
+```
+
+---
+
+## STEP 7: 동작 확인 체크리스트
+
+1. 스타일 1~3 기존 동작 유지 ✅
+2. 스타일 4~8 새 오버레이 렌더링 정상 ✅
+3. 썸네일 카드 가로 스크롤 동작 ✅
+4. 선택된 스타일 썸네일에 accent 테두리 표시 ✅
+5. 컬러칩 아래 줄로 분리, 정상 동작 ✅
+6. WorkoutCameraOverlay에서도 4~8번 스타일 렌더링 ✅
+7. TypeScript 타입 에러 없음 ✅
+
+---
+
+## STEP 8: Git 커밋
+
+```
+cd D:\시작\gympick
+git add src/screens/flow/PostWorkoutLogModal.tsx
+git add src/screens/flow/WorkoutCameraOverlay.tsx
+git commit -m "feat: 오운완 레이아웃 스타일 3→8개 확장, 썸네일 가로 스크롤 선택 UI"
+```

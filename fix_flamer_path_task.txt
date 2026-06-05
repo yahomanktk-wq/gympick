@@ -1,0 +1,29 @@
+# 태스크: Flamer 폰트 경로 소문자로 수정
+# 프로젝트 경로: D:\시작\gympick
+# 확인이나 중단 없이 끝까지 완료해줘
+
+---
+
+## STEP 1: PostWorkoutLogModal.tsx Flamer 경로 수정
+
+`src/screens/flow/PostWorkoutLogModal.tsx` 에서
+아래 코드를 찾는다:
+
+```tsx
+  'Flamer':            require('../../../assets/fonts/Flamer.ttf'),
+```
+
+아래로 교체한다:
+```tsx
+  'Flamer':            require('../../../assets/fonts/flamer.ttf'),
+```
+
+---
+
+## STEP 2: Git 커밋
+
+```
+cd D:\시작\gympick
+git add src/screens/flow/PostWorkoutLogModal.tsx
+git commit -m "fix: Flamer 폰트 경로 소문자로 수정"
+```

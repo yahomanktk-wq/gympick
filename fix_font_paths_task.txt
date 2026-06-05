@@ -1,0 +1,64 @@
+# 태스크: 폰트 require 경로 수정 (파일명 변경 반영)
+# 프로젝트 경로: D:\시작\gympick
+# 확인이나 중단 없이 끝까지 완료해줘
+
+---
+
+## 목표
+useFonts 훅의 require 경로를 실제 파일명에 맞게 수정
+
+---
+
+## STEP 1: PostWorkoutLogModal.tsx useFonts 경로 수정
+
+`src/screens/flow/PostWorkoutLogModal.tsx` 에서
+`useFonts` 훅 전체를 찾아서 아래 코드로 교체한다:
+
+```tsx
+const [fontsLoaded] = useFonts({
+  'MatchaCih':         require('../../../assets/fonts/Matcha_Cih.ttf'),
+  'MatSaleh':          require('../../../assets/fonts/Mat_Saleh.ttf'),
+  'KCCGanpan':         require('../../../assets/fonts/KCC-Ganpan.ttf'),
+  'QuicksilverItalic': require('../../../assets/fonts/Quicksilver_Italic.ttf'),
+  'SportypoReguler':   require('../../../assets/fonts/Sportypo-Reguler-Demo.ttf'),
+  'VdeVacia':          require('../../../assets/fonts/V-de-vacia-deFharo.ttf'),
+  'Oklahoma':          require('../../../assets/fonts/Oklahoma.ttf'),
+  'CollegeBoy':        require('../../../assets/fonts/College_Boy.otf'),
+  'HonfleurHeavy':     require('../../../assets/fonts/Honfleur-Heavy.otf'),
+  'BlaccS':            require('../../../assets/fonts/BLACCS.TTF'),
+  'Blacc':             require('../../../assets/fonts/BLACC.TTF'),
+  'Flamer':            require('../../../assets/fonts/Flamer.TTF'),
+  'HeavyHeapRg':       require('../../../assets/fonts/heavy_heap_rg.otf'),
+});
+```
+
+---
+
+## STEP 2: WorkoutCameraOverlay.tsx 도 동일하게 수정
+
+`src/screens/flow/WorkoutCameraOverlay.tsx` 에서
+`useFonts` 훅이 있으면 동일하게 경로 수정한다.
+
+없으면 STEP 2 생략.
+
+---
+
+## STEP 3: 동작 확인 체크리스트
+
+1. BLACCS.TTF 경로 정상 로딩 ✅
+2. BLACC.TTF 경로 정상 로딩 ✅
+3. Flamer.TTF 경로 정상 로딩 ✅
+4. College_Boy.otf 경로 정상 로딩 ✅
+5. heavy_heap_rg.otf 경로 정상 로딩 ✅
+6. 번들링 에러 없음 ✅
+
+---
+
+## STEP 4: Git 커밋
+
+```
+cd D:\시작\gympick
+git add src/screens/flow/PostWorkoutLogModal.tsx
+git add src/screens/flow/WorkoutCameraOverlay.tsx
+git commit -m "fix: 폰트 파일명 변경 반영 (BLACCS/BLACC/Flamer/College_Boy/heavy_heap_rg)"
+```

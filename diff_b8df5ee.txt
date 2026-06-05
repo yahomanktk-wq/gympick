@@ -1,0 +1,396 @@
+diff --git a/src/screens/flow/PostWorkoutLogModal.tsx b/src/screens/flow/PostWorkoutLogModal.tsx
+index 7fb8f60..fd157dd 100644
+--- a/src/screens/flow/PostWorkoutLogModal.tsx
++++ b/src/screens/flow/PostWorkoutLogModal.tsx
+@@ -1054,7 +1054,7 @@ interface OverlayProps {
+   photoH: number;
+ }
+ 
+-export function ClassicOverlay({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH }: OverlayProps) {
++export function ClassicOverlay({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH, fontSet }: OverlayProps & { fontSet: FontSet }) {
+   const LOGO_STRIP_H_L = 14;
+   const LOGO_STRIP_W_L = Math.round(LOGO_STRIP_H_L * (2805 / 279));
+   const LOGO_EDGE_GAP  = 8;
+@@ -1073,28 +1073,28 @@ export function ClassicOverlay({ exercises, logs, nickname, timestamp, muscleLab
+         <GymPickLogo color={tc} width={LOGO_STRIP_W_L} height={LOGO_STRIP_H_L} />
+       </View>
+       <View style={s.overlayTopRight}>
+-        <Text style={[s.overlayUsername, { color: tc }]}>{nickname}</Text>
+-        <Text style={[s.overlayTimestamp, { color: tc }]}>{timestamp}</Text>
++        <Text style={[s.overlayUsername, { color: tc, fontFamily: fontSet.nickname }]}>{nickname}</Text>
++        <Text style={[s.overlayTimestamp, { color: tc, fontFamily: fontSet.nickname }]}>{timestamp}</Text>
+       </View>
+       <View style={s.overlayBottomLeft}>
+-        <Text style={[s.overlayMuscleTitle, { color: tc, fontFamily: 'Quicksilver-Italic' }]}>{muscleLabel}</Text>
++        <Text style={[s.overlayMuscleTitle, { color: tc, fontFamily: fontSet.muscle, ...(fontSet.muscle === 'BasicFont' && { fontWeight: '900' }) }]}>{muscleLabel}</Text>
+         <View style={s.sessionScroll}>
+           {exercises.slice(0, 7).map(ex => {
+             const sets     = logs[ex.id] ?? [];
+             const setsLine = sets.map(st => `${st.weight} x ${st.reps}`).join(' / ');
+             return (
+               <View key={ex.id} style={s.overlayExBlock}>
+-                <Text style={[s.overlayExName, { color: tc }]} numberOfLines={1}>
++                <Text style={[s.overlayExName, { color: tc, fontFamily: fontSet.routine }]} numberOfLines={1}>
+                   {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
+                 </Text>
+                 {setsLine ? (
+-                  <Text style={[s.overlayExSet, { color: tc }]} numberOfLines={2}>{setsLine}</Text>
++                  <Text style={[s.overlayExSet, { color: tc, fontFamily: fontSet.routine }]} numberOfLines={2}>{setsLine}</Text>
+                 ) : null}
+               </View>
+             );
+           })}
+           {exercises.length > 7 && (
+-            <Text style={[s.overlayExName, { color: tc, opacity: 0.6, marginTop: 2 }]}>
++            <Text style={[s.overlayExName, { color: tc, opacity: 0.6, marginTop: 2, fontFamily: fontSet.routine }]}>
+               {`+${exercises.length - 7} more...`}
+             </Text>
+           )}
+@@ -1854,6 +1854,84 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
+   );
+ }
+ 
++export function GridOverlayC({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH, fontSet }: OverlayProps & { fontSet: FontSet }) {
++  const OVERLAY_PAD_C = 20;
++  const COL_COUNT = 3;
++  const COL_W = Math.floor((photoW - OVERLAY_PAD_C * 2 - 16) / COL_COUNT);
++
++  return (
++    <>
++      {/* 상단: 닉네임 좌, 날짜 우 */}
++      <View style={{ position: 'absolute', top: OVERLAY_PAD_C, left: OVERLAY_PAD_C, right: OVERLAY_PAD_C, flexDirection: 'row', justifyContent: 'space-between' }}>
++        <Text style={{ fontSize: 13, fontWeight: '900', color: tc, fontFamily: fontSet.nickname }}>{nickname}</Text>
++        <Text style={{ fontSize: 10, color: tc, opacity: 0.85, fontFamily: fontSet.nickname }}>{timestamp}</Text>
++      </View>
++
++      {/* 중앙 그룹: 타겟부위 + 3열 루틴 */}
++      <View style={{
++        position: 'absolute',
++        top: OVERLAY_PAD_C + 30,
++        bottom: OVERLAY_PAD_C + 30,
++        left: OVERLAY_PAD_C,
++        right: OVERLAY_PAD_C,
++        justifyContent: 'center',
++        alignItems: 'center',
++      }}>
++        <Text style={{
++          fontSize: 46,
++          color: tc,
++          letterSpacing: -0.5,
++          textAlign: 'center',
++          fontFamily: fontSet.muscle,
++          marginBottom: 57,
++          ...(fontSet.muscle === 'BasicFont' && { fontWeight: '900' }),
++        }}>
++          {muscleLabel}
++        </Text>
++
++        <View style={{
++          flexDirection: 'row',
++          flexWrap: 'wrap',
++          gap: 8,
++          justifyContent: 'center',
++          width: '100%',
++        }}>
++          {exercises.slice(0, 9).map(ex => {
++            const sets = logs[ex.id] ?? [];
++            return (
++              <View key={ex.id} style={{ width: COL_W, marginBottom: 12, alignItems: 'center' }}>
++                <Text style={{ fontSize: 14, fontWeight: '700', color: tc, opacity: 0.7, letterSpacing: 0.5, textAlign: 'center', fontFamily: fontSet.routine }}>
++                  {`[${ex.brand.toUpperCase()}]`}
++                </Text>
++                <Text style={{ fontSize: 16, fontWeight: '900', color: tc, letterSpacing: 0.2, marginBottom: 3, lineHeight: 22, textAlign: 'center', fontFamily: fontSet.routine }} numberOfLines={2}>
++                  {ex.name.toUpperCase()}
++                </Text>
++                {sets.map((st, si) => (
++                  <Text key={si} style={{ fontSize: 14, fontWeight: '600', color: tc, opacity: 0.85, lineHeight: 22, textAlign: 'center', fontFamily: fontSet.routine }}>
++                    {`S${si + 1} ${st.weight}kg × ${st.reps}`}
++                  </Text>
++                ))}
++              </View>
++            );
++          })}
++          {exercises.length > 9 && (
++            <View style={{ width: COL_W }}>
++              <Text style={{ fontSize: 14, fontWeight: '700', color: tc, opacity: 0.6, textAlign: 'center', fontFamily: fontSet.routine }}>
++                {`+${exercises.length - 9} more...`}
++              </Text>
++            </View>
++          )}
++        </View>
++      </View>
++
++      {/* 하단 중앙 로고 */}
++      <View style={{ position: 'absolute', bottom: OVERLAY_PAD_C, left: 0, right: 0, alignItems: 'center' }}>
++        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
++      </View>
++    </>
++  );
++}
++
+ export function ArchDayOverlay({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH }: OverlayProps) {
+   const COL_COUNT = 3;
+   const COL_W = Math.floor((photoW - OVERLAY_PAD * 2 - 16) / COL_COUNT);
+@@ -2095,61 +2173,88 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
+       await new Promise(resolve => requestAnimationFrame(resolve));
+       await new Promise<void>(resolve => InteractionManager.runAfterInteractions(() => resolve()));
+ 
+-      const capturedUri = await captureRef(overlayRef, {
+-        format: 'png', quality: 0.95, result: 'tmpfile',
+-        width: PHOTO_W, height: photoH,
+-      });
++      // 1. 인증샷 캡처
++      let capturedUri: string;
++      try {
++        capturedUri = await captureRef(overlayRef, {
++          format: 'png', quality: 0.95, result: 'tmpfile',
++          width: PHOTO_W, height: photoH,
++        });
++      } catch (e) {
++        console.error('[Instagram] 인증샷 캡처 실패:', e);
++        Alert.alert('캡처 실패', '인증샷 캡처에 실패했습니다. 다시 시도해 주세요.');
++        return;
++      }
+ 
++      // 2. 루틴카드 페이지별 캡처
+       const pageUris: string[] = [];
+       for (let i = 0; i < pageCount; i++) {
+         const ref = routinePageRefs.current[i];
+         if (ref) {
+-          await new Promise(resolve => requestAnimationFrame(resolve));
+-          const pageUri = await captureRef(ref, {
+-            format: 'png', quality: 0.95, result: 'tmpfile',
+-            width: PHOTO_W, height: ROUTINE_CARD_H,
+-          });
+-          pageUris.push(pageUri);
++          try {
++            await new Promise(resolve => requestAnimationFrame(resolve));
++            await new Promise(resolve => setTimeout(resolve, 100));
++            const pageUri = await captureRef(ref, {
++              format: 'png', quality: 0.95, result: 'tmpfile',
++              width: PHOTO_W, height: ROUTINE_CARD_H,
++            });
++            pageUris.push(pageUri);
++          } catch (e) {
++            console.error(`[Instagram] 루틴카드 페이지 ${i} 캡처 실패:`, e);
++          }
++        } else {
++          console.warn(`[Instagram] routinePageRefs[${i}] is null`);
+         }
+       }
+ 
++      // 3. 갤러리 저장
+       const allUris = [capturedUri, ...pageUris];
+       const assets: MediaLibrary.Asset[] = [];
+       for (const uri of allUris) {
+-        const asset = await MediaLibrary.createAssetAsync(uri);
+-        assets.push(asset);
++        try {
++          const asset = await MediaLibrary.createAssetAsync(uri);
++          assets.push(asset);
++        } catch (e) {
++          console.error('[Instagram] 갤러리 저장 실패:', e);
++        }
+       }
+ 
+       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+ 
+-      if (Platform.OS === 'ios') {
++      // 4. 인스타그램 실행
++      if (Platform.OS === 'ios' && assets.length > 0) {
+         const instagramUrl = `instagram://library?LocalIdentifier=${assets[0].id}`;
+-        const canOpen = await Linking.canOpenURL(instagramUrl);
+-        if (canOpen) {
++        try {
+           await Linking.openURL(instagramUrl);
+-        } else {
++        } catch (e) {
++          console.warn('[Instagram] 딥링크 실패, 앱스토어로 이동:', e);
+           Alert.alert(
+             '저장 완료',
+-            `${allUris.length}장이 갤러리에 저장되었습니다.\n인스타그램 앱에서 업로드해주세요.`
++            `${assets.length}장이 갤러리에 저장되었습니다.\n인스타그램 앱을 실행해서 업로드해주세요.`,
+           );
+         }
+       } else {
+-        const canShare = await Sharing.isAvailableAsync();
+-        if (canShare) {
+-          await Sharing.shareAsync(capturedUri, {
+-            mimeType: 'image/webp',
+-            dialogTitle: '인스타그램에 공유',
+-          });
+-        } else {
+-          Alert.alert(
+-            '저장 완료',
+-            `${allUris.length}장이 갤러리에 저장되었습니다.\n인스타그램 앱에서 업로드해주세요.`
+-          );
++        try {
++          const canShare = await Sharing.isAvailableAsync();
++          if (canShare && capturedUri) {
++            await Sharing.shareAsync(capturedUri, {
++              mimeType: 'image/png',
++              dialogTitle: '인스타그램에 공유',
++            });
++          } else {
++            Alert.alert(
++              '저장 완료',
++              `${assets.length}장이 갤러리에 저장되었습니다.\n인스타그램 앱에서 업로드해주세요.`
++            );
++          }
++        } catch (e) {
++          console.error('[Instagram] 공유 실패:', e);
++          Alert.alert('저장 완료', `${assets.length}장이 갤러리에 저장되었습니다.`);
+         }
+       }
+     } catch (error) {
+       console.error('[GymPick] 인스타그램 공유 오류:', error);
+-      Alert.alert('공유에 실패했습니다', '다시 시도해 주세요.');
++      Alert.alert('공유에 실패했습니다', `오류: ${String(error)}`);
+     }
+   }
+ 
+@@ -2255,58 +2360,20 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
+                 photoH,
+               };
+ 
+-              // 유형 A: ClassicOverlay 구조 복원
++              // 유형 A: ClassicOverlay
+               if (layout === 'a') {
+-                const LOGO_STRIP_H_L = 14;
+-                const LOGO_STRIP_W_L = Math.round(LOGO_STRIP_H_L * (2805 / 279));
+-                const LOGO_EDGE_GAP  = 8;
+-
+-                const logoTlLeft = Math.round(LOGO_EDGE_GAP + LOGO_STRIP_H_L / 2 - LOGO_STRIP_W_L / 2);
+-                const logoTlTop  = Math.round(OVERLAY_PAD   + LOGO_STRIP_W_L / 2 - LOGO_STRIP_H_L / 2);
+-                const logoBrLeft = Math.round((PHOTO_W - LOGO_EDGE_GAP - LOGO_STRIP_H_L) + LOGO_STRIP_H_L / 2 - LOGO_STRIP_W_L / 2);
+-                const logoBrTop  = Math.round((photoH  - OVERLAY_PAD  - LOGO_STRIP_W_L)  + LOGO_STRIP_W_L / 2 - LOGO_STRIP_H_L / 2);
+-
+                 return (
+-                  <>
+-                    {/* 좌상단 세로 로고 */}
+-                    <View style={[s.overlayLogoAbsolute, { left: logoTlLeft, top: logoTlTop, transform: [{ rotate: '90deg' }] }]}>
+-                      <GymPickLogo color={tc} width={LOGO_STRIP_W_L} height={LOGO_STRIP_H_L} />
+-                    </View>
+-                    {/* 우하단 세로 로고 */}
+-                    <View style={[s.overlayLogoAbsolute, { left: logoBrLeft, top: logoBrTop, transform: [{ rotate: '270deg' }] }]}>
+-                      <GymPickLogo color={tc} width={LOGO_STRIP_W_L} height={LOGO_STRIP_H_L} />
+-                    </View>
+-                    {/* 상단 우: 닉네임 + 날짜 */}
+-                    <View style={s.overlayTopRight}>
+-                      <Text style={[s.overlayUsername, { color: tc, fontFamily: fs.nickname }]}>{displayName}</Text>
+-                      <Text style={[s.overlayTimestamp, { color: tc, fontFamily: fs.nickname }]}>{timestamp}</Text>
+-                    </View>
+-                    {/* 하단 좌: muscleLabel + 운동 목록 */}
+-                    <View style={s.overlayBottomLeft}>
+-                      <Text style={[s.overlayMuscleTitle, { color: tc, fontFamily: fs.muscle, ...(fs.muscle === 'BasicFont' && { fontWeight: '900' }) }]}>{muscleLabel}</Text>
+-                      <View style={s.sessionScroll}>
+-                        {exercises.slice(0, 7).map(ex => {
+-                          const sets     = logs[ex.id] ?? [];
+-                          const setsLine = sets.map(st => `${st.weight} x ${st.reps}`).join(' / ');
+-                          return (
+-                            <View key={ex.id} style={s.overlayExBlock}>
+-                              <Text style={[s.overlayExName, { color: tc, fontFamily: fs.routine }]} numberOfLines={1}>
+-                                {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
+-                              </Text>
+-                              {setsLine ? (
+-                                <Text style={[s.overlayExSet, { color: tc, fontFamily: fs.routine }]} numberOfLines={2}>{setsLine}</Text>
+-                              ) : null}
+-                            </View>
+-                          );
+-                        })}
+-                        {exercises.length > 7 && (
+-                          <Text style={[s.overlayExName, { color: tc, opacity: 0.6, marginTop: 2 }]}>
+-                            {`+${exercises.length - 7} more...`}
+-                          </Text>
+-                        )}
+-                      </View>
+-                    </View>
+-                  </>
++                  <ClassicOverlay
++                    exercises={exercises}
++                    logs={logs}
++                    nickname={displayName}
++                    timestamp={timestamp}
++                    muscleLabel={muscleLabel}
++                    tc={tc}
++                    photoW={PHOTO_W}
++                    photoH={photoH}
++                    fontSet={fs}
++                  />
+                 );
+               }
+ 
+@@ -2337,61 +2404,20 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
+                 );
+               }
+ 
+-              // 유형 C: GridOverlay 기반
++              // 유형 C: GridOverlayC
+               if (layout === 'c') {
+-                const COL_COUNT = 3;
+-                const COL_W = Math.floor((PHOTO_W - OVERLAY_PAD * 2 - 16) / COL_COUNT);
+                 return (
+-                  <>
+-                    {/* 상단: 닉네임 좌, 날짜 우 */}
+-                    <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD, right: OVERLAY_PAD, flexDirection: 'row', justifyContent: 'space-between' }}>
+-                      <Text style={{ fontSize: 13, fontWeight: '900', color: tc, fontFamily: fs.nickname }}>{displayName}</Text>
+-                      <Text style={{ fontSize: 10, color: tc, opacity: 0.85, fontFamily: fs.nickname }}>{timestamp}</Text>
+-                    </View>
+-                    {/* 타겟부위 */}
+-                    <View style={{ position: 'absolute', top: OVERLAY_PAD + 28, left: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'center' }}>
+-                      <Text style={{ fontSize: 29, fontWeight: fs.muscle === 'BasicFont' ? '900' : undefined, color: tc, fontFamily: fs.muscle, textAlign: 'center' }} numberOfLines={1}>
+-                        {muscleLabel}
+-                      </Text>
+-                    </View>
+-                    {/* 3열 운동 목록 */}
+-                    <View style={{
+-                      position: 'absolute',
+-                      top: OVERLAY_PAD + 28 + 48,
+-                      left: OVERLAY_PAD,
+-                      right: OVERLAY_PAD,
+-                      flexDirection: 'row',
+-                      flexWrap: 'wrap',
+-                      gap: 8,
+-                      alignContent: 'flex-start',
+-                    }}>
+-                      {exercises.slice(0, 9).map(ex => {
+-                        const sets = logs[ex.id] ?? [];
+-                        return (
+-                          <View key={ex.id} style={{ width: COL_W, marginBottom: 10 }}>
+-                            <Text style={{ fontSize: 8, color: tc, opacity: 0.7, fontFamily: fs.routine, letterSpacing: 0.5 }} numberOfLines={1}>
+-                              {`[${ex.brand.toUpperCase()}]`}
+-                            </Text>
+-                            <Text style={{ fontSize: 9, fontWeight: '900', color: tc, fontFamily: fs.routine, marginBottom: 2 }} numberOfLines={2}>
+-                              {ex.name.toUpperCase()}
+-                            </Text>
+-                            {sets.map((st, si) => (
+-                              <Text key={si} style={{ fontSize: 8, color: tc, opacity: 0.85, fontFamily: fs.routine }}>
+-                                {`S${si + 1} ${st.weight}kg × ${st.reps}`}
+-                              </Text>
+-                            ))}
+-                          </View>
+-                        );
+-                      })}
+-                      {exercises.length > 9 && (
+-                        <Text style={{ fontSize: 8, color: tc, opacity: 0.6 }}>{`+${exercises.length - 9} more...`}</Text>
+-                      )}
+-                    </View>
+-                    {/* 하단 중앙 로고 */}
+-                    <View style={{ position: 'absolute', bottom: OVERLAY_PAD, left: 0, right: 0, alignItems: 'center' }}>
+-                      <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
+-                    </View>
+-                  </>
++                  <GridOverlayC
++                    exercises={exercises}
++                    logs={logs}
++                    nickname={displayName}
++                    timestamp={timestamp}
++                    muscleLabel={muscleLabel}
++                    tc={tc}
++                    photoW={PHOTO_W}
++                    photoH={photoH}
++                    fontSet={fs}
++                  />
+                 );
+               }
+ 

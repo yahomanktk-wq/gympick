@@ -1,0 +1,199 @@
+# 태스크: StyleThumbnail Text 렌더링 에러 수정
+# 프로젝트 경로: D:\시작\gympick
+# 확인이나 중단 없이 끝까지 완료해줘
+
+---
+
+## 원인
+StyleThumbnail 컴포넌트의 switch/case 블록 내부에
+JSX 주석이 아닌 형태의 문자열이 텍스트 노드로 인식되거나,
+line() / dot() 호출 사이에 공백 텍스트가 렌더링되고 있음.
+
+---
+
+## 수정 방법
+`src/screens/flow/PostWorkoutLogModal.tsx` 에서
+`StyleThumbnail` 함수 전체를 찾아서 아래 코드로 완전히 교체한다.
+
+---
+
+## 교체할 StyleThumbnail 전체 코드
+
+아래 코드로 StyleThumbnail 함수 전체를 교체한다:
+
+```tsx
+function StyleThumbnail({ styleKey, isActive }: { styleKey: OverlayStyle; isActive: boolean }) {
+  const fg = isActive ? C.accent : C.textDim;
+
+  const Line = ({ top, left, width, height = 1.5 }: { top: number; left: number; width: number; height?: number }) => (
+    <View style={{ position: 'absolute', top, left, width, height, backgroundColor: fg, borderRadius: 1, opacity: 0.8 }} />
+  );
+
+  const Dot = ({ top, left, size = 4 }: { top: number; left: number; size?: number }) => (
+    <View style={{ position: 'absolute', top, left, width: size, height: size, borderRadius: size / 2, backgroundColor: fg, opacity: 0.7 }} />
+  );
+
+  const Bar = ({ top, left, width, height }: { top: number; left: number; width: number; height: number }) => (
+    <View style={{ position: 'absolute', top, left, width, height, backgroundColor: fg, borderRadius: 2, opacity: 0.12 }} />
+  );
+
+  if (styleKey === 'classic') {
+    return (
+      <View style={{ flex: 1, width: '100%' }}>
+        <Dot top={6} left={32} size={3} />
+        <Line top={22} left={4} width={32} height={5} />
+        <Line top={31} left={4} width={24} />
+        <Line top={35} left={4} width={20} />
+        <Line top={39} left={4} width={22} />
+        <Line top={44} left={4} width={18} />
+        <Line top={48} left={4} width={20} />
+      </View>
+    );
+  }
+  if (styleKey === 'leftcol') {
+    return (
+      <View style={{ flex: 1, width: '100%' }}>
+        <Line top={4} left={4} width={14} height={3} />
+        <Bar top={16} left={4} width={8} height={52} />
+        <Line top={16} left={30} width={20} />
+        <Line top={22} left={30} width={16} />
+        <Line top={28} left={30} width={18} />
+        <Line top={35} left={30} width={20} />
+        <Line top={41} left={30} width={16} />
+        <Line top={47} left={30} width={18} />
+        <Line top={54} left={30} width={14} />
+        <Line top={68} left={16} width={28} height={2} />
+      </View>
+    );
+  }
+  if (styleKey === 'grid') {
+    return (
+      <View style={{ flex: 1, width: '100%' }}>
+        <Line top={6} left={4} width={16} />
+        <Dot top={6} left={42} size={3} />
+        <Line top={14} left={14} width={28} height={4} />
+        <Line top={22} left={4} width={14} />
+        <Line top={22} left={22} width={14} />
+        <Line top={22} left={40} width={14} />
+        <Line top={26} left={4} width={10} />
+        <Line top={26} left={22} width={10} />
+        <Line top={26} left={40} width={10} />
+        <Line top={32} left={4} width={14} />
+        <Line top={32} left={22} width={14} />
+        <Line top={32} left={40} width={14} />
+        <Line top={36} left={4} width={10} />
+        <Line top={36} left={22} width={10} />
+        <Line top={36} left={40} width={10} />
+        <Line top={68} left={14} width={28} height={2} />
+      </View>
+    );
+  }
+  if (styleKey === 'centered') {
+    return (
+      <View style={{ flex: 1, width: '100%' }}>
+        <Line top={6} left={4} width={14} />
+        <Line top={6} left={38} width={14} />
+        <Line top={18} left={8} width={40} height={5} />
+        <Line top={28} left={4} width={22} />
+        <Line top={28} left={30} width={22} />
+        <Line top={32} left={4} width={16} />
+        <Line top={32} left={30} width={16} />
+        <Line top={38} left={4} width={22} />
+        <Line top={38} left={30} width={22} />
+        <Line top={42} left={4} width={16} />
+        <Line top={42} left={30} width={16} />
+        <Line top={68} left={14} width={28} height={2} />
+      </View>
+    );
+  }
+  if (styleKey === 'sidebar') {
+    return (
+      <View style={{ flex: 1, width: '100%' }}>
+        <Line top={6} left={4} width={14} />
+        <Line top={10} left={4} width={10} />
+        <Line top={14} left={4} width={8} />
+        <Bar top={30} left={4} width={6} height={30} />
+        <Line top={10} left={30} width={24} />
+        <Line top={15} left={26} width={28} />
+        <Line top={22} left={22} width={32} />
+        <Line top={27} left={26} width={28} />
+        <Line top={34} left={22} width={32} />
+        <Line top={39} left={26} width={28} />
+        <Line top={46} left={22} width={32} />
+        <Line top={51} left={26} width={28} />
+        <Line top={68} left={14} width={28} height={2} />
+      </View>
+    );
+  }
+  if (styleKey === 'topbig') {
+    return (
+      <View style={{ flex: 1, width: '100%' }}>
+        <Line top={5} left={4} width={14} />
+        <Line top={5} left={38} width={14} />
+        <Line top={13} left={4} width={48} height={6} />
+        <Line top={22} left={4} width={48} height={1} />
+        <Line top={28} left={4} width={22} />
+        <Line top={28} left={30} width={22} />
+        <Line top={32} left={4} width={16} />
+        <Line top={32} left={30} width={16} />
+        <Line top={38} left={4} width={22} />
+        <Line top={38} left={30} width={22} />
+        <Line top={42} left={4} width={16} />
+        <Line top={42} left={30} width={16} />
+        <Line top={68} left={14} width={28} height={2} />
+      </View>
+    );
+  }
+  if (styleKey === 'centerlist') {
+    return (
+      <View style={{ flex: 1, width: '100%' }}>
+        <Line top={6} left={14} width={28} height={2} />
+        <Bar top={14} left={2} width={5} height={52} />
+        <Bar top={14} left={49} width={5} height={52} />
+        <Line top={16} left={12} width={32} />
+        <Line top={21} left={12} width={32} />
+        <Line top={28} left={12} width={32} />
+        <Line top={33} left={12} width={32} />
+        <Line top={40} left={12} width={32} />
+        <Line top={45} left={12} width={32} />
+        <Line top={52} left={12} width={32} />
+        <Line top={57} left={12} width={32} />
+      </View>
+    );
+  }
+  if (styleKey === 'bottominfo') {
+    return (
+      <View style={{ flex: 1, width: '100%' }}>
+        <Line top={5} left={4} width={48} height={7} />
+        <Line top={17} left={4} width={32} />
+        <Line top={22} left={4} width={24} />
+        <Line top={28} left={4} width={32} />
+        <Line top={33} left={4} width={24} />
+        <Line top={39} left={4} width={32} />
+        <Line top={44} left={4} width={24} />
+        <Line top={68} left={4} width={20} height={2} />
+        <Line top={66} left={34} width={18} />
+        <Line top={70} left={30} width={24} />
+      </View>
+    );
+  }
+  return null;
+}
+```
+
+---
+
+## 확인 사항
+- switch 문 대신 if 문으로 변경 (switch 내부 fall-through 방지)
+- 인라인 함수 line/dot/block 대신 컴포넌트 Line/Dot/Bar 로 변경 (JSX 반환 보장)
+- 각 case를 View로 감싸서 단일 루트 반환
+- 주석 완전 제거
+
+---
+
+## Git 커밋
+```
+cd D:\시작\gympick
+git add src/screens/flow/PostWorkoutLogModal.tsx
+git commit -m "fix: StyleThumbnail Text 렌더링 에러 수정 (if문 + 컴포넌트 방식으로 교체)"
+```

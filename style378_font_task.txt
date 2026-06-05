@@ -1,0 +1,303 @@
+# 태스크: 레이아웃 스타일 3, 7, 8 폰트 변경
+# 프로젝트 경로: D:\시작\gympick
+# 확인이나 중단 없이 끝까지 완료해줘
+
+---
+
+## 수정 사항
+- 스타일 3 (GridOverlay): 타겟부위 폰트 → HonfleurHeavy, 크기 26 → 29 (10% 증가)
+- 스타일 7 (CenterListOverlay): 타겟부위 → BlaccS, 나머지 → Blacc
+- 스타일 8 (BottomInfoOverlay): 타겟부위 → Flamer, 나머지 → HeavyHeapRg, 밑줄 제거
+
+---
+
+## STEP 1: 폰트 5개 useFonts에 추가
+
+`src/screens/flow/PostWorkoutLogModal.tsx` 에서
+`useFonts` 훅을 찾아서 아래 5개를 추가한다:
+
+```tsx
+const [fontsLoaded] = useFonts({
+  'MatchaCih':         require('../../../assets/fonts/Matcha_Cih.ttf'),
+  'MatSaleh':          require('../../../assets/fonts/Mat_Saleh.ttf'),
+  'KCCGanpan':         require('../../../assets/fonts/KCC-Ganpan.ttf'),
+  'QuicksilverItalic': require('../../../assets/fonts/Quicksilver_Italic.ttf'),
+  'SportypoReguler':   require('../../../assets/fonts/Sportypo-Reguler-Demo.ttf'),
+  'VdeVacia':          require('../../../assets/fonts/V-de-vacia-deFharo.ttf'),
+  'Oklahoma':          require('../../../assets/fonts/Oklahoma.ttf'),
+  'CollegeBoy':        require('../../../assets/fonts/College_Boy.otf'),
+  'HonfleurHeavy':     require('../../../assets/fonts/Honfleur-Heavy.otf'),
+  'BlaccS':            require('../../../assets/fonts/BLACCS__.TTF'),
+  'Blacc':             require('../../../assets/fonts/BLACC___.TTF'),
+  'Flamer':            require('../../../assets/fonts/FLAMER.TTF'),
+  'HeavyHeapRg':       require('../../../assets/fonts/heavy_heap_rg.otf'),
+});
+```
+
+---
+
+## STEP 2: GridOverlay (스타일 3) 타겟부위 폰트 변경 + 크기 증가
+
+`GridOverlay` 함수 내부에서 muscleLabel을 렌더링하는 Text를 찾는다.
+
+찾는 코드:
+```tsx
+        <Text style={{
+          fontSize: 26,
+          fontWeight: '900',
+          color: tc,
+          letterSpacing: -0.5,
+          textAlign: 'center',
+          fontFamily: 'QuicksilverItalic',
+        }}>
+          {muscleLabel}
+        </Text>
+```
+
+변경 후 (fontSize 26 → 29, fontFamily 변경):
+```tsx
+        <Text style={{
+          fontSize: 29,
+          color: tc,
+          letterSpacing: -0.5,
+          textAlign: 'center',
+          fontFamily: 'HonfleurHeavy',
+        }}>
+          {muscleLabel}
+        </Text>
+```
+
+---
+
+## STEP 3: GridOverlay (스타일 3) 레이아웃 버튼 폰트 매핑 변경
+
+`src/screens/flow/PostWorkoutLogModal.tsx` 에서
+레이아웃 버튼 배열을 찾는다:
+
+찾는 코드:
+```tsx
+                { key: 'grid',       fontFamily: 'QuicksilverItalic' },
+```
+
+변경 후:
+```tsx
+                { key: 'grid',       fontFamily: 'HonfleurHeavy'     },
+```
+
+---
+
+## STEP 4: CenterListOverlay (스타일 7) 전체 교체
+
+`CenterListOverlay` 함수 전체를 찾아서 아래 코드로 교체한다.
+
+```tsx
+export function CenterListOverlay({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH }: OverlayProps) {
+  const COL_COUNT = 2;
+  const COL_W = Math.floor((photoW - OVERLAY_PAD * 2 - 12) / COL_COUNT);
+  return (
+    <>
+      {/* 상단 좌: 닉네임 */}
+      <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD }}>
+        <Text style={{ fontSize: 13, color: tc, letterSpacing: 0.3, fontFamily: 'Blacc' }}>
+          {nickname}
+        </Text>
+      </View>
+      {/* 상단 우: 날짜 */}
+      <View style={{ position: 'absolute', top: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'flex-end' }}>
+        <Text style={{ fontSize: 10, color: tc, opacity: 0.85, fontFamily: 'Blacc' }}>
+          {timestamp}
+        </Text>
+      </View>
+      {/* 중앙 타겟부위 - BlaccS 폰트 */}
+      <View style={{ position: 'absolute', top: OVERLAY_PAD + 44, left: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'center' }}>
+        <Text style={{
+          fontSize: 32,
+          color: tc,
+          letterSpacing: -0.5,
+          textAlign: 'center',
+          fontFamily: 'BlaccS',
+        }}>
+          {muscleLabel}
+        </Text>
+      </View>
+      {/* 2열 운동 목록 - Blacc 폰트 */}
+      <View style={{
+        position: 'absolute',
+        top: OVERLAY_PAD + 44 + 52,
+        left: OVERLAY_PAD,
+        right: OVERLAY_PAD,
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        alignContent: 'flex-start',
+      }}>
+        {exercises.slice(0, 8).map(ex => {
+          const sets = logs[ex.id] ?? [];
+          const setsLine = sets.map(st => `${st.weight} × ${st.reps}`).join(' / ');
+          return (
+            <View key={ex.id} style={{ width: COL_W, marginBottom: 10 }}>
+              <Text style={{
+                fontSize: 9,
+                color: tc,
+                letterSpacing: 0.3,
+                marginBottom: 2,
+                fontFamily: 'Blacc',
+              }} numberOfLines={1}>
+                {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
+              </Text>
+              {setsLine ? (
+                <Text style={{
+                  fontSize: 8,
+                  color: tc,
+                  opacity: 0.85,
+                  fontFamily: 'Blacc',
+                }} numberOfLines={1}>
+                  {setsLine}
+                </Text>
+              ) : null}
+            </View>
+          );
+        })}
+        {exercises.length > 8 && (
+          <Text style={{ fontSize: 8, color: tc, opacity: 0.6, fontFamily: 'Blacc' }}>
+            {`+${exercises.length - 8} more...`}
+          </Text>
+        )}
+      </View>
+      {/* 하단 중앙 로고 */}
+      <View style={{ position: 'absolute', bottom: OVERLAY_PAD, left: 0, right: 0, alignItems: 'center' }}>
+        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
+      </View>
+    </>
+  );
+}
+```
+
+---
+
+## STEP 5: 레이아웃 버튼 배열 스타일 7 폰트 변경
+
+찾는 코드:
+```tsx
+                { key: 'centerlist', fontFamily: 'MatchaCih'         },
+```
+
+변경 후:
+```tsx
+                { key: 'centerlist', fontFamily: 'BlaccS'            },
+```
+
+---
+
+## STEP 6: BottomInfoOverlay (스타일 8) 전체 교체
+
+`BottomInfoOverlay` 함수 전체를 찾아서 아래 코드로 교체한다.
+
+```tsx
+export function BottomInfoOverlay({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH }: OverlayProps) {
+  return (
+    <>
+      {/* 상단 좌: 타겟부위 - Flamer 폰트, 밑줄 없음 */}
+      <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD, right: OVERLAY_PAD }}>
+        <Text style={{
+          fontSize: 38,
+          color: tc,
+          letterSpacing: -0.5,
+          fontFamily: 'Flamer',
+        }} numberOfLines={1}>
+          {muscleLabel}
+        </Text>
+      </View>
+      {/* 운동 목록 - HeavyHeapRg 폰트 */}
+      <View style={{
+        position: 'absolute',
+        top: OVERLAY_PAD + 60,
+        left: OVERLAY_PAD,
+        right: OVERLAY_PAD,
+        bottom: OVERLAY_PAD + 44,
+      }}>
+        {exercises.slice(0, 6).map(ex => {
+          const sets = logs[ex.id] ?? [];
+          const setsLine = sets.map(st => `${st.weight} × ${st.reps}`).join(' / ');
+          return (
+            <View key={ex.id} style={{ marginBottom: 10 }}>
+              <Text style={{
+                fontSize: 10,
+                color: tc,
+                letterSpacing: 0.3,
+                marginBottom: 1,
+                fontFamily: 'HeavyHeapRg',
+              }} numberOfLines={1}>
+                {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
+              </Text>
+              {setsLine ? (
+                <Text style={{
+                  fontSize: 9,
+                  color: tc,
+                  opacity: 0.85,
+                  fontFamily: 'HeavyHeapRg',
+                }} numberOfLines={1}>
+                  {setsLine}
+                </Text>
+              ) : null}
+            </View>
+          );
+        })}
+        {exercises.length > 6 && (
+          <Text style={{ fontSize: 8, color: tc, opacity: 0.6, fontFamily: 'HeavyHeapRg' }}>
+            {`+${exercises.length - 6} more...`}
+          </Text>
+        )}
+      </View>
+      {/* 좌하단 로고 */}
+      <View style={{ position: 'absolute', bottom: OVERLAY_PAD, left: OVERLAY_PAD }}>
+        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
+      </View>
+      {/* 우하단 닉네임 + 날짜 - HeavyHeapRg 폰트 */}
+      <View style={{ position: 'absolute', bottom: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'flex-end' }}>
+        <Text style={{ fontSize: 12, color: tc, fontFamily: 'HeavyHeapRg' }}>{nickname}</Text>
+        <Text style={{ fontSize: 9, color: tc, opacity: 0.85, marginTop: 2, fontFamily: 'HeavyHeapRg' }}>{timestamp}</Text>
+      </View>
+    </>
+  );
+}
+```
+
+---
+
+## STEP 7: 레이아웃 버튼 배열 스타일 8 폰트 변경
+
+찾는 코드:
+```tsx
+                { key: 'bottominfo', fontFamily: undefined            },
+```
+
+변경 후:
+```tsx
+                { key: 'bottominfo', fontFamily: 'Flamer'             },
+```
+
+---
+
+## STEP 8: 동작 확인 체크리스트
+
+1. 스타일 3 타겟부위 HonfleurHeavy 폰트 + fontSize 29 ✅
+2. 스타일 3 버튼 DAY HonfleurHeavy 폰트 ✅
+3. 스타일 7 타겟부위 BlaccS 폰트 ✅
+4. 스타일 7 닉네임/날짜/루틴 Blacc 폰트 ✅
+5. 스타일 7 버튼 DAY BlaccS 폰트 ✅
+6. 스타일 8 타겟부위 Flamer 폰트, 밑줄 없음 ✅
+7. 스타일 8 닉네임/날짜/루틴 HeavyHeapRg 폰트 ✅
+8. 스타일 8 버튼 DAY Flamer 폰트 ✅
+9. 스타일 1, 2, 4, 5, 6, 9 변경 없음 ✅
+10. TypeScript 에러 없음 ✅
+
+---
+
+## STEP 9: Git 커밋
+
+```
+cd D:\시작\gympick
+git add src/screens/flow/PostWorkoutLogModal.tsx
+git commit -m "feat: 스타일 3 HonfleurHeavy, 스타일 7 BlaccS/Blacc, 스타일 8 Flamer/HeavyHeapRg 폰트 적용"
+```

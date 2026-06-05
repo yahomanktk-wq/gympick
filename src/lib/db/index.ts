@@ -17,6 +17,5 @@ export * from './managerRequests';
 export * from './notifications';
 export * from './userProfiles';
 export * from './gymReports';
-export * from './machineLevels';
 export * from './feedPosts';
 export * from './rankings';

@@ -1,0 +1,146 @@
+# 태스크: 유형 A 레이아웃 이전 스타일 1번과 동일하게 수정
+# 프로젝트 경로: D:\시작\gympick
+# 확인이나 중단 없이 끝까지 완료해줘
+
+---
+
+## 수정 사항
+1. 닉네임 → 상단 우측으로 이동 (날짜 위에 2줄 배치)
+2. 상단 좌측 닉네임 제거
+3. 좌측 세로 GYM PICK 로고 추가
+4. 우측 하단 세로 로고 잘림 수정
+5. 세트 표기 × → x 로 변경
+
+---
+
+## STEP 1: WorkoutPhotoStep 내 유형 A 렌더링 블록 교체
+
+`src/screens/flow/PostWorkoutLogModal.tsx` 에서
+`// 유형 A: ClassicOverlay 기반` 주석을 찾아서
+해당 if 블록 전체를 아래 코드로 교체한다:
+
+```tsx
+              // 유형 A: ClassicOverlay 기반
+              if (layout === 'a') {
+                return (
+                  <>
+                    {/* 상단 우: 닉네임 + 날짜 2줄 */}
+                    <View style={{ position: 'absolute', top: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'flex-end' }}>
+                      <Text style={{ fontSize: 13, fontWeight: '900', color: tc, fontFamily: fs.nickname }}>
+                        {displayName}
+                      </Text>
+                      <Text style={{ fontSize: 10, color: tc, opacity: 0.85, marginTop: 2, fontFamily: fs.nickname }}>
+                        {timestamp}
+                      </Text>
+                    </View>
+                    {/* 좌측 세로 GYM PICK 로고 */}
+                    <View style={{
+                      position: 'absolute',
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      width: 28,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      <View style={{ transform: [{ rotate: '180deg' }] }}>
+                        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_H * 0.595)} height={Math.round(LOGO_STRIP_W * 0.595)} style={{ transform: [{ rotate: '-90deg' }] }} />
+                      </View>
+                    </View>
+                    {/* 하단 그라디언트 오버레이 */}
+                    <LinearGradient
+                      colors={['transparent', 'rgba(0,0,0,0.82)']}
+                      style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: photoH * 0.52,
+                        justifyContent: 'flex-end',
+                        paddingBottom: OVERLAY_PAD,
+                        paddingRight: 36,
+                      }}
+                    >
+                      <View style={{ paddingHorizontal: OVERLAY_PAD }}>
+                        <Text style={{
+                          fontSize: 28,
+                          fontWeight: '900',
+                          color: tc,
+                          fontFamily: fs.muscle,
+                          marginBottom: 8,
+                        }} numberOfLines={1}>
+                          {muscleLabel}
+                        </Text>
+                        {exercises.slice(0, 5).map(ex => {
+                          const sets = logs[ex.id] ?? [];
+                          const setsLine = sets.map(st => `${st.weight} x ${st.reps}`).join(' / ');
+                          return (
+                            <View key={ex.id} style={{ marginBottom: 4 }}>
+                              <Text style={{
+                                fontSize: 9,
+                                fontWeight: '900',
+                                color: tc,
+                                fontFamily: fs.routine,
+                                letterSpacing: 0.3,
+                              }} numberOfLines={1}>
+                                {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
+                              </Text>
+                              {setsLine ? (
+                                <Text style={{
+                                  fontSize: 8,
+                                  color: tc,
+                                  opacity: 0.85,
+                                  fontFamily: fs.routine,
+                                }} numberOfLines={1}>
+                                  {setsLine}
+                                </Text>
+                              ) : null}
+                            </View>
+                          );
+                        })}
+                        {exercises.length > 5 && (
+                          <Text style={{ fontSize: 8, color: tc, opacity: 0.6 }}>
+                            {`+${exercises.length - 5} more...`}
+                          </Text>
+                        )}
+                      </View>
+                    </LinearGradient>
+                    {/* 우측 하단 세로 GYM PICK 로고 */}
+                    <View style={{
+                      position: 'absolute',
+                      right: 4,
+                      bottom: OVERLAY_PAD,
+                      width: 28,
+                      alignItems: 'center',
+                    }}>
+                      <View style={{ transform: [{ rotate: '-90deg' }] }}>
+                        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
+                      </View>
+                    </View>
+                  </>
+                );
+              }
+```
+
+---
+
+## STEP 2: 동작 확인 체크리스트
+
+1. 닉네임 상단 우측 배치 (날짜 위에) ✅
+2. 상단 좌측 닉네임 없음 ✅
+3. 좌측 세로 GYM PICK 로고 표시 ✅
+4. 우측 하단 세로 GYM PICK 로고 잘림 없음 ✅
+5. 세트 표기 `x` (소문자) ✅
+6. 유형 B, C 변경 없음 ✅
+7. 9번 archday 변경 없음 ✅
+8. TypeScript 에러 없음 ✅
+
+---
+
+## STEP 3: Git 커밋
+
+```
+cd D:\시작\gympick
+git add src/screens/flow/PostWorkoutLogModal.tsx
+git commit -m "fix: 유형 A 레이아웃 이전 스타일 1번과 동일하게 수정 (닉네임 우측, 좌측 로고, 세트표기 x)"
+```

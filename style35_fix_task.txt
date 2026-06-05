@@ -1,0 +1,129 @@
+# 태스크: 레이아웃 스타일 3 크기 수정 + 스타일 5 폰트 변경
+# 프로젝트 경로: D:\시작\gympick
+# 확인이나 중단 없이 끝까지 완료해줘
+
+---
+
+## 수정 사항
+1. 스타일 3 (GridOverlay): 타겟부위 폰트 크기 30% 증가 (20 → 26), 하단 로고 20% 축소 (0.85 → 0.68)
+2. 스타일 5 (SidebarOverlay): 타겟부위 밑줄 제거 + 폰트 → SportypoRegulер
+
+---
+
+## STEP 1: SportypoReguler 폰트 useFonts에 추가
+
+`src/screens/flow/PostWorkoutLogModal.tsx` 에서
+`useFonts` 훅을 찾아서 `SportypoReguler` 항목을 추가한다.
+
+기존:
+```tsx
+const [fontsLoaded] = useFonts({
+  'MatchaCih':         require('../../../assets/fonts/Matcha_Cih.ttf'),
+  'MatSaleh':          require('../../../assets/fonts/Mat_Saleh.ttf'),
+  'KCCGanpan':         require('../../../assets/fonts/KCC-Ganpan.ttf'),
+  'QuicksilverItalic': require('../../../assets/fonts/Quicksilver_Italic.ttf'),
+});
+```
+
+변경 후:
+```tsx
+const [fontsLoaded] = useFonts({
+  'MatchaCih':         require('../../../assets/fonts/Matcha_Cih.ttf'),
+  'MatSaleh':          require('../../../assets/fonts/Mat_Saleh.ttf'),
+  'KCCGanpan':         require('../../../assets/fonts/KCC-Ganpan.ttf'),
+  'QuicksilverItalic': require('../../../assets/fonts/Quicksilver_Italic.ttf'),
+  'SportypoReguler':   require('../../../assets/fonts/Sportypo-Reguler-Demo.ttf'),
+});
+```
+
+---
+
+## STEP 2: GridOverlay (스타일 3) 타겟부위 크기 30% 증가
+
+`GridOverlay` 함수 내부에서 muscleLabel을 렌더링하는 Text를 찾는다.
+
+찾는 코드:
+```tsx
+style={{
+  fontSize: 20,
+  fontWeight: '900',
+  color: tc,
+  letterSpacing: -0.5,
+  textAlign: 'center',
+  fontFamily: 'QuicksilverItalic',
+}}
+```
+
+`fontSize: 20` 을 `fontSize: 26` 으로 변경한다:
+```tsx
+style={{
+  fontSize: 26,
+  fontWeight: '900',
+  color: tc,
+  letterSpacing: -0.5,
+  textAlign: 'center',
+  fontFamily: 'QuicksilverItalic',
+}}
+```
+
+---
+
+## STEP 3: GridOverlay (스타일 3) 하단 로고 크기 20% 축소
+
+`GridOverlay` 함수 내부에서 하단 GymPickLogo 를 찾는다.
+
+찾는 코드:
+```tsx
+<GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.85)} height={Math.round(LOGO_STRIP_H * 0.85)} />
+```
+
+`0.85` 를 `0.68` 로 변경한다 (0.85 × 0.8 = 0.68):
+```tsx
+<GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.68)} height={Math.round(LOGO_STRIP_H * 0.68)} />
+```
+
+---
+
+## STEP 4: SidebarOverlay (스타일 5) 타겟부위 밑줄 제거 + 폰트 변경
+
+`SidebarOverlay` 함수 내부에서 muscleLabel을 렌더링하는 Text를 찾는다.
+세로 회전된 타겟부위 텍스트로 `transform: [{ rotate: '90deg' }]` 가 포함되어 있다.
+
+찾는 스타일 내에서:
+- `textDecorationLine: 'underline'` 이 있으면 제거
+- `fontFamily` 를 `'SportypoReguler'` 로 추가 또는 변경
+
+최종 muscleLabel Text 스타일:
+```tsx
+style={{
+  fontSize: 26,
+  fontWeight: '900',
+  color: tc,
+  transform: [{ rotate: '90deg' }],
+  width: photoH * 0.35,
+  textAlign: 'center',
+  letterSpacing: -0.3,
+  fontFamily: 'SportypoReguler',
+}}
+```
+
+---
+
+## STEP 5: 동작 확인 체크리스트
+
+1. 스타일 3 타겟부위 fontSize 20 → 26 (30% 증가) ✅
+2. 스타일 3 하단 로고 배율 0.85 → 0.68 (20% 축소) ✅
+3. 스타일 5 타겟부위 밑줄 제거 ✅
+4. 스타일 5 타겟부위 SportypoReguler 폰트 적용 ✅
+5. 스타일 1, 2, 4, 6, 7, 8 변경 없음 ✅
+6. TypeScript 에러 없음 ✅
+
+---
+
+## STEP 6: Git 커밋
+
+```
+cd D:\시작\gympick
+git add src/screens/flow/PostWorkoutLogModal.tsx
+git commit -m "feat: 스타일 3 타겟부위 크기+로고 축소, 스타일 5 SportypoReguler 폰트 적용"
+```

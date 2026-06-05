@@ -37,14 +37,9 @@ import { addNewSession } from '../../data/sessionStore';
 import { saveTemplate, getTemplates, deleteTemplate, WorkoutTemplate } from '../../data/templateStore';
 import { recordPR } from '../../data/prStore';
 import { useAuth } from '../../context/AuthContext';
-import { calculateXP, addXP } from '../../lib/machineLevelUtils';
-import { getMachineLevelData, updateMachineLevelData } from '../../data/machineLevelStore';
 import { insertWorkoutSession, insertWorkoutEntry, insertWorkoutSet, insertWorkoutPhoto } from '../../lib/db/workouts';
 import { uploadWorkoutPhoto } from '../../lib/photoStorage';
-import { saveMachineLevelData } from '../../lib/db/machineLevels';
 import { insertFeedPost } from '../../lib/db/feedPosts';
-import XPGainPopup from '../../components/XPGainPopup';
-import { MachineLevelData } from '../../data/types';
 import GymPickLogo from '../../components/GymPickLogo';
 import WorkoutCameraOverlay from './WorkoutCameraOverlay';
 import RoutineReferenceScreen, { MachineExtraInfo } from './RoutineReferenceScreen';
@@ -2996,15 +2991,6 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   const [routineCardUri,    setRoutineCardUri]    = useState<string | null>(null);
   const [detectedPRs,       setDetectedPRs]       = useState<{ name: string; weight: number; reps: number }[]>([]);
   const [prCelebration,     setPrCelebration]     = useState<{ name: string; weight: number; reps: number } | null>(null);
-  // XP Popup
-  const [xpPopupVisible,   setXpPopupVisible]    = useState(false);
-  const [xpPopupData,      setXpPopupData]       = useState<{
-    machineName: string;
-    xpResult:   ReturnType<typeof calculateXP>;
-    levelData:  MachineLevelData;
-    leveledUp:  boolean;
-    newLevel:   number;
-  } | null>(null);
   // Overlay
   const [selectedColor,      setSelectedColor]      = useState('#ffffff');
   const [isSaving,           setIsSaving]           = useState(false);
@@ -3149,43 +3135,6 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
         }
       }
 
-      // XP 계산 및 레벨 업데이트 (머신 + 프리웨이트 모두 적용)
-      {
-        const existingLevel = getMachineLevelData(currentExerciseId);
-        const volume        = exSets.reduce((sum, s) => sum + s.weight * s.reps, 0);
-        const xpResult      = calculateXP({
-          volume,
-          isPR,
-          isFirstUse:       existingLevel === null,
-          weeklyUsageCount: existingLevel?.weeklyUsageCount ?? 0,
-        });
-
-        if (xpResult.totalXP > 0) {
-          const baseData: MachineLevelData = existingLevel ?? {
-            machineId:        currentExerciseId,
-            level:            1,
-            currentXP:        0,
-            totalXP:          0,
-            lastUsedAt:       new Date().toISOString(),
-            weeklyUsageCount: 0,
-          };
-          const { updatedData, leveledUp, newLevel } = addXP(baseData, xpResult.totalXP);
-          if (user) {
-            saveMachineLevelData(updatedData, user.id);
-          } else {
-            updateMachineLevelData(updatedData);
-          }
-
-          const machineName = currentExercise?.name ?? currentExerciseId;
-          setXpPopupData({ machineName, xpResult, levelData: updatedData, leveledUp, newLevel });
-          setXpPopupVisible(true);
-          if (leveledUp) {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          } else {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          }
-        }
-      }
     }
     setCurrentExerciseId(null);
     setStep('exercise-select');
@@ -3669,18 +3618,6 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
           </View>
         )}
 
-        {/* XP Gain Popup — absolute View (Modal 중첩 방지) */}
-        {xpPopupData && (
-          <XPGainPopup
-            visible={xpPopupVisible}
-            machineName={xpPopupData.machineName}
-            xpResult={xpPopupData.xpResult}
-            levelData={xpPopupData.levelData}
-            leveledUp={xpPopupData.leveledUp}
-            newLevel={xpPopupData.newLevel}
-            onClose={() => setXpPopupVisible(false)}
-          />
-        )}
       </View>
       </SafeAreaProvider>
     </Modal>
