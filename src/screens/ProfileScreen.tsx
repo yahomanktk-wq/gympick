@@ -406,20 +406,41 @@ export default function ProfileScreen() {
         const volume = logs.reduce((acc, log) => {
           return acc + log.machines.reduce((a, m) => a + (m.weight ?? 0) * (m.reps ?? 0) * (m.sets ?? 1), 0);
         }, 0) / 1000;
-        const uniqueDates = [...new Set(logs.map(l => l.date.slice(0, 10)))].sort().reverse();
-        let streak = uniqueDates.length > 0 ? 1 : 0;
+        // 최장 연속 기록 (전체 히스토리 중 가장 긴 연속 일수)
+        const uniqueDates = [...new Set(logs.map(l => l.date.slice(0, 10)))]
+          .sort(); // 오래된 날짜부터 오름차순
+        let maxStreak     = uniqueDates.length > 0 ? 1 : 0;
+        let currentStreak = uniqueDates.length > 0 ? 1 : 0;
         for (let i = 1; i < uniqueDates.length; i++) {
           const prev = new Date(uniqueDates[i - 1]);
-          prev.setDate(prev.getDate() - 1);
-          if (uniqueDates[i] === prev.toISOString().slice(0, 10)) { streak++; } else { break; }
+          prev.setDate(prev.getDate() + 1);
+          if (uniqueDates[i] === prev.toISOString().slice(0, 10)) {
+            currentStreak++;
+            if (currentStreak > maxStreak) maxStreak = currentStreak;
+          } else {
+            currentStreak = 1;
+          }
         }
+        const streak = maxStreak;
+        // PR 횟수: 이전 기록이 있는 상태에서 최고 중량 갱신 시만 카운트 (처음 사용 제외)
         const machineMaxMap: Record<string, number> = {};
         let prCount = 0;
-        logs.forEach(log => {
+        const sortedLogs = [...logs].sort((a, b) =>
+          new Date(a.date).getTime() - new Date(b.date).getTime()
+        );
+        sortedLogs.forEach(log => {
           log.machines.forEach(m => {
-            const key = m.machineId ?? m.machineName;
-            const prev = machineMaxMap[key] ?? 0;
-            if ((m.weight ?? 0) > prev) { machineMaxMap[key] = m.weight ?? 0; prCount++; }
+            const key  = m.machineId ?? m.machineName;
+            const prev = machineMaxMap[key];
+            const cur  = m.weight ?? 0;
+            if (cur > 0) {
+              if (prev !== undefined && cur > prev) {
+                prCount++;
+              }
+              if (prev === undefined || cur > prev) {
+                machineMaxMap[key] = cur;
+              }
+            }
           });
         });
         setProfileStats({ workoutCount, prCount, streak, volume: Math.round(volume * 10) / 10 });
