@@ -28,11 +28,24 @@ export default function App() {
 
   useEffect(() => {
     const prepare = async () => {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      const val = await AsyncStorage.getItem('onboarding_completed');
-      setOnboardingDone(val === 'true');
-      setAppReady(true);
-      await SplashScreen.hideAsync();
+      try {
+        // AsyncStorage 읽기에 최대 3초 timeout 적용
+        const val = await Promise.race([
+          AsyncStorage.getItem('onboarding_completed'),
+          new Promise<null>(resolve => setTimeout(() => resolve(null), 3000)),
+        ]);
+        setOnboardingDone(val === 'true');
+      } catch {
+        // 읽기 실패 시 온보딩 완료로 처리 (기존 유저 보호)
+        setOnboardingDone(true);
+      } finally {
+        // 최소 1초 스플래시 유지 보장
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        setAppReady(true);
+        try {
+          await SplashScreen.hideAsync();
+        } catch {}
+      }
     };
     prepare();
   }, []);
