@@ -626,16 +626,6 @@ export default function ProfileScreen() {
               <Ionicons name={roleMeta.icon} size={9} color={roleMeta.color} />
               <Text style={[styles.rolePipText, { color: roleMeta.color }]}>{roleMeta.label}</Text>
             </View>
-            {user.role === 'manager' && (
-              <View style={styles.managerRoleBadge}>
-                <Text style={styles.managerRoleBadgeText}>매니저</Text>
-              </View>
-            )}
-            {user.role === 'admin' && (
-              <View style={styles.adminRoleBadge}>
-                <Text style={styles.adminRoleBadgeText}>어드민</Text>
-              </View>
-            )}
             <Text style={styles.userName}>{user.nickname ?? user.name}</Text>
             <TouchableOpacity
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setNicknameInput(user.nickname ?? user.name ?? ''); setShowNicknameEdit(true); }}
