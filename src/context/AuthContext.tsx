@@ -173,14 +173,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // getSession에 5초 timeout 적용 — hang 시 반드시 setLoading(false) 보장
+    const sessionTimeout = setTimeout(() => {
+      setLoading(false);
+    }, 5000);
+
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        const profileData = await fetchProfileData(session.user.id);
-        setUser(mapSupabaseUser(session.user, profileData));
-        fetchGymFavorites(session.user.id).then(ids => initGymFavorites(ids));
-      } else {
+      clearTimeout(sessionTimeout);
+      try {
+        if (session?.user) {
+          const profileData = await fetchProfileData(session.user.id);
+          setUser(mapSupabaseUser(session.user, profileData));
+          fetchGymFavorites(session.user.id).then(ids => initGymFavorites(ids));
+        } else {
+          setUser(null);
+        }
+      } catch {
         setUser(null);
+      } finally {
+        setLoading(false);
       }
+    }).catch(() => {
+      clearTimeout(sessionTimeout);
+      setUser(null);
       setLoading(false);
     });
 
@@ -195,7 +210,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(sessionTimeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string): Promise<{ error: string | null }> => {
