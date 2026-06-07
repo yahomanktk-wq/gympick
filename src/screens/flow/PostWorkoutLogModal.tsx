@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -1965,7 +1965,7 @@ export function ArchDayOverlay({ exercises, logs, nickname, timestamp, muscleLab
       {/* 3열 운동 목록 - GridOverlay와 동일한 구조 */}
       <View style={{
         position: 'absolute',
-        top: OVERLAY_PAD + 28 + svgH - 100,
+        top: OVERLAY_PAD + 28 + svgH - 80,
         left: OVERLAY_PAD,
         right: OVERLAY_PAD,
         bottom: OVERLAY_PAD + 32,
@@ -1978,7 +1978,7 @@ export function ArchDayOverlay({ exercises, logs, nickname, timestamp, muscleLab
         {exercises.slice(0, 9).map(ex => {
           const sets = logs[ex.id] ?? [];
           return (
-            <View key={ex.id} style={{ width: COL_W, marginBottom: 12, alignItems: 'center' }}>
+            <View key={ex.id} style={{ width: COL_W, marginBottom: 8, alignItems: 'center' }}>
               <Text style={{
                 fontSize: 8,
                 fontFamily: 'CollegeBoy',
@@ -1994,8 +1994,8 @@ export function ArchDayOverlay({ exercises, logs, nickname, timestamp, muscleLab
                 fontFamily: 'CollegeBoy',
                 color: tc,
                 letterSpacing: 0.2,
-                marginBottom: 3,
-                lineHeight: 13,
+                marginBottom: 2,
+                lineHeight: 9,
                 textAlign: 'center',
               }} numberOfLines={2}>
                 {ex.name.toUpperCase()}
@@ -2006,7 +2006,7 @@ export function ArchDayOverlay({ exercises, logs, nickname, timestamp, muscleLab
                   fontFamily: 'CollegeBoy',
                   color: tc,
                   opacity: 0.85,
-                  lineHeight: 13,
+                  lineHeight: 9,
                   textAlign: 'center',
                 }}>
                   {`S${si + 1} ${st.weight}kg × ${st.reps}`}
@@ -2057,10 +2057,37 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
   const [overlayStyle,  setOverlayStyle]  = useState<OverlayStyle>('s1a');
   const overlayRef = useRef<View>(null);
   const routineCardRef = useRef<View>(null);
-  const ROUTINE_CARD_H    = Math.round(PHOTO_W * 4 / 3);
-  const RC_ITEMS_PER_PAGE = Math.max(1, Math.floor((ROUTINE_CARD_H - 70 - 36) / 90));
-  const pageCount         = Math.ceil(exercises.length / RC_ITEMS_PER_PAGE);
-  const routinePageRefs   = useRef<(View | null)[]>([]);
+  const ROUTINE_CARD_H = Math.round(PHOTO_W * 4 / 3);
+  const RC_HEADER_H    = 70;
+  const RC_FOOTER_H    = 36;
+  const RC_AVAIL_H     = ROUTINE_CARD_H - RC_HEADER_H - RC_FOOTER_H - 1;
+
+  const [itemHeights, setItemHeights] = useState<number[]>([]);
+
+  const pageGroups = useMemo<number[][]>(() => {
+    if (itemHeights.length !== exercises.length) {
+      return exercises.map((_, i) => [i]);
+    }
+    const groups: number[][] = [];
+    let current: number[] = [];
+    let accumulated = 0;
+    for (let i = 0; i < exercises.length; i++) {
+      const h = itemHeights[i] + (current.length > 0 ? 1 : 0);
+      if (current.length > 0 && accumulated + h > RC_AVAIL_H) {
+        groups.push(current);
+        current = [i];
+        accumulated = itemHeights[i];
+      } else {
+        current.push(i);
+        accumulated += h;
+      }
+    }
+    if (current.length > 0) groups.push(current);
+    return groups;
+  }, [itemHeights, exercises.length, RC_AVAIL_H]);
+
+  const pageCount       = Math.max(1, pageGroups.length);
+  const routinePageRefs = useRef<(View | null)[]>([]);
 
   const photoH = Math.round(PHOTO_W * 4 / 3);
 
@@ -2105,7 +2132,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
         Alert.alert('저장 실패', '저장에 실패했습니다.');
         return;
       }
-      const capturedUri = await captureRef(overlayRef, { format: 'jpg', quality: 0.9, result: 'tmpfile', width: PHOTO_W, height: photoH, pixelRatio: PixelRatio.get() });
+      const capturedUri = await captureRef(overlayRef, { format: 'png', quality: 1, result: 'tmpfile', width: PHOTO_W, height: photoH, pixelRatio: PixelRatio.get() });
       onCompositeUri(capturedUri);
       await MediaLibrary.saveToLibraryAsync(capturedUri);
 
@@ -2113,7 +2140,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
       if (routineCardRef.current) {
         await new Promise(resolve => requestAnimationFrame(resolve));
         const routineUri = await captureRef(routineCardRef, {
-          format: 'jpg', quality: 0.9, result: 'tmpfile', pixelRatio: PixelRatio.get(),
+          format: 'png', quality: 1, result: 'tmpfile', pixelRatio: PixelRatio.get(),
         });
         await MediaLibrary.saveToLibraryAsync(routineUri);
         onRoutineCardUri?.(routineUri);
@@ -2147,7 +2174,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
       let capturedUri: string;
       try {
         capturedUri = await captureRef(overlayRef, {
-          format: 'jpg', quality: 0.95, result: 'tmpfile',
+          format: 'png', quality: 1, result: 'tmpfile',
           width: PHOTO_W, height: photoH, pixelRatio: PixelRatio.get(),
         });
       } catch (e) {
@@ -2165,7 +2192,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
             await new Promise(resolve => requestAnimationFrame(resolve));
             await new Promise(resolve => setTimeout(resolve, 100));
             const pageUri = await captureRef(ref, {
-              format: 'jpg', quality: 0.95, result: 'tmpfile',
+              format: 'png', quality: 1, result: 'tmpfile',
               width: PHOTO_W, height: ROUTINE_CARD_H, pixelRatio: PixelRatio.get(),
             });
             pageUris.push(pageUri);
@@ -2412,7 +2439,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
         )}
 
         {/* 루틴카드 — 캡처 전용 (화면 밖에 배치) */}
-        <View style={{ position: 'absolute', top: -9999, left: -9999 }} pointerEvents="none">
+        <View style={{ position: 'absolute', top: -9999, left: -9999, backgroundColor: 'transparent' }} pointerEvents="none">
           <View
             ref={routineCardRef}
             collapsable={false}
@@ -2522,16 +2549,59 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
           </View>
         </View>
 
+        {/* 머신 행 실제 높이 측정용 (화면 밖에 숨김) */}
+        <View style={{ position: 'absolute', top: -9999, left: -9999, width: PHOTO_W, backgroundColor: 'transparent' }} pointerEvents="none">
+          {exercises.map((ex, i) => {
+            const exSets    = logs[ex.id] ?? [];
+            const brandKey  = ex.brand.toUpperCase().replace(/\s+/g, '_');
+            const brandLogo = brandLogos[brandKey];
+            const imageUrl  = `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${ex.id}.webp`;
+            return (
+              <View
+                key={`measure-${ex.id}`}
+                collapsable={false}
+                onLayout={e => {
+                  const h = e.nativeEvent.layout.height;
+                  setItemHeights(prev => {
+                    const next = [...prev];
+                    next[i] = h;
+                    return next;
+                  });
+                }}
+                style={{ flexDirection: 'row', alignItems: 'flex-start', padding: 12, gap: 10 }}
+              >
+                <View style={{ width: 64, height: 64, borderRadius: 10, overflow: 'hidden', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E5E5' }}>
+                  <Image source={{ uri: imageUrl }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#000000', lineHeight: 16, marginBottom: 4 }} numberOfLines={2}>
+                    {ex.name.toUpperCase()}
+                  </Text>
+                  {brandLogo ? (
+                    <Image source={brandLogo} style={{ width: 56, height: 18 }} resizeMode="contain" />
+                  ) : (
+                    <Text style={{ fontSize: 10, color: '#333333' }}>{ex.brand}</Text>
+                  )}
+                </View>
+                <View style={{ alignItems: 'flex-end', justifyContent: 'flex-start', minWidth: 80 }}>
+                  {exSets.map((st, si) => (
+                    <Text key={si} style={{ fontSize: 11, fontWeight: '600', color: '#000000', lineHeight: 18 }}>
+                      {st.weight > 0 ? `${st.weight}kg` : '--'} × {st.reps}
+                    </Text>
+                  ))}
+                </View>
+              </View>
+            );
+          })}
+        </View>
+
         {/* 인스타 공유용 루틴카드 페이지 분할 */}
-        {Array.from({ length: pageCount }).map((_, pageIdx) => {
-          const pageExercises = exercises.slice(
-            pageIdx * RC_ITEMS_PER_PAGE,
-            (pageIdx + 1) * RC_ITEMS_PER_PAGE,
-          );
+        {pageGroups.map((group, pageIdx) => {
+          const pageExercises = group.map(i => exercises[i]);
           return (
             <View
               key={`rpage-${pageIdx}`}
-              style={{ position: 'absolute', top: -9999, left: -9999 }}
+              style={{ position: 'absolute', top: -9999, left: -9999, backgroundColor: 'transparent' }}
               pointerEvents="none"
             >
               <View
