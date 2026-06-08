@@ -1067,7 +1067,7 @@ export function ClassicOverlay({ exercises, logs, nickname, timestamp, muscleLab
         <Text style={[s.overlayTimestamp, { color: tc, fontFamily: fontSet.nickname }]}>{timestamp}</Text>
       </View>
       <View style={s.overlayBottomLeft}>
-        <Text style={[s.overlayMuscleTitle, { color: tc, fontFamily: fontSet.muscle, ...(fontSet.muscle === 'BasicFont' && { fontWeight: '900' }) }]}>{muscleLabel}</Text>
+        <Text style={[s.overlayMuscleTitle, { color: tc, fontFamily: fontSet.muscle }]}>{muscleLabel}</Text>
         <View style={s.sessionScroll}>
           {exercises.slice(0, 7).map(ex => {
             const sets     = logs[ex.id] ?? [];
@@ -1653,10 +1653,8 @@ export function LeftColOverlayB({ exercises, logs, nickname, timestamp, muscleLa
         {/* 타겟부위_day — 크고 굵게, 밑줄 없음 */}
         <Text style={{
           fontSize: 40,
-          fontWeight: '900',
           color: tc,
           fontFamily: fontSet.muscle,
-          fontWeight: fontSet.muscle === 'BasicFont' ? '900' : undefined,
           letterSpacing: -1,
           lineHeight: 46,
           marginBottom: 16,
@@ -1754,7 +1752,6 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
         <Text
           style={{
             fontFamily: fontSet.muscle,
-            fontWeight: '900',
             color: tc,
             textAlign: 'center',
             letterSpacing: -2,
@@ -1857,7 +1854,7 @@ export function GridOverlayC({ exercises, logs, nickname, timestamp, muscleLabel
       </View>
       {/* 타겟부위 */}
       <View style={{ position: 'absolute', top: OVERLAY_PAD + 28, left: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'center' }}>
-        <Text style={{ fontSize: 29, fontWeight: fontSet.muscle === 'BasicFont' ? '900' : undefined, color: tc, fontFamily: fontSet.muscle, textAlign: 'center' }} numberOfLines={1}>
+        <Text style={{ fontSize: 29, color: tc, fontFamily: fontSet.muscle, textAlign: 'center' }} numberOfLines={1}>
           {muscleLabel}
         </Text>
       </View>
@@ -3878,7 +3875,7 @@ const s = StyleSheet.create({
 
   // Lower-left: muscle label + scrollable session (좌측으로 5% 이동 = left 감소)
   overlayBottomLeft: { position: 'absolute', left: Math.max(0, OVERLAY_PAD + LOGO_STRIP_H + 4 - Math.round(PHOTO_W * 0.05)), right: OVERLAY_PAD, bottom: OVERLAY_PAD, zIndex: 3 },
-  overlayMuscleTitle:{ fontSize: 24, fontWeight: '900', letterSpacing: -0.5, marginBottom: 8 },
+  overlayMuscleTitle:{ fontSize: 24, letterSpacing: -0.5, marginBottom: 8 },
   sessionScroll:     { maxHeight: 220 },
   overlayExBlock:    { marginBottom: 6 },
   overlayExName:     { fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
