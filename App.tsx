@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useFonts } from 'expo-font';
 import { Modal } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -25,6 +26,33 @@ export default function App() {
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [appReady, setAppReady] = useState(false);
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
+
+  const [fontsLoaded] = useFonts({
+    'KCC-Ganpan':            require('./assets/fonts/kcc_ganpan.ttf'),
+    'Mat Saleh':             require('./assets/fonts/mat_saleh.ttf'),
+    'Matcha Cih':            require('./assets/fonts/matcha_cih.ttf'),
+    'Quicksilver-Italic':    require('./assets/fonts/quicksilver_italic.ttf'),
+    'Stadium1956-Regular':   require('./assets/fonts/stadium1956_regular.otf'),
+    'BlackwoodCastle':       require('./assets/fonts/blacc.ttf'),
+    'BlackwoodCastleShadow': require('./assets/fonts/blaccs.ttf'),
+    'CollegeBoy':            require('./assets/fonts/college_boy.otf'),
+    'Flamer':                require('./assets/fonts/flamer.ttf'),
+    'HeavyHeapRg-Regular':   require('./assets/fonts/heavy_heap_rg.otf'),
+    'Honfleur-Heavy':        require('./assets/fonts/honfleur_heavy.otf'),
+    'BasicFont':             require('./assets/fonts/basif.ttf'),
+    'Abrakadaboom':          require('./assets/fonts/abrakadaboom.ttf'),
+    'KERISKEDU_Line':        require('./assets/fonts/keriskedu_line.ttf'),
+    'HeirofLightRegular':    require('./assets/fonts/heiroflightregular.ttf'),
+    'BMkkubulimTTF-Regular': require('./assets/fonts/bmkkubulim.ttf'),
+    'biergartenlt':          require('./assets/fonts/biergartenlt.ttf'),
+    ...((() => {
+      try {
+        return { 'Oklahoma': require('./assets/fonts/oklahoma.ttf') };
+      } catch {
+        return {};
+      }
+    })()),
+  });
 
   useEffect(() => {
     const prepare = async () => {
@@ -89,7 +117,7 @@ export default function App() {
     }
   }
 
-  if (!appReady || onboardingDone === null) return null;
+  if (!appReady || onboardingDone === null || !fontsLoaded) return null;
 
   return (
     <AuthProvider>
