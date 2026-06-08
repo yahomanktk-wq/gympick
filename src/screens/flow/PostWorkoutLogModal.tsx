@@ -2129,7 +2129,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
         Alert.alert('저장 실패', '저장에 실패했습니다.');
         return;
       }
-      const capturedUri = await captureRef(overlayRef, { format: 'png', quality: 1, result: 'tmpfile', width: PHOTO_W, height: photoH, pixelRatio: PixelRatio.get() });
+      const capturedUri = await captureRef(overlayRef, { format: 'png', quality: 1, result: 'tmpfile', width: PHOTO_W, height: photoH, pixelRatio: Math.max(PixelRatio.get(), 3) });
       onCompositeUri(capturedUri);
       await MediaLibrary.saveToLibraryAsync(capturedUri);
 
@@ -2137,7 +2137,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
       if (routineCardRef.current) {
         await new Promise(resolve => requestAnimationFrame(resolve));
         const routineUri = await captureRef(routineCardRef, {
-          format: 'png', quality: 1, result: 'tmpfile', pixelRatio: PixelRatio.get(),
+          format: 'png', quality: 1, result: 'tmpfile', pixelRatio: Math.max(PixelRatio.get(), 3),
         });
         await MediaLibrary.saveToLibraryAsync(routineUri);
         onRoutineCardUri?.(routineUri);
@@ -2172,7 +2172,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
       try {
         capturedUri = await captureRef(overlayRef, {
           format: 'png', quality: 1, result: 'tmpfile',
-          width: PHOTO_W, height: photoH, pixelRatio: PixelRatio.get(),
+          width: PHOTO_W, height: photoH, pixelRatio: Math.max(PixelRatio.get(), 3),
         });
       } catch (e) {
         console.error('[Instagram] 인증샷 캡처 실패:', e);
@@ -2190,7 +2190,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
             await new Promise(resolve => setTimeout(resolve, 100));
             const pageUri = await captureRef(ref, {
               format: 'png', quality: 1, result: 'tmpfile',
-              width: PHOTO_W, height: ROUTINE_CARD_H, pixelRatio: PixelRatio.get(),
+              width: PHOTO_W, height: ROUTINE_CARD_H, pixelRatio: Math.max(PixelRatio.get(), 3),
             });
             pageUris.push(pageUri);
           } catch (e) {
@@ -2854,13 +2854,13 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
               await new Promise(resolve => requestAnimationFrame(resolve));
               await new Promise<void>(resolve => InteractionManager.runAfterInteractions(() => resolve()));
               if (overlayRef.current) {
-                captured = await captureRef(overlayRef, { format: 'jpg', quality: 0.9, result: 'tmpfile', width: PHOTO_W, height: photoH, pixelRatio: PixelRatio.get() });
+                captured = await captureRef(overlayRef, { format: 'png', quality: 1, result: 'tmpfile', width: PHOTO_W, height: photoH, pixelRatio: Math.max(PixelRatio.get(), 3) });
                 onCompositeUri(captured);
               }
               if (routineCardRef.current) {
                 await new Promise(resolve => requestAnimationFrame(resolve));
                 capturedRoutineUri = await captureRef(routineCardRef, {
-                  format: 'jpg', quality: 0.9, result: 'tmpfile', pixelRatio: PixelRatio.get(),
+                  format: 'png', quality: 1, result: 'tmpfile', pixelRatio: Math.max(PixelRatio.get(), 3),
                 });
                 onRoutineCardUri?.(capturedRoutineUri);
               }
