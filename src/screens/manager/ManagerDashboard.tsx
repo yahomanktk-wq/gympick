@@ -37,6 +37,7 @@ import { submitGymRegistrationRequest } from '../../lib/db/gymRegistrationReques
 import { fetchGymMachineIds, saveGymMachineIds } from '../../lib/db/gymMachines';
 import { invalidateGymsCache } from '../../lib/db/gyms';
 import { geocodeAddress } from '../../lib/geocoding';
+import { containsBannedWord } from '../../lib/bannedWords';
 import GymStatsView from './GymStatsView';
 import * as ImagePicker from 'expo-image-picker';
 import { Image as ExpoImage } from 'expo-image';
@@ -1311,6 +1312,13 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
       Alert.alert('입력 오류', '헬스장 이름과 위치는 필수 항목입니다.');
       return;
     }
+    if (regForm.description) {
+      const banned = await containsBannedWord(regForm.description);
+      if (banned) {
+        Alert.alert('사용 불가', '사용할 수 없는 단어가 포함되어 있어요.');
+        return;
+      }
+    }
     const alreadyPending = gyms.some(g => g.status === 'pending');
     if (alreadyPending) {
       Alert.alert('이미 등록 요청 중', '현재 검토 중인 헬스장 등록 요청이 있습니다.');
@@ -1370,6 +1378,11 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
 
   const saveRoutine = useCallback(async () => {
     if (!routineName.trim()) { Alert.alert('입력 오류', '루틴 이름을 입력해 주세요.'); return; }
+    const banned = await containsBannedWord(routineName);
+    if (banned) {
+      Alert.alert('사용 불가', '사용할 수 없는 단어가 포함되어 있어요.');
+      return;
+    }
     if (routineSelectedIds.size === 0 || !selectedGym) return;
 
     const machineIds = [...routineSelectedIds];
@@ -1436,8 +1449,13 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
 
   // ─── Announcement tab helpers ─────────────────────────────────────────────
 
-  const submitAnnouncement = useCallback((title: string, content: string) => {
+  const submitAnnouncement = useCallback(async (title: string, content: string) => {
     if (!title.trim() || !content.trim()) { Alert.alert('입력 오류', '제목과 내용을 모두 입력해 주세요.'); return; }
+    const banned = await containsBannedWord(title);
+    if (banned) {
+      Alert.alert('사용 불가', '사용할 수 없는 단어가 포함되어 있어요.');
+      return;
+    }
     if (!selectedGym) return;
     addAnnouncement(selectedGym.id, title.trim(), content.trim());
     setAnnouncements(getAnnouncements(selectedGym.id));

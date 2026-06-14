@@ -14,7 +14,9 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
+import { brandLogos } from '../constants/brandLogos';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -167,8 +169,17 @@ function GymCard({
       <View style={{ flex: 1, paddingLeft: 0 }}>
         <View style={s.gymCardTop}>
           <Text style={s.gymCardName}>{gym.name}</Text>
-          <View style={[s.openBadge, { backgroundColor: C.accentBg }]}>
-            <Text style={[s.openBadgeText, { color: C.accent }]}>영업 중</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            {gym.managerId && (
+              <Ionicons
+                name="shield-checkmark"
+                size={15}
+                color="#5ba4ff"
+              />
+            )}
+            <View style={[s.openBadge, { backgroundColor: C.accentBg }]}>
+              <Text style={[s.openBadgeText, { color: C.accent }]}>영업 중</Text>
+            </View>
           </View>
         </View>
         <View style={s.gymCardMeta}>
@@ -186,6 +197,28 @@ function GymCard({
             {matchCount} 머신
           </Text>
         </View>
+        {/* 오피셜 브랜드 로고 */}
+        {gym.officialBrands && gym.officialBrands.length > 0 && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+            <Ionicons name="shield-checkmark" size={11} color="#5ba4ff" />
+            {gym.officialBrands.map(brand => {
+              const key = brand.toUpperCase().replace(/\s+/g, '_');
+              const logo = brandLogos[key];
+              return logo ? (
+                <Image
+                  key={brand}
+                  source={logo}
+                  style={{ width: 36, height: 16 }}
+                  resizeMode="contain"
+                />
+              ) : (
+                <Text key={brand} style={{ fontSize: 9, fontWeight: '700', color: '#5ba4ff' }}>
+                  {brand}
+                </Text>
+              );
+            })}
+          </View>
+        )}
       </View>
     </TouchableOpacity>
   );

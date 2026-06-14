@@ -7,6 +7,7 @@ import { UserRole } from '../data/types';
 import { supabase } from '../lib/supabase';
 import { fetchGymFavorites } from '../lib/db/gymFavorites';
 import { initGymFavorites } from '../data/gymFavoriteStore';
+import { containsBannedWord } from '../lib/bannedWords';
 
 // --- Types
 
@@ -28,7 +29,7 @@ interface AuthContextValue {
   signIn:       (email: string, password: string) => Promise<{ error: string | null }>;
   signUp:       (
     email: string, password: string,
-    name: string, nickname: string, birthDate: string,
+    name: string, birthDate: string,
   ) => Promise<{ error: string | null; needsVerification: boolean }>;
   signOut:      () => Promise<void>;
   signInGoogle:    () => Promise<{ error: string | null }>;
@@ -37,6 +38,7 @@ interface AuthContextValue {
   updateNickname:     (nickname: string) => Promise<{ error: string | null }>;
   updateProfileImage: (url: string) => void;
   updateWeightUnit:   (unit: 'kg' | 'lbs') => void;
+  refreshUser:        () => Promise<void>;
 }
 
 // --- Mock users
@@ -74,9 +76,10 @@ const MOCK_CREDENTIALS: Record<string, { user: AuthUser; password: string }> = {
 };
 
 interface ProfileData {
-  avatarUrl?: string;
-  nickname?:  string;
-  role?:      'user' | 'manager' | 'admin';
+  avatarUrl?:     string;
+  nickname?:      string;
+  role?:          'user' | 'manager' | 'admin';
+  managedGymIds?: string[];
 }
 
 function mapSupabaseUser(sbUser: SupabaseUser, profileData?: ProfileData): AuthUser {
@@ -88,22 +91,33 @@ function mapSupabaseUser(sbUser: SupabaseUser, profileData?: ProfileData): AuthU
     nickname:        profileData?.nickname ?? sbUser.user_metadata?.nickname,
     email:           sbUser.email ?? '',
     role:            (profileData?.role ?? 'user') as UserRole,
-    managedGymIds:   [],
+    managedGymIds:   profileData?.managedGymIds ?? [],
     profileImageUrl: profileData?.avatarUrl,
   };
 }
 
 async function fetchProfileData(userId: string): Promise<ProfileData> {
   try {
-    const { data } = await supabase
-      .from('profiles')
-      .select('avatar_url, nickname, role')
-      .eq('id', userId)
-      .single();
+    const [profileRes, gymsRes] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('avatar_url, nickname, role')
+        .eq('id', userId)
+        .single(),
+      supabase
+        .from('gyms')
+        .select('id')
+        .eq('manager_id', userId),
+    ]);
+
+    const data     = profileRes.data;
+    const gymsData = gymsRes.data ?? [];
+
     return {
-      avatarUrl: data?.avatar_url ?? undefined,
-      nickname:  data?.nickname   ?? undefined,
-      role:      data?.role       ?? undefined,
+      avatarUrl:     data?.avatar_url ?? undefined,
+      nickname:      data?.nickname   ?? undefined,
+      role:          data?.role       ?? undefined,
+      managedGymIds: gymsData.map((g: { id: string }) => g.id),
     };
   } catch {
     return {};
@@ -145,6 +159,18 @@ async function ensureProfileExists(sbUser: SupabaseUser): Promise<void> {
   }
 }
 
+function generateNickname(): string {
+  const adjectives = [
+    '단단한', '탄탄한', '강인한', '날렵한', '묵직한', '거대한', '다부진',
+    '열정적인', '꾸준한', '폭발적인', '맹렬한', '끈질긴', '집중하는', '도전하는',
+    '철벽같은', '파워풀한', '불굴의', '맹수같은',
+    '무적의', '최강의', '전설의', '압도적인', '위대한',
+  ];
+  const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+  const num = String(Math.floor(Math.random() * 9000) + 1000);
+  return `${adj}_${num}`;
+}
+
 // --- Context
 
 const AuthContext = createContext<AuthContextValue>({
@@ -159,6 +185,7 @@ const AuthContext = createContext<AuthContextValue>({
   updateNickname:     async () => ({ error: null }),
   updateProfileImage: () => {},
   updateWeightUnit:   () => {},
+  refreshUser:        async () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -246,7 +273,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (
     email: string, password: string,
-    name: string, nickname: string, birthDate: string,
+    name: string, birthDate: string,
   ): Promise<{ error: string | null; needsVerification: boolean }> => {
     const trimmedEmail = email.trim().toLowerCase();
 
@@ -254,7 +281,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const mockUser: AuthUser = {
         id:            `mock-${Date.now()}`,
         name,
-        nickname,
+        nickname:      generateNickname(),
         email:         trimmedEmail,
         role:          'user',
         managedGymIds: [],
@@ -263,12 +290,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: null, needsVerification: false };
     }
 
+    const nickname = generateNickname();
+
     const { data, error } = await supabase.auth.signUp({
       email: trimmedEmail,
       password,
       options: { data: { name, nickname } },
     });
-    if (error) return { error: error.message, needsVerification: false };
+    if (error) {
+      const msg = error.message ?? '';
+      if (
+        msg.includes('already registered') ||
+        msg.includes('already been registered') ||
+        msg.includes('email address is already') ||
+        msg.includes('User already registered')
+      ) {
+        return { error: '이미 가입된 이메일이에요. 로그인해주세요.', needsVerification: false };
+      }
+      return { error: msg, needsVerification: false };
+    }
 
     if (data.user) {
       await supabase.from('profiles').upsert({
@@ -277,6 +317,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         nickname,
         birth_date: birthDate,
       });
+    }
+
+    // 이미 가입된 이메일: identities가 빈 배열로 반환됨
+    if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      return { error: '이미 가입된 이메일이에요. 로그인해주세요.', needsVerification: false };
     }
 
     const needsVerification = !data.session;
@@ -301,6 +346,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!trimmed) return { error: '닉네임을 입력해주세요.' };
 
       if (supabaseConfigured) {
+        const bannedInNickname = await containsBannedWord(trimmed);
+        if (bannedInNickname) return { error: '사용할 수 없는 단어가 닉네임에 포함되어 있어요.' };
+
+        // 닉네임 중복 체크 (본인 제외)
+        const { data: existingNickname } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('nickname', trimmed)
+          .neq('id', user.id)
+          .maybeSingle();
+        if (existingNickname) return { error: '이미 사용 중인 닉네임이에요. 다른 닉네임을 입력해주세요.' };
+
         const { upsertUserProfile } = await import('../lib/db/userProfiles');
         await upsertUserProfile(user.id, { nickname: trimmed });
       }
@@ -319,6 +376,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateWeightUnit = (unit: 'kg' | 'lbs') => {
     setUser(prev => prev ? { ...prev, weightUnit: unit } : prev);
+  };
+
+  const refreshUser = async (): Promise<void> => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      const profileData = await fetchProfileData(session.user.id);
+      setUser(mapSupabaseUser(session.user, profileData));
+    } catch (e) {
+      if (__DEV__) console.warn('[AuthContext] refreshUser 오류:', e);
+    }
   };
 
   const signInGoogle = async (): Promise<{ error: string | null }> => {
@@ -455,6 +523,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updateNickname,
       updateProfileImage,
       updateWeightUnit,
+      refreshUser,
     }}>
       {children}
     </AuthContext.Provider>

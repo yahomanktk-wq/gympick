@@ -19,14 +19,14 @@ export default function VerifyScreen({ onBack }: Props) {
         <Ionicons name="mail-unread-outline" size={36} color={C.accent} />
       </View>
 
-      <Text style={s.title}>Check your email</Text>
+      <Text style={s.title}>이메일을 확인해주세요</Text>
       <Text style={s.body}>
-        We sent a verification link to your email address.{'\n\n'}
-        Please confirm your email before signing in.
+        입력하신 이메일 주소로 인증 링크를 보냈어요.{'\n\n'}
+        이메일 인증 후 로그인해주세요.
       </Text>
 
       <TouchableOpacity style={s.btn} activeOpacity={0.85} onPress={onBack}>
-        <Text style={s.btnText}>Back to Sign In</Text>
+        <Text style={s.btnText}>로그인으로 돌아가기</Text>
       </TouchableOpacity>
     </View>
   );

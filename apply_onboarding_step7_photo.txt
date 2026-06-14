@@ -1,0 +1,299 @@
+파일 경로: src/screens/flow/PostWorkoutLogModal.tsx
+
+확인이나 중단 없이 끝까지 완료해줘.
+
+## 목표
+7단계(인증샷) 화면에 온보딩 스포트라이트 5개 포인트 적용.
+- photo-capture: 사진 촬영/선택 영역
+- photo-overlay: 레이아웃 스타일 선택
+- photo-color: 텍스트 색상 선택
+- photo-save-share: 저장/인스타그램 버튼
+- workout-save: 운동 저장 버튼
+
+주의: photo-overlay, photo-color, photo-save-share는 photoTaken이 true일 때만 화면에 존재함.
+photo-capture 단계에서 "다음"을 누르면 아직 사진이 없을 수 있으므로,
+이 경우 photo-overlay/photo-color/photo-save-share 포인트는 자동으로 건너뛰고
+workout-save로 이동하도록 처리.
+
+---
+
+## 작업 1 — WorkoutPhotoStep props 타입에 onboarding 관련 props 추가
+
+현재:
+function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname, onColorChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera }: {
+  gym: GymWithMachines;
+  exercises: ExerciseInfo[];
+  logs: Record<string, SetEntry[]>;
+  photoTaken: boolean;
+  photoUri?: string;
+  nickname?: string;
+  onColorChange: (color: string) => void;
+  onCapture: (aspect: [number, number]) => void;
+  onCameraCapture: (uri: string) => void;
+  onCompositeUri:    (uri: string) => void;
+  onRoutineCardUri?: (uri: string) => void;
+  onSave: (captured?: string, capturedRoutineUri?: string) => void;
+  onBack: () => void;
+  onClose: () => void;
+  showCamera: boolean;
+  onSetShowCamera: (v: boolean) => void;
+}) {
+
+아래로 교체:
+function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname, onColorChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera, onRegisterRect, onboardingActive, onboardingKey, onOnboardingNext, onOnboardingJump }: {
+  gym: GymWithMachines;
+  exercises: ExerciseInfo[];
+  logs: Record<string, SetEntry[]>;
+  photoTaken: boolean;
+  photoUri?: string;
+  nickname?: string;
+  onColorChange: (color: string) => void;
+  onCapture: (aspect: [number, number]) => void;
+  onCameraCapture: (uri: string) => void;
+  onCompositeUri:    (uri: string) => void;
+  onRoutineCardUri?: (uri: string) => void;
+  onSave: (captured?: string, capturedRoutineUri?: string) => void;
+  onBack: () => void;
+  onClose: () => void;
+  showCamera: boolean;
+  onSetShowCamera: (v: boolean) => void;
+  onRegisterRect?: (key: OnboardingPointKey, rect: SpotlightRect) => void;
+  onboardingActive?: boolean;
+  onboardingKey?: OnboardingPointKey | null;
+  onOnboardingNext?: () => void;
+  onOnboardingJump?: (key: OnboardingPointKey) => void;
+}) {
+
+---
+
+## 작업 2 — ref 선언 추가
+
+기존 overlayRef, routineCardRef 선언 아래에 추가:
+
+  const photoFrameRef   = useRef<View>(null);
+  const overlayStyleRef = useRef<View>(null);
+  const colorChipRef    = useRef<View>(null);
+  const shareRowRef     = useRef<View>(null);
+  const ctaBarRef       = useRef<View>(null);
+
+---
+
+## 작업 3 — 재측정 useEffect 추가
+
+ref 선언들 아래에 추가:
+
+  useEffect(() => {
+    if (!onboardingActive) return;
+    const measure = (key: OnboardingPointKey, ref: React.RefObject<View>) => {
+      requestAnimationFrame(() => {
+        ref.current?.measureInWindow((x, y, width, height) => {
+          onRegisterRect?.(key, { x, y, width, height });
+        });
+      });
+    };
+
+    if (onboardingKey === 'photo-capture') {
+      const target = photoTaken ? overlayRef : photoFrameRef;
+      measure('photo-capture', target as React.RefObject<View>);
+    }
+    if (onboardingKey === 'photo-overlay') {
+      if (!photoTaken && !showCamera) {
+        // 사진 없으면 이 포인트 건너뛰기
+        onOnboardingJump?.('workout-save');
+      } else {
+        measure('photo-overlay', overlayStyleRef);
+      }
+    }
+    if (onboardingKey === 'photo-color') {
+      if (!photoTaken && !showCamera) {
+        onOnboardingJump?.('workout-save');
+      } else {
+        measure('photo-color', colorChipRef);
+      }
+    }
+    if (onboardingKey === 'photo-save-share') {
+      if (!photoTaken) {
+        onOnboardingJump?.('workout-save');
+      } else {
+        measure('photo-save-share', shareRowRef);
+      }
+    }
+    if (onboardingKey === 'workout-save') {
+      measure('workout-save', ctaBarRef);
+    }
+  }, [onboardingActive, onboardingKey, photoTaken, showCamera]);
+
+---
+
+## 작업 4 — 사진 촬영 전 영역(photoFrame)에 ref 추가
+
+현재:
+        {!photoTaken && !showCamera && (
+          <TouchableOpacity
+            style={[s.photoFrame, { height: photoH }]}
+            activeOpacity={0.85}
+            onPress={() => {
+
+아래로 교체:
+        {!photoTaken && !showCamera && (
+          <TouchableOpacity
+            ref={photoFrameRef}
+            style={[s.photoFrame, { height: photoH }]}
+            activeOpacity={0.85}
+            onLayout={() => {
+              if (onboardingActive && onboardingKey === 'photo-capture') {
+                photoFrameRef.current?.measureInWindow((x, y, width, height) => {
+                  onRegisterRect?.('photo-capture', { x, y, width, height });
+                });
+              }
+            }}
+            onPress={() => {
+
+---
+
+## 작업 5 — 사진 촬영 후 영역(overlayRef)에 onLayout 추가
+
+현재:
+        {photoTaken && !showCamera && (
+          <View
+            ref={overlayRef}
+            style={[s.photoFrame, s.photoFrameActive, { height: photoH, backgroundColor: 'transparent', borderWidth: 0, borderRadius: 20, overflow: 'hidden' }]}
+            collapsable={false}
+          >
+
+아래로 교체:
+        {photoTaken && !showCamera && (
+          <View
+            ref={overlayRef}
+            style={[s.photoFrame, s.photoFrameActive, { height: photoH, backgroundColor: 'transparent', borderWidth: 0, borderRadius: 20, overflow: 'hidden' }]}
+            collapsable={false}
+            onLayout={() => {
+              if (onboardingActive && onboardingKey === 'photo-capture') {
+                overlayRef.current?.measureInWindow((x, y, width, height) => {
+                  onRegisterRect?.('photo-capture', { x, y, width, height });
+                });
+              }
+            }}
+          >
+
+---
+
+## 작업 6 — 레이아웃 스타일 선택 영역에 ref 추가
+
+현재:
+          {/* 레이아웃 스타일: 폰트 세트 × 유형 버튼 */}
+          <View style={{ marginBottom: 10 }}>
+            <Text style={{ fontSize: 9, fontWeight: '700', color: C.textDim, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8, paddingHorizontal: 2 }}>
+              레이아웃
+            </Text>
+
+아래로 교체:
+          {/* 레이아웃 스타일: 폰트 세트 × 유형 버튼 */}
+          <View
+            ref={overlayStyleRef}
+            style={{ marginBottom: 10 }}
+            onLayout={() => {
+              if (onboardingActive && onboardingKey === 'photo-overlay') {
+                overlayStyleRef.current?.measureInWindow((x, y, width, height) => {
+                  onRegisterRect?.('photo-overlay', { x, y, width, height });
+                });
+              }
+            }}
+          >
+            <Text style={{ fontSize: 9, fontWeight: '700', color: C.textDim, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8, paddingHorizontal: 2 }}>
+              레이아웃
+            </Text>
+
+---
+
+## 작업 7 — 텍스트 색상 선택 영역에 ref 추가
+
+현재:
+          {/* 컬러칩 */}
+          <View style={{ marginBottom: 16 }}>
+            <Text style={{ fontSize: 9, fontWeight: '700', color: C.textDim, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8, paddingHorizontal: 2 }}>
+              텍스트 색상
+            </Text>
+
+아래로 교체:
+          {/* 컬러칩 */}
+          <View
+            ref={colorChipRef}
+            style={{ marginBottom: 16 }}
+            onLayout={() => {
+              if (onboardingActive && onboardingKey === 'photo-color') {
+                colorChipRef.current?.measureInWindow((x, y, width, height) => {
+                  onRegisterRect?.('photo-color', { x, y, width, height });
+                });
+              }
+            }}
+          >
+            <Text style={{ fontSize: 9, fontWeight: '700', color: C.textDim, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8, paddingHorizontal: 2 }}>
+              텍스트 색상
+            </Text>
+
+---
+
+## 작업 8 — 저장/인스타그램 버튼 영역에 ref 추가
+
+현재:
+        {/* 저장 / 인스타그램 버튼 */}
+        <View style={s.shareRow}>
+          <TouchableOpacity style={s.shareBtn} activeOpacity={0.8} onPress={() => {
+
+아래로 교체:
+        {/* 저장 / 인스타그램 버튼 */}
+        <View
+          ref={shareRowRef}
+          style={s.shareRow}
+          onLayout={() => {
+            if (onboardingActive && onboardingKey === 'photo-save-share') {
+              shareRowRef.current?.measureInWindow((x, y, width, height) => {
+                onRegisterRect?.('photo-save-share', { x, y, width, height });
+              });
+            }
+          }}
+        >
+          <TouchableOpacity style={s.shareBtn} activeOpacity={0.8} onPress={() => {
+
+---
+
+## 작업 9 — 운동 저장 버튼(ctaBar) 영역에 ref 추가
+
+현재:
+      <View style={s.ctaBar}>
+        <TouchableOpacity style={s.ctaBtn} activeOpacity={0.85} onPress={async () => {
+
+아래로 교체:
+      <View
+        ref={ctaBarRef}
+        style={s.ctaBar}
+        onLayout={() => {
+          if (onboardingActive && onboardingKey === 'workout-save') {
+            ctaBarRef.current?.measureInWindow((x, y, width, height) => {
+              onRegisterRect?.('workout-save', { x, y, width, height });
+            });
+          }
+        }}
+      >
+        <TouchableOpacity style={s.ctaBtn} activeOpacity={0.85} onPress={async () => {
+
+---
+
+## 작업 10 — renderStep()의 WorkoutPhotoStep 호출부 수정
+
+case 'photo': 안의 <WorkoutPhotoStep ... /> 호출에서
+onSetShowCamera={...} 다음 줄에 추가:
+
+            onRegisterRect={onboarding.registerRect}
+            onboardingActive={onboarding.active}
+            onboardingKey={onboarding.currentKey}
+            onOnboardingNext={onboarding.next}
+            onOnboardingJump={onboarding.jumpTo}
+
+---
+
+## 작업 11 — import 확인
+파일 상단에서 react import에 useEffect, useRef가 없으면 추가 (이미 있을 가능성 높음, 확인만).
+
+완료 후 변경된 부분 요약해줘.

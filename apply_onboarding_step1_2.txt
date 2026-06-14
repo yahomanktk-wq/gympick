@@ -1,0 +1,275 @@
+파일 경로: src/screens/flow/PostWorkoutLogModal.tsx
+
+확인이나 중단 없이 끝까지 완료해줘.
+
+## 목표
+운동일지 작성 1단계(GymSelectStep), 2단계(MuscleSelectStep)에 온보딩 스포트라이트 툴팁 적용.
+
+---
+
+## 작업 1 — import 추가
+파일 상단 import 영역에 추가:
+
+import OnboardingTooltip from '../../components/OnboardingTooltip';
+import { useOnboarding } from '../../hooks/useOnboarding';
+
+---
+
+## 작업 2 — 메인 컴포넌트에 useOnboarding 연결
+
+메인 컴포넌트 함수 내부 (다른 useState/useCallback 선언부 근처)에 추가:
+
+  const onboarding = useOnboarding();
+
+메인 컴포넌트의 최종 return문에서 아래 구조:
+
+  return (
+    <>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="fullScreen"
+      onRequestClose={goBack}
+    >
+      <SafeAreaProvider>
+      <View style={{ flex: 1, backgroundColor: C.bg }}>
+          {renderStep()}
+
+아래로 교체 (View 안에 OnboardingTooltip 추가):
+
+  return (
+    <>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="fullScreen"
+      onRequestClose={goBack}
+    >
+      <SafeAreaProvider>
+      <View style={{ flex: 1, backgroundColor: C.bg }}>
+          {renderStep()}
+
+          <OnboardingTooltip
+            visible={onboarding.active}
+            rect={onboarding.currentRect}
+            message={onboarding.currentMessage}
+            stepIndex={onboarding.currentIndex}
+            totalSteps={onboarding.total}
+            isLast={onboarding.isLast}
+            onNext={onboarding.next}
+            onSkip={onboarding.skip}
+          />
+
+---
+
+## 작업 3 — renderStep()의 GymSelectStep, MuscleSelectStep 호출부에 onboarding props 전달
+
+현재:
+      case 'gym-select':
+        return (
+          <GymSelectStep
+            onSelect={handleSelectGym}
+            onClose={() => onClose(false)}
+          />
+        );
+      case 'muscle-select':
+        return (
+          <MuscleSelectStep
+            selected={selectedMuscles}
+            onToggle={toggleMuscle}
+            onNext={() => setStep('routine-reference')}
+            onBack={goBack}
+            onClose={() => onClose(false)}
+            isRestDay={isRestDay}
+          />
+        );
+
+아래로 교체:
+      case 'gym-select':
+        return (
+          <GymSelectStep
+            onSelect={handleSelectGym}
+            onClose={() => onClose(false)}
+            onRegisterRect={onboarding.registerRect}
+            onboardingActive={onboarding.active}
+            onboardingKey={onboarding.currentKey}
+          />
+        );
+      case 'muscle-select':
+        return (
+          <MuscleSelectStep
+            selected={selectedMuscles}
+            onToggle={toggleMuscle}
+            onNext={() => setStep('routine-reference')}
+            onBack={goBack}
+            onClose={() => onClose(false)}
+            isRestDay={isRestDay}
+            onRegisterRect={onboarding.registerRect}
+            onboardingActive={onboarding.active}
+            onboardingKey={onboarding.currentKey}
+          />
+        );
+
+---
+
+## 작업 4 — GymSelectStep 컴포넌트 수정
+
+### 4-1. props 타입에 onboarding 관련 props 추가
+현재:
+function GymSelectStep({ onSelect, onClose }: {
+  onSelect: (gym: GymWithMachines) => void;
+  onClose: () => void;
+}) {
+
+아래로 교체:
+function GymSelectStep({ onSelect, onClose, onRegisterRect, onboardingActive, onboardingKey }: {
+  onSelect: (gym: GymWithMachines) => void;
+  onClose: () => void;
+  onRegisterRect?: (key: OnboardingPointKey, rect: SpotlightRect) => void;
+  onboardingActive?: boolean;
+  onboardingKey?: OnboardingPointKey | null;
+}) {
+
+### 4-2. ref 선언 추가
+GymSelectStep 함수 내부, 기존 useState들 근처에 추가:
+
+  const gymListRef = useRef<View>(null);
+  const gymRequestLinkRef = useRef<View>(null);
+
+### 4-3. 헬스장 리스트 영역에 ref + onLayout 추가
+현재 (loading 분기 이후 gyms.map 부분을 감싸는 View가 없으므로, gyms.map 시작 부분에 래퍼 View 추가):
+
+        {loading ? (
+          <View style={{ paddingVertical: 48, alignItems: 'center' }}>
+            <Text style={{ fontSize: 13, color: C.textDim }}>헬스장 목록 로딩 중...</Text>
+          </View>
+        ) : (
+          gyms.map(gym => {
+
+아래로 교체:
+
+        {loading ? (
+          <View style={{ paddingVertical: 48, alignItems: 'center' }}>
+            <Text style={{ fontSize: 13, color: C.textDim }}>헬스장 목록 로딩 중...</Text>
+          </View>
+        ) : (
+          <View
+            ref={gymListRef}
+            onLayout={() => {
+              if (onboardingActive && onboardingKey === 'gym-list') {
+                gymListRef.current?.measureInWindow((x, y, width, height) => {
+                  onRegisterRect?.('gym-list', { x, y, width, height });
+                });
+              }
+            }}
+          >
+          {gyms.map(gym => {
+
+그리고 gyms.map의 닫는 부분 (현재):
+          })
+        )}
+
+아래로 교체:
+          })}
+          </View>
+        )}
+
+### 4-4. "등록 요청하기" 링크에 ref + onLayout 추가
+현재:
+        <TouchableOpacity
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 14 }}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowGymRequestModal(true); }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="add-circle-outline" size={14} color={C.accent} />
+          <Text style={{ fontSize: 12, fontWeight: '700', color: C.accent }}>
+            내가 다니는 헬스장이 없나요? 등록 요청하기
+          </Text>
+        </TouchableOpacity>
+
+아래로 교체:
+        <View
+          ref={gymRequestLinkRef}
+          onLayout={() => {
+            if (onboardingActive && onboardingKey === 'gym-request-link') {
+              gymRequestLinkRef.current?.measureInWindow((x, y, width, height) => {
+                onRegisterRect?.('gym-request-link', { x, y, width, height });
+              });
+            }
+          }}
+        >
+          <TouchableOpacity
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 14 }}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowGymRequestModal(true); }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="add-circle-outline" size={14} color={C.accent} />
+            <Text style={{ fontSize: 12, fontWeight: '700', color: C.accent }}>
+              내가 다니는 헬스장이 없나요? 등록 요청하기
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+---
+
+## 작업 5 — MuscleSelectStep 컴포넌트 수정
+
+### 5-1. props 타입에 onboarding 관련 props 추가
+현재:
+function MuscleSelectStep({ selected, onToggle, onNext, onBack, onClose, isRestDay }: {
+  selected:   Set<string>;
+  onToggle:   (m: string) => void;
+  onNext:     () => void;
+  onBack:     () => void;
+  onClose:    () => void;
+  isRestDay?: boolean;
+}) {
+
+아래로 교체:
+function MuscleSelectStep({ selected, onToggle, onNext, onBack, onClose, isRestDay, onRegisterRect, onboardingActive, onboardingKey }: {
+  selected:   Set<string>;
+  onToggle:   (m: string) => void;
+  onNext:     () => void;
+  onBack:     () => void;
+  onClose:    () => void;
+  isRestDay?: boolean;
+  onRegisterRect?: (key: OnboardingPointKey, rect: SpotlightRect) => void;
+  onboardingActive?: boolean;
+  onboardingKey?: OnboardingPointKey | null;
+}) {
+
+### 5-2. ref 선언 추가
+MuscleSelectStep 함수 내부 최상단에 추가:
+
+  const muscleGridRef = useRef<View>(null);
+
+### 5-3. 부위 그리드에 ref + onLayout 추가
+현재:
+        <View style={s.muscleGrid}>
+          {MUSCLE_GROUPS.map(g => (
+
+아래로 교체:
+        <View
+          ref={muscleGridRef}
+          style={s.muscleGrid}
+          onLayout={() => {
+            if (onboardingActive && onboardingKey === 'muscle-grid') {
+              muscleGridRef.current?.measureInWindow((x, y, width, height) => {
+                onRegisterRect?.('muscle-grid', { x, y, width, height });
+              });
+            }
+          }}
+        >
+          {MUSCLE_GROUPS.map(g => (
+
+---
+
+## 작업 6 — 타입 import 추가
+파일 상단 import 영역에 추가:
+
+import type { OnboardingPointKey } from '../../data/onboardingSteps';
+import type { SpotlightRect } from '../../components/OnboardingTooltip';
+
+---
+
+완료 후 변경된 부분 요약해줘.

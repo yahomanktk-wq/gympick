@@ -15,6 +15,7 @@ import {
   Linking,
   Platform,
   PixelRatio,
+  KeyboardAvoidingView,
 } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
@@ -37,10 +38,16 @@ import { addNewSession } from '../../data/sessionStore';
 import { saveTemplate, getTemplates, deleteTemplate, WorkoutTemplate } from '../../data/templateStore';
 import { recordPR } from '../../data/prStore';
 import { useAuth } from '../../context/AuthContext';
+import { submitGymRegistrationRequest } from '../../lib/db/gymRegistrationRequests';
 import { insertWorkoutSession, insertWorkoutEntry, insertWorkoutSet, insertWorkoutPhoto } from '../../lib/db/workouts';
 import { uploadWorkoutPhoto } from '../../lib/photoStorage';
+import { containsBannedWord } from '../../lib/bannedWords';
 import { insertFeedPost } from '../../lib/db/feedPosts';
 import GymPickLogo from '../../components/GymPickLogo';
+import OnboardingTooltip from '../../components/OnboardingTooltip';
+import { useOnboarding } from '../../hooks/useOnboarding';
+import type { OnboardingPointKey } from '../../data/onboardingSteps';
+import type { SpotlightRect } from '../../components/OnboardingTooltip';
 import WorkoutCameraOverlay from './WorkoutCameraOverlay';
 import RoutineReferenceScreen, { MachineExtraInfo } from './RoutineReferenceScreen';
 import TodayWorkoutListScreen from './TodayWorkoutListScreen';
@@ -266,14 +273,30 @@ function MuscleCard({ name, sub, SvgIcon, selected, onToggle }: {
   );
 }
 
-function MuscleSelectStep({ selected, onToggle, onNext, onBack, onClose, isRestDay }: {
+function MuscleSelectStep({ selected, onToggle, onNext, onBack, onClose, isRestDay, onRegisterRect, onboardingActive, onboardingKey }: {
   selected:   Set<string>;
   onToggle:   (m: string) => void;
   onNext:     () => void;
   onBack:     () => void;
   onClose:    () => void;
   isRestDay?: boolean;
+  onRegisterRect?: (key: OnboardingPointKey, rect: SpotlightRect) => void;
+  onboardingActive?: boolean;
+  onboardingKey?: OnboardingPointKey | null;
 }) {
+  const muscleGridRef = useRef<View>(null);
+
+  useEffect(() => {
+    if (!onboardingActive) return;
+    if (onboardingKey === 'muscle-grid') {
+      requestAnimationFrame(() => {
+        muscleGridRef.current?.measureInWindow((x, y, width, height) => {
+          onRegisterRect?.('muscle-grid', { x, y, width, height });
+        });
+      });
+    }
+  }, [onboardingActive, onboardingKey]);
+
   return (
     <SafeAreaView style={s.safe} edges={["top", "bottom"]}>
       <NavHeader title="어떤 부위를 운동했나요?" onBack={onBack} onClose={onClose} />
@@ -285,7 +308,17 @@ function MuscleSelectStep({ selected, onToggle, onNext, onBack, onClose, isRestD
             : '오늘 운동한 부위를 모두 선택하세요'}
         </Text>
 
-        <View style={s.muscleGrid}>
+        <View
+          ref={muscleGridRef}
+          style={s.muscleGrid}
+          onLayout={() => {
+            if (onboardingActive) {
+              muscleGridRef.current?.measureInWindow((x, y, width, height) => {
+                onRegisterRect?.('muscle-grid', { x, y, width, height });
+              });
+            }
+          }}
+        >
           {MUSCLE_GROUPS.map(g => (
             <MuscleCard
               key={g.name}
@@ -319,14 +352,27 @@ function MuscleSelectStep({ selected, onToggle, onNext, onBack, onClose, isRestD
 
 // --- Step 1 (was Step 2): Gym Select
 
-function GymSelectStep({ onSelect, onClose }: {
+function GymSelectStep({ onSelect, onClose, onRegisterRect, onboardingActive, onboardingKey }: {
   onSelect: (gym: GymWithMachines) => void;
   onClose: () => void;
+  onRegisterRect?: (key: OnboardingPointKey, rect: SpotlightRect) => void;
+  onboardingActive?: boolean;
+  onboardingKey?: OnboardingPointKey | null;
 }) {
   const [gyms,         setGyms]         = useState<GymWithMachines[]>([]);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [loading,      setLoading]      = useState(true);
   const [locError,     setLocError]     = useState(false);
+
+  const gymListRef        = useRef<View>(null);
+  const gymRequestLinkRef = useRef<View>(null);
+
+  const { user } = useAuth();
+  const [showGymRequestModal, setShowGymRequestModal] = useState(false);
+  const [reqGymName,   setReqGymName]   = useState('');
+  const [reqLocation,  setReqLocation]  = useState('');
+  const [reqNotes,     setReqNotes]     = useState('');
+  const [reqLoading,   setReqLoading]   = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -366,10 +412,57 @@ function GymSelectStep({ onSelect, onClose }: {
     load();
   }, []);
 
+  useEffect(() => {
+    if (!onboardingActive) return;
+    if (onboardingKey === 'gym-list') {
+      requestAnimationFrame(() => {
+        gymListRef.current?.measureInWindow((x, y, width, height) => {
+          onRegisterRect?.('gym-list', { x, y, width, height });
+        });
+      });
+    }
+    if (onboardingKey === 'gym-request-link') {
+      requestAnimationFrame(() => {
+        gymRequestLinkRef.current?.measureInWindow((x, y, width, height) => {
+          onRegisterRect?.('gym-request-link', { x, y, width, height });
+        });
+      });
+    }
+  }, [onboardingActive, onboardingKey]);
+
   function getDistLabel(gym: GymWithMachines): string {
     if (!userLocation || gym.latitude == null || gym.longitude == null) return '';
     const km = calcDistanceKm(userLocation.latitude, userLocation.longitude, gym.latitude, gym.longitude);
     return formatDistance(km);
+  }
+
+  async function handleSubmitGymRequest() {
+    if (!reqGymName.trim() || !reqLocation.trim()) {
+      Alert.alert('입력 오류', '헬스장명과 위치를 입력해주세요.');
+      return;
+    }
+    if (!user) {
+      Alert.alert('로그인 필요', '로그인 후 이용해주세요.');
+      return;
+    }
+    setReqLoading(true);
+    const { error } = await submitGymRegistrationRequest(
+      user.id,
+      reqGymName.trim(),
+      reqLocation.trim(),
+      '',
+      reqNotes.trim(),
+    );
+    setReqLoading(false);
+    if (error) {
+      Alert.alert('오류', error);
+      return;
+    }
+    Alert.alert('신청 완료', '헬스장 등록 요청이 접수되었습니다.\n검토 후 등록해드리겠습니다.');
+    setShowGymRequestModal(false);
+    setReqGymName('');
+    setReqLocation('');
+    setReqNotes('');
   }
 
   return (
@@ -378,6 +471,28 @@ function GymSelectStep({ onSelect, onClose }: {
       <StepBar total={5} current={0} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
         <Text style={s.hint}>오늘 운동한 헬스장을 선택하세요</Text>
+
+        <View
+          ref={gymRequestLinkRef}
+          onLayout={() => {
+            if (onboardingActive) {
+              gymRequestLinkRef.current?.measureInWindow((x, y, width, height) => {
+                onRegisterRect?.('gym-request-link', { x, y, width, height });
+              });
+            }
+          }}
+        >
+          <TouchableOpacity
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 14 }}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowGymRequestModal(true); }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="add-circle-outline" size={14} color={C.accent} />
+            <Text style={{ fontSize: 12, fontWeight: '700', color: C.accent }}>
+              내가 다니는 헬스장이 없나요? 등록 요청하기
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         {locError && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12, backgroundColor: C.surfaceHigh, borderRadius: R.inner, padding: 10 }}>
@@ -391,7 +506,17 @@ function GymSelectStep({ onSelect, onClose }: {
             <Text style={{ fontSize: 13, color: C.textDim }}>헬스장 목록 로딩 중...</Text>
           </View>
         ) : (
-          gyms.map(gym => {
+          <View
+            ref={gymListRef}
+            onLayout={() => {
+              if (onboardingActive) {
+                gymListRef.current?.measureInWindow((x, y, width, height) => {
+                  onRegisterRect?.('gym-list', { x, y, width, height });
+                });
+              }
+            }}
+          >
+          {gyms.map(gym => {
             const distLabel    = getDistLabel(gym);
             const machineCount = gym.machines.length;
             return (
@@ -415,9 +540,80 @@ function GymSelectStep({ onSelect, onClose }: {
                 <Ionicons name="chevron-forward" size={16} color={C.textDim} style={{ alignSelf: 'center' }} />
               </TouchableOpacity>
             );
-          })
+          })}
+          </View>
         )}
       </ScrollView>
+
+      <Modal visible={showGymRequestModal} transparent animationType="slide" onRequestClose={() => setShowGymRequestModal(false)}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={{ backgroundColor: C.bg, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, gap: 16 }}>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: C.text }}>헬스장 등록 요청</Text>
+
+                <View style={{ gap: 8 }}>
+                  <Text style={{ fontSize: 12, color: C.textSub, fontWeight: '600' }}>헬스장명 *</Text>
+                  <TextInput
+                    value={reqGymName}
+                    onChangeText={setReqGymName}
+                    placeholder="예) 짐픽 강남점"
+                    placeholderTextColor={C.textDim}
+                    style={{ backgroundColor: C.surface, borderRadius: R.inner, padding: 12, color: C.text, fontSize: 14 }}
+                  />
+                </View>
+
+                <View style={{ gap: 8 }}>
+                  <Text style={{ fontSize: 12, color: C.textSub, fontWeight: '600' }}>위치 *</Text>
+                  <TextInput
+                    value={reqLocation}
+                    onChangeText={setReqLocation}
+                    placeholder="예) 서울 강남구 역삼동"
+                    placeholderTextColor={C.textDim}
+                    style={{ backgroundColor: C.surface, borderRadius: R.inner, padding: 12, color: C.text, fontSize: 14 }}
+                  />
+                </View>
+
+                <View style={{ gap: 8 }}>
+                  <Text style={{ fontSize: 12, color: C.textSub, fontWeight: '600' }}>기타사항</Text>
+                  <TextInput
+                    value={reqNotes}
+                    onChangeText={setReqNotes}
+                    placeholder="추가로 알려주실 내용이 있으면 입력해주세요"
+                    placeholderTextColor={C.textDim}
+                    multiline
+                    numberOfLines={3}
+                    style={{ backgroundColor: C.surface, borderRadius: R.inner, padding: 12, color: C.text, fontSize: 14, minHeight: 80, textAlignVertical: 'top' }}
+                  />
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <TouchableOpacity
+                    style={{ flex: 1, padding: 14, borderRadius: R.btn, backgroundColor: C.surface, alignItems: 'center' }}
+                    onPress={() => setShowGymRequestModal(false)}
+                  >
+                    <Text style={{ color: C.textSub, fontWeight: '700' }}>취소</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ flex: 1, padding: 14, borderRadius: R.btn, backgroundColor: C.accent, alignItems: 'center' }}
+                    onPress={handleSubmitGymRequest}
+                    disabled={reqLoading}
+                  >
+                    <Text style={{ color: C.bg, fontWeight: '800' }}>{reqLoading ? '신청 중...' : '신청하기'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -476,7 +672,7 @@ function ExerciseCard({ name, brand, targetMuscle, logged, preloaded, onPress, i
   );
 }
 
-function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, routineExtraInfo, templates, onSelectExercise, onLoadTemplate, onDeleteTemplate, onFinish, onBack, onClose }: {
+function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, routineExtraInfo, templates, onSelectExercise, onLoadTemplate, onDeleteTemplate, onFinish, onBack, onClose, onRegisterRect, onboardingActive, onboardingKey }: {
   gym: GymWithMachines;
   selectedMuscles: Set<string>;
   loggedIds: Set<string>;
@@ -489,10 +685,26 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
   onFinish: () => void;
   onBack: () => void;
   onClose: () => void;
+  onRegisterRect?: (key: OnboardingPointKey, rect: SpotlightRect) => void;
+  onboardingActive?: boolean;
+  onboardingKey?: OnboardingPointKey | null;
 }) {
   const [localSelectedId, setLocalSelectedId] = useState<string | null>(null);
   const [showTplList,     setShowTplList]     = useState(false);
   const [dbFreeWeights,   setDbFreeWeights]   = useState<typeof FREE_WEIGHTS>([]);
+
+  const exerciseGridRef = useRef<View>(null);
+
+  useEffect(() => {
+    if (!onboardingActive) return;
+    if (onboardingKey === 'exercise-grid') {
+      requestAnimationFrame(() => {
+        exerciseGridRef.current?.measureInWindow((x, y, width, height) => {
+          onRegisterRect?.('exercise-grid', { x, y, width, height });
+        });
+      });
+    }
+  }, [onboardingActive, onboardingKey]);
 
   useEffect(() => {
     fetchFreeWeights().then(data => {
@@ -589,7 +801,17 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
         {hasPreloaded && routineOrderedAll.length > 0 && (
           <>
             <Text style={s.sectionTitle}>추천 루틴 머신</Text>
-            <View style={s.machineCardGrid}>
+            <View
+              ref={exerciseGridRef}
+              style={s.machineCardGrid}
+              onLayout={() => {
+                if (onboardingActive) {
+                  exerciseGridRef.current?.measureInWindow((x, y, width, height) => {
+                    onRegisterRect?.('exercise-grid', { x, y, width, height });
+                  });
+                }
+              }}
+            >
               {routineOrderedAll.map((m, idx) => (
                 <TouchableOpacity
                   key={m.id}
@@ -631,7 +853,17 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
         {machines.length > 0 && (
           <>
             <Text style={s.sectionTitle}>머신</Text>
-            <View style={s.machineCardGrid}>
+            <View
+              ref={exerciseGridRef}
+              style={s.machineCardGrid}
+              onLayout={() => {
+                if (onboardingActive) {
+                  exerciseGridRef.current?.measureInWindow((x, y, width, height) => {
+                    onRegisterRect?.('exercise-grid', { x, y, width, height });
+                  });
+                }
+              }}
+            >
               {machines.map(m => (
                 <TouchableOpacity
                   key={m.id}
@@ -800,7 +1032,7 @@ function SetProgressBanner({
 
 // --- Step 4: Log Sets (single exercise)
 
-function SetCard({ ex, sets, onChange, onAdd, onCopyPrev, onRemove, onSetLayout }: {
+function SetCard({ ex, sets, onChange, onAdd, onCopyPrev, onRemove, onSetLayout, onRegisterRect, onboardingActive, onboardingKey }: {
   ex: ExerciseInfo;
   sets: SetEntry[];
   onChange: (idx: number, field: keyof SetEntry, val: number) => void;
@@ -808,12 +1040,31 @@ function SetCard({ ex, sets, onChange, onAdd, onCopyPrev, onRemove, onSetLayout 
   onCopyPrev: () => void;
   onRemove: (idx: number) => void;
   onSetLayout?: (idx: number, y: number) => void;
+  onRegisterRect?: (key: OnboardingPointKey, rect: SpotlightRect) => void;
+  onboardingActive?: boolean;
+  onboardingKey?: OnboardingPointKey | null;
 }) {
   const col    = mp(ex.targetMuscle);
   const isFW   = ex.id.startsWith('fw');
   const curMax  = sets.length ? Math.max(...sets.map(s => s.weight)) : 0;
   const histPR  = HIST_PRS[ex.id]; // { weight, reps } | undefined
   const isNewPR = curMax > 0 && (histPR === undefined || curMax > histPR.weight);
+
+  const setInputRef   = useRef<View>(null);
+  const setActionsRef = useRef<View>(null);
+
+  useEffect(() => {
+    if (!onboardingActive) return;
+    const measure = (key: OnboardingPointKey, ref: React.RefObject<View>) => {
+      requestAnimationFrame(() => {
+        ref.current?.measureInWindow((x, y, width, height) => {
+          onRegisterRect?.(key, { x, y, width, height });
+        });
+      });
+    };
+    if (onboardingKey === 'set-input')    measure('set-input', setInputRef);
+    if (onboardingKey === 'set-add-copy') measure('set-add-copy', setActionsRef);
+  }, [onboardingActive, onboardingKey]);
 
   useEffect(() => {
     if (isNewPR) {
@@ -846,8 +1097,16 @@ function SetCard({ ex, sets, onChange, onAdd, onCopyPrev, onRemove, onSetLayout 
       {sets.map((set, idx) => (
         <View
           key={idx}
+          ref={idx === 0 ? setInputRef : undefined}
           style={s.setBlock}
-          onLayout={(e) => onSetLayout?.(idx, e.nativeEvent.layout.y)}
+          onLayout={(e) => {
+            onSetLayout?.(idx, e.nativeEvent.layout.y);
+            if (idx === 0 && onboardingActive) {
+              setInputRef.current?.measureInWindow((x, y, width, height) => {
+                onRegisterRect?.('set-input', { x, y, width, height });
+              });
+            }
+          }}
         >
           <View style={s.setBlockHeader}>
             <Text style={s.setBlockLabel}>세트 {idx + 1}</Text>
@@ -904,7 +1163,17 @@ function SetCard({ ex, sets, onChange, onAdd, onCopyPrev, onRemove, onSetLayout 
         </View>
       ))}
 
-      <View style={s.setActions}>
+      <View
+        ref={setActionsRef}
+        style={s.setActions}
+        onLayout={() => {
+          if (onboardingActive) {
+            setActionsRef.current?.measureInWindow((x, y, width, height) => {
+              onRegisterRect?.('set-add-copy', { x, y, width, height });
+            });
+          }
+        }}
+      >
         <TouchableOpacity style={s.addSetBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onAdd(); }} activeOpacity={0.75}>
           <Ionicons name="add" size={14} color={C.accent} />
           <Text style={s.addSetText}>세트 추가</Text>
@@ -920,7 +1189,7 @@ function SetCard({ ex, sets, onChange, onAdd, onCopyPrev, onRemove, onSetLayout 
   );
 }
 
-function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onRemove, onNoteChange, onSave, onFinish, onBack, onClose }: {
+function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onRemove, onNoteChange, onSave, onFinish, onBack, onClose, onRegisterRect, onboardingActive, onboardingKey }: {
   exercise: ExerciseInfo;
   sets: SetEntry[];
   note: string;
@@ -933,10 +1202,14 @@ function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onR
   onFinish: () => void;
   onBack: () => void;
   onClose: () => void;
+  onRegisterRect?: (key: OnboardingPointKey, rect: SpotlightRect) => void;
+  onboardingActive?: boolean;
+  onboardingKey?: OnboardingPointKey | null;
 }) {
   const scrollRef        = useRef<ScrollView>(null);
   const setLayoutsRef    = useRef<number[]>([]);
   const pendingScrollIdx = useRef<number>(-1);
+  const noteCardRef      = useRef<View>(null);
   const hasSets = sets.length > 0 && sets.some(s => s.weight > 0 || s.reps > 0);
   const completedSets = sets.slice(0, -1);
 
@@ -959,6 +1232,17 @@ function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onR
     onCopyPrev();
   }
 
+  useEffect(() => {
+    if (!onboardingActive) return;
+    if (onboardingKey === 'set-note') {
+      requestAnimationFrame(() => {
+        noteCardRef.current?.measureInWindow((x, y, width, height) => {
+          onRegisterRect?.('set-note', { x, y, width, height });
+        });
+      });
+    }
+  }, [onboardingActive, onboardingKey]);
+
   return (
     <SafeAreaView style={s.safe} edges={["top", "bottom"]}>
       <NavHeader title="세트 기록" onBack={onBack} onClose={onClose} />
@@ -979,10 +1263,23 @@ function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onR
           onCopyPrev={handleCopyPrev}
           onRemove={onRemove}
           onSetLayout={handleSetLayout}
+          onRegisterRect={onRegisterRect}
+          onboardingActive={onboardingActive}
+          onboardingKey={onboardingKey}
         />
 
         {/* Optional exercise note */}
-        <View style={s.noteCard}>
+        <View
+          ref={noteCardRef}
+          style={s.noteCard}
+          onLayout={() => {
+            if (onboardingActive) {
+              noteCardRef.current?.measureInWindow((x, y, width, height) => {
+                onRegisterRect?.('set-note', { x, y, width, height });
+              });
+            }
+          }}
+        >
           <Text style={s.noteLabel}>노트 (선택)</Text>
           <TextInput
             style={s.noteInput}
@@ -2031,7 +2328,7 @@ export function ArchDayOverlay({ exercises, logs, nickname, timestamp, muscleLab
 
 // --- Step 5: Photo
 
-function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname, onColorChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera }: {
+function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname, onColorChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera, onRegisterRect, onboardingActive, onboardingKey, onOnboardingNext, onOnboardingJump }: {
   gym: GymWithMachines;
   exercises: ExerciseInfo[];
   logs: Record<string, SetEntry[]>;
@@ -2048,12 +2345,92 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
   onClose: () => void;
   showCamera: boolean;
   onSetShowCamera: (v: boolean) => void;
+  onRegisterRect?: (key: OnboardingPointKey, rect: SpotlightRect) => void;
+  onboardingActive?: boolean;
+  onboardingKey?: OnboardingPointKey | null;
+  onOnboardingNext?: () => void;
+  onOnboardingJump?: (key: OnboardingPointKey) => void;
 }) {
   const [textColor,     setTextColor]     = useState('#ffffff');
   const [saveSuccess,   setSaveSuccess]   = useState(false);
   const [overlayStyle,  setOverlayStyle]  = useState<OverlayStyle>('s1a');
   const overlayRef = useRef<View>(null);
   const routineCardRef = useRef<View>(null);
+  const photoFrameRef   = useRef<View>(null);
+  const overlayStyleRef = useRef<View>(null);
+  const colorChipRef    = useRef<View>(null);
+  const shareRowRef     = useRef<View>(null);
+  const ctaBarRef       = useRef<View>(null);
+
+  useEffect(() => {
+    if (!onboardingActive) return;
+    const measure = (key: OnboardingPointKey, ref: React.RefObject<View>) => {
+      requestAnimationFrame(() => {
+        ref.current?.measureInWindow((x, y, width, height) => {
+          onRegisterRect?.(key, { x, y, width, height });
+        });
+      });
+    };
+
+    if (onboardingKey === 'photo-capture') {
+      const target = photoTaken ? overlayRef : photoFrameRef;
+      measure('photo-capture', target as React.RefObject<View>);
+    }
+    // 카메라 화면 진입 시 카메라 힌트 포인트로 이동
+    if (onboardingKey === 'photo-camera-hint') {
+      // 카메라 화면 전체를 스포트라이트로 표시
+      const { width: W, height: H } = Dimensions.get('window');
+      onRegisterRect?.('photo-camera-hint', { x: 0, y: 0, width: W, height: H });
+    }
+    // photo-capture-done은 overlayRef의 onLayout에서 처리 (마운트 완료 시점 보장)
+    // useEffect에서는 이미 마운트된 경우에만 측정 시도
+    if (onboardingKey === 'photo-capture-done' && photoTaken) {
+      requestAnimationFrame(() => {
+        overlayRef.current?.measureInWindow((x, y, width, height) => {
+          if (width > 0 && height > 0) {
+            onRegisterRect?.('photo-capture-done', { x, y, width, height });
+          }
+          // width/height가 0이면 onLayout이 아직 안 됨 → onLayout에서 처리됨
+        });
+      });
+    }
+    if (onboardingKey === 'photo-overlay') {
+      if (!photoTaken && !showCamera) {
+        onOnboardingJump?.('workout-save');
+      } else {
+        measure('photo-overlay', overlayStyleRef);
+      }
+    }
+    if (onboardingKey === 'photo-color') {
+      if (!photoTaken && !showCamera) {
+        onOnboardingJump?.('workout-save');
+      } else {
+        measure('photo-color', colorChipRef);
+      }
+    }
+    if (onboardingKey === 'photo-save-share') {
+      if (!photoTaken) {
+        onOnboardingJump?.('workout-save');
+      } else {
+        measure('photo-save-share', shareRowRef);
+      }
+    }
+    if (onboardingKey === 'workout-save') {
+      measure('workout-save', ctaBarRef);
+    }
+  }, [onboardingActive, onboardingKey, photoTaken, showCamera]);
+
+  useEffect(() => {
+    if (!onboardingActive) return;
+    if (photoTaken && (
+      onboardingKey === 'photo-capture' ||
+      onboardingKey === 'photo-camera-hint'
+    )) {
+      // 사진 촬영/선택 완료 → photo-capture-done으로 이동
+      onOnboardingJump?.('photo-capture-done');
+    }
+  }, [photoTaken, onboardingActive, onboardingKey]);
+
   const ROUTINE_CARD_H = Math.round(PHOTO_W * 4 / 3);
   const RC_HEADER_H    = 70;
   const RC_FOOTER_H    = 36;
@@ -2262,8 +2639,16 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
         {/* No photo: show camera CTA as TouchableOpacity */}
         {!photoTaken && !showCamera && (
           <TouchableOpacity
+            ref={photoFrameRef}
             style={[s.photoFrame, { height: photoH }]}
             activeOpacity={0.85}
+            onLayout={() => {
+              if (onboardingActive && onboardingKey === 'photo-capture') {
+                photoFrameRef.current?.measureInWindow((x, y, width, height) => {
+                  onRegisterRect?.('photo-capture', { x, y, width, height });
+                });
+              }
+            }}
             onPress={() => {
               Alert.alert(
                 '사진 선택',
@@ -2271,11 +2656,22 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
                 [
                   {
                     text: '카메라로 찍기',
-                    onPress: () => onSetShowCamera(true),
+                    onPress: () => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      if (onboardingActive && onboardingKey === 'photo-capture') {
+                        onOnboardingJump?.('photo-camera-hint');
+                      }
+                      onSetShowCamera(true);
+                    },
                   },
                   {
                     text: '사진 선택',
-                    onPress: () => onCapture([3, 4]),
+                    onPress: () => {
+                      if (onboardingActive && onboardingKey === 'photo-capture') {
+                        onOnboardingJump?.('photo-capture-done');
+                      }
+                      onCapture([3, 4]);
+                    },
                   },
                   { text: '취소', style: 'cancel' },
                 ],
@@ -2314,6 +2710,20 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
             ref={overlayRef}
             style={[s.photoFrame, s.photoFrameActive, { height: photoH, backgroundColor: 'transparent', borderWidth: 0, borderRadius: 20, overflow: 'hidden' }]}
             collapsable={false}
+            onLayout={() => {
+              if (!onboardingActive) return;
+              if (onboardingKey === 'photo-capture') {
+                overlayRef.current?.measureInWindow((x, y, width, height) => {
+                  onRegisterRect?.('photo-capture', { x, y, width, height });
+                });
+              }
+              if (onboardingKey === 'photo-capture-done') {
+                // onLayout 시점에 바로 측정 (마운트 완료 보장)
+                overlayRef.current?.measureInWindow((x, y, width, height) => {
+                  onRegisterRect?.('photo-capture-done', { x, y, width, height });
+                });
+              }
+            }}
           >
             {/* Background photo */}
             {photoUri ? (
@@ -2702,7 +3112,17 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
         {(photoTaken || showCamera) && (
           <>
           {/* 레이아웃 스타일: 폰트 세트 × 유형 버튼 */}
-          <View style={{ marginBottom: 10 }}>
+          <View
+            ref={overlayStyleRef}
+            style={{ marginBottom: 10 }}
+            onLayout={() => {
+              if (onboardingActive && onboardingKey === 'photo-overlay') {
+                overlayStyleRef.current?.measureInWindow((x, y, width, height) => {
+                  onRegisterRect?.('photo-overlay', { x, y, width, height });
+                });
+              }
+            }}
+          >
             <Text style={{ fontSize: 9, fontWeight: '700', color: C.textDim, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8, paddingHorizontal: 2 }}>
               레이아웃
             </Text>
@@ -2781,7 +3201,17 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
           </View>
 
           {/* 컬러칩 */}
-          <View style={{ marginBottom: 16 }}>
+          <View
+            ref={colorChipRef}
+            style={{ marginBottom: 16 }}
+            onLayout={() => {
+              if (onboardingActive && onboardingKey === 'photo-color') {
+                colorChipRef.current?.measureInWindow((x, y, width, height) => {
+                  onRegisterRect?.('photo-color', { x, y, width, height });
+                });
+              }
+            }}
+          >
             <Text style={{ fontSize: 9, fontWeight: '700', color: C.textDim, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8, paddingHorizontal: 2 }}>
               텍스트 색상
             </Text>
@@ -2808,7 +3238,17 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
         )}
 
         {/* 저장 / 인스타그램 버튼 */}
-        <View style={s.shareRow}>
+        <View
+          ref={shareRowRef}
+          style={s.shareRow}
+          onLayout={() => {
+            if (onboardingActive && onboardingKey === 'photo-save-share') {
+              shareRowRef.current?.measureInWindow((x, y, width, height) => {
+                onRegisterRect?.('photo-save-share', { x, y, width, height });
+              });
+            }
+          }}
+        >
           <TouchableOpacity style={s.shareBtn} activeOpacity={0.8} onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             handleSaveImage();
@@ -2826,7 +3266,17 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
 
         <View style={{ height: 100 }} />
       </ScrollView>
-      <View style={s.ctaBar}>
+      <View
+        ref={ctaBarRef}
+        style={s.ctaBar}
+        onLayout={() => {
+          if (onboardingActive && onboardingKey === 'workout-save') {
+            ctaBarRef.current?.measureInWindow((x, y, width, height) => {
+              onRegisterRect?.('workout-save', { x, y, width, height });
+            });
+          }
+        }}
+      >
         <TouchableOpacity style={s.ctaBtn} activeOpacity={0.85} onPress={async () => {
           if (!photoTaken) {
             Alert.alert(
@@ -2894,7 +3344,12 @@ function WorkoutDoneStep({ gym, exercises, logs, detectedPRs, selectedMuscles, o
     a + (logs[e.id] ?? []).reduce((sa, s) => sa + s.weight * s.reps, 0), 0,
   );
 
-  function handleSaveTemplate() {
+  async function handleSaveTemplate() {
+    const banned = await containsBannedWord(tplName);
+    if (banned) {
+      Alert.alert('사용 불가', '사용할 수 없는 단어가 포함되어 있어요.');
+      return;
+    }
     const name = tplName.trim() || `Workout ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
     saveTemplate({
       name,
@@ -3043,6 +3498,8 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     'biergartenlt':             require('../../../assets/fonts/biergartenlt.ttf'),
   });
 
+  const onboarding = useOnboarding();
+
   const [step,              setStep]              = useState<Step>('gym-select');
   const [selectedMuscles,   setSelectedMuscles]   = useState<Set<string>>(new Set());
   const [isRestDay,         setIsRestDay]         = useState(false);
@@ -3174,7 +3631,15 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     setStep('log-sets');
   }
 
-  function handleSaveExercise() {
+  async function handleSaveExercise() {
+    const noteText = currentExerciseId ? notes[currentExerciseId] : undefined;
+    if (noteText) {
+      const banned = await containsBannedWord(noteText);
+      if (banned) {
+        Alert.alert('사용 불가', '사용할 수 없는 단어가 포함되어 있어요.');
+        return;
+      }
+    }
     if (currentExerciseId) {
       setLoggedIds(prev => new Set([...prev, currentExerciseId]));
 
@@ -3506,6 +3971,9 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
           <GymSelectStep
             onSelect={handleSelectGym}
             onClose={() => onClose(false)}
+            onRegisterRect={onboarding.registerRect}
+            onboardingActive={onboarding.active}
+            onboardingKey={onboarding.currentKey}
           />
         );
       case 'muscle-select':
@@ -3517,6 +3985,9 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             onBack={goBack}
             onClose={() => onClose(false)}
             isRestDay={isRestDay}
+            onRegisterRect={onboarding.registerRect}
+            onboardingActive={onboarding.active}
+            onboardingKey={onboarding.currentKey}
           />
         );
       case 'routine-reference':
@@ -3539,6 +4010,10 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             }}
             onBack={goBack}
             onClose={() => onClose(false)}
+            onRegisterRect={onboarding.registerRect}
+            onboardingActive={onboarding.active}
+            onboardingKey={onboarding.currentKey}
+            onJumpToExerciseGrid={() => onboarding.jumpTo('exercise-grid')}
           />
         );
       case 'today-list':
@@ -3555,6 +4030,9 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             }}
             onBack={goBack}
             onClose={() => onClose(false)}
+            onRegisterRect={onboarding.registerRect}
+            onboardingActive={onboarding.active}
+            onboardingKey={onboarding.currentKey}
           />
         );
       case 'exercise-select':
@@ -3572,6 +4050,9 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             onFinish={() => setStep('photo')}
             onBack={goBack}
             onClose={() => onClose(false)}
+            onRegisterRect={onboarding.registerRect}
+            onboardingActive={onboarding.active}
+            onboardingKey={onboarding.currentKey}
           />
         );
       case 'log-sets':
@@ -3589,6 +4070,9 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             onFinish={() => { setCurrentExerciseId(null); setStep('photo'); }}
             onBack={goBack}
             onClose={() => onClose(false)}
+            onRegisterRect={onboarding.registerRect}
+            onboardingActive={onboarding.active}
+            onboardingKey={onboarding.currentKey}
           />
         ) : null;
       case 'photo':
@@ -3614,6 +4098,11 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             onSave={requestSaveWorkout}
             onBack={goBack}
             onClose={() => onClose(false)}
+            onRegisterRect={onboarding.registerRect}
+            onboardingActive={onboarding.active}
+            onboardingKey={onboarding.currentKey}
+            onOnboardingNext={onboarding.next}
+            onOnboardingJump={onboarding.jumpTo}
           />
         );
       case 'done':
@@ -3641,6 +4130,20 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
       <SafeAreaProvider>
       <View style={{ flex: 1, backgroundColor: C.bg }}>
           {renderStep()}
+
+          <OnboardingTooltip
+            visible={onboarding.active}
+            rect={onboarding.currentRect}
+            message={onboarding.currentMessage}
+            stepIndex={onboarding.currentIndex}
+            totalSteps={onboarding.total}
+            isLast={onboarding.isLast}
+            hideNext={onboarding.hideNext}
+            hideSkip={onboarding.hideSkip}
+            hideSpotlightBorder={onboarding.hideSpotlightBorder}
+            onNext={onboarding.next}
+            onSkip={onboarding.skip}
+          />
 
         {/* 저장 중 로딩 팝업 */}
         {isSaving && (

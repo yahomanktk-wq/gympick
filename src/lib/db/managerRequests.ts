@@ -60,3 +60,65 @@ export async function addManagerRequest(
     });
   }
 }
+
+export async function fetchManagerRequests(): Promise<ManagerRequest[]> {
+  try {
+    const { data, error } = await supabase
+      .from('manager_requests')
+      .select('id, user_id, gym_name, location, phone, message, status, created_at')
+      .order('created_at', { ascending: false });
+
+    if (error || !data) return [];
+
+    return data.map((r: any) => ({
+      id:        r.id,
+      userId:    r.user_id,
+      gymName:   r.gym_name,
+      location:  r.location  ?? '',
+      phone:     r.phone     ?? '',
+      message:   r.message   ?? '',
+      status:    r.status    ?? 'pending',
+      createdAt: r.created_at,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function updateManagerRequestStatus(
+  id: string,
+  status: 'approved' | 'rejected',
+): Promise<{ error: string | null }> {
+  try {
+    const { error } = await supabase
+      .from('manager_requests')
+      .update({ status })
+      .eq('id', id);
+    if (error) return { error: error.message };
+    return { error: null };
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+export async function deleteManagerRequest(id: string): Promise<{ error: string | null }> {
+  try {
+    const { error } = await supabase
+      .from('manager_requests')
+      .delete()
+      .eq('id', id);
+    if (error) return { error: error.message };
+    return { error: null };
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+export async function deleteManagerRequestsByUserId(userId: string): Promise<void> {
+  try {
+    await supabase
+      .from('manager_requests')
+      .delete()
+      .eq('user_id', userId);
+  } catch {}
+}

@@ -97,3 +97,60 @@ export async function markAllNotificationsRead(userId: string): Promise<void> {
 export function getUnreadCount(notifications: AppNotification[]): number {
   return notifications.filter(n => !n.read).length;
 }
+
+export async function fetchNotifications(userId: string): Promise<AppNotification[]> {
+  try {
+    const { data } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    return (data ?? []).map((r: any) => ({
+      id:        r.id,
+      userId:    r.user_id,
+      type:      r.type,
+      title:     r.title,
+      body:      r.body,
+      read:      r.read ?? false,
+      relatedId: r.related_id ?? null,
+      createdAt: r.created_at,
+    }));
+  } catch {
+    return mockNotifications.filter(n => n.userId === userId);
+  }
+}
+
+export async function sendNotification(
+  userId: string,
+  type: string,
+  title: string,
+  body: string,
+  relatedId?: string,
+): Promise<void> {
+  try {
+    await supabase.from('notifications').insert({
+      user_id:    userId,
+      type,
+      title,
+      body,
+      read:       false,
+      related_id: relatedId ?? null,
+    });
+  } catch (e: any) {
+    console.warn('[notifications] sendNotification 오류:', e.message);
+  }
+}
+
+export async function fetchUnreadCount(userId: string): Promise<number> {
+  try {
+    const { count } = await supabase
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('read', false);
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
+}

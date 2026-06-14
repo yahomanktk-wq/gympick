@@ -9,8 +9,8 @@ export async function uploadWorkoutPhoto(
   isComposite: boolean = false,
 ): Promise<string> {
   try {
-    // WebP로 고정 (로딩 속도 최적화)
-    const fileName = `${userId}/${sessionId}_${Date.now()}.webp`;
+    // PNG로 저장 (투명 배경 보존)
+    const fileName = `${userId}/${sessionId}_${Date.now()}.png`;
 
     const response    = await fetch(localUri);
     const blob        = await response.blob();
@@ -24,7 +24,7 @@ export async function uploadWorkoutPhoto(
     const { data, error } = await supabase.storage
       .from(BUCKET)
       .upload(fileName, arrayBuffer, {
-        contentType: 'image/webp',  // WebP로 고정
+        contentType: 'image/png',   // PNG로 저장 (투명 배경 보존)
         upsert:      false,
       });
 

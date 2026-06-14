@@ -14,7 +14,10 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  Image,
 } from 'react-native';
+import { brandLogos } from '../../constants/brandLogos';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { GymReportType } from '../../lib/db/gymReports';
@@ -31,6 +34,7 @@ import { addGymFavoriteDB, removeGymFavoriteDB } from '../../lib/db/gymFavorites
 import GymCommunityTab from './community/GymCommunityTab';
 import MachineCard from '../../components/MachineCard';
 import MachineCardBorder from '../../components/MachineCardBorder';
+import { containsBannedWord } from '../../lib/bannedWords';
 
 const SCREEN_W = Dimensions.get('window').width;
 const CARD_W   = (SCREEN_W - 32 - 8) / 2;
@@ -509,6 +513,48 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
 
 
 
+            {/* 오피셜 센터 섹션 */}
+            {gym.officialBrands && gym.officialBrands.length > 0 && (
+              <View style={{ marginTop: 20 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                  <Ionicons name="shield-checkmark" size={14} color="#5ba4ff" />
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#5ba4ff' }}>오피셜 센터</Text>
+                </View>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                  {gym.officialBrands.map(brand => {
+                    const key = brand.toUpperCase().replace(/\s+/g, '_');
+                    const logo = brandLogos[key];
+                    return (
+                      <View
+                        key={brand}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 8,
+                          backgroundColor: '#5ba4ff12',
+                          borderRadius: 10,
+                          borderWidth: 1,
+                          borderColor: '#5ba4ff30',
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                        }}
+                      >
+                        {logo ? (
+                          <Image source={logo} style={{ width: 48, height: 20 }} resizeMode="contain" />
+                        ) : (
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#5ba4ff' }}>{brand}</Text>
+                        )}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                          <Ionicons name="shield-checkmark" size={10} color="#5ba4ff" />
+                          <Text style={{ fontSize: 9, fontWeight: '700', color: '#5ba4ff' }}>OFFICIAL</Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
             {/* ── 정보 제보하기 ── */}
             <TouchableOpacity
               style={s.reportBtn}
@@ -620,6 +666,11 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
                   disabled={reportLoading}
                   onPress={async () => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    const banned = await containsBannedWord(reportMsg);
+                    if (banned) {
+                      Alert.alert('사용 불가', '사용할 수 없는 단어가 포함되어 있어요.');
+                      return;
+                    }
                     setReportLoading(true);
                     addGymInfoReport({
                       gymId: gym.id,

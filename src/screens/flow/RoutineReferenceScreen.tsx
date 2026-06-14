@@ -11,7 +11,9 @@
  * onSelectMachineIds([])  → Start Fresh (빈 리스트)
  */
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
+import type { OnboardingPointKey } from '../../data/onboardingSteps';
+import type { SpotlightRect } from '../../components/OnboardingTooltip';
 import {
   View,
   Text,
@@ -19,6 +21,7 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -45,6 +48,10 @@ export interface RoutineReferenceScreenProps {
   onSelectMachineIds: (ids: string[], extraInfo?: MachineExtraInfo) => void; // [] = start fresh
   onBack: () => void;
   onClose: () => void;
+  onRegisterRect?: (key: OnboardingPointKey, rect: SpotlightRect) => void;
+  onboardingActive?: boolean;
+  onboardingKey?: OnboardingPointKey | null;
+  onJumpToExerciseGrid?: () => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -245,7 +252,56 @@ export default function RoutineReferenceScreen({
   onSelectMachineIds,
   onBack,
   onClose,
+  onRegisterRect,
+  onboardingActive,
+  onboardingKey,
+  onJumpToExerciseGrid,
 }: RoutineReferenceScreenProps) {
+  const startFreshRef   = useRef<View>(null);
+  const pastSessionsRef = useRef<View>(null);
+  const gymRoutinesRef  = useRef<View>(null);
+  const scrollRef       = useRef<ScrollView>(null);
+  const scrollYRef      = useRef(0);
+
+  useEffect(() => {
+    if (!onboardingActive) return;
+    const measure = (key: OnboardingPointKey, ref: React.RefObject<View>) => {
+      requestAnimationFrame(() => {
+        ref.current?.measureInWindow((x, y, width, height) => {
+          onRegisterRect?.(key, { x, y, width, height });
+        });
+      });
+    };
+    if (onboardingKey === 'routine-new')  measure('routine-new', startFreshRef);
+    if (onboardingKey === 'routine-past') measure('routine-past', pastSessionsRef);
+    if (onboardingKey === 'routine-recommended') {
+      // 1) 현재 화면 기준 위치 측정
+      gymRoutinesRef.current?.measureInWindow((mx, my, mw, mh) => {
+        const screenHeight = Dimensions.get('window').height;
+        // 화면 아래로 잘려 있으면 스크롤 이동
+        if (my + mh > screenHeight || my < 0) {
+          const targetY = scrollYRef.current + my - 100;
+          scrollRef.current?.scrollTo({ y: Math.max(targetY, 0), animated: true });
+          setTimeout(() => {
+            gymRoutinesRef.current?.measureInWindow((mx2, my2, mw2, mh2) => {
+              onRegisterRect?.('routine-recommended', { x: mx2, y: my2, width: mw2, height: mh2 });
+            });
+          }, 350);
+        } else {
+          onRegisterRect?.('routine-recommended', { x: mx, y: my, width: mw, height: mh });
+        }
+      });
+    }
+  }, [onboardingActive, onboardingKey]);
+
+  useEffect(() => {
+    // 3단계 툴팁이 모두 끝나면 (onboardingKey가 routine 관련 키에서 벗어나면) 최상단으로 스크롤
+    const routineKeys: (OnboardingPointKey | null)[] = ['routine-new', 'routine-past', 'routine-recommended'];
+    if (!onboardingActive || (onboardingKey !== null && routineKeys.includes(onboardingKey))) return;
+    // onboardingKey가 routine 키가 아닌 다른 키이거나 null이면 최상단으로
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  }, [onboardingKey, onboardingActive]);
+
   // Filter past sessions: same gym, at least one muscle overlap
   const filteredPast = useMemo(() => {
     const muscleSet = new Set(selectedMuscles);
@@ -307,8 +363,11 @@ export default function RoutineReferenceScreen({
       <StepBar total={6} current={2} />
 
       <ScrollView
+        ref={scrollRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={s.scroll}
+        onScroll={(e) => { scrollYRef.current = e.nativeEvent.contentOffset.y; }}
+        scrollEventThrottle={16}
       >
         <Text style={s.gymLabel}>
           <Ionicons name="location-outline" size={12} color={C.textSub} />
@@ -316,71 +375,108 @@ export default function RoutineReferenceScreen({
         </Text>
 
         {/* ── Section 1: Start Fresh ─────────────────────────── */}
-        <SectionHeader icon="add-circle-outline" label="Start Fresh" />
-        <TouchableOpacity
-          style={[s.card, s.startFreshCard]}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onSelectMachineIds([]); }}
-          activeOpacity={0.8}
+        <View
+          ref={startFreshRef}
+          onLayout={() => {
+            if (onboardingActive) {
+              startFreshRef.current?.measureInWindow((x, y, width, height) => {
+                onRegisterRect?.('routine-new', { x, y, width, height });
+              });
+            }
+          }}
         >
-          <View style={s.cardRow}>
-            <View style={[s.cardIcon, { backgroundColor: C.accentBg ?? C.accent + '18' }]}>
-              <Ionicons name="create-outline" size={18} color={C.accent} />
+          <SectionHeader icon="add-circle-outline" label="Start Fresh" />
+          <TouchableOpacity
+            style={[s.card, s.startFreshCard]}
+            onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            if (onboardingActive) onJumpToExerciseGrid?.();
+            onSelectMachineIds([]);
+          }}
+            activeOpacity={0.8}
+          >
+            <View style={s.cardRow}>
+              <View style={[s.cardIcon, { backgroundColor: C.accentBg ?? C.accent + '18' }]}>
+                <Ionicons name="create-outline" size={18} color={C.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.cardTitle, { color: C.accent }]}>새 루틴 작성하기</Text>
+                <Text style={s.cardSub}>
+                  머신을 직접 추가하며 오늘 루틴을 만들어요
+                </Text>
+                <Text style={s.cardHint}>운동 종료 후 루틴 저장 옵션 제공</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={15} color={C.accent} style={s.cardChevron} />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[s.cardTitle, { color: C.accent }]}>새 루틴 작성하기</Text>
-              <Text style={s.cardSub}>
-                머신을 직접 추가하며 오늘 루틴을 만들어요
-              </Text>
-              <Text style={s.cardHint}>운동 종료 후 루틴 저장 옵션 제공</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={15} color={C.accent} style={s.cardChevron} />
-          </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
+        </View>
 
         {/* ── Section 2: Past workout logs ──────────────────── */}
-        <SectionHeader icon="time-outline" label="이전 운동일지 참고" />
-        {filteredPast.length === 0 ? (
-          <View style={s.emptyBox}>
-            <Text style={s.emptyText}>
-              {gymName}에서 {muscleLabel} 기록이 없어요
-            </Text>
-          </View>
-        ) : (
-          filteredPast.map((session) => (
-            <PastSessionCard
-              key={session.id}
-              session={session}
-              onPress={() => {
-                const ids = session.machines.map((m) => m.machineId);
-                const extraInfo: MachineExtraInfo = {};
-                session.machines.forEach((m) => {
-                  extraInfo[m.machineId] = {
-                    name: m.machineName,
-                    brand: m.machineBrand ?? '',
-                    targetMuscle: m.targetMuscle,
-                  };
-                });
-                onSelectMachineIds(ids, extraInfo);
-              }}
-            />
-          ))
-        )}
+        <View
+          ref={pastSessionsRef}
+          onLayout={() => {
+            if (onboardingActive) {
+              pastSessionsRef.current?.measureInWindow((x, y, width, height) => {
+                onRegisterRect?.('routine-past', { x, y, width, height });
+              });
+            }
+          }}
+        >
+          <SectionHeader icon="time-outline" label="이전 운동일지 참고" />
+          {filteredPast.length === 0 ? (
+            <View style={s.emptyBox}>
+              <Text style={s.emptyText}>
+                {gymName}에서 {muscleLabel} 기록이 없어요
+              </Text>
+            </View>
+          ) : (
+            filteredPast.map((session) => (
+              <PastSessionCard
+                key={session.id}
+                session={session}
+                onPress={() => {
+                  const ids = session.machines.map((m) => m.machineId);
+                  const extraInfo: MachineExtraInfo = {};
+                  session.machines.forEach((m) => {
+                    extraInfo[m.machineId] = {
+                      name: m.machineName,
+                      brand: m.machineBrand ?? '',
+                      targetMuscle: m.targetMuscle,
+                    };
+                  });
+                  onSelectMachineIds(ids, extraInfo);
+                }}
+              />
+            ))
+          )}
+        </View>
 
         {/* ── Section 3: Gym recommended routines ───────────── */}
-        <SectionHeader icon="medal-outline" label="헬스장 추천 루틴" />
-        {gymRoutines.length === 0 ? (
-          <View style={s.emptyBox}>
-            <Text style={s.emptyText}>등록된 추천 루틴이 없어요</Text>
-          </View>
-        ) : (
-          gymRoutines.map((r) => (
-            <GymRoutineCard
-              key={r.id}
-              routine={r}
-              onPress={() => onSelectMachineIds(r.machineIds)}
-            />
-          ))
-        )}
+        <View
+          ref={gymRoutinesRef}
+          onLayout={() => {
+            if (onboardingActive) {
+              gymRoutinesRef.current?.measureInWindow((x, y, width, height) => {
+                onRegisterRect?.('routine-recommended', { x, y, width, height });
+              });
+            }
+          }}
+        >
+          <SectionHeader icon="medal-outline" label="헬스장 추천 루틴" />
+          {gymRoutines.length === 0 ? (
+            <View style={s.emptyBox}>
+              <Text style={s.emptyText}>등록된 추천 루틴이 없어요</Text>
+            </View>
+          ) : (
+            gymRoutines.map((r) => (
+              <GymRoutineCard
+                key={r.id}
+                routine={r}
+                onPress={() => onSelectMachineIds(r.machineIds)}
+              />
+            ))
+          )}
+        </View>
 
         {/* ── Section 4: Community routines ─────────────────── */}
         <SectionHeader icon="people-outline" label="다른 유저 루틴" />

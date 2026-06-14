@@ -74,7 +74,6 @@ export default function SignUpScreen({ onBack, onVerification }: Props) {
   const [password,  setPassword]  = useState('');
   const [confirm,   setConfirm]   = useState('');
   const [name,      setName]      = useState('');
-  const [nickname,  setNickname]  = useState('');
   const [year,      setYear]      = useState('');
   const [month,     setMonth]     = useState('');
   const [day,       setDay]       = useState('');
@@ -95,7 +94,6 @@ export default function SignUpScreen({ onBack, onVerification }: Props) {
     setError(null);
 
     if (!name.trim())         return setError('이름을 입력해주세요.');
-    if (!nickname.trim())     return setError('닉네임을 입력해주세요.');
     if (!isValidEmail(email)) return setError('유효한 이메일을 입력해주세요.');
     if (password.length < 6)  return setError('비밀번호는 6자 이상이어야 해요.');
     if (password !== confirm)  return setError('비밀번호가 일치하지 않아요.');
@@ -111,7 +109,7 @@ export default function SignUpScreen({ onBack, onVerification }: Props) {
     const birthDate = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
     setLoading(true);
-    const result = await signUp(email.trim(), password, name.trim(), nickname.trim(), birthDate);
+    const result = await signUp(email.trim(), password, name.trim(), birthDate);
     setLoading(false);
 
     if (result.error) { setError(result.error); return; }
@@ -158,7 +156,7 @@ export default function SignUpScreen({ onBack, onVerification }: Props) {
           <TextInput
             style={s.input}
             placeholder="이름"
-            placeholderTextColor={C.textDim}
+            placeholderTextColor={C.textSub}
             value={name}
             onChangeText={setName}
             returnKeyType="next"
@@ -166,18 +164,8 @@ export default function SignUpScreen({ onBack, onVerification }: Props) {
           <View style={s.divider} />
           <TextInput
             style={s.input}
-            placeholder="닉네임"
-            placeholderTextColor={C.textDim}
-            value={nickname}
-            onChangeText={setNickname}
-            autoCapitalize="none"
-            returnKeyType="next"
-          />
-          <View style={s.divider} />
-          <TextInput
-            style={s.input}
             placeholder="이메일"
-            placeholderTextColor={C.textDim}
+            placeholderTextColor={C.textSub}
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -188,7 +176,7 @@ export default function SignUpScreen({ onBack, onVerification }: Props) {
           <TextInput
             style={s.input}
             placeholder="비밀번호 (6자 이상)"
-            placeholderTextColor={C.textDim}
+            placeholderTextColor={C.textSub}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -198,7 +186,7 @@ export default function SignUpScreen({ onBack, onVerification }: Props) {
           <TextInput
             style={s.input}
             placeholder="비밀번호 확인"
-            placeholderTextColor={C.textDim}
+            placeholderTextColor={C.textSub}
             value={confirm}
             onChangeText={setConfirm}
             secureTextEntry
@@ -213,7 +201,7 @@ export default function SignUpScreen({ onBack, onVerification }: Props) {
               <TextInput
                 style={[s.dateInput, s.dateInputYear]}
                 placeholder="YYYY"
-                placeholderTextColor={C.textDim}
+                placeholderTextColor={C.textSub}
                 value={year}
                 onChangeText={t => setYear(t.replace(/\D/g, '').slice(0, 4))}
                 keyboardType="numeric"
@@ -224,7 +212,7 @@ export default function SignUpScreen({ onBack, onVerification }: Props) {
               <TextInput
                 style={[s.dateInput, s.dateInputMonth]}
                 placeholder="MM"
-                placeholderTextColor={C.textDim}
+                placeholderTextColor={C.textSub}
                 value={month}
                 onChangeText={t => setMonth(t.replace(/\D/g, '').slice(0, 2))}
                 keyboardType="numeric"
@@ -235,13 +223,12 @@ export default function SignUpScreen({ onBack, onVerification }: Props) {
               <TextInput
                 style={[s.dateInput, s.dateInputDay]}
                 placeholder="DD"
-                placeholderTextColor={C.textDim}
+                placeholderTextColor={C.textSub}
                 value={day}
                 onChangeText={t => setDay(t.replace(/\D/g, '').slice(0, 2))}
                 keyboardType="numeric"
                 maxLength={2}
                 returnKeyType="done"
-                onSubmitEditing={handleSignUp}
               />
             </View>
           </View>

@@ -11,7 +11,10 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
 import { pickAndUploadProfileImage, saveProfileImageUrl, loadProfileImageUrl } from '../lib/profileImageStorage';
@@ -30,7 +33,9 @@ import PrivacyPolicyScreen from './PrivacyPolicyScreen';
 import AuthFlow from './auth/AuthFlow';
 import NotificationsScreen from './NotificationsScreen';
 import ManagerRequestModal from './flow/ManagerRequestModal';
-import { getNotifications, getUnreadCount } from '../lib/db/notifications';
+import { fetchUnreadCount } from '../lib/db/notifications';
+import { setWorkoutGuideSeen } from '../lib/db/onboarding';
+import { supabase } from '../lib/supabase';
 import { getUserBadges } from '../data/badgeStore';
 import WorkoutBadgeComponent from '../components/WorkoutBadge';
 import WorkoutSplitSetupScreen from './flow/WorkoutSplitSetupScreen';
@@ -305,7 +310,7 @@ function AdminSection({ onOpen }: { onOpen: () => void }) {
 
 export default function ProfileScreen() {
   const nav = useNavigation<any>();
-  const { user, signOut, updateNickname, updateProfileImage, updateWeightUnit } = useAuth();
+  const { user, signOut, updateNickname, updateProfileImage, updateWeightUnit, signInGoogle, signInApple } = useAuth();
 
   function handleSettingPress(label: string) {
     if (label === '단위 (kg / lbs)') {
@@ -322,6 +327,25 @@ export default function ProfileScreen() {
       return;
     }
   }
+  async function handleGuestGoogleSignIn() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const { error } = await signInGoogle();
+    if (error) Alert.alert('로그인 실패', error);
+  }
+
+  async function handleGuestAppleSignIn() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const { error } = await signInApple();
+    if (error && error !== 'Apple 로그인이 취소되었습니다.') {
+      Alert.alert('로그인 실패', error);
+    }
+  }
+
+  const [showHelpModal,     setShowHelpModal]     = useState(false);
+  const [resetLoading,      setResetLoading]      = useState<'app' | 'workout' | null>(null);
+  const [showFeedbackSheet, setShowFeedbackSheet] = useState(false);
+  const [feedbackText,      setFeedbackText]      = useState('');
+  const [feedbackLoading,   setFeedbackLoading]   = useState(false);
   const [showManager,       setShowManager]       = useState(false);
   const [showAdmin,         setShowAdmin]         = useState(false);
   const [showFavorites,     setShowFavorites]     = useState(false);
@@ -388,9 +412,9 @@ export default function ProfileScreen() {
   }, [user?.id, user?.role]);
 
   const loadUnreadCount = useCallback(async () => {
-    if (!user) return;
-    const notifs = await getNotifications(user.id);
-    setUnreadCount(getUnreadCount(notifs));
+    if (!user?.id) return;
+    const count = await fetchUnreadCount(user.id);
+    setUnreadCount(count);
   }, [user?.id]);
 
   useEffect(() => { loadUnreadCount(); }, [loadUnreadCount]);
@@ -529,6 +553,56 @@ export default function ProfileScreen() {
     );
   }
 
+  async function handleResetAppOnboarding() {
+    setResetLoading('app');
+    try {
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+      await AsyncStorage.removeItem('onboarding_completed');
+      Alert.alert('초기화 완료', '앱 온보딩이 초기화됐어요.\n앱을 재시작하면 다시 볼 수 있어요.');
+    } catch {
+      Alert.alert('오류', '초기화에 실패했어요. 다시 시도해주세요.');
+    }
+    setResetLoading(null);
+  }
+
+  async function handleResetWorkoutGuide() {
+    if (!user) return;
+    setResetLoading('workout');
+    try {
+      await setWorkoutGuideSeen(user.id, false);
+      Alert.alert('초기화 완료', '운동일지 가이드가 초기화됐어요.\n다음 운동일지 작성 시 다시 볼 수 있어요.');
+    } catch {
+      Alert.alert('오류', '초기화에 실패했어요. 다시 시도해주세요.');
+    }
+    setResetLoading(null);
+  }
+
+  async function handleSubmitFeedback() {
+    const trimmed = feedbackText.trim();
+    if (!trimmed) {
+      Alert.alert('내용을 입력해주세요', '의견을 작성한 후 제출해주세요.');
+      return;
+    }
+    if (trimmed.length < 5) {
+      Alert.alert('내용이 너무 짧아요', '조금 더 자세히 작성해주세요.');
+      return;
+    }
+    setFeedbackLoading(true);
+    try {
+      const { error } = await supabase.from('feedbacks').insert({
+        user_id: user?.id ?? null,
+        content: trimmed,
+      });
+      if (error) throw error;
+      setFeedbackText('');
+      setShowFeedbackSheet(false);
+      Alert.alert('감사해요! 🙏', '소중한 의견이 전달됐어요.\n더 나은 짐픽을 만드는 데 활용할게요.');
+    } catch {
+      Alert.alert('오류', '제출에 실패했어요. 잠시 후 다시 시도해주세요.');
+    }
+    setFeedbackLoading(false);
+  }
+
   // Guest profile view — keep showing AuthFlow until onComplete is called
   if (showingAuth) {
     return (
@@ -556,7 +630,7 @@ export default function ProfileScreen() {
             activeOpacity={0.85}
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setAuthPage('signin'); setShowingAuth(true); }}
           >
-            <Text style={styles.guestSignInTxt}>Login</Text>
+            <Text style={styles.guestSignInTxt}>이메일로 로그인</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.guestCreateBtn}
@@ -565,6 +639,37 @@ export default function ProfileScreen() {
           >
             <Text style={styles.guestCreateTxt}>회원가입</Text>
           </TouchableOpacity>
+
+          {/* 구분선 */}
+          <View style={styles.guestDividerRow}>
+            <View style={styles.guestDividerLine} />
+            <Text style={styles.guestDividerText}>또는</Text>
+            <View style={styles.guestDividerLine} />
+          </View>
+
+          {/* 구글 로그인 */}
+          <TouchableOpacity
+            style={styles.guestSocialBtn}
+            activeOpacity={0.85}
+            onPress={handleGuestGoogleSignIn}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+              <Text style={{ fontSize: 16, fontWeight: '900', color: '#4285F4' }}>G</Text>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: C.text }}>Google로 계속하기</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* 애플 로그인 (iOS만) */}
+          {Platform.OS === 'ios' && (
+            <AppleAuthentication.AppleAuthenticationButton
+              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+              cornerRadius={12}
+              style={styles.guestAppleBtn}
+              onPress={handleGuestAppleSignIn}
+            />
+          )}
+
           <Text style={styles.guestFooter}>
             로그인 없이 헬스장과 머신을 탐색하세요.
           </Text>
@@ -739,7 +844,7 @@ export default function ProfileScreen() {
                     setShowSplitSetup(true);
                   }
                   : s.label === '단위 (kg / lbs)' ? () => handleSettingPress(s.label)
-                  : s.label === '도움말 및 피드백' ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); nav.navigate('Onboarding', { isReview: true }); }
+                  : s.label === '도움말 및 피드백' ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowHelpModal(true); }
                   : undefined
                 }
               />
@@ -807,7 +912,6 @@ export default function ProfileScreen() {
         onRequestClose={() => { setShowNotifications(false); loadUnreadCount(); }}
       >
         <NotificationsScreen
-          userId={user.id}
           onClose={() => { setShowNotifications(false); loadUnreadCount(); }}
         />
       </Modal>
@@ -847,6 +951,170 @@ export default function ProfileScreen() {
             setShowSplitSetup(true);
           }}
         />
+      </Modal>
+
+      {/* ── 도움말 및 피드백 모달 ── */}
+      <Modal visible={showHelpModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowHelpModal(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
+          {/* 헤더 */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: C.border }}>
+            <TouchableOpacity onPress={() => setShowHelpModal(false)} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="chevron-down" size={22} color={C.text} />
+            </TouchableOpacity>
+            <Text style={{ flex: 1, fontSize: 16, fontWeight: '800', color: C.text, textAlign: 'center' }}>도움말 및 피드백</Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
+
+            {/* 가이드 다시 보기 섹션 */}
+            <Text style={{ fontSize: 12, fontWeight: '700', color: C.textDim, letterSpacing: 1, marginBottom: 4 }}>가이드 다시 보기</Text>
+
+            {/* 앱 온보딩 */}
+            <View style={{ backgroundColor: C.surface, borderRadius: R.card, borderWidth: 1, borderColor: C.border, padding: 16, gap: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: C.accentBg, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="phone-portrait-outline" size={18} color={C.accent} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: C.text }}>앱 소개 온보딩</Text>
+                  <Text style={{ fontSize: 12, color: C.textSub, marginTop: 2 }}>짐픽 앱 소개 슬라이드를 다시 볼 수 있어요</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={{ backgroundColor: C.accent, borderRadius: R.btn, paddingVertical: 12, alignItems: 'center', opacity: resetLoading === 'app' ? 0.6 : 1 }}
+                onPress={handleResetAppOnboarding}
+                disabled={resetLoading !== null}
+                activeOpacity={0.85}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '800', color: C.bg }}>
+                  {resetLoading === 'app' ? '초기화 중...' : '앱 재시작 시 다시 보기'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* 운동일지 가이드 */}
+            {user && (
+              <View style={{ backgroundColor: C.surface, borderRadius: R.card, borderWidth: 1, borderColor: C.border, padding: 16, gap: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: '#5ba4ff18', alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="barbell-outline" size={18} color="#5ba4ff" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: C.text }}>운동일지 작성 가이드</Text>
+                    <Text style={{ fontSize: 12, color: C.textSub, marginTop: 2 }}>운동일지 작성 단계별 툴팁을 다시 볼 수 있어요</Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={{ backgroundColor: '#5ba4ff', borderRadius: R.btn, paddingVertical: 12, alignItems: 'center', opacity: resetLoading === 'workout' ? 0.6 : 1 }}
+                  onPress={handleResetWorkoutGuide}
+                  disabled={resetLoading !== null}
+                  activeOpacity={0.85}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#fff' }}>
+                    {resetLoading === 'workout' ? '초기화 중...' : '다음 운동일지 작성 시 다시 보기'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* 피드백 섹션 */}
+            <Text style={{ fontSize: 12, fontWeight: '700', color: C.textDim, letterSpacing: 1, marginTop: 8, marginBottom: 4 }}>피드백</Text>
+            <View style={{ backgroundColor: C.surface, borderRadius: R.card, borderWidth: 1, borderColor: C.border, overflow: 'hidden' }}>
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12 }}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowFeedbackSheet(true); }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="chatbubble-outline" size={18} color={C.textSub} />
+                <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: C.text }}>의견 보내기</Text>
+                <Ionicons name="chevron-forward" size={16} color={C.textDim} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ height: 32 }} />
+          </ScrollView>
+
+          {/* ── 의견 보내기 시트 (도움말 모달 내부) ── */}
+          <Modal
+            visible={showFeedbackSheet}
+            animationType="slide"
+            presentationStyle="pageSheet"
+            onRequestClose={() => { setShowFeedbackSheet(false); setFeedbackText(''); }}
+          >
+            <KeyboardAvoidingView
+              style={{ flex: 1, backgroundColor: C.bg }}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            >
+              <SafeAreaView style={{ flex: 1 }}>
+                {/* 헤더 */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: C.border }}>
+                  <TouchableOpacity
+                    onPress={() => { setShowFeedbackSheet(false); setFeedbackText(''); }}
+                    style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <Ionicons name="chevron-down" size={22} color={C.text} />
+                  </TouchableOpacity>
+                  <Text style={{ flex: 1, fontSize: 16, fontWeight: '800', color: C.text, textAlign: 'center' }}>의견 보내기</Text>
+                  <View style={{ width: 40 }} />
+                </View>
+
+                <ScrollView
+                  contentContainerStyle={{ padding: 20, gap: 16 }}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                >
+                  {/* 안내 */}
+                  <View style={{ backgroundColor: C.accentBg, borderRadius: R.inner, padding: 14, flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
+                    <Ionicons name="sparkles" size={16} color={C.accent} style={{ marginTop: 1 }} />
+                    <Text style={{ flex: 1, fontSize: 13, color: C.accent, lineHeight: 20 }}>
+                      짐픽을 더 좋게 만들 수 있는 의견을 자유롭게 남겨주세요. 버그 제보, 기능 제안, 불편한 점 모두 환영해요!
+                    </Text>
+                  </View>
+
+                  {/* 입력칸 */}
+                  <View style={{ backgroundColor: C.surface, borderRadius: R.card, borderWidth: 1, borderColor: C.border, padding: 14 }}>
+                    <TextInput
+                      value={feedbackText}
+                      onChangeText={setFeedbackText}
+                      placeholder="의견을 자유롭게 작성해주세요..."
+                      placeholderTextColor={C.textDim}
+                      multiline
+                      numberOfLines={8}
+                      maxLength={500}
+                      style={{ fontSize: 14, color: C.text, lineHeight: 22, minHeight: 160, textAlignVertical: 'top' }}
+                      autoFocus
+                    />
+                    <Text style={{ fontSize: 11, color: C.textDim, textAlign: 'right', marginTop: 8 }}>
+                      {feedbackText.length} / 500
+                    </Text>
+                  </View>
+
+                  {/* 제출 버튼 */}
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: feedbackText.trim().length >= 5 ? C.accent : C.border,
+                      borderRadius: R.btn,
+                      paddingVertical: 16,
+                      alignItems: 'center',
+                      opacity: feedbackLoading ? 0.6 : 1,
+                    }}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); handleSubmitFeedback(); }}
+                    disabled={feedbackLoading || feedbackText.trim().length < 5}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: feedbackText.trim().length >= 5 ? C.bg : C.textDim }}>
+                      {feedbackLoading ? '제출 중...' : '의견 보내기'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <View style={{ height: 32 }} />
+                </ScrollView>
+              </SafeAreaView>
+            </KeyboardAvoidingView>
+          </Modal>
+
+        </SafeAreaView>
       </Modal>
 
       {/* ── 닉네임 수정 모달 ── */}
@@ -978,6 +1246,25 @@ const styles = StyleSheet.create({
   },
   guestCreateTxt: { fontSize: 15, fontWeight: '700', color: C.text },
   guestFooter:    { fontSize: 12, color: C.textDim, textAlign: 'center' },
+  guestDividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    marginVertical: 20,
+    gap: 12,
+  },
+  guestDividerLine: { flex: 1, height: 1, backgroundColor: C.border },
+  guestDividerText: { fontSize: 12, color: C.textDim, fontWeight: '600' },
+  guestSocialBtn: {
+    alignSelf: 'stretch',
+    backgroundColor: C.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+    paddingVertical: 14,
+    marginBottom: 12,
+  },
+  guestAppleBtn: { alignSelf: 'stretch', height: 50, marginBottom: 12 },
 
   // --- Hero
   hero: {

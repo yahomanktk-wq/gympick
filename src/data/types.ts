@@ -36,6 +36,7 @@ export interface Gym {
   hours?:         string | null;
   phone?:         string | null;
   website?:       string | null;
+  managerId?:     string | null;
 }
 
 // --- machines
@@ -155,8 +156,9 @@ export interface MachineWithGyms extends Machine {
 // The primary display type used throughout the app for gym cards and detail views.
 
 export interface GymWithMachines extends Gym {
-  machines:   MachineWithGyms[];
-  machineIds: string[];   // convenience array, derived from GymMachineLink
+  machines:       MachineWithGyms[];
+  machineIds:     string[];   // convenience array, derived from GymMachineLink
+  officialBrands?: string[];
 }
 
 // --- Aggregated exercise row within a workout log

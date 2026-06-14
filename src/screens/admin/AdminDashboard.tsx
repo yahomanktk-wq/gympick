@@ -13,6 +13,7 @@ import {
   Platform,
   Dimensions,
   Alert,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T } from '../../theme';
@@ -58,6 +59,20 @@ import {
   type GymRegistrationRequest,
 } from '../../lib/db/gymRegistrationRequests';
 import { geocodeAddress } from '../../lib/geocoding';
+import {
+  fetchGymOfficialBrands,
+  addGymOfficialBrand,
+  removeGymOfficialBrand,
+} from '../../lib/db/gymOfficialBrands';
+import { brandLogos } from '../../constants/brandLogos';
+import {
+  fetchManagerRequests,
+  updateManagerRequestStatus,
+  deleteManagerRequest,
+  deleteManagerRequestsByUserId,
+  type ManagerRequest,
+} from '../../lib/db/managerRequests';
+import { sendNotification } from '../../lib/db/notifications';
 
 const SCREEN_W     = Dimensions.get('window').width;
 const CAT_CARD_W   = Math.floor((SCREEN_W - 40 - 12) / 2);
@@ -66,7 +81,7 @@ const CAT_BRANDS   = ['All', ...Array.from(new Set(MACHINES.map(m => m.brand))).
 
 // --- Types
 
-type AdminView = 'home' | 'pending-gyms' | 'gym-detail' | 'pending-edits' | 'flagged' | 'machine-catalog' | 'brand-copyright' | 'gym-reports' | 'manager-requests' | 'register-gym' | 'gym-registration-requests';
+type AdminView = 'home' | 'pending-gyms' | 'gym-detail' | 'pending-edits' | 'flagged' | 'machine-catalog' | 'brand-copyright' | 'gym-reports' | 'manager-requests' | 'register-gym' | 'gym-registration-requests' | 'gym-official-brands' | 'all-gyms-official';
 
 // --- Shared components
 
@@ -337,6 +352,14 @@ function HomeView({ pendingGymCount, pendingEditCount, openFlagCount, gymReportC
           sub: gymRequestCount > 0 ? `${gymRequestCount}개 검토 대기` : '접수된 요청 없음',
           onPress: () => onPush('gym-registration-requests'),
           color: '#fb923c',
+        },
+        {
+          icon: 'shield-checkmark-outline' as const,
+          title: '헬스장 오피셜 관리',
+          count: 0,
+          sub: '헬스장별 오피셜 브랜드 설정',
+          onPress: () => onPush('all-gyms-official'),
+          color: '#5ba4ff',
         },
       ].map(q => (
         <TouchableOpacity key={q.title} style={styles.queueCard} onPress={q.onPress} activeOpacity={0.85}>
@@ -1069,9 +1092,10 @@ interface RegisterGymAdminViewProps {
   registeredGyms: AdminRegisteredGym[];
   onSave: (name: string, location: string, phone: string, hours: string, machineIds: string[]) => void;
   onUpdate: (id: string, name: string, location: string, phone: string, hours: string, machineIds: string[]) => void;
+  onOfficialBrands: (gymId: string, gymName: string) => void;
 }
 
-function RegisterGymAdminView({ registeredGyms, onSave, onUpdate }: RegisterGymAdminViewProps) {
+function RegisterGymAdminView({ registeredGyms, onSave, onUpdate, onOfficialBrands }: RegisterGymAdminViewProps) {
   const [showForm,         setShowForm]         = useState(false);
   const [editingGym,       setEditingGym]       = useState<AdminRegisteredGym | null>(null);
   const [gymName,          setGymName]          = useState('');
@@ -1295,10 +1319,16 @@ function RegisterGymAdminView({ registeredGyms, onSave, onUpdate }: RegisterGymA
                   <Text style={styles.locText}>{gym.location}</Text>
                 </View>
               </View>
-              <TouchableOpacity style={[styles.approveBtn, { paddingHorizontal: 12, paddingVertical: 7 }]} onPress={() => openEdit(gym)} activeOpacity={0.85}>
-                <Ionicons name="create-outline" size={13} color={C.bg} />
-                <Text style={[styles.approveBtnText, { fontSize: 12 }]}>수정</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity style={[styles.approveBtn, { paddingHorizontal: 12, paddingVertical: 7, backgroundColor: '#5ba4ff' }]} onPress={() => onOfficialBrands(gym.id, gym.name)} activeOpacity={0.85}>
+                  <Ionicons name="shield-checkmark-outline" size={13} color={C.bg} />
+                  <Text style={[styles.approveBtnText, { fontSize: 12 }]}>오피셜</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.approveBtn, { paddingHorizontal: 12, paddingVertical: 7 }]} onPress={() => openEdit(gym)} activeOpacity={0.85}>
+                  <Ionicons name="create-outline" size={13} color={C.bg} />
+                  <Text style={[styles.approveBtnText, { fontSize: 12 }]}>수정</Text>
+                </TouchableOpacity>
+              </View>
             </View>
             <View style={styles.submittedRow}>
               <Ionicons name="barbell-outline" size={11} color={C.textSub} />
@@ -1312,6 +1342,248 @@ function RegisterGymAdminView({ registeredGyms, onSave, onUpdate }: RegisterGymA
 }
 
 // --- Main component
+
+function ManagerRequestsSupabaseView({
+  requests,
+  loading,
+  onApprove,
+  onReject,
+}: {
+  requests:  ManagerRequest[];
+  loading:   boolean;
+  onApprove: (id: string) => void;
+  onReject:  (id: string) => void;
+}) {
+  const pending = requests.filter(r => r.status === 'pending');
+
+  if (loading) {
+    return (
+      <View style={styles.emptyQueue}>
+        <Text style={styles.emptyQueueText}>신청 목록 로딩 중...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <Text style={styles.sectionTitle}>매니저 신청 관리</Text>
+      <Text style={styles.sectionSub}>{pending.length}개 심사 대기</Text>
+
+      {pending.length === 0 && <EmptyQueue label="대기 중인 매니저 신청이 없어요" />}
+
+      {pending.map(r => (
+        <View key={r.id} style={styles.pendingCard}>
+          <View style={styles.pendingCardTop}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.pendingName}>{r.gymName}</Text>
+              <View style={styles.locRow}>
+                <Ionicons name="location-outline" size={11} color={C.textSub} />
+                <Text style={styles.locText}>{r.location}</Text>
+              </View>
+            </View>
+          </View>
+          <View style={styles.submittedRow}>
+            <Ionicons name="person-outline" size={11} color={C.textSub} />
+            <Text style={styles.submittedText}>신청자 ID: {r.userId.slice(0, 8)}... · {r.createdAt.slice(0, 10)}</Text>
+          </View>
+          {r.phone.length > 0 && (
+            <View style={styles.submittedRow}>
+              <Ionicons name="call-outline" size={11} color={C.textSub} />
+              <Text style={styles.submittedText}>{r.phone}</Text>
+            </View>
+          )}
+          {r.message.length > 0 && (
+            <Text style={[styles.pendingDesc, { marginTop: 6 }]} numberOfLines={3}>{r.message}</Text>
+          )}
+          <ReviewButtons
+            onApprove={() => onApprove(r.id)}
+            onReject={() => onReject(r.id)}
+          />
+        </View>
+      ))}
+
+    </ScrollView>
+  );
+}
+
+function AllGymsOfficialView({
+  onSelectGym,
+  onBack,
+}: {
+  onSelectGym: (gymId: string, gymName: string) => void;
+  onBack: () => void;
+}) {
+  const [gyms, setGyms] = useState<{ id: string; name: string; location: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const { supabase } = await import('../../lib/supabase');
+        const { data } = await supabase
+          .from('gyms')
+          .select('id, name, location')
+          .order('name');
+        setGyms(data ?? []);
+      } catch {}
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  const filtered = gyms.filter(g =>
+    g.name.toLowerCase().includes(search.toLowerCase()) ||
+    g.location.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <View style={{ flex: 1 }}>
+      <ScrollView
+        contentContainerStyle={{ padding: 16, gap: 10 }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <TouchableOpacity onPress={onBack} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <Ionicons name="chevron-back" size={20} color={C.text} />
+          <Text style={{ fontSize: 16, fontWeight: '800', color: C.text }}>헬스장 오피셜 관리</Text>
+        </TouchableOpacity>
+
+        {/* 검색 */}
+        <View style={styles.catSearchRow}>
+          <Ionicons name="search" size={15} color={C.textDim} style={{ marginLeft: 12 }} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="헬스장 이름 또는 위치 검색..."
+            placeholderTextColor={C.textDim}
+            style={styles.catSearchInput}
+            autoCorrect={false}
+            autoCapitalize="none"
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch('')} style={{ marginRight: 10 }}>
+              <Ionicons name="close-circle" size={16} color={C.textDim} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <Text style={{ fontSize: 12, fontWeight: '700', color: C.textDim, letterSpacing: 1 }}>
+          전체 헬스장 ({filtered.length}개)
+        </Text>
+
+        {loading ? (
+          <Text style={{ fontSize: 13, color: C.textDim, paddingVertical: 20, textAlign: 'center' }}>로딩 중...</Text>
+        ) : filtered.length === 0 ? (
+          <Text style={{ fontSize: 13, color: C.textDim, paddingVertical: 20, textAlign: 'center' }}>검색 결과가 없어요</Text>
+        ) : (
+          filtered.map(gym => (
+            <TouchableOpacity
+              key={gym.id}
+              style={{
+                backgroundColor: C.surface,
+                borderRadius: R.card,
+                borderWidth: 1,
+                borderColor: C.border,
+                padding: 14,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+              }}
+              onPress={() => onSelectGym(gym.id, gym.name)}
+              activeOpacity={0.8}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: C.text }}>{gym.name}</Text>
+                <Text style={{ fontSize: 12, color: C.textSub, marginTop: 2 }}>{gym.location}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="shield-checkmark-outline" size={16} color="#5ba4ff" />
+                <Ionicons name="chevron-forward" size={16} color={C.textDim} />
+              </View>
+            </TouchableOpacity>
+          ))
+        )}
+
+        <View style={{ height: 32 }} />
+      </ScrollView>
+    </View>
+  );
+}
+
+function GymOfficialBrandsView({
+  gymName,
+  officialBrands,
+  loading,
+  onToggle,
+  onBack,
+}: {
+  gymName: string;
+  officialBrands: string[];
+  loading: boolean;
+  onToggle: (brand: string) => void;
+  onBack: () => void;
+}) {
+  const allBrands = Object.keys(brandLogos).map(key =>
+    key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+  );
+
+  return (
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }} showsVerticalScrollIndicator={false}>
+      <TouchableOpacity onPress={onBack} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <Ionicons name="chevron-back" size={20} color={C.text} />
+        <Text style={{ fontSize: 16, fontWeight: '800', color: C.text }}>{gymName}</Text>
+      </TouchableOpacity>
+
+      <Text style={{ fontSize: 12, fontWeight: '700', color: C.textDim, letterSpacing: 1 }}>
+        오피셜 브랜드 ({officialBrands.length}개 선택됨)
+      </Text>
+
+      {loading ? (
+        <Text style={{ fontSize: 13, color: C.textDim, paddingVertical: 20, textAlign: 'center' }}>로딩 중...</Text>
+      ) : (
+        allBrands.map(brand => {
+          const key = brand.toUpperCase().replace(/\s+/g, '_');
+          const logoSrc = brandLogos[key];
+          const isActive = officialBrands.includes(brand);
+          return (
+            <TouchableOpacity
+              key={brand}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: C.surface,
+                borderRadius: R.card,
+                borderWidth: 1.5,
+                borderColor: isActive ? '#5ba4ff' : C.border,
+                padding: 14,
+                gap: 14,
+              }}
+              onPress={() => onToggle(brand)}
+              activeOpacity={0.8}
+            >
+              {logoSrc ? (
+                <Image source={logoSrc} style={{ width: 48, height: 24 }} resizeMode="contain" />
+              ) : (
+                <View style={{ width: 48, height: 24, backgroundColor: C.surfaceHigh, borderRadius: 4 }} />
+              )}
+              <Text style={{ flex: 1, fontSize: 14, fontWeight: '700', color: C.text }}>{brand}</Text>
+              {isActive ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#5ba4ff18', borderRadius: R.pill, paddingHorizontal: 10, paddingVertical: 4 }}>
+                  <Ionicons name="shield-checkmark" size={13} color="#5ba4ff" />
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#5ba4ff' }}>오피셜</Text>
+                </View>
+              ) : (
+                <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: C.border }} />
+              )}
+            </TouchableOpacity>
+          );
+        })
+      )}
+      <View style={{ height: 32 }} />
+    </ScrollView>
+  );
+}
 
 export default function AdminDashboard({ onClose }: { onClose: () => void }) {
   // --- Navigation
@@ -1333,48 +1605,33 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
   const [gymReports,   setGymReports]    = useState<GymInfoReport[]>(() => getAllGymInfoReports());
   const [managerApps,  setManagerApps]   = useState<ManagerApplication[]>(() => getAllManagerApplications());
 
-  // Supabase manager_requests 데이터 로딩
-  useEffect(() => {
-    async function loadManagerRequests() {
-      try {
-        const { supabase } = await import('../../lib/supabase');
-        const { data, error } = await supabase
-          .from('manager_requests')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (error || !data) return;
-
-        const supabaseApps: ManagerApplication[] = data.map((r: any) => ({
-          id:              r.id,
-          applicantUserId: r.user_id,
-          applicantName:   r.user_id,
-          gymName:         r.gym_name,
-          location:        r.location,
-          phone:           r.phone ?? '',
-          message:         r.message ?? '',
-          createdAt:       r.created_at,
-          status:          r.status,
-        }));
-
-        setManagerApps(prev => {
-          // 중복 제거 후 합산
-          const existingIds = new Set(supabaseApps.map(a => a.id));
-          const localOnly = prev.filter(a => !existingIds.has(a.id));
-          return [...supabaseApps, ...localOnly];
-        });
-      } catch (e: any) {
-        console.warn('[AdminDashboard] manager_requests 로딩 오류:', e.message);
-      }
-    }
-    loadManagerRequests();
-  }, []);
   const [registeredGyms, setRegisteredGyms] = useState<AdminRegisteredGym[]>(() => getAllAdminGyms());
   const [gymRequests,    setGymRequests]    = useState<GymRegistrationRequest[]>([]);
 
   useEffect(() => {
     fetchGymRegistrationRequests().then(setGymRequests);
   }, []);
+
+  const [managerRequests,        setManagerRequests]        = useState<ManagerRequest[]>([]);
+  const [managerRequestsLoading, setManagerRequestsLoading] = useState(false);
+
+  const loadManagerRequests = useCallback(async () => {
+    setManagerRequestsLoading(true);
+    const data = await fetchManagerRequests();
+    setManagerRequests(data);
+    setManagerRequestsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (currentView === 'manager-requests') {
+      loadManagerRequests();
+    }
+  }, [currentView, loadManagerRequests]);
+
+  const [officialGymId,   setOfficialGymId]   = useState<string | null>(null);
+  const [officialGymName, setOfficialGymName] = useState<string>('');
+  const [officialBrands,  setOfficialBrands]  = useState<string[]>([]);
+  const [officialLoading, setOfficialLoading] = useState(false);
 
   // --- Machine catalog state
   const [catQuery,    setCatQuery]    = useState('');
@@ -1422,7 +1679,7 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
                             + editList.filter(e => e.status === 'pending').length;
   const openFlagCount       = flaggedItems.filter(f => f.status === 'open').length;
   const gymReportCount      = gymReports.filter(r => r.status === 'pending').length;
-  const managerRequestCount = managerApps.filter(a => a.status === 'pending').length;
+  const managerRequestCount = managerRequests.filter(r => r.status === 'pending').length;
   const registeredGymCount  = registeredGyms.length;
   const gymRequestCount     = gymRequests.filter(r => r.status === 'pending' && (r.requesterRole ?? 'user') === 'user').length;
 
@@ -1548,40 +1805,105 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
   }, []);
 
   const handleApproveApplication = useCallback(async (id: string) => {
+    // 1. 로컬 상태 업데이트
     updateApplicationStatus(id, 'approved');
     setManagerApps(getAllManagerApplications());
 
-    // Supabase에서 해당 신청 찾기
     try {
       const { supabase } = await import('../../lib/supabase');
 
-      // manager_requests 테이블에서 user_id 조회
-      const { data: reqData } = await supabase
+      // 2. manager_requests 테이블에서 신청 정보 조회
+      const { data: reqData, error: reqError } = await supabase
         .from('manager_requests')
-        .select('user_id')
+        .select('user_id, gym_name, location, phone')
         .eq('id', id)
         .single();
 
-      const targetUserId = reqData?.user_id ?? managerApps.find(a => a.id === id)?.applicantUserId;
-
-      if (targetUserId) {
-        console.log('[AdminDashboard] 매니저 승인 - userId:', targetUserId);
-        const { error } = await supabase
-          .from('profiles')
-          .update({ role: 'manager' })
-          .eq('id', targetUserId);
-        console.log('[AdminDashboard] role 업데이트:', error?.message ?? 'OK');
-
-        // manager_requests 상태도 업데이트
-        await supabase
-          .from('manager_requests')
-          .update({ status: 'approved' })
-          .eq('id', id);
+      if (reqError || !reqData) {
+        // manager_requests에 없으면 로컬 mock에서 조회
+        const localApp = getAllManagerApplications().find(a => a.id === id);
+        if (!localApp) {
+          if (__DEV__) console.warn('[AdminDashboard] 매니저 신청 정보를 찾을 수 없음:', id);
+          return;
+        }
+        // 로컬 데이터로 처리 (Supabase 미연동 환경)
+        Alert.alert('승인 완료', '로컬 환경에서는 DB 연결이 생략됩니다.');
+        return;
       }
+
+      const { user_id, gym_name, location, phone } = reqData;
+
+      // 3. profiles.role = 'manager' 업데이트
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ role: 'manager' })
+        .eq('id', user_id);
+
+      if (profileError) {
+        if (__DEV__) console.warn('[AdminDashboard] profiles role 업데이트 실패:', profileError.message);
+      }
+
+      // 4. gyms 테이블에서 동일 이름 헬스장 검색
+      const { data: existingGym } = await supabase
+        .from('gyms')
+        .select('id')
+        .ilike('name', gym_name.trim())
+        .maybeSingle();
+
+      let gymId: string;
+
+      if (existingGym) {
+        // 4-1. 기존 헬스장에 manager_id 연결
+        gymId = existingGym.id;
+        const { error: gymUpdateError } = await supabase
+          .from('gyms')
+          .update({ manager_id: user_id })
+          .eq('id', gymId);
+
+        if (gymUpdateError) {
+          if (__DEV__) console.warn('[AdminDashboard] gyms manager_id 업데이트 실패:', gymUpdateError.message);
+        }
+      } else {
+        // 4-2. 새 헬스장 생성 후 manager_id 연결
+        gymId = `g_${Date.now()}`;
+        const { error: gymInsertError } = await supabase
+          .from('gyms')
+          .insert({
+            id:          gymId,
+            name:        gym_name.trim(),
+            location:    location?.trim() ?? '',
+            phone:       phone?.trim() ?? '',
+            description: '',
+            manager_id:  user_id,
+          });
+
+        if (gymInsertError) {
+          if (__DEV__) console.warn('[AdminDashboard] gyms 신규 생성 실패:', gymInsertError.message);
+        }
+      }
+
+      // 5. manager_requests.status = 'approved' 업데이트
+      await supabase
+        .from('manager_requests')
+        .update({ status: 'approved' })
+        .eq('id', id);
+
+      // 6. 헬스장 캐시 무효화
+      const { invalidateGymsCache } = await import('../../lib/db/gyms');
+      invalidateGymsCache();
+
+      Alert.alert(
+        '승인 완료',
+        existingGym
+          ? `${gym_name} 헬스장에 매니저가 연결됐어요.`
+          : `${gym_name} 헬스장이 새로 등록되고 매니저가 연결됐어요.`,
+      );
+
     } catch (e: any) {
-      console.warn('[AdminDashboard] 매니저 승인 오류:', e.message);
+      if (__DEV__) console.warn('[AdminDashboard] 매니저 승인 처리 오류:', e.message);
+      Alert.alert('승인은 완료됐어요', 'DB 연결 중 일부 오류가 발생했어요. 수동으로 확인해주세요.');
     }
-  }, [managerApps]);
+  }, []);
 
   const handleRejectApplication = useCallback((id: string) => {
     updateApplicationStatus(id, 'rejected');
@@ -1592,6 +1914,28 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     addAdminGym({ name, location, phone, hours, machineIds });
     setRegisteredGyms(getAllAdminGyms());
   }, []);
+
+  const openOfficialBrands = useCallback(async (gymId: string, gymName: string) => {
+    setOfficialGymId(gymId);
+    setOfficialGymName(gymName);
+    setOfficialLoading(true);
+    const brands = await fetchGymOfficialBrands(gymId);
+    setOfficialBrands(brands);
+    setOfficialLoading(false);
+    push('gym-official-brands');
+  }, [push]);
+
+  const handleToggleOfficialBrand = useCallback(async (brand: string) => {
+    if (!officialGymId) return;
+    const isActive = officialBrands.includes(brand);
+    if (isActive) {
+      await removeGymOfficialBrand(officialGymId, brand);
+      setOfficialBrands(prev => prev.filter(b => b !== brand));
+    } else {
+      await addGymOfficialBrand(officialGymId, brand);
+      setOfficialBrands(prev => [...prev, brand]);
+    }
+  }, [officialGymId, officialBrands]);
 
   const handleUpdateGym = useCallback((id: string, name: string, location: string, phone: string, hours: string, machineIds: string[]) => {
     updateAdminGym(id, { name, location, phone, hours, machineIds });
@@ -1612,6 +1956,8 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     'manager-requests':  '매니저 신청 관리',
     'register-gym':               '헬스장 직접 등록',
     'gym-registration-requests':  '헬스장 신규 등록 제안(유저)',
+    'gym-official-brands':        `${officialGymName} 오피셜 브랜드`,
+    'all-gyms-official':          '헬스장 오피셜 관리',
   };
 
   // --- Render
@@ -1699,10 +2045,45 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
         />
       )}
       {currentView === 'manager-requests' && (
-        <ManagerRequestsAdminView
-          applications={managerApps}
-          onApprove={handleApproveApplication}
-          onReject={handleRejectApplication}
+        <ManagerRequestsSupabaseView
+          requests={managerRequests}
+          loading={managerRequestsLoading}
+          onApprove={async (id) => {
+            const req = managerRequests.find(r => r.id === id);
+            // 1. 매니저 승인 처리 (profiles.role 변경 + gyms 연결)
+            await handleApproveApplication(id);
+            // 2. 알림 발송
+            if (req?.userId) {
+              await sendNotification(
+                req.userId,
+                'manager_approved',
+                '매니저 신청이 승인됐어요! 🎉',
+                `${req.gymName} 헬스장의 매니저로 승인됐어요. 앱을 재시작하면 헬스장 관리 기능이 활성화돼요.`,
+                req.id,
+              );
+              // 3. 해당 유저의 모든 신청 내역 삭제 (중복 신청 포함)
+              await deleteManagerRequestsByUserId(req.userId);
+            } else {
+              await deleteManagerRequest(id);
+            }
+            await loadManagerRequests();
+          }}
+          onReject={async (id) => {
+            const req = managerRequests.find(r => r.id === id);
+            // 1. 알림 발송
+            if (req?.userId) {
+              await sendNotification(
+                req.userId,
+                'manager_rejected',
+                '매니저 신청 결과 안내',
+                `${req.gymName} 헬스장 매니저 신청이 반려됐어요. 자세한 문의는 고객센터를 이용해주세요.`,
+                req.id,
+              );
+            }
+            // 2. 해당 신청 내역만 삭제
+            await deleteManagerRequest(id);
+            await loadManagerRequests();
+          }}
         />
       )}
       {currentView === 'register-gym' && (
@@ -1710,6 +2091,22 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
           registeredGyms={registeredGyms}
           onSave={handleRegisterGym}
           onUpdate={handleUpdateGym}
+          onOfficialBrands={openOfficialBrands}
+        />
+      )}
+      {currentView === 'all-gyms-official' && (
+        <AllGymsOfficialView
+          onSelectGym={(gymId, gymName) => openOfficialBrands(gymId, gymName)}
+          onBack={pop}
+        />
+      )}
+      {currentView === 'gym-official-brands' && (
+        <GymOfficialBrandsView
+          gymName={officialGymName}
+          officialBrands={officialBrands}
+          loading={officialLoading}
+          onToggle={handleToggleOfficialBrand}
+          onBack={pop}
         />
       )}
       {currentView === 'gym-registration-requests' && (

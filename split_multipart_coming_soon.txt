@@ -1,0 +1,66 @@
+파일 경로: src/screens/flow/WorkoutSplitSetupScreen.tsx
+
+확인이나 중단 없이 끝까지 완료해줘.
+
+## 목표
+하루에 두 개 이상 부위를 설정하려 할 때 "준비 중" 안내 메시지를 표시.
+실제 다중 선택은 막고, 기존 단일 선택 동작은 그대로 유지.
+
+## 작업 1 — import에 Alert 추가
+Alert가 react-native import에 없으면 추가.
+(이미 있으면 생략)
+
+## 작업 2 — 요일 기반 toggleWeekdayMuscle 함수 수정
+현재:
+  function toggleWeekdayMuscle(key: keyof WeekdaySplit, muscle: string) {
+    setWeekday(prev => {
+      const current = prev[key] as string[];
+      const newArr  = current.includes(muscle)
+        ? current.filter(m => m !== muscle)
+        : [...current, muscle];
+      return { ...prev, [key]: newArr };
+    });
+  }
+
+아래로 교체:
+  function toggleWeekdayMuscle(key: keyof WeekdaySplit, muscle: string) {
+    setWeekday(prev => {
+      const current = prev[key] as string[];
+      // 이미 선택된 부위를 해제하는 경우 → 허용
+      if (current.includes(muscle)) {
+        return { ...prev, [key]: current.filter(m => m !== muscle) };
+      }
+      // 이미 1개 선택된 상태에서 추가 선택 시도 → 안내 메시지
+      if (current.length >= 1) {
+        Alert.alert(
+          '준비 중인 기능이에요',
+          '하루에 두 개 이상의 부위를 설정하는 기능은 곧 추가될 예정이에요.',
+        );
+        return prev;
+      }
+      return { ...prev, [key]: [...current, muscle] };
+    });
+  }
+
+## 작업 3 — 순서 기반 addToSeq 함수 수정
+현재:
+  function addToSeq(muscle: string) {
+    setSeqList(prev => [...prev, muscle]);
+  }
+
+아래로 교체 (동일 부위 연속 추가 시 안내 — 순서 기반에서 같은 부위를 연달아 넣으려는 경우):
+  function addToSeq(muscle: string) {
+    setSeqList(prev => {
+      // 바로 직전 항목과 같은 부위면 안내 (실수 방지)
+      if (prev.length > 0 && prev[prev.length - 1] === muscle) {
+        Alert.alert(
+          '준비 중인 기능이에요',
+          '하루에 두 개 이상의 부위를 묶는 기능은 곧 추가될 예정이에요.',
+        );
+        return prev;
+      }
+      return [...prev, muscle];
+    });
+  }
+
+완료 후 변경된 함수 두 개 이름 알려줘.

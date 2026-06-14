@@ -29,6 +29,7 @@ import * as Location from 'expo-location';
 import { calcDistanceKm, formatDistance } from '../../lib/geocoding';
 import { fetchGymsWithMachines } from '../../lib/db/gyms';
 import { GymWithMachines } from '../../data/types';
+import { containsBannedWord } from '../../lib/bannedWords';
 
 // --- Star rating
 
@@ -210,6 +211,11 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
   }
 
   async function submitReview() {
+    const banned = await containsBannedWord(reviewText);
+    if (banned) {
+      Alert.alert('사용 불가', '사용할 수 없는 단어가 포함되어 있어요.');
+      return;
+    }
     if (!user) {
       Alert.alert(
         '로그인 필요',

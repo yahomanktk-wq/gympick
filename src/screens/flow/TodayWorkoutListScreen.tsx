@@ -12,7 +12,9 @@
  * 세트/중량은 절대 자동 입력되지 않음 — 머신 순서만 관리.
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import type { OnboardingPointKey } from '../../data/onboardingSteps';
+import type { SpotlightRect } from '../../components/OnboardingTooltip';
 import {
   View,
   Text,
@@ -40,6 +42,9 @@ export interface TodayWorkoutListScreenProps {
   onConfirm: (orderedMachineIds: string[]) => void;
   onBack: () => void;
   onClose: () => void;
+  onRegisterRect?: (key: OnboardingPointKey, rect: SpotlightRect) => void;
+  onboardingActive?: boolean;
+  onboardingKey?: OnboardingPointKey | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -226,11 +231,30 @@ export default function TodayWorkoutListScreen({
   onConfirm,
   onBack,
   onClose,
+  onRegisterRect,
+  onboardingActive,
+  onboardingKey,
 }: TodayWorkoutListScreenProps) {
   const [orderedIds,        setOrderedIds]        = useState<string[]>(initialMachineIds);
   const [addExpanded,       setAddExpanded]       = useState(false);
   const [muscleFilter,      setMuscleFilter]      = useState<string | null>(null);
   const [dynamicMachineMap, setDynamicMachineMap] = useState<Record<string, Machine>>(LOCAL_MACHINES_MAP);
+
+  const machineListRef = useRef<View>(null);
+  const addToggleRef   = useRef<View>(null);
+
+  useEffect(() => {
+    if (!onboardingActive) return;
+    const measure = (key: OnboardingPointKey, ref: React.RefObject<View>) => {
+      requestAnimationFrame(() => {
+        ref.current?.measureInWindow((x, y, width, height) => {
+          onRegisterRect?.(key, { x, y, width, height });
+        });
+      });
+    };
+    if (onboardingKey === 'machine-list')       measure('machine-list', machineListRef);
+    if (onboardingKey === 'machine-add-toggle') measure('machine-add-toggle', addToggleRef);
+  }, [onboardingActive, onboardingKey]);
 
   // Supabase에서 전체 머신(프리웨이트 포함) 로드 → fw37 등 처리
   useEffect(() => {
@@ -330,56 +354,78 @@ export default function TodayWorkoutListScreen({
         </View>
 
         {/* ── Machine list ─────────────────────────────────── */}
-        {orderedIds.length === 0 ? (
-          <View style={s.emptyBox}>
-            <Ionicons name="barbell-outline" size={36} color={C.textDim} />
-            <Text style={s.emptyTitle}>루틴이 비어 있어요</Text>
-            <Text style={s.emptyHint}>아래 "머신 추가" 버튼으로 머신을 추가하거나{'\n'}바로 시작해도 됩니다</Text>
-          </View>
-        ) : (
-          orderedIds.map((id, i) => {
-            const machine = resolveMachine(id) ?? {
-              id,
-              name:         extraMachineInfo?.[id]?.name ?? id,
-              brand:        extraMachineInfo?.[id]?.brand ?? '알 수 없음',
-              targetMuscle: extraMachineInfo?.[id]?.targetMuscle ?? '',
-              category:     '',
-            } as Machine;
-            return (
-              <MachineListRow
-                key={id}
-                machine={machine}
-                index={i}
-                total={orderedIds.length}
-                onMoveUp={() => moveUp(i)}
-                onMoveDown={() => moveDown(i)}
-                onRemove={() => remove(i)}
-                readOnly={readOnly}
-              />
-            );
-          })
-        )}
+        <View
+          ref={machineListRef}
+          onLayout={() => {
+            if (onboardingActive) {
+              machineListRef.current?.measureInWindow((x, y, width, height) => {
+                onRegisterRect?.('machine-list', { x, y, width, height });
+              });
+            }
+          }}
+        >
+          {orderedIds.length === 0 ? (
+            <View style={s.emptyBox}>
+              <Ionicons name="barbell-outline" size={36} color={C.textDim} />
+              <Text style={s.emptyTitle}>루틴이 비어 있어요</Text>
+              <Text style={s.emptyHint}>아래 "머신 추가" 버튼으로 머신을 추가하거나{'\n'}바로 시작해도 됩니다</Text>
+            </View>
+          ) : (
+            orderedIds.map((id, i) => {
+              const machine = resolveMachine(id) ?? {
+                id,
+                name:         extraMachineInfo?.[id]?.name ?? id,
+                brand:        extraMachineInfo?.[id]?.brand ?? '알 수 없음',
+                targetMuscle: extraMachineInfo?.[id]?.targetMuscle ?? '',
+                category:     '',
+              } as Machine;
+              return (
+                <MachineListRow
+                  key={id}
+                  machine={machine}
+                  index={i}
+                  total={orderedIds.length}
+                  onMoveUp={() => moveUp(i)}
+                  onMoveDown={() => moveDown(i)}
+                  onRemove={() => remove(i)}
+                  readOnly={readOnly}
+                />
+              );
+            })
+          )}
+        </View>
 
         {/* ── Add Machine section (hidden in readOnly mode) ─── */}
         {!readOnly && (
           <>
-            <TouchableOpacity
-              style={s.addToggleBtn}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setAddExpanded((v) => !v); }}
-              activeOpacity={0.8}
+            <View
+              ref={addToggleRef}
+              onLayout={() => {
+                if (onboardingActive) {
+                  addToggleRef.current?.measureInWindow((x, y, width, height) => {
+                    onRegisterRect?.('machine-add-toggle', { x, y, width, height });
+                  });
+                }
+              }}
             >
-              <Ionicons
-                name={addExpanded ? 'chevron-up' : 'add'}
-                size={18}
-                color={C.accent}
-              />
-              <Text style={s.addToggleText}>머신 추가</Text>
-              {availableToAdd.length > 0 && (
-                <View style={s.addCountBadge}>
-                  <Text style={s.addCountText}>{availableToAdd.length}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={s.addToggleBtn}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setAddExpanded((v) => !v); }}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name={addExpanded ? 'chevron-up' : 'add'}
+                  size={18}
+                  color={C.accent}
+                />
+                <Text style={s.addToggleText}>머신 추가</Text>
+                {availableToAdd.length > 0 && (
+                  <View style={s.addCountBadge}>
+                    <Text style={s.addCountText}>{availableToAdd.length}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
 
             {addExpanded && (
               <View style={s.addPanel}>

@@ -4,7 +4,7 @@ import { Gym, GymWithMachines } from '../../data/types';
 // ── 메모리 캐시 ──────────────────────────────────────────────
 let _gymsCache:     GymWithMachines[] | null = null;
 let _gymsCacheTime: number                   = 0;
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5분
+const CACHE_TTL_MS = 30 * 60 * 1000; // 30분
 
 export function invalidateGymsCache() {
   _gymsCache     = null;
@@ -28,6 +28,7 @@ type GymRow = {
   hours?:         string | null;
   phone?:         string | null;
   website?:       string | null;
+  manager_id?:    string | null;
 };
 
 function rowToGym(row: GymRow): Gym {
@@ -42,6 +43,7 @@ function rowToGym(row: GymRow): Gym {
     hours:         row.hours    ?? null,
     phone:         row.phone    ?? null,
     website:       row.website  ?? null,
+    managerId:     row.manager_id ?? null,
   };
 }
 
@@ -88,7 +90,9 @@ export async function fetchGymsWithMachines(): Promise<GymWithMachines[]> {
       .select(`
         id, name, location, address_detail, description,
         latitude, longitude, hours, phone, website,
-        gym_machines ( machine_id )
+        manager_id,
+        gym_machines ( machine_id ),
+        gym_official_brands ( brand )
       `)
       .order('name');
 
@@ -113,6 +117,8 @@ export async function fetchGymsWithMachines(): Promise<GymWithMachines[]> {
         hours:         row.hours    ?? null,
         phone:         row.phone    ?? null,
         website:       row.website  ?? null,
+        managerId:      row.manager_id ?? null,
+        officialBrands: (row.gym_official_brands ?? []).map((ob: any) => ob.brand),
         machineIds,
         machines: allMachines.filter(m => machineIds.includes(m.id)),
       } as GymWithMachines;
@@ -134,14 +140,17 @@ export async function fetchGymWithMachines(id: string): Promise<GymWithMachines 
 
     const { fetchGymMachineIds } = await import('./gymMachines');
     const { fetchMachines }      = await import('./machines');
-    const [machineIds, allMachines] = await Promise.all([
+    const { fetchGymOfficialBrands } = await import('./gymOfficialBrands');
+    const [machineIds, allMachines, officialBrands] = await Promise.all([
       fetchGymMachineIds(id),
       fetchMachines(),
+      fetchGymOfficialBrands(id),
     ]);
     return {
       ...gym,
       machineIds,
-      machines: allMachines.filter(m => machineIds.includes(m.id)),
+      machines:       allMachines.filter(m => machineIds.includes(m.id)),
+      officialBrands,
     } as GymWithMachines;
   } catch (e) {
     if (__DEV__) console.warn('[db/gyms] fetchGymWithMachines error:', e);

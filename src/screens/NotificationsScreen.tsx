@@ -1,29 +1,29 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  SafeAreaView,
-  StatusBar,
+  View, Text, StyleSheet, FlatList,
+  TouchableOpacity, SafeAreaView, StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { C, R, T } from '../theme';
+import { useAuth } from '../context/AuthContext';
 import {
-  AppNotification,
-  getNotifications,
+  fetchNotifications,
   markNotificationRead,
   markAllNotificationsRead,
+  type AppNotification,
 } from '../lib/db/notifications';
 
-type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+interface Props {
+  onClose: () => void;
+}
 
-const TYPE_META: Record<AppNotification['type'], { icon: IoniconName; color: string }> = {
-  manager_approved: { icon: 'checkmark-circle', color: C.accent },
-  manager_rejected: { icon: 'close-circle',     color: '#ff4d6d'  },
-  announcement:     { icon: 'megaphone',         color: '#ffb547'  },
-  general:          { icon: 'notifications',     color: '#5ba4ff'  },
+const TYPE_META: Record<string, { icon: React.ComponentProps<typeof Ionicons>['name']; color: string }> = {
+  manager_approved: { icon: 'checkmark-circle',  color: '#3dd68c' },
+  manager_rejected: { icon: 'close-circle',       color: C.danger  },
+  announcement:     { icon: 'megaphone',           color: '#ffb547' },
+  general:          { icon: 'notifications',       color: '#5ba4ff' },
+  default:          { icon: 'notifications',       color: C.accent  },
 };
 
 function formatDate(iso: string): string {
@@ -39,30 +39,36 @@ function formatDate(iso: string): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-interface Props {
-  userId: string;
-  onClose: () => void;
-}
-
-export default function NotificationsScreen({ userId, onClose }: Props) {
+export default function NotificationsScreen({ onClose }: Props) {
+  const { user, refreshUser } = useAuth();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const data = await getNotifications(userId);
+    if (!user?.id) return;
+    setLoading(true);
+    const data = await fetchNotifications(user.id);
     setNotifications(data);
     setLoading(false);
-  }, [userId]);
+  }, [user?.id]);
 
   useEffect(() => { load(); }, [load]);
 
-  async function handleMarkRead(id: string) {
-    await markNotificationRead(id);
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  async function handleRead(n: AppNotification) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (!n.read) {
+      await markNotificationRead(n.id);
+      setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, read: true } : item));
+    }
+    if (n.type === 'manager_approved') {
+      await refreshUser();
+    }
   }
 
   async function handleMarkAllRead() {
-    await markAllNotificationsRead(userId);
+    if (!user?.id) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await markAllNotificationsRead(user.id);
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   }
 
@@ -72,15 +78,15 @@ export default function NotificationsScreen({ userId, onClose }: Props) {
     <SafeAreaView style={s.safe}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
 
-      {/* Header */}
+      {/* 헤더 */}
       <View style={s.header}>
-        <TouchableOpacity style={s.headerBtn} onPress={onClose} activeOpacity={0.7}>
-          <Ionicons name="chevron-back" size={20} color={C.text} />
+        <TouchableOpacity onPress={onClose} style={s.headerBtn}>
+          <Ionicons name="chevron-down" size={22} color={C.text} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>알림</Text>
         {unreadCount > 0 ? (
-          <TouchableOpacity style={s.headerBtn} onPress={handleMarkAllRead} activeOpacity={0.7}>
-            <Text style={s.markAllText}>모두 읽음</Text>
+          <TouchableOpacity onPress={handleMarkAllRead} style={s.headerBtn}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: C.accent }}>모두 읽음</Text>
           </TouchableOpacity>
         ) : (
           <View style={s.headerBtn} />
@@ -88,97 +94,72 @@ export default function NotificationsScreen({ userId, onClose }: Props) {
       </View>
 
       {loading ? (
-        <View style={s.emptyWrap}>
-          <Text style={s.emptyText}>불러오는 중...</Text>
+        <View style={s.empty}>
+          <Text style={s.emptyText}>알림을 불러오는 중...</Text>
         </View>
       ) : notifications.length === 0 ? (
-        <View style={s.emptyWrap}>
-          <Ionicons name="notifications-off-outline" size={48} color={C.textDim} />
-          <Text style={s.emptyTitle}>알림이 없어요</Text>
-          <Text style={s.emptyText}>새 알림이 오면 여기에 표시됩니다.</Text>
+        <View style={s.empty}>
+          <Ionicons name="notifications-outline" size={48} color={C.textDim} />
+          <Text style={s.emptyText}>아직 알림이 없어요</Text>
         </View>
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {notifications.map((notif, i) => {
-            const meta = TYPE_META[notif.type] ?? TYPE_META.general;
+        <FlatList
+          data={notifications}
+          keyExtractor={item => item.id}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingVertical: 8 }}
+          renderItem={({ item, index }) => {
+            const meta = TYPE_META[item.type] ?? TYPE_META.default;
             return (
               <TouchableOpacity
-                key={notif.id}
-                style={[s.row, !notif.read && s.rowUnread, i > 0 && s.rowBorder]}
-                activeOpacity={0.75}
-                onPress={() => { if (!notif.read) handleMarkRead(notif.id); }}
+                style={[s.item, !item.read && s.itemUnread, index > 0 && s.itemBorder]}
+                onPress={() => handleRead(item)}
+                activeOpacity={0.8}
               >
-                {/* Unread dot */}
-                {!notif.read && <View style={s.unreadDot} />}
-
-                {/* Icon */}
                 <View style={[s.iconWrap, { backgroundColor: meta.color + '18' }]}>
-                  <Ionicons name={meta.icon} size={20} color={meta.color} />
+                  <Ionicons name={meta.icon} size={22} color={meta.color} />
                 </View>
-
-                {/* Text */}
-                <View style={s.textWrap}>
-                  <Text style={[s.title, !notif.read && s.titleUnread]} numberOfLines={1}>
-                    {notif.title}
-                  </Text>
-                  {notif.body.length > 0 && (
-                    <Text style={s.body} numberOfLines={2}>{notif.body}</Text>
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Text style={[s.itemTitle, !item.read && s.itemTitleUnread]}>{item.title}</Text>
+                  {item.body.length > 0 && (
+                    <Text style={s.itemBody} numberOfLines={2}>{item.body}</Text>
                   )}
-                  <Text style={s.time}>{formatDate(notif.createdAt)}</Text>
+                  <Text style={s.itemTime}>{formatDate(item.createdAt)}</Text>
                 </View>
+                {!item.read && <View style={s.unreadDot} />}
               </TouchableOpacity>
             );
-          })}
-          <View style={{ height: 32 }} />
-        </ScrollView>
+          }}
+          ListFooterComponent={<View style={{ height: 32 }} />}
+        />
       )}
     </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: C.bg },
-
+  safe:   { flex: 1, backgroundColor: C.bg },
   header: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 8, paddingVertical: 12,
     borderBottomWidth: 1, borderBottomColor: C.border,
   },
-  headerBtn:    { width: 60, height: 44, alignItems: 'center', justifyContent: 'center' },
-  headerTitle:  { flex: 1, textAlign: 'center', ...T.section, color: C.text },
-  markAllText:  { fontSize: 12, fontWeight: '700', color: C.accent },
+  headerBtn:   { width: 80, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, textAlign: 'center', fontSize: 16, fontWeight: '800', color: C.text },
 
-  emptyWrap: {
-    flex: 1, alignItems: 'center', justifyContent: 'center',
-    paddingHorizontal: 32, gap: 12,
-  },
-  emptyTitle: { ...T.section, color: C.text },
-  emptyText:  { fontSize: 13, color: C.textDim, textAlign: 'center' },
+  empty:     { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  emptyText: { fontSize: 14, color: C.textDim, fontWeight: '600' },
 
-  row: {
+  item: {
     flexDirection: 'row', alignItems: 'flex-start',
-    paddingHorizontal: 20, paddingVertical: 16,
-    position: 'relative',
+    gap: 12, paddingHorizontal: 16, paddingVertical: 14,
   },
-  rowUnread:  { backgroundColor: C.surfaceHigh },
-  rowBorder:  { borderTopWidth: 1, borderTopColor: C.border },
-
-  unreadDot: {
-    position: 'absolute', left: 8, top: 22,
-    width: 6, height: 6, borderRadius: 3,
-    backgroundColor: C.accent,
-  },
-
-  iconWrap: {
-    width: 40, height: 40,
-    borderRadius: R.inner,
-    alignItems: 'center', justifyContent: 'center',
-    marginRight: 14, flexShrink: 0,
-  },
-
-  textWrap:    { flex: 1 },
-  title:       { fontSize: 14, fontWeight: '600', color: C.textSub, marginBottom: 3 },
-  titleUnread: { color: C.text, fontWeight: '700' },
-  body:        { fontSize: 13, color: C.textDim, lineHeight: 18, marginBottom: 4 },
-  time:        { fontSize: 11, color: C.textDim },
+  itemUnread:      { backgroundColor: C.surface },
+  itemBorder:      { borderTopWidth: 1, borderTopColor: C.border },
+  iconWrap:        { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  itemTitle:       { fontSize: 14, fontWeight: '600', color: C.textSub },
+  itemTitleUnread: { color: C.text, fontWeight: '700' },
+  itemBody:        { fontSize: 13, color: C.textDim, lineHeight: 18 },
+  itemTime:        { fontSize: 11, color: C.textDim, marginTop: 2 },
+  unreadDot:       { width: 8, height: 8, borderRadius: 4, backgroundColor: C.accent, marginTop: 4, flexShrink: 0 },
 });

@@ -8,6 +8,7 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T } from '../../theme';
@@ -293,15 +294,34 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
   function toggleWeekdayMuscle(key: keyof WeekdaySplit, muscle: string) {
     setWeekday(prev => {
       const current = prev[key] as string[];
-      const newArr  = current.includes(muscle)
-        ? current.filter(m => m !== muscle)
-        : [...current, muscle];
-      return { ...prev, [key]: newArr };
+      // 이미 선택된 부위를 해제하는 경우 → 허용
+      if (current.includes(muscle)) {
+        return { ...prev, [key]: current.filter(m => m !== muscle) };
+      }
+      // 이미 1개 선택된 상태에서 추가 선택 시도 → 안내 메시지
+      if (current.length >= 1) {
+        Alert.alert(
+          '준비 중인 기능이에요',
+          '하루에 두 개 이상의 부위를 설정하는 기능은 곧 추가될 예정이에요.',
+        );
+        return prev;
+      }
+      return { ...prev, [key]: [...current, muscle] };
     });
   }
 
   function addToSeq(muscle: string) {
-    setSeqList(prev => [...prev, muscle]);
+    setSeqList(prev => {
+      // 바로 직전 항목과 같은 부위면 안내 (실수 방지)
+      if (prev.length > 0 && prev[prev.length - 1] === muscle) {
+        Alert.alert(
+          '준비 중인 기능이에요',
+          '하루에 두 개 이상의 부위를 묶는 기능은 곧 추가될 예정이에요.',
+        );
+        return prev;
+      }
+      return [...prev, muscle];
+    });
   }
 
   function removeFromSeq(index: number) {
@@ -327,6 +347,12 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
   }
 
   async function handleSkip() {
+    // step 0 (변경하기 화면): 기존 설정 유지 → 저장 없이 바로 완료
+    if (step === 0) {
+      onComplete();
+      return;
+    }
+    // step -1 (최초 설정): 빈 배열로 저장
     setSaving(true);
     try { await saveSplitConfig(userId, 'sequential', []); } catch {}
     setSaving(false);
@@ -783,8 +809,8 @@ const s = StyleSheet.create({
   typeCardRadioDot:      { width: 10, height: 10, borderRadius: 5, backgroundColor: C.accent },
   typeCardTitle:         { fontSize: 15, fontWeight: '700', color: C.text, marginBottom: 4 },
   typeCardTitleSelected: { color: C.accent },
-  typeCardDesc:          { fontSize: 12, color: C.textSub, lineHeight: 18, marginBottom: 4 },
-  typeCardExample:       { fontSize: 11, color: C.textDim, fontStyle: 'italic', lineHeight: 16 },
+  typeCardDesc:          { fontSize: 13, color: C.textSub, lineHeight: 20, marginBottom: 6 },
+  typeCardExample:       { fontSize: 12, color: C.textSub, lineHeight: 18 },
 
   // Chips — FIX 1: 크기 확대
   chip: {

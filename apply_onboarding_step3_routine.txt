@@ -1,0 +1,334 @@
+파일 경로: src/screens/flow/RoutineReferenceScreen.tsx
+파일 경로: src/screens/flow/PostWorkoutLogModal.tsx
+
+확인이나 중단 없이 끝까지 완료해줘.
+
+## 목표
+3단계(루틴 참고 선택) 화면에 온보딩 스포트라이트 적용.
+강조 대상 3곳: "새 루틴 작성하기" 섹션, "이전 운동일지 참고" 섹션, "헬스장 추천 루틴" 섹션.
+(섹션 = SectionHeader + 그 아래 카드/빈 상태 영역 전체를 감싸는 View)
+
+---
+
+## 작업 1 — RoutineReferenceScreen.tsx 수정
+
+### 1-1. import 추가
+파일 상단에 추가:
+
+import { useEffect as useEffectAlias } from 'react'; // 사용하지 않음, 무시
+(주의: 위 줄은 추가하지 말 것. 아래 import만 추가)
+
+import type { OnboardingPointKey } from '../../data/onboardingSteps';
+import type { SpotlightRect } from '../../components/OnboardingTooltip';
+
+useEffect, useRef 가 react import에 없으면 추가:
+import React, { useMemo, useState, useEffect, useRef } from 'react';
+
+### 1-2. RoutineReferenceScreenProps 인터페이스에 props 추가
+현재:
+export interface RoutineReferenceScreenProps {
+  gymId: string;
+  gymName: string;
+  selectedMuscles: string[]; // e.g. ['Chest', 'Back']
+  pastSessions: WorkoutLog[];
+  onSelectMachineIds: (ids: string[], extraInfo?: MachineExtraInfo) => void; // [] = start fresh
+  onBack: () => void;
+  onClose: () => void;
+}
+
+아래로 교체:
+export interface RoutineReferenceScreenProps {
+  gymId: string;
+  gymName: string;
+  selectedMuscles: string[]; // e.g. ['Chest', 'Back']
+  pastSessions: WorkoutLog[];
+  onSelectMachineIds: (ids: string[], extraInfo?: MachineExtraInfo) => void; // [] = start fresh
+  onBack: () => void;
+  onClose: () => void;
+  onRegisterRect?: (key: OnboardingPointKey, rect: SpotlightRect) => void;
+  onboardingActive?: boolean;
+  onboardingKey?: OnboardingPointKey | null;
+}
+
+### 1-3. 함수 파라미터에 props 추가
+현재:
+export default function RoutineReferenceScreen({
+  gymId,
+  gymName,
+  selectedMuscles,
+  pastSessions,
+  onSelectMachineIds,
+  onBack,
+  onClose,
+}: RoutineReferenceScreenProps) {
+
+아래로 교체:
+export default function RoutineReferenceScreen({
+  gymId,
+  gymName,
+  selectedMuscles,
+  pastSessions,
+  onSelectMachineIds,
+  onBack,
+  onClose,
+  onRegisterRect,
+  onboardingActive,
+  onboardingKey,
+}: RoutineReferenceScreenProps) {
+
+### 1-4. ref 선언 추가
+함수 내부, 다른 useState들 근처에 추가:
+
+  const startFreshRef    = useRef<View>(null);
+  const pastSessionsRef  = useRef<View>(null);
+  const gymRoutinesRef   = useRef<View>(null);
+
+### 1-5. 재측정 useEffect 추가
+ref 선언 아래에 추가:
+
+  useEffect(() => {
+    if (!onboardingActive) return;
+    const measure = (key: OnboardingPointKey, ref: React.RefObject<View>) => {
+      requestAnimationFrame(() => {
+        ref.current?.measureInWindow((x, y, width, height) => {
+          onRegisterRect?.(key, { x, y, width, height });
+        });
+      });
+    };
+    if (onboardingKey === 'routine-new')         measure('routine-new', startFreshRef);
+    if (onboardingKey === 'routine-past')        measure('routine-past', pastSessionsRef);
+    if (onboardingKey === 'routine-recommended') measure('routine-recommended', gymRoutinesRef);
+  }, [onboardingActive, onboardingKey]);
+
+### 1-6. Section 1 (Start Fresh)을 ref로 감싸기
+현재:
+        {/* ── Section 1: Start Fresh ─────────────────────────── */}
+        <SectionHeader icon="add-circle-outline" label="Start Fresh" />
+        <TouchableOpacity
+          style={[s.card, s.startFreshCard]}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onSelectMachineIds([]); }}
+          activeOpacity={0.8}
+        >
+          <View style={s.cardRow}>
+            <View style={[s.cardIcon, { backgroundColor: C.accentBg ?? C.accent + '18' }]}>
+              <Ionicons name="create-outline" size={18} color={C.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.cardTitle, { color: C.accent }]}>새 루틴 작성하기</Text>
+              <Text style={s.cardSub}>
+                머신을 직접 추가하며 오늘 루틴을 만들어요
+              </Text>
+              <Text style={s.cardHint}>운동 종료 후 루틴 저장 옵션 제공</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={15} color={C.accent} style={s.cardChevron} />
+          </View>
+        </TouchableOpacity>
+
+아래로 교체:
+        {/* ── Section 1: Start Fresh ─────────────────────────── */}
+        <View
+          ref={startFreshRef}
+          onLayout={() => {
+            if (onboardingActive) {
+              startFreshRef.current?.measureInWindow((x, y, width, height) => {
+                onRegisterRect?.('routine-new', { x, y, width, height });
+              });
+            }
+          }}
+        >
+          <SectionHeader icon="add-circle-outline" label="Start Fresh" />
+          <TouchableOpacity
+            style={[s.card, s.startFreshCard]}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onSelectMachineIds([]); }}
+            activeOpacity={0.8}
+          >
+            <View style={s.cardRow}>
+              <View style={[s.cardIcon, { backgroundColor: C.accentBg ?? C.accent + '18' }]}>
+                <Ionicons name="create-outline" size={18} color={C.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.cardTitle, { color: C.accent }]}>새 루틴 작성하기</Text>
+                <Text style={s.cardSub}>
+                  머신을 직접 추가하며 오늘 루틴을 만들어요
+                </Text>
+                <Text style={s.cardHint}>운동 종료 후 루틴 저장 옵션 제공</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={15} color={C.accent} style={s.cardChevron} />
+            </View>
+          </TouchableOpacity>
+        </View>
+
+### 1-7. Section 2 (이전 운동일지 참고)를 ref로 감싸기
+현재:
+        {/* ── Section 2: Past workout logs ──────────────────── */}
+        <SectionHeader icon="time-outline" label="이전 운동일지 참고" />
+        {filteredPast.length === 0 ? (
+          <View style={s.emptyBox}>
+            <Text style={s.emptyText}>
+              {gymName}에서 {muscleLabel} 기록이 없어요
+            </Text>
+          </View>
+        ) : (
+          filteredPast.map((session) => (
+            <PastSessionCard
+              key={session.id}
+              session={session}
+              onPress={() => {
+                const ids = session.machines.map((m) => m.machineId);
+                const extraInfo: MachineExtraInfo = {};
+                session.machines.forEach((m) => {
+                  extraInfo[m.machineId] = {
+                    name: m.machineName,
+                    brand: m.machineBrand ?? '',
+                    targetMuscle: m.targetMuscle,
+                  };
+                });
+                onSelectMachineIds(ids, extraInfo);
+              }}
+            />
+          ))
+        )}
+
+아래로 교체:
+        {/* ── Section 2: Past workout logs ──────────────────── */}
+        <View
+          ref={pastSessionsRef}
+          onLayout={() => {
+            if (onboardingActive) {
+              pastSessionsRef.current?.measureInWindow((x, y, width, height) => {
+                onRegisterRect?.('routine-past', { x, y, width, height });
+              });
+            }
+          }}
+        >
+          <SectionHeader icon="time-outline" label="이전 운동일지 참고" />
+          {filteredPast.length === 0 ? (
+            <View style={s.emptyBox}>
+              <Text style={s.emptyText}>
+                {gymName}에서 {muscleLabel} 기록이 없어요
+              </Text>
+            </View>
+          ) : (
+            filteredPast.map((session) => (
+              <PastSessionCard
+                key={session.id}
+                session={session}
+                onPress={() => {
+                  const ids = session.machines.map((m) => m.machineId);
+                  const extraInfo: MachineExtraInfo = {};
+                  session.machines.forEach((m) => {
+                    extraInfo[m.machineId] = {
+                      name: m.machineName,
+                      brand: m.machineBrand ?? '',
+                      targetMuscle: m.targetMuscle,
+                    };
+                  });
+                  onSelectMachineIds(ids, extraInfo);
+                }}
+              />
+            ))
+          )}
+        </View>
+
+### 1-8. Section 3 (헬스장 추천 루틴)을 ref로 감싸기
+현재:
+        {/* ── Section 3: Gym recommended routines ───────────── */}
+        <SectionHeader icon="medal-outline" label="헬스장 추천 루틴" />
+        {gymRoutines.length === 0 ? (
+          <View style={s.emptyBox}>
+            <Text style={s.emptyText}>등록된 추천 루틴이 없어요</Text>
+          </View>
+        ) : (
+          gymRoutines.map((r) => (
+            <GymRoutineCard
+              key={r.id}
+              routine={r}
+              onPress={() => onSelectMachineIds(r.machineIds)}
+            />
+          ))
+        )}
+
+아래로 교체:
+        {/* ── Section 3: Gym recommended routines ───────────── */}
+        <View
+          ref={gymRoutinesRef}
+          onLayout={() => {
+            if (onboardingActive) {
+              gymRoutinesRef.current?.measureInWindow((x, y, width, height) => {
+                onRegisterRect?.('routine-recommended', { x, y, width, height });
+              });
+            }
+          }}
+        >
+          <SectionHeader icon="medal-outline" label="헬스장 추천 루틴" />
+          {gymRoutines.length === 0 ? (
+            <View style={s.emptyBox}>
+              <Text style={s.emptyText}>등록된 추천 루틴이 없어요</Text>
+            </View>
+          ) : (
+            gymRoutines.map((r) => (
+              <GymRoutineCard
+                key={r.id}
+                routine={r}
+                onPress={() => onSelectMachineIds(r.machineIds)}
+              />
+            ))
+          )}
+        </View>
+
+---
+
+## 작업 2 — PostWorkoutLogModal.tsx: RoutineReferenceScreen 호출부 수정
+
+현재:
+      case 'routine-reference':
+        return (
+          <RoutineReferenceScreen
+            gymId={gym!.id}
+            gymName={gym!.name}
+            selectedMuscles={Array.from(selectedMuscles)}
+            pastSessions={sessions}
+            onSelectMachineIds={(ids, extraInfo) => {
+              if (ids.length === 0) {
+                setStep('exercise-select');
+              } else {
+                setPreloadedIdsOrdered(ids);
+                setRoutineMachineIds(ids);
+                setRoutineReadOnly(true);
+                setRoutineExtraInfo(extraInfo);
+                setStep('today-list');
+              }
+            }}
+            onBack={goBack}
+            onClose={() => onClose(false)}
+          />
+        );
+
+아래로 교체:
+      case 'routine-reference':
+        return (
+          <RoutineReferenceScreen
+            gymId={gym!.id}
+            gymName={gym!.name}
+            selectedMuscles={Array.from(selectedMuscles)}
+            pastSessions={sessions}
+            onSelectMachineIds={(ids, extraInfo) => {
+              if (ids.length === 0) {
+                setStep('exercise-select');
+              } else {
+                setPreloadedIdsOrdered(ids);
+                setRoutineMachineIds(ids);
+                setRoutineReadOnly(true);
+                setRoutineExtraInfo(extraInfo);
+                setStep('today-list');
+              }
+            }}
+            onBack={goBack}
+            onClose={() => onClose(false)}
+            onRegisterRect={onboarding.registerRect}
+            onboardingActive={onboarding.active}
+            onboardingKey={onboarding.currentKey}
+          />
+        );
+
+완료 후 변경된 부분 요약해줘.
