@@ -18,7 +18,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T } from '../../theme';
 import { PendingGym, PendingEdit, FlaggedItem, ReviewStatus, FlagType } from '../../data/types';
-import { PENDING_GYMS, PENDING_EDITS, FLAGGED_ITEMS } from '../../data/mockAdmin';
 import { MACHINES } from '../../data/machines';
 import type { Machine } from '../../data/types';
 import { Switch } from 'react-native';
@@ -1596,9 +1595,9 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
   }, [viewStack.length, onClose]);
 
   // --- State
-  const [pendingGyms,   setPendingGyms]   = useState<PendingGym[]>(() => PENDING_GYMS.map(g => ({...g})));
-  const [pendingEdits,  setPendingEdits]  = useState<PendingEdit[]>(PENDING_EDITS);
-  const [flaggedItems,  setFlaggedItems]  = useState<FlaggedItem[]>(FLAGGED_ITEMS);
+  const [pendingGyms,   setPendingGyms]   = useState<PendingGym[]>([]);
+  const [pendingEdits,  setPendingEdits]  = useState<PendingEdit[]>([]);
+  const [flaggedItems,  setFlaggedItems]  = useState<FlaggedItem[]>([]);
   const [selectedGym,  setSelectedGym]   = useState<PendingGym | null>(null);
   const [gymList,      setGymList]       = useState<RegistrationGym[]>(() => getAllGymsForAdmin());
   const [editList,     setEditList]      = useState<RegEditRequest[]>(() => getAllEditRequests());
@@ -1832,6 +1831,21 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
       }
 
       const { user_id, gym_name, location, phone } = reqData;
+
+      // 이미 관리 중인 헬스장이 있는지 확인
+      const { data: existingManaged } = await supabase
+        .from('gyms')
+        .select('id, name')
+        .eq('manager_id', user_id)
+        .maybeSingle();
+
+      if (existingManaged) {
+        Alert.alert(
+          '승인 불가',
+          `이 유저는 이미 ${existingManaged.name} 헬스장을 관리 중이에요.\n매니저는 하나의 헬스장만 관리할 수 있어요.`
+        );
+        return;
+      }
 
       // 3. profiles.role = 'manager' 업데이트
       const { error: profileError } = await supabase

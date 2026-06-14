@@ -47,8 +47,44 @@ export default function ManagerRequestModal({ visible, userId, onClose }: Props)
     if (!gymName.trim() || !location.trim()) return;
     setLoading(true);
     try {
-      // Supabase manager_requests 테이블에 저장
       const { supabase } = await import('../../lib/supabase');
+
+      // 이미 pending 상태인 신청이 있는지 확인
+      const { data: existing } = await supabase
+        .from('manager_requests')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('status', 'pending')
+        .maybeSingle();
+
+      if (existing) {
+        setLoading(false);
+        const { Alert } = await import('react-native');
+        Alert.alert(
+          '신청 진행 중',
+          '이미 매니저 신청이 접수되어 있어요.\n승인 또는 거절 후 다시 신청할 수 있어요.'
+        );
+        return;
+      }
+
+      // 이미 매니저 계정인지 확인 (gyms 테이블에 manager_id로 연결된 헬스장 있는지)
+      const { data: managedGym } = await supabase
+        .from('gyms')
+        .select('id, name')
+        .eq('manager_id', userId)
+        .maybeSingle();
+
+      if (managedGym) {
+        setLoading(false);
+        const { Alert } = await import('react-native');
+        Alert.alert(
+          '이미 관리 중인 헬스장이 있어요',
+          `현재 ${managedGym.name} 헬스장을 관리 중이에요.\n매니저는 하나의 헬스장만 관리할 수 있어요.`
+        );
+        return;
+      }
+
+      // Supabase manager_requests 테이블에 저장
       const { error } = await supabase.from('manager_requests').insert({
         user_id:  userId,
         gym_name: gymName.trim(),
