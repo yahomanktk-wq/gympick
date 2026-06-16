@@ -13,6 +13,8 @@ import {
   Alert,
   Linking,
   Platform,
+  PixelRatio,
+  ActionSheetIOS,
 } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -441,21 +443,35 @@ function SessionDetailModal({
       return;
     }
     try {
-      if (session.compositeUri) {
-        await MediaLibrary.saveToLibraryAsync(session.compositeUri);
-      } else if (session.photoUri) {
-        const pNode = photoRefs.current[session.id];
-        if (pNode) {
-          const uri = await captureRef(pNode, { format: 'jpg', quality: 0.95, result: 'tmpfile' });
-          await MediaLibrary.saveToLibraryAsync(uri);
+      // 1. 인증샷 저장 — compositeUri는 원격 URL이라 captureRef로 재캡처
+      const photoNode = photoRefs.current[session.id];
+      if (photoNode) {
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        const uri = await captureRef(photoNode, {
+          format: 'png', quality: 1, result: 'tmpfile',
+          pixelRatio: Math.max(PixelRatio.get(), 2),
+        });
+        await MediaLibrary.saveToLibraryAsync(uri);
+      } else if (session.compositeUri) {
+        // photoRef 없을 때만 URL 직접 사용 (로컬 파일인 경우만 동작)
+        try { await MediaLibrary.saveToLibraryAsync(session.compositeUri); } catch {}
+      }
+
+      // 2. 루틴카드 페이지별 캡처 및 저장 (인스타 방식과 동일)
+      const pageRefs = routinePageRefs.current[session.id] ?? [];
+      for (const ref of pageRefs) {
+        if (ref) {
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          await new Promise(resolve => setTimeout(resolve, 100));
+          const pageUri = await captureRef(ref, {
+            format: 'png', quality: 1, result: 'tmpfile',
+            width: PHOTO_W_J, height: ROUTINE_CARD_H_J,
+            pixelRatio: Math.max(PixelRatio.get(), 2),
+          });
+          await MediaLibrary.saveToLibraryAsync(pageUri);
         }
       }
-      const rcNode = routineCardRefs.current[session.id];
-      if (rcNode) {
-        await new Promise(resolve => requestAnimationFrame(resolve));
-        const routineUri = await captureRef(rcNode, { format: 'jpg', quality: 0.95, result: 'tmpfile' });
-        await MediaLibrary.saveToLibraryAsync(routineUri);
-      }
+
       Alert.alert('저장 완료', '인증샷과 운동 루틴 카드가 저장되었습니다.');
     } catch (e) {
       if (__DEV__) console.warn('[JournalScreen] handleSave 오류:', e);
@@ -472,19 +488,17 @@ function SessionDetailModal({
     try {
       const savedAssets: MediaLibrary.Asset[] = [];
 
-      // 1. 인증샷 저장 (URL 지원되는 saveToLibraryAsync 사용)
-      if (session.compositeUri) {
-        await MediaLibrary.saveToLibraryAsync(session.compositeUri);
+      // 1. 인증샷 저장 — photoRefs로 View 직접 캡처 (PNG 투명 배경 보존)
+      const photoNode = photoRefs.current[session.id];
+      if (photoNode) {
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        const uri = await captureRef(photoNode, {
+          format: 'png', quality: 1, result: 'tmpfile',
+          pixelRatio: Math.max(PixelRatio.get(), 2),
+        });
+        await MediaLibrary.saveToLibraryAsync(uri);
         const { assets } = await MediaLibrary.getAssetsAsync({ first: 1, sortBy: MediaLibrary.SortBy.creationTime });
         if (assets.length > 0) savedAssets.push(assets[0]);
-      } else if (session.photoUri) {
-        const pNode = photoRefs.current[session.id];
-        if (pNode) {
-          const uri = await captureRef(pNode, { format: 'jpg', quality: 0.95, result: 'tmpfile' });
-          await MediaLibrary.saveToLibraryAsync(uri);
-          const { assets } = await MediaLibrary.getAssetsAsync({ first: 1, sortBy: MediaLibrary.SortBy.creationTime });
-          if (assets.length > 0) savedAssets.push(assets[0]);
-        }
       }
 
       // 2. 루틴카드 페이지별 캡처 및 저장
@@ -494,8 +508,9 @@ function SessionDetailModal({
           await new Promise(resolve => requestAnimationFrame(resolve));
           await new Promise(resolve => setTimeout(resolve, 100));
           const pageUri = await captureRef(ref, {
-            format: 'jpg', quality: 0.95, result: 'tmpfile',
+            format: 'png', quality: 1, result: 'tmpfile',
             width: PHOTO_W_J, height: ROUTINE_CARD_H_J,
+            pixelRatio: Math.max(PixelRatio.get(), 2),
           });
           await MediaLibrary.saveToLibraryAsync(pageUri);
           const { assets } = await MediaLibrary.getAssetsAsync({ first: 1, sortBy: MediaLibrary.SortBy.creationTime });
@@ -517,7 +532,7 @@ function SessionDetailModal({
         const canShare = await Sharing.isAvailableAsync();
         if (session.compositeUri && canShare) {
           await Sharing.shareAsync(session.compositeUri, {
-            mimeType: 'image/webp',
+            mimeType: 'image/png',
             dialogTitle: '인스타그램에 공유',
           });
         } else {
@@ -667,20 +682,36 @@ function SessionDetailModal({
                 <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 12 }}>
                   <TouchableOpacity
                     style={[det.photoActionBtn, { flex: 1 }]}
-                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); handleSave(session); }}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      if (Platform.OS === 'ios') {
+                        ActionSheetIOS.showActionSheetWithOptions(
+                          {
+                            options: ['취소', '기기에 저장', '인스타그램에 업로드'],
+                            cancelButtonIndex: 0,
+                            title: '저장 방식 선택',
+                          },
+                          (buttonIndex) => {
+                            if (buttonIndex === 1) handleSave(session);
+                            if (buttonIndex === 2) handleInstagramShare(session);
+                          }
+                        );
+                      } else {
+                        Alert.alert(
+                          '저장 방식 선택',
+                          '어떻게 저장할까요?',
+                          [
+                            { text: '취소', style: 'cancel' },
+                            { text: '기기에 저장', onPress: () => handleSave(session) },
+                            { text: '인스타그램에 업로드', onPress: () => handleInstagramShare(session) },
+                          ]
+                        );
+                      }
+                    }}
                     activeOpacity={0.8}
                   >
-                    <Ionicons name="download-outline" size={16} color={C.text} />
-                    <Text style={det.photoActionTxt}>저장</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[det.photoActionBtn, { flex: 1 }]}
-                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); handleInstagramShare(session); }}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="logo-instagram" size={16} color={C.accent} />
-                    <Text style={[det.photoActionTxt, { color: C.accent }]}>인스타그램</Text>
+                    <Ionicons name="share-outline" size={16} color={C.text} />
+                    <Text style={det.photoActionTxt}>저장 / 공유</Text>
                   </TouchableOpacity>
 
                   {publicStatusMap[session.id] !== undefined && publicStatusMap[session.id] !== null && (

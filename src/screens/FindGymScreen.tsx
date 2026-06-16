@@ -200,17 +200,17 @@ function GymCard({
         {/* 오피셜 브랜드 로고 */}
         {gym.officialBrands && gym.officialBrands.length > 0 && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-            <Ionicons name="shield-checkmark" size={11} color="#5ba4ff" />
             {gym.officialBrands.map(brand => {
               const key = brand.toUpperCase().replace(/\s+/g, '_');
               const logo = brandLogos[key];
               return logo ? (
-                <Image
-                  key={brand}
-                  source={logo}
-                  style={{ width: 36, height: 16 }}
-                  resizeMode="contain"
-                />
+                <View key={brand} style={{ backgroundColor: '#ffffff', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 3 }}>
+                  <Image
+                    source={logo}
+                    style={{ width: 36, height: 14 }}
+                    resizeMode="contain"
+                  />
+                </View>
               ) : (
                 <Text key={brand} style={{ fontSize: 9, fontWeight: '700', color: '#5ba4ff' }}>
                   {brand}

@@ -15,6 +15,7 @@ import {
   Linking,
   Platform,
   PixelRatio,
+  ActionSheetIOS,
   KeyboardAvoidingView,
 } from 'react-native';
 import * as Sharing from 'expo-sharing';
@@ -2510,14 +2511,28 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
       onCompositeUri(capturedUri);
       await MediaLibrary.saveToLibraryAsync(capturedUri);
 
-      // 루틴카드 캡처 및 저장
-      if (routineCardRef.current) {
-        await new Promise(resolve => requestAnimationFrame(resolve));
-        const routineUri = await captureRef(routineCardRef, {
-          format: 'png', quality: 1, result: 'tmpfile', pixelRatio: Math.max(PixelRatio.get(), 3),
-        });
-        await MediaLibrary.saveToLibraryAsync(routineUri);
-        onRoutineCardUri?.(routineUri);
+      // 루틴카드 페이지별 캡처 및 저장 (인스타그램 방식과 동일)
+      const routineUris: string[] = [];
+      for (let i = 0; i < pageCount; i++) {
+        const ref = routinePageRefs.current[i];
+        if (ref) {
+          try {
+            await new Promise(resolve => requestAnimationFrame(resolve));
+            await new Promise(resolve => setTimeout(resolve, 100));
+            const pageUri = await captureRef(ref, {
+              format: 'png', quality: 1, result: 'tmpfile',
+              width: PHOTO_W, height: ROUTINE_CARD_H,
+              pixelRatio: Math.max(PixelRatio.get(), 3),
+            });
+            routineUris.push(pageUri);
+            await MediaLibrary.saveToLibraryAsync(pageUri);
+          } catch (e) {
+            console.error(`[SaveImage] 루틴카드 페이지 ${i} 캡처 실패:`, e);
+          }
+        }
+      }
+      if (routineUris.length > 0) {
+        onRoutineCardUri?.(routineUris[0]);
       }
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -3249,18 +3264,40 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
             }
           }}
         >
-          <TouchableOpacity style={s.shareBtn} activeOpacity={0.8} onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            handleSaveImage();
-          }}>
-            <Ionicons name="image-outline" size={16} color={C.textSub} />
-            <Text style={[s.shareBtnTxt, { color: C.textSub }]}>
-              {saveSuccess ? '저장됨 ✓' : '이미지 저장'}
+          <TouchableOpacity
+            style={[s.shareBtn, { flex: 1 }]}
+            activeOpacity={0.8}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              if (Platform.OS === 'ios') {
+                ActionSheetIOS.showActionSheetWithOptions(
+                  {
+                    options: ['취소', '기기에 저장', '인스타그램에 업로드'],
+                    cancelButtonIndex: 0,
+                    title: '저장 방식 선택',
+                  },
+                  (buttonIndex) => {
+                    if (buttonIndex === 1) handleSaveImage();
+                    if (buttonIndex === 2) handleInstagramShare();
+                  }
+                );
+              } else {
+                Alert.alert(
+                  '저장 방식 선택',
+                  '어떻게 저장할까요?',
+                  [
+                    { text: '취소', style: 'cancel' },
+                    { text: '기기에 저장', onPress: handleSaveImage },
+                    { text: '인스타그램에 업로드', onPress: handleInstagramShare },
+                  ]
+                );
+              }
+            }}
+          >
+            <Ionicons name="share-outline" size={18} color={C.text} />
+            <Text style={s.shareBtnTxt}>
+              {saveSuccess ? '저장됨 ✓' : '저장 / 공유'}
             </Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={s.shareBtn} activeOpacity={0.8} onPress={handleInstagramShare}>
-            <Ionicons name="logo-instagram" size={16} color={C.accent} />
-            <Text style={s.shareBtnTxt}>인스타그램</Text>
           </TouchableOpacity>
         </View>
 

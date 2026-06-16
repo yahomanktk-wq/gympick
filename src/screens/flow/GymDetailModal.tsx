@@ -531,23 +531,22 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
                           flexDirection: 'row',
                           alignItems: 'center',
                           gap: 8,
-                          backgroundColor: '#5ba4ff12',
+                          backgroundColor: '#1e2230',
                           borderRadius: 10,
                           borderWidth: 1,
-                          borderColor: '#5ba4ff30',
+                          borderColor: '#5ba4ff40',
                           paddingHorizontal: 12,
                           paddingVertical: 8,
                         }}
                       >
                         {logo ? (
-                          <Image source={logo} style={{ width: 48, height: 20 }} resizeMode="contain" />
+                          <View style={{ backgroundColor: '#ffffff', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 3 }}>
+                            <Image source={logo} style={{ width: 48, height: 18 }} resizeMode="contain" />
+                          </View>
                         ) : (
                           <Text style={{ fontSize: 11, fontWeight: '700', color: '#5ba4ff' }}>{brand}</Text>
                         )}
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                          <Ionicons name="shield-checkmark" size={10} color="#5ba4ff" />
-                          <Text style={{ fontSize: 9, fontWeight: '700', color: '#5ba4ff' }}>OFFICIAL</Text>
-                        </View>
+                        <Text style={{ fontSize: 9, fontWeight: '700', color: '#5ba4ff' }}>OFFICIAL</Text>
                       </View>
                     );
                   })}
