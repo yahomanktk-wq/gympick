@@ -7,15 +7,18 @@ export async function pickAndUploadProfileImage(
   userId: string,
 ): Promise<string | null> {
   try {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) return null;
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
+    let result: ImagePicker.ImagePickerResult;
+    try {
+      result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+    } catch (e) {
+      console.warn('[GymPick] 사진 라이브러리 접근 실패:', e);
+      return null;
+    }
 
     if (result.canceled || !result.assets?.[0]) return null;
 

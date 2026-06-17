@@ -437,7 +437,7 @@ function SessionDetailModal({
   });
 
   async function handleSave(session: WorkoutLog) {
-    const { status } = await MediaLibrary.requestPermissionsAsync();
+    const { status } = await MediaLibrary.requestPermissionsAsync(true);
     if (status !== 'granted') {
       Alert.alert('권한 필요', '사진 저장을 위해 사진 라이브러리 접근 권한이 필요합니다.');
       return;
@@ -480,7 +480,7 @@ function SessionDetailModal({
   }
 
   async function handleInstagramShare(session: WorkoutLog) {
-    const { status } = await MediaLibrary.requestPermissionsAsync();
+    const { status } = await MediaLibrary.requestPermissionsAsync(true);
     if (status !== 'granted') {
       Alert.alert('권한 필요', '사진 저장을 위해 미디어 라이브러리 접근 권한이 필요합니다.');
       return;
@@ -496,9 +496,8 @@ function SessionDetailModal({
           format: 'png', quality: 1, result: 'tmpfile',
           pixelRatio: Math.max(PixelRatio.get(), 2),
         });
-        await MediaLibrary.saveToLibraryAsync(uri);
-        const { assets } = await MediaLibrary.getAssetsAsync({ first: 1, sortBy: MediaLibrary.SortBy.creationTime });
-        if (assets.length > 0) savedAssets.push(assets[0]);
+        const asset = await MediaLibrary.createAssetAsync(uri);
+        savedAssets.push(asset);
       }
 
       // 2. 루틴카드 페이지별 캡처 및 저장
@@ -512,9 +511,8 @@ function SessionDetailModal({
             width: PHOTO_W_J, height: ROUTINE_CARD_H_J,
             pixelRatio: Math.max(PixelRatio.get(), 2),
           });
-          await MediaLibrary.saveToLibraryAsync(pageUri);
-          const { assets } = await MediaLibrary.getAssetsAsync({ first: 1, sortBy: MediaLibrary.SortBy.creationTime });
-          if (assets.length > 0) savedAssets.push(assets[0]);
+          const asset = await MediaLibrary.createAssetAsync(pageUri);
+          savedAssets.push(asset);
         }
       }
 

@@ -2496,7 +2496,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
       return;
     }
     try {
-      const { status } = await MediaLibrary.requestPermissionsAsync();
+      const { status } = await MediaLibrary.requestPermissionsAsync(true);
       if (status !== 'granted') {
         Alert.alert('권한 필요', '사진 저장을 위해 미디어 라이브러리 접근 권한이 필요합니다.');
         return;
@@ -2551,7 +2551,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
       return;
     }
     try {
-      const { status } = await MediaLibrary.requestPermissionsAsync();
+      const { status } = await MediaLibrary.requestPermissionsAsync(true);
       if (status !== 'granted') {
         Alert.alert('권한 필요', '사진 저장을 위해 미디어 라이브러리 접근 권한이 필요합니다.');
         return;
@@ -3964,17 +3964,19 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   }
 
   async function handleCapture(_aspect: [number, number] = [3, 4]) {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
+    let result: ImagePicker.ImagePickerResult;
+    try {
+      result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 0.9,
+        exif: true,
+      });
+    } catch (e) {
+      console.warn('[GymPick] 사진 라이브러리 접근 실패:', e);
       Alert.alert('권한 필요', '사진 라이브러리 접근 권한이 필요합니다.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: false,
-      quality: 0.9,
-      exif: true,
-    });
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
 

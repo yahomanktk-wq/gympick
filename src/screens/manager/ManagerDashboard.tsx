@@ -1538,9 +1538,14 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
       {
         text: '앨범에서 선택',
         onPress: async () => {
-          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-          if (status !== 'granted') { Alert.alert('권한 필요', '사진 라이브러리 접근 권한이 필요합니다.'); return; }
-          const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.85 });
+          let result: ImagePicker.ImagePickerResult;
+          try {
+            result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.85 });
+          } catch (e) {
+            console.warn('[GymPick] 사진 라이브러리 접근 실패:', e);
+            Alert.alert('권한 필요', '사진 라이브러리 접근 권한이 필요합니다.');
+            return;
+          }
           if (!result.canceled && result.assets[0]) await upload(result.assets[0].uri);
         },
       },
