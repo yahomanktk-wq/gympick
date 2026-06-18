@@ -2362,6 +2362,8 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
   const colorChipRef    = useRef<View>(null);
   const shareRowRef     = useRef<View>(null);
   const ctaBarRef       = useRef<View>(null);
+  const photoScrollRef  = useRef<ScrollView>(null);
+  const photoScrollYRef = useRef(0);
 
   useEffect(() => {
     if (!onboardingActive) return;
@@ -2369,6 +2371,24 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
       requestAnimationFrame(() => {
         ref.current?.measureInWindow((x, y, width, height) => {
           onRegisterRect?.(key, { x, y, width, height });
+        });
+      });
+    };
+
+    // 스크롤 후 measureInWindow: photo-overlay/color/save-share 전용
+    // 스크롤 완료(380ms) 후에 좌표를 재측정해야 스포트라이트가 정확하게 표시됨
+    const scrollThenMeasure = (key: OnboardingPointKey, ref: React.RefObject<View>) => {
+      ref.current?.measureInWindow((ex, ey) => {
+        photoScrollRef.current?.measureInWindow((_sx, sy) => {
+          const contentY = (ey - sy) + photoScrollYRef.current;
+          photoScrollRef.current?.scrollTo({ y: Math.max(0, contentY - 50), animated: true });
+          setTimeout(() => {
+            requestAnimationFrame(() => {
+              ref.current?.measureInWindow((x, y, width, height) => {
+                onRegisterRect?.(key, { x, y, width, height });
+              });
+            });
+          }, 380);
         });
       });
     };
@@ -2399,21 +2419,21 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
       if (!photoTaken && !showCamera) {
         onOnboardingJump?.('workout-save');
       } else {
-        measure('photo-overlay', overlayStyleRef);
+        scrollThenMeasure('photo-overlay', overlayStyleRef);
       }
     }
     if (onboardingKey === 'photo-color') {
       if (!photoTaken && !showCamera) {
         onOnboardingJump?.('workout-save');
       } else {
-        measure('photo-color', colorChipRef);
+        scrollThenMeasure('photo-color', colorChipRef);
       }
     }
     if (onboardingKey === 'photo-save-share') {
       if (!photoTaken) {
         onOnboardingJump?.('workout-save');
       } else {
-        measure('photo-save-share', shareRowRef);
+        scrollThenMeasure('photo-save-share', shareRowRef);
       }
     }
     if (onboardingKey === 'workout-save') {
@@ -2496,11 +2516,6 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
       return;
     }
     try {
-      const { status } = await MediaLibrary.requestPermissionsAsync(true);
-      if (status !== 'granted') {
-        Alert.alert('권한 필요', '사진 저장을 위해 미디어 라이브러리 접근 권한이 필요합니다.');
-        return;
-      }
       await new Promise(resolve => requestAnimationFrame(resolve));
       await new Promise<void>(resolve => InteractionManager.runAfterInteractions(() => resolve()));
       if (!overlayRef.current) {
@@ -2551,11 +2566,6 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
       return;
     }
     try {
-      const { status } = await MediaLibrary.requestPermissionsAsync(true);
-      if (status !== 'granted') {
-        Alert.alert('권한 필요', '사진 저장을 위해 미디어 라이브러리 접근 권한이 필요합니다.');
-        return;
-      }
       await new Promise(resolve => requestAnimationFrame(resolve));
       await new Promise<void>(resolve => InteractionManager.runAfterInteractions(() => resolve()));
 
@@ -2650,7 +2660,13 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
     <SafeAreaView style={s.safe} edges={["top", "bottom"]}>
       <NavHeader title="운동 사진" onBack={onBack} onClose={onClose} />
       <StepBar total={5} current={3} />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
+      <ScrollView
+        ref={photoScrollRef}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={s.listPad}
+        onScroll={e => { photoScrollYRef.current = e.nativeEvent.contentOffset.y; }}
+        scrollEventThrottle={16}
+      >
         {/* No photo: show camera CTA as TouchableOpacity */}
         {!photoTaken && !showCamera && (
           <TouchableOpacity

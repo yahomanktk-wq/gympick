@@ -10,11 +10,13 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T } from '../../theme';
 import { addManagerApplication } from '../../data/managerApplicationStore';
 import { useAuth } from '../../context/AuthContext';
+import { geocodeAddress } from '../../lib/geocoding';
 
 interface Props {
   visible: boolean;
@@ -46,6 +48,16 @@ export default function ManagerRequestModal({ visible, userId, onClose }: Props)
   async function handleSubmit() {
     if (!gymName.trim() || !location.trim()) return;
     setLoading(true);
+    const coords = await geocodeAddress(location.trim());
+    if (!coords) {
+      setLoading(false);
+      Alert.alert(
+        '주소를 확인해주세요',
+        `"${location.trim()}" 주소를 찾을 수 없어요.\n\n도로명 주소나 지번 주소를 정확하게 입력해주세요.\n예) 서울 강남구 테헤란로 152`,
+        [{ text: '확인', style: 'default' }],
+      );
+      return;
+    }
     try {
       const { supabase } = await import('../../lib/supabase');
 

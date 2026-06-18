@@ -17,6 +17,7 @@ import {
   ActionSheetIOS,
 } from 'react-native';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as MediaLibrary from 'expo-media-library';
 import { captureRef } from 'react-native-view-shot';
@@ -393,6 +394,8 @@ function SessionDetailModal({
   const [publicStatusMap, setPublicStatusMap] = useState<
     Record<string, { postId: string; isPublic: boolean } | null>
   >({});
+  const [localPhotoUriMap,   setLocalPhotoUriMap]   = useState<Record<string, string>>({});
+  const [localMachineImgMap, setLocalMachineImgMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!userId) return;
@@ -436,20 +439,51 @@ function SessionDetailModal({
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
   });
 
-  async function handleSave(session: WorkoutLog) {
-    const { status } = await MediaLibrary.requestPermissionsAsync(true);
-    if (status !== 'granted') {
-      Alert.alert('권한 필요', '사진 저장을 위해 사진 라이브러리 접근 권한이 필요합니다.');
-      return;
-    }
+  async function downloadToLocal(remoteUri: string, filename: string): Promise<string> {
+    if (!remoteUri.startsWith('http')) return remoteUri;
+    const localPath = `${FileSystem.cacheDirectory}gympick_${filename}`;
     try {
+      const info = await FileSystem.getInfoAsync(localPath);
+      if (info.exists) return localPath;
+      const result = await FileSystem.downloadAsync(remoteUri, localPath);
+      return result.uri;
+    } catch {
+      return remoteUri;
+    }
+  }
+
+  async function prepareCapture(session: WorkoutLog): Promise<void> {
+    if (Platform.OS !== 'android') return;
+    const rawPhotoUri = session.compositeUri ?? session.photoUri;
+    if (rawPhotoUri?.startsWith('http')) {
+      const localUri = await downloadToLocal(rawPhotoUri, `photo_${session.id}.png`);
+      setLocalPhotoUriMap(prev => ({ ...prev, [session.id]: localUri }));
+    }
+    const machines = session.machines ?? [];
+    const newMap: Record<string, string> = {};
+    for (const m of machines) {
+      const remoteUrl = `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${m.machineId}.webp`;
+      const localUri = await downloadToLocal(remoteUrl, `machine_${m.machineId}.webp`);
+      if (localUri !== remoteUrl) newMap[m.machineId] = localUri;
+    }
+    if (Object.keys(newMap).length > 0) {
+      setLocalMachineImgMap(prev => ({ ...prev, ...newMap }));
+    }
+    await new Promise(resolve =>
+      requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 300)))
+    );
+  }
+
+  async function handleSave(session: WorkoutLog) {
+    try {
+      await prepareCapture(session);
       // 1. 인증샷 저장 — compositeUri는 원격 URL이라 captureRef로 재캡처
       const photoNode = photoRefs.current[session.id];
       if (photoNode) {
         await new Promise(resolve => requestAnimationFrame(resolve));
         const uri = await captureRef(photoNode, {
           format: 'png', quality: 1, result: 'tmpfile',
-          pixelRatio: Math.max(PixelRatio.get(), 2),
+          pixelRatio: Math.max(PixelRatio.get(), 3),
         });
         await MediaLibrary.saveToLibraryAsync(uri);
       } else if (session.compositeUri) {
@@ -466,7 +500,7 @@ function SessionDetailModal({
           const pageUri = await captureRef(ref, {
             format: 'png', quality: 1, result: 'tmpfile',
             width: PHOTO_W_J, height: ROUTINE_CARD_H_J,
-            pixelRatio: Math.max(PixelRatio.get(), 2),
+            pixelRatio: Math.max(PixelRatio.get(), 3),
           });
           await MediaLibrary.saveToLibraryAsync(pageUri);
         }
@@ -480,13 +514,10 @@ function SessionDetailModal({
   }
 
   async function handleInstagramShare(session: WorkoutLog) {
-    const { status } = await MediaLibrary.requestPermissionsAsync(true);
-    if (status !== 'granted') {
-      Alert.alert('권한 필요', '사진 저장을 위해 미디어 라이브러리 접근 권한이 필요합니다.');
-      return;
-    }
     try {
+      await prepareCapture(session);
       const savedAssets: MediaLibrary.Asset[] = [];
+      let capturedPhotoUri: string | null = null;
 
       // 1. 인증샷 저장 — photoRefs로 View 직접 캡처 (PNG 투명 배경 보존)
       const photoNode = photoRefs.current[session.id];
@@ -494,8 +525,9 @@ function SessionDetailModal({
         await new Promise(resolve => requestAnimationFrame(resolve));
         const uri = await captureRef(photoNode, {
           format: 'png', quality: 1, result: 'tmpfile',
-          pixelRatio: Math.max(PixelRatio.get(), 2),
+          pixelRatio: Math.max(PixelRatio.get(), 3),
         });
+        capturedPhotoUri = uri;
         const asset = await MediaLibrary.createAssetAsync(uri);
         savedAssets.push(asset);
       }
@@ -509,7 +541,7 @@ function SessionDetailModal({
           const pageUri = await captureRef(ref, {
             format: 'png', quality: 1, result: 'tmpfile',
             width: PHOTO_W_J, height: ROUTINE_CARD_H_J,
-            pixelRatio: Math.max(PixelRatio.get(), 2),
+            pixelRatio: Math.max(PixelRatio.get(), 3),
           });
           const asset = await MediaLibrary.createAssetAsync(pageUri);
           savedAssets.push(asset);
@@ -528,8 +560,8 @@ function SessionDetailModal({
         }
       } else {
         const canShare = await Sharing.isAvailableAsync();
-        if (session.compositeUri && canShare) {
-          await Sharing.shareAsync(session.compositeUri, {
+        if (capturedPhotoUri && canShare) {
+          await Sharing.shareAsync(capturedPhotoUri, {
             mimeType: 'image/png',
             dialogTitle: '인스타그램에 공유',
           });
@@ -622,7 +654,7 @@ function SessionDetailModal({
                 >
                   {photoUri ? (
                     <ExpoImage
-                      source={{ uri: photoUri }}
+                      source={{ uri: localPhotoUriMap[session.id] ?? photoUri }}
                       style={StyleSheet.absoluteFill}
                       contentFit="contain"
                       onError={() => {}}
@@ -955,7 +987,7 @@ function SessionDetailModal({
                                   {i > 0 && <View style={{ height: 1, backgroundColor: '#E5E5E5' }} />}
                                   <View style={{ flexDirection: 'row', alignItems: 'flex-start', padding: 12, gap: 10 }}>
                                     <View style={{ width: 64, height: 64, borderRadius: 10, overflow: 'hidden', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E5E5' }}>
-                                      <ExpoImage source={{ uri: imageUrl }} style={{ width: '100%', height: '100%', backgroundColor: '#FFFFFF' }} contentFit="contain" />
+                                      <ExpoImage source={{ uri: localMachineImgMap[m.machineId] ?? imageUrl }} style={{ width: '100%', height: '100%', backgroundColor: '#FFFFFF' }} contentFit="contain" />
                                     </View>
                                     <View style={{ flex: 1 }}>
                                       <Text style={{ fontSize: 12, fontWeight: '700', color: '#000000', lineHeight: 16, marginBottom: 4 }} numberOfLines={2}>
