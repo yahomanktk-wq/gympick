@@ -3,6 +3,7 @@ import {
   Modal,
   View,
   Text,
+  Image,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
@@ -10,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { C, R } from '../../theme';
 import { MANAGER_ONBOARDING_SLIDES } from '../../data/managerManual';
 
@@ -30,6 +32,7 @@ export default function ManagerOnboardingModal({
   const isLast = index >= slides.length - 1;
 
   function goNext() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (isLast) { onComplete(); onFinish?.(); return; }
     const next = index + 1;
     scrollRef.current?.scrollTo({ x: next * SCREEN_W, animated: true });
@@ -61,11 +64,21 @@ export default function ManagerOnboardingModal({
         >
           {slides.map((s, i) => (
             <View key={i} style={[styles.slide, { width: SCREEN_W }]}>
-              <View style={styles.iconCircle}>
-                <Ionicons name={s.icon} size={48} color={C.accent} />
-              </View>
+              {s.image ? (
+                <Image source={s.image} style={styles.illust} resizeMode="contain" />
+              ) : (
+                <View style={styles.iconCircle}>
+                  <Ionicons name={s.icon} size={48} color={C.accent} />
+                </View>
+              )}
               <Text style={styles.title}>{s.title}</Text>
               <Text style={styles.body}>{s.body}</Text>
+              {s.showManagedBadge && (
+                <View style={styles.managedBadge}>
+                  <Ionicons name="shield-checkmark" size={13} color="#4A90E2" />
+                  <Text style={styles.managedBadgeText}>헬스장 직접 관리</Text>
+                </View>
+              )}
             </View>
           ))}
         </ScrollView>
@@ -101,6 +114,14 @@ const styles = StyleSheet.create({
   },
   title:   { fontSize: 25, fontWeight: '900', color: C.text, textAlign: 'center', marginBottom: 18, letterSpacing: -0.5 },
   body:    { fontSize: 17, color: C.textSub, textAlign: 'center', lineHeight: 28 },
+  illust:  { width: 160, height: 160, marginBottom: 32 },
+  managedBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: '#4A90E218', borderRadius: R.pill,
+    paddingHorizontal: 12, paddingVertical: 7,
+    marginTop: 20,
+  },
+  managedBadgeText: { fontSize: 14, fontWeight: '700', color: '#4A90E2' },
   dots:    { flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 16 },
   dot:     { width: 7, height: 7, borderRadius: 4, backgroundColor: C.border },
   dotActive: { width: 20, backgroundColor: C.accent },

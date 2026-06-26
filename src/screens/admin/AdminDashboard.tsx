@@ -277,7 +277,11 @@ function MachineRequestsView({
             ) : null}
           </View>
           <Text style={{ fontSize: 13, color: C.textSub }}>헬스장: {req.gymName}</Text>
-          <Text style={{ fontSize: 11, color: C.textDim }}>신청자: {req.requesterId} · {new Date(req.createdAt).toLocaleDateString('ko-KR')}</Text>
+          <Text style={{ fontSize: 13, color: C.textSub, fontWeight: '600' }}>신청자: {req.requesterNickname || req.requesterName || req.requesterId}</Text>
+          {req.requesterEmail ? (
+            <Text style={{ fontSize: 11, color: C.textDim }}>{req.requesterEmail}</Text>
+          ) : null}
+          <Text style={{ fontSize: 11, color: C.textDim }}>{new Date(req.createdAt).toLocaleDateString('ko-KR')}</Text>
           <TouchableOpacity
             style={{ padding: 12, borderRadius: R.btn, backgroundColor: C.accent, alignItems: 'center', marginTop: 4 }}
             onPress={() => onUpdateStatus(req.id, 'resolved')}

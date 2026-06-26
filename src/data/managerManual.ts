@@ -7,6 +7,8 @@ export interface OnboardingSlide {
   icon:  IoniconName;
   title: string;
   body:  string;
+  image?: any;
+  showManagedBadge?: boolean;
 }
 
 export interface ManualSection {
@@ -19,26 +21,32 @@ export interface ManualSection {
 export const MANAGER_ONBOARDING_SLIDES: OnboardingSlide[] = [
   {
     icon: 'happy-outline',
+    image: require('../assets/onboarding/welcome.png'),
     title: '환영합니다, 매니저님 👋',
     body: '이제 짐픽에서\n내 헬스장을 직접 운영할 수 있어요.\n\n신청하신 정보로\n등록부터 시작해볼게요.',
   },
   {
     icon: 'barbell-outline',
-    title: "짐픽은 '머신'으로 헬스장을 찾아요",
-    body: '직접 머신을 등록하고 관리하면\n머신이 바뀌어도 바로 반영할 수 있어요.\n\n등록한 헬스장에는 \'헬스장 직접 관리\' 표시가 붙어,\n유저가 믿고 볼 수 있어요.',
+    image: require('../assets/onboarding/machine.png'),
+    title: "'머신'으로 헬스장을 찾아요",
+    body: '직접 머신을 등록하고 관리하면\n머신이 바뀌어도 바로 반영할 수 있어요.\n\n등록한 헬스장에는 이 표시가 붙어\n유저가 믿고 볼 수 있어요.',
+    showManagedBadge: true,
   },
   {
     icon: 'options-outline',
+    image: require('../assets/onboarding/manage.png'),
     title: '이렇게 관리해요',
     body: '· 보유 머신 등록\n  우리 헬스장 머신을 추가해요\n\n· 추천 루틴\n  유저에게 보여줄 운동 루틴을 만들어요\n\n· 공지·요청\n  공지를 올리고 유저 제보를 확인해요',
   },
   {
     icon: 'stats-chart-outline',
+    image: require('../assets/onboarding/data.png'),
     title: '데이터로 확인해요',
     body: '어떤 머신이 많이 쓰이는지,\n언제 붐비는지,\n회원이 다시 오는지\n한눈에 볼 수 있어요.',
   },
   {
     icon: 'rocket-outline',
+    image: require('../assets/onboarding/start.png'),
     title: '지금 시작해볼까요?',
     body: '프로필 > 헬스장 관리에서\n등록을 완료하고 머신을 추가해보세요.\n\n이 가이드는\n프로필 > 도움말에서 다시 볼 수 있어요.',
   },

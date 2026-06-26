@@ -11,6 +11,9 @@ export interface MachineRequest {
   photoUrl:     string | null;
   status:       'pending' | 'reviewed' | 'resolved';
   createdAt:    string;
+  requesterNickname: string | null;
+  requesterName:     string | null;
+  requesterEmail:    string | null;
 }
 
 export async function submitMachineRequest(input: {
@@ -49,18 +52,43 @@ export async function fetchMachineRequests(): Promise<MachineRequest[]> {
     .order('created_at', { ascending: false });
 
   if (error || !data) return [];
-  return data.map((r: any) => ({
-    id:           r.id,
-    gymId:        r.gym_id ?? null,
-    gymName:      r.gym_name,
-    requesterId:  r.requester_id,
-    brand:        r.brand ?? '',
-    machineName:  r.machine_name,
-    targetMuscle: r.target_muscle ?? '',
-    photoUrl:     r.photo_url ?? null,
-    status:       r.status,
-    createdAt:    r.created_at,
+
+  const base: MachineRequest[] = data.map((r: any) => ({
+    id:                r.id,
+    gymId:             r.gym_id ?? null,
+    gymName:           r.gym_name,
+    requesterId:       r.requester_id,
+    brand:             r.brand ?? '',
+    machineName:       r.machine_name,
+    targetMuscle:      r.target_muscle ?? '',
+    photoUrl:          r.photo_url ?? null,
+    status:            r.status,
+    createdAt:         r.created_at,
+    requesterNickname: null,
+    requesterName:     null,
+    requesterEmail:    null,
   }));
+
+  const ids = [...new Set(base.map(r => r.requesterId).filter(Boolean))];
+  if (ids.length > 0) {
+    const { data: profs } = await supabase
+      .from('profiles')
+      .select('id, nickname, name, email')
+      .in('id', ids);
+    if (profs) {
+      const map = new Map(profs.map((p: any) => [p.id, p]));
+      for (const r of base) {
+        const p = map.get(r.requesterId);
+        if (p) {
+          r.requesterNickname = p.nickname ?? null;
+          r.requesterName     = p.name ?? null;
+          r.requesterEmail    = p.email ?? null;
+        }
+      }
+    }
+  }
+
+  return base;
 }
 
 export async function updateMachineRequestStatus(
