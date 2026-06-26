@@ -265,7 +265,7 @@ export default function RoutineReferenceScreen({
 
   useEffect(() => {
     if (!onboardingActive) return;
-    const measure = (key: OnboardingPointKey, ref: React.RefObject<View>) => {
+    const measure = (key: OnboardingPointKey, ref: React.RefObject<View | null>) => {
       requestAnimationFrame(() => {
         ref.current?.measureInWindow((x, y, width, height) => {
           onRegisterRect?.(key, { x, y, width, height });
@@ -296,7 +296,7 @@ export default function RoutineReferenceScreen({
 
   useEffect(() => {
     // 3단계 툴팁이 모두 끝나면 (onboardingKey가 routine 관련 키에서 벗어나면) 최상단으로 스크롤
-    const routineKeys: (OnboardingPointKey | null)[] = ['routine-new', 'routine-past', 'routine-recommended'];
+    const routineKeys: (OnboardingPointKey | null | undefined)[] = ['routine-new', 'routine-past', 'routine-recommended'];
     if (!onboardingActive || (onboardingKey !== null && routineKeys.includes(onboardingKey))) return;
     // onboardingKey가 routine 키가 아닌 다른 키이거나 null이면 최상단으로
     scrollRef.current?.scrollTo({ y: 0, animated: true });

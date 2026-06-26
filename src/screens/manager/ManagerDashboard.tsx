@@ -31,7 +31,7 @@ import {
 import type { GymAnnouncement } from '../../data/gymAnnouncementStore';
 import { getRequestsByGymId, markRequestAsRead } from '../../data/gymRequestStore';
 import type { GymRequest } from '../../data/gymRequestStore';
-import { getManagedGymById, getGymMachineIds, updateGymMachines } from '../../data/managedGymStore';
+import { getGymMachineIds, updateGymMachines } from '../../data/managedGymStore';
 import { FREE_WEIGHTS } from '../../data/freeWeights';
 import { submitGymRegistrationRequest } from '../../lib/db/gymRegistrationRequests';
 import { fetchGymMachineIds, saveGymMachineIds } from '../../lib/db/gymMachines';
@@ -40,8 +40,11 @@ import { geocodeAddress } from '../../lib/geocoding';
 import { containsBannedWord } from '../../lib/bannedWords';
 import GymStatsView from './GymStatsView';
 import * as ImagePicker from 'expo-image-picker';
+import { submitMachineRequest } from '../../lib/db/machineRequests';
 import { Image as ExpoImage } from 'expo-image';
 import { fetchGymPhotoUrlsByUser } from '../../lib/db/gymPhotos';
+import { fetchWeeklyVisitors } from '../../lib/db/gymStats';
+import { fetchGymFavoriteCount } from '../../lib/db/gymFavorites';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -50,9 +53,9 @@ type ManagerTab  = 'routine' | 'notice' | 'request';
 
 interface GymForm {
   name: string; location: string; addressDetail: string; description: string;
-  phone: string; website: string;
+  phone: string; website: string; hoursNote: string;
 }
-const EMPTY_GYM_FORM: GymForm = { name: '', location: '', addressDetail: '', description: '', phone: '', website: '' };
+const EMPTY_GYM_FORM: GymForm = { name: '', location: '', addressDetail: '', description: '', phone: '', website: '', hoursNote: '' };
 
 type DayHours = { enabled: boolean; open: string; close: string };
 type OperatingHours = {
@@ -226,11 +229,13 @@ function StepBar({ current, labels }: { current: number; labels: string[] }) {
 
 // ─── OperatingHours UI ───────────────────────────────────────────────────────
 
-function OperatingHoursEditor({ hours, updateDay, notices, toggleNotice }: {
+function OperatingHoursEditor({ hours, updateDay, notices, toggleNotice, hoursNote, setHoursNote }: {
   hours: OperatingHours;
   updateDay: (day: keyof OperatingHours, field: keyof DayHours, value: any) => void;
   notices: string[];
   toggleNotice: (chip: string) => void;
+  hoursNote: string;
+  setHoursNote: (v: string) => void;
 }) {
   return (
     <View>
@@ -297,6 +302,20 @@ function OperatingHoursEditor({ hours, updateDay, notices, toggleNotice }: {
           );
         })}
       </View>
+      <View style={{ marginTop: 14 }}>
+        <Text style={styles.fieldLabel}>운영시간 메모 (선택)</Text>
+        <TextInput
+          style={styles.hoursNoteInput}
+          value={hoursNote}
+          onChangeText={setHoursNote}
+          placeholder="예: 매월 2·4번째 일요일 휴무, 설·추석 당일 휴무"
+          placeholderTextColor={C.textDim}
+          multiline
+          maxLength={200}
+          autoCorrect={false}
+          spellCheck={false}
+        />
+      </View>
     </View>
   );
 }
@@ -305,6 +324,9 @@ function OperatingHoursEditor({ hours, updateDay, notices, toggleNotice }: {
 
 interface HomeViewProps {
   gyms: ManagedGym[];
+  weeklyVisitors: number | null;
+  gymFavCount: number | null;
+  machineCount: number;
   onOpenEdit: (gym: ManagedGym) => void;
   onOpenMachines: (gym: ManagedGym) => void;
   onOpenManage: (gym: ManagedGym, tab?: ManagerTab) => void;
@@ -350,6 +372,7 @@ interface MachinesViewProps {
   showOwnedOnly: boolean;
   setShowOwnedOnly: (v: boolean) => void;
   onToggleMachine: (id: string) => void;
+  onRequestMachine: () => void;
 }
 
 interface RoutineTabProps {
@@ -396,14 +419,14 @@ interface ManageViewProps {
 
 const STEP_LABELS = ['기본 정보', '연락처 정보', '검토'];
 
-function HomeView({ gyms, onOpenEdit, onOpenMachines, onOpenManage, onOpenStats, onRegister }: HomeViewProps) {
+function HomeView({ gyms, weeklyVisitors, gymFavCount, machineCount, onOpenEdit, onOpenMachines, onOpenManage, onOpenStats, onRegister }: HomeViewProps) {
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
       <View style={styles.homeSummary}>
         {[
-          { value: String(gyms.length),                                      label: '헬스장' },
-          { value: String(gyms.filter(g => g.status === 'approved').length), label: '운영 중' },
-          { value: String(gyms.filter(g => g.status === 'pending').length),  label: '대기 중' },
+          { value: weeklyVisitors == null ? '–' : String(weeklyVisitors), label: '주간 방문' },
+          { value: String(machineCount),                                    label: '머신' },
+          { value: gymFavCount    == null ? '–' : String(gymFavCount),     label: '즐겨찾기' },
         ].map(s => (
           <View key={s.label} style={styles.summaryCell}>
             <Text style={styles.summaryCellValue}>{s.value}</Text>
@@ -455,14 +478,16 @@ function HomeView({ gyms, onOpenEdit, onOpenMachines, onOpenManage, onOpenStats,
         </View>
       ))}
 
-      <TouchableOpacity
-        style={styles.registerBtn}
-        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onRegister(); }}
-        activeOpacity={0.88}
-      >
-        <Ionicons name="add-circle-outline" size={18} color={C.bg} />
-        <Text style={styles.registerBtnText}>헬스장 등록 신청</Text>
-      </TouchableOpacity>
+      {gyms.length === 0 && (
+        <TouchableOpacity
+          style={styles.registerBtn}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onRegister(); }}
+          activeOpacity={0.88}
+        >
+          <Ionicons name="add-circle-outline" size={18} color={C.bg} />
+          <Text style={styles.registerBtnText}>헬스장 등록 신청</Text>
+        </TouchableOpacity>
+      )}
 
       <View style={styles.infoNote}>
         <Ionicons name="information-circle-outline" size={15} color={C.textSub} style={{ marginTop: 1 }} />
@@ -514,7 +539,7 @@ function RegisterView({
           <SectionCard title="회원들이 연락할 수 있도록 정보를 입력해 주세요">
             <Field label="전화번호" value={regForm.phone}   onChangeText={t => onChangeField('phone', t)}   placeholder="예) 02-1234-5678" />
             <Field label="웹사이트" value={regForm.website} onChangeText={t => onChangeField('website', t)} placeholder="예) mygym.kr" />
-            <OperatingHoursEditor hours={regHours} updateDay={updateRegDay} notices={regNotices} toggleNotice={toggleRegNotice} />
+            <OperatingHoursEditor hours={regHours} updateDay={updateRegDay} notices={regNotices} toggleNotice={toggleRegNotice} hoursNote="" setHoursNote={() => {}} />
           </SectionCard>
         )}
         {step === 3 && (
@@ -584,7 +609,7 @@ function EditView({
         <SectionCard title="연락처 및 운영시간">
           <Field label="전화번호" value={editForm.phone}   onChangeText={t => onChangeEditField('phone', t)} />
           <Field label="웹사이트" value={editForm.website} onChangeText={t => onChangeEditField('website', t)} />
-          <OperatingHoursEditor hours={editHours} updateDay={updateEditDay} notices={editNotices} toggleNotice={toggleEditNotice} />
+          <OperatingHoursEditor hours={editHours} updateDay={updateEditDay} notices={editNotices} toggleNotice={toggleEditNotice} hoursNote={editForm.hoursNote} setHoursNote={(v) => onChangeEditField('hoursNote', v)} />
         </SectionCard>
         <View style={styles.sectionCard}>
           <View style={styles.photoSectionHeader}>
@@ -658,7 +683,7 @@ function MachinesView({
   gymMachineIds, machineMusclFilter, setMachineMusclFilter,
   machineBrandFilter, setMachineBrandFilter,
   showOwnedOnly, setShowOwnedOnly,
-  onToggleMachine,
+  onToggleMachine, onRequestMachine,
 }: MachinesViewProps) {
   const filteredMachines = MACHINES.filter(m => {
     if (!m || !m.name || !m.brand || !m.targetMuscle) return false;
@@ -698,6 +723,14 @@ function MachinesView({
         >
           <Ionicons name="checkmark-circle" size={13} color={showOwnedOnly ? '#000000' : C.textSub} />
           <Text style={[styles.ownershipChipText, showOwnedOnly && styles.ownershipChipTextActive]}>보유 중</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={mrStyles.requestBtn}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onRequestMachine(); }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="add-circle-outline" size={14} color={C.accent} />
+          <Text style={mrStyles.requestBtnText}>찾는 머신이 없나요?</Text>
         </TouchableOpacity>
       </View>
 
@@ -1098,6 +1131,43 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
     loadApprovedGyms();
   }, [user?.id]);
   const [selectedGym, setSelectedGym] = useState<ManagedGym | null>(null);
+  const [machineReqVisible, setMachineReqVisible] = useState(false);
+
+  const [weeklyVisitors, setWeeklyVisitors] = useState<number | null>(null);
+  const [gymFavCount,    setGymFavCount]    = useState<number | null>(null);
+
+  // 대표 헬스장: 승인된 것 우선, 없으면 첫번째
+  const primaryGym = gyms.find(g => g.status === 'approved') ?? gyms[0] ?? null;
+
+  useEffect(() => {
+    if (!primaryGym) { setWeeklyVisitors(null); setGymFavCount(null); return; }
+    let alive = true;
+
+    // 이번 주 월요일~일요일 (로컬 기준)
+    const now = new Date();
+    const day = now.getDay();               // 0(일)~6(토)
+    const diffToMon = (day === 0 ? -6 : 1 - day);
+    const monday = new Date(now); monday.setDate(now.getDate() + diffToMon);
+    const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+    const fmt = (d: Date) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${dd}`;
+    };
+
+    (async () => {
+      const [visitors, fav] = await Promise.all([
+        fetchWeeklyVisitors(primaryGym.id, fmt(monday), fmt(sunday)).catch(() => 0),
+        fetchGymFavoriteCount(primaryGym.id).catch(() => 0),
+      ]);
+      if (!alive) return;
+      setWeeklyVisitors(visitors);
+      setGymFavCount(fav);
+    })();
+
+    return () => { alive = false; };
+  }, [primaryGym?.id]);
 
   // Register form
   const [step, setStep]               = useState(1);
@@ -1177,10 +1247,51 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
   const serializeHours = useCallback((h: OperatingHours): string =>
     DAY_KEYS.filter(d => h[d].enabled).map(d => `${DAY_LABELS[d]} ${h[d].open}~${h[d].close}`).join(', '), []);
 
+  // "월 09:00~22:00, 화 09:00~22:00, 토 10:00~20:00" → OperatingHours 로 역직렬화.
+  // 문자열에 없는 요일은 휴무(enabled:false)로 둔다. 파싱 실패 시 DEFAULT_HOURS 폴백.
+  const parseHours = useCallback((raw?: string | null): OperatingHours => {
+    if (!raw || !raw.trim()) return DEFAULT_HOURS;
+    try {
+      // 라벨('월')→key('mon') 역매핑
+      const labelToKey: Record<string, keyof OperatingHours> = {} as any;
+      (Object.keys(DAY_LABELS) as (keyof OperatingHours)[]).forEach(k => {
+        labelToKey[DAY_LABELS[k]] = k;
+      });
+
+      // 모든 요일을 일단 휴무로 초기화 (시간 기본값은 DEFAULT_HOURS에서 가져옴)
+      const result = {} as OperatingHours;
+      (Object.keys(DEFAULT_HOURS) as (keyof OperatingHours)[]).forEach(k => {
+        result[k] = { ...DEFAULT_HOURS[k], enabled: false };
+      });
+
+      let matched = 0;
+      raw.split(',').forEach(part => {
+        const seg = part.trim();
+        if (!seg) return;
+        // "월 09:00~22:00" → ["월", "09:00~22:00"]
+        const sp = seg.indexOf(' ');
+        if (sp < 0) return;
+        const label = seg.slice(0, sp).trim();
+        const time  = seg.slice(sp + 1).trim();
+        const key = labelToKey[label];
+        if (!key) return;
+        const [open, close] = time.split('~').map(t => t.trim());
+        if (!open || !close) return;
+        result[key] = { enabled: true, open, close };
+        matched += 1;
+      });
+
+      // 하나도 못 읽었으면 형식이 깨진 것 → 폴백
+      return matched > 0 ? result : DEFAULT_HOURS;
+    } catch {
+      return DEFAULT_HOURS;
+    }
+  }, []);
+
   const openEdit = useCallback(async (gym: ManagedGym) => {
     setSelectedGym(gym);
-    setEditForm({ name: gym.name, location: gym.location, addressDetail: '', description: gym.description, phone: gym.phone, website: gym.website });
-    setEditHours(DEFAULT_HOURS); setEditNotices([]);
+    setEditForm({ name: gym.name, location: gym.location, addressDetail: '', description: gym.description, phone: gym.phone, website: gym.website, hoursNote: gym.hoursNote ?? '' });
+    setEditHours(parseHours(gym.hours)); setEditNotices([]);
     setPhotos([]);
     push('edit');
 
@@ -1188,7 +1299,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
       const urls = await fetchGymPhotoUrlsByUser(gym.id, user.id);
       setPhotos(urls);
     }
-  }, [push, user?.id]);
+  }, [push, user?.id, parseHours]);
 
   const openMachines = useCallback(async (gym: ManagedGym) => {
     if (!gym) return;
@@ -1280,9 +1391,16 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
   }, [gymMachineIds, pop, viewStack.length, onClose]);
 
   const onRegister = useCallback(() => {
+    if (gyms.length > 0) {
+      Alert.alert(
+        '이미 헬스장을 관리 중이에요',
+        '매니저는 하나의 헬스장만 관리할 수 있어요.',
+      );
+      return;
+    }
     setStep(1); setRegForm(EMPTY_GYM_FORM); setRegHours(DEFAULT_HOURS); setRegNotices([]);
     push('register');
-  }, [push]);
+  }, [gyms, push]);
 
   // ─── Register helpers ─────────────────────────────────────────────────────
 
@@ -1327,9 +1445,8 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
     setSubmitting(true);
 
     const notes = [
-      regForm.phone       ? `전화: ${regForm.phone}`           : '',
-      serializeHours(regHours) ? `운영시간: ${serializeHours(regHours)}` : '',
-      regForm.description ? regForm.description                : '',
+      regForm.phone       ? `전화: ${regForm.phone}` : '',
+      regForm.description ? regForm.description      : '',
     ].filter(Boolean).join('\n');
 
     const { error } = await submitGymRegistrationRequest(
@@ -1339,6 +1456,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
       regForm.addressDetail.trim(),
       notes,
       'manager',
+      serializeHours(regHours),
     );
 
     if (error) {
@@ -1567,6 +1685,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
       phone:       (editForm.phone       ?? '').trim(),
       website:     (editForm.website     ?? '').trim(),
       hours:       updatedHours || null,
+      hours_note:  (editForm.hoursNote ?? '').trim() || null,
     };
 
     if (__DEV__) console.log('[saveEdits] payload:', updatePayload, 'gymId:', selectedGym.id);
@@ -1585,7 +1704,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
     }
 
     setGyms(prev => prev.map(g =>
-      g.id === selectedGym.id ? { ...g, ...editForm, hours: updatedHours } : g
+      g.id === selectedGym.id ? { ...g, ...editForm, hours: updatedHours, hoursNote: (editForm.hoursNote ?? '').trim() || null } : g
     ));
     Alert.alert('수정 완료', '헬스장 정보가 수정되었습니다.', [{
       text: '확인',
@@ -1647,6 +1766,9 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
       {currentView === 'home' && (
         <HomeView
           gyms={gyms}
+          weeklyVisitors={weeklyVisitors}
+          gymFavCount={gymFavCount}
+          machineCount={primaryGym ? primaryGym.machineIds.length : 0}
           onOpenEdit={openEdit}
           onOpenMachines={openMachines}
           onOpenManage={openManage}
@@ -1696,6 +1818,14 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
             showOwnedOnly={showOwnedOnly}
             setShowOwnedOnly={setShowOwnedOnly}
             onToggleMachine={toggleMachine}
+            onRequestMachine={() => setMachineReqVisible(true)}
+          />
+          <MachineRequestModal
+            visible={machineReqVisible}
+            onClose={() => setMachineReqVisible(false)}
+            gymName={selectedGym?.name ?? ''}
+            gymId={selectedGym?.id ?? null}
+            requesterId={user?.id ?? ''}
           />
           {showSaveConfirm && (
             <View style={styles.saveConfirmOverlay}>
@@ -2005,4 +2135,266 @@ const styles = StyleSheet.create({
   saveConfirmCancelText: { fontSize: 15, fontWeight: '700', color: C.textSub },
   saveConfirmSaveBtn:    { flex: 2, paddingVertical: 14, borderRadius: R.btn, backgroundColor: C.accent, alignItems: 'center' },
   saveConfirmSaveText:   { fontSize: 15, fontWeight: '800', color: '#000000' },
+
+  hoursNoteInput: {
+    backgroundColor: C.surfaceHigh,
+    borderRadius: R.inner,
+    borderWidth: 1,
+    borderColor: C.border,
+    color: C.text,
+    fontSize: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    minHeight: 64,
+    textAlignVertical: 'top',
+    marginTop: 6,
+  },
+});
+
+// ── 머신 등록 신청 모달 ──────────────────────────────────────────────────
+function MachineRequestModal({
+  visible, onClose, gymName, gymId, requesterId,
+}: {
+  visible:     boolean;
+  onClose:     () => void;
+  gymName:     string;
+  gymId:       string | null;
+  requesterId: string;
+}) {
+  const [brand,        setBrand]        = useState('');
+  const [machineName,  setMachineName]  = useState('');
+  const [targetMuscle, setTargetMuscle] = useState('');
+  const [photoUrl,     setPhotoUrl]     = useState<string | null>(null);
+  const [uploading,    setUploading]    = useState(false);
+  const [submitting,   setSubmitting]   = useState(false);
+
+  function resetAndClose() {
+    setBrand(''); setMachineName(''); setTargetMuscle(''); setPhotoUrl(null);
+    setUploading(false); setSubmitting(false);
+    onClose();
+  }
+
+  async function uploadPhoto(uri: string) {
+    if (!requesterId) { Alert.alert('업로드 실패', '로그인이 필요합니다.'); return; }
+    setUploading(true);
+    try {
+      const photoId  = `machine_req_${Date.now()}`;
+      const fileName = `machine-requests/${requesterId}/${photoId}.jpg`;
+      const formData = new FormData();
+      formData.append('file', { uri, name: fileName, type: 'image/jpeg' } as any);
+
+      const { supabase } = await import('../../lib/supabase');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { Alert.alert('업로드 실패', '로그인이 필요합니다.'); setUploading(false); return; }
+
+      const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
+      const uploadUrl    = `${SUPABASE_URL}/storage/v1/object/gym-photos/${fileName}`;
+      const response = await fetch(uploadUrl, {
+        method:  'POST',
+        headers: { 'Authorization': `Bearer ${session.access_token}`, 'x-upsert': 'true' },
+        body:    formData,
+      });
+      if (!response.ok) {
+        if (__DEV__) console.warn('[MachineRequest] 업로드 실패:', await response.text());
+        Alert.alert('업로드 실패', '사진 업로드에 실패했습니다.');
+        setUploading(false);
+        return;
+      }
+      setPhotoUrl(`${SUPABASE_URL}/storage/v1/object/public/gym-photos/${fileName}`);
+    } catch (e) {
+      if (__DEV__) console.warn('[MachineRequest] 업로드 오류:', e);
+      Alert.alert('업로드 실패', '사진 업로드 중 오류가 발생했습니다.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function pickPhoto() {
+    Alert.alert('머신 사진 추가', '사진을 선택하세요', [
+      { text: '카메라로 찍기', onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') { Alert.alert('권한 필요', '카메라 접근 권한이 필요합니다.'); return; }
+          const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.85 });
+          if (!result.canceled && result.assets[0]) await uploadPhoto(result.assets[0].uri);
+        } },
+      { text: '앨범에서 선택', onPress: async () => {
+          let result: ImagePicker.ImagePickerResult;
+          try { result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.85 }); }
+          catch (e) { Alert.alert('권한 필요', '사진 라이브러리 접근 권한이 필요합니다.'); return; }
+          if (!result.canceled && result.assets[0]) await uploadPhoto(result.assets[0].uri);
+        } },
+      { text: '취소', style: 'cancel' },
+    ]);
+  }
+
+  async function handleSubmit() {
+    if (!machineName.trim()) { Alert.alert('입력 확인', '머신 이름을 입력해주세요.'); return; }
+    if (!requesterId)        { Alert.alert('오류', '로그인이 필요합니다.'); return; }
+    setSubmitting(true);
+    const { error } = await submitMachineRequest({
+      gymId,
+      gymName,
+      requesterId,
+      brand:        brand.trim(),
+      machineName:  machineName.trim(),
+      targetMuscle: targetMuscle.trim(),
+      photoUrl,
+    });
+    setSubmitting(false);
+    if (error) { Alert.alert('신청 실패', error); return; }
+    Alert.alert('신청 완료', '머신 등록 신청이 접수되었어요. 관리자 확인 후 반영됩니다.');
+    resetAndClose();
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={resetAndClose}>
+      <View style={mrStyles.overlay}>
+        <View style={mrStyles.sheet}>
+          <View style={mrStyles.header}>
+            <Text style={mrStyles.title}>머신 등록 신청</Text>
+            <TouchableOpacity onPress={resetAndClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close" size={22} color={C.text} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView contentContainerStyle={mrStyles.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <Text style={mrStyles.label}>헬스장</Text>
+            <View style={mrStyles.readonlyField}>
+              <Text style={mrStyles.readonlyText}>{gymName || '—'}</Text>
+            </View>
+
+            <Text style={mrStyles.label}>브랜드</Text>
+            <TextInput
+              style={mrStyles.input}
+              value={brand}
+              onChangeText={setBrand}
+              placeholder="예: Life Fitness"
+              placeholderTextColor={C.textDim}
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+
+            <Text style={mrStyles.label}>머신 이름 *</Text>
+            <TextInput
+              style={mrStyles.input}
+              value={machineName}
+              onChangeText={setMachineName}
+              placeholder="예: Lat Pulldown"
+              placeholderTextColor={C.textDim}
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+
+            <Text style={mrStyles.label}>타겟 부위</Text>
+            <TextInput
+              style={mrStyles.input}
+              value={targetMuscle}
+              onChangeText={setTargetMuscle}
+              placeholder="예: 등"
+              placeholderTextColor={C.textDim}
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+
+            <Text style={mrStyles.label}>머신 사진 (선택)</Text>
+            {photoUrl ? (
+              <View style={mrStyles.photoPreviewWrap}>
+                <ExpoImage source={{ uri: photoUrl }} style={mrStyles.photoPreview} contentFit="cover" />
+                <TouchableOpacity style={mrStyles.photoRemove} onPress={() => setPhotoUrl(null)} activeOpacity={0.8}>
+                  <Ionicons name="close-circle" size={22} color={C.danger} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity style={mrStyles.photoBtn} onPress={pickPhoto} activeOpacity={0.8} disabled={uploading}>
+                <Ionicons name={uploading ? 'hourglass-outline' : 'camera-outline'} size={18} color={C.accent} />
+                <Text style={mrStyles.photoBtnText}>{uploading ? '업로드 중...' : '사진 추가'}</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={[mrStyles.submitBtn, (submitting || uploading) && { opacity: 0.5 }]}
+              onPress={handleSubmit}
+              activeOpacity={0.85}
+              disabled={submitting || uploading}
+            >
+              <Text style={mrStyles.submitBtnText}>{submitting ? '신청 중...' : '신청하기'}</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const mrStyles = StyleSheet.create({
+  requestBtn: {
+    marginLeft:    'auto',
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           4,
+    paddingVertical:   6,
+    paddingHorizontal: 4,
+  },
+  requestBtnText: { fontSize: 13, fontWeight: '700', color: C.accent },
+
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: C.bg,
+    borderTopLeftRadius:  20,
+    borderTopRightRadius: 20,
+    maxHeight: '88%',
+    paddingBottom: 24,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    justifyContent:'space-between',
+    paddingHorizontal: 20,
+    paddingVertical:   16,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  title: { fontSize: 17, fontWeight: '800', color: C.text },
+  body:  { padding: 20, gap: 8 },
+  label: { fontSize: 12, fontWeight: '700', color: C.textSub, marginTop: 10, marginBottom: 2 },
+  input: {
+    backgroundColor: C.surface,
+    borderRadius: R.inner,
+    borderWidth: 1,
+    borderColor: C.border,
+    color: C.text,
+    fontSize: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+  },
+  readonlyField: {
+    backgroundColor: C.surfaceHigh,
+    borderRadius: R.inner,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+  },
+  readonlyText: { fontSize: 14, color: C.textSub },
+  photoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 13,
+    borderRadius: R.inner,
+    borderWidth: 1.5,
+    borderColor: C.accent + '60',
+    borderStyle: 'dashed',
+  },
+  photoBtnText: { fontSize: 14, fontWeight: '700', color: C.accent },
+  photoPreviewWrap: { position: 'relative', alignSelf: 'flex-start' },
+  photoPreview: { width: 120, height: 120, borderRadius: R.inner, backgroundColor: C.surface },
+  photoRemove: { position: 'absolute', top: -8, right: -8, backgroundColor: C.bg, borderRadius: 12 },
+  submitBtn: {
+    backgroundColor: C.accent,
+    borderRadius: R.btn,
+    paddingVertical: 15,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  submitBtnText: { fontSize: 15, fontWeight: '800', color: C.bg },
 });

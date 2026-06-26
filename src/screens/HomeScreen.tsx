@@ -16,13 +16,14 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { C, R, T } from '../theme';
 import { btnHeight, cardPadH, cardPadV, iconSize, screenPad } from '../theme/responsive';
 import GymDetailModal from './flow/GymDetailModal';
+import ManagerOnboardingModal from './manager/ManagerOnboardingModal';
 import { useAuth } from '../context/AuthContext';
 
 import { WorkoutLog, WorkoutFeedPost, UserSplitConfig, WeekdaySplit } from '../data/types';
 import { fetchWorkoutLogs } from '../lib/db';
 import { fetchActiveFeedPosts } from '../lib/db/feedPosts';
 import { fetchSplitConfig } from '../lib/db/splitRoutine';
-import { getTodayTarget, toEnMuscle, toKoMuscle } from '../lib/splitUtils';
+import { getTodayTarget, getTodayTargets, toEnMuscle, toKoMuscle } from '../lib/splitUtils';
 import * as Haptics from 'expo-haptics';
 
 // --- Helpers
@@ -67,13 +68,14 @@ function getWeekTargetMap(
     weekDates.forEach(d => {
       const key = DAY_KEYS[d.getDay()] as keyof WeekdaySplit;
       const targets = (split[key] ?? []) as string[];
-      result[d.toDateString()] = targets.length > 0 ? targets[0] : null;
+      const work = targets.filter(m => m !== '휴식');
+      result[d.toDateString()] = work.length > 0 ? work.join('·') : (targets.length > 0 ? '휴식' : null);
     });
     return result;
   }
 
   // sequential: assign from today onwards
-  const split = splitConfig.workoutSplit as string[];
+  const split = splitConfig.workoutSplit as string[][];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   let idx = splitConfig.splitCurrentIndex;
@@ -84,7 +86,9 @@ function getWeekTargetMap(
     if (date < today) {
       result[d.toDateString()] = null;
     } else {
-      result[d.toDateString()] = split[idx % split.length];
+      const slot = split[idx % split.length] ?? [];
+      const work = slot.filter(m => m !== '휴식');
+      result[d.toDateString()] = work.length > 0 ? work.join('·') : (slot.length > 0 ? '휴식' : null);
       idx++;
     }
   });
@@ -274,7 +278,7 @@ const OunwanHeader = React.memo(({
 // --- Screen
 
 export default function HomeScreen() {
-  const { user } = useAuth();
+  const { user, markManagerOnboarded } = useAuth();
   const nav = useNavigation<any>();
   const [gymDetailVisible, setGymDetailVisible] = useState(false);
   const [gymDetailId,      setGymDetailId]      = useState<string | null>(null);
@@ -285,11 +289,21 @@ export default function HomeScreen() {
   const [weekTargetMap,      setWeekTargetMap]       = useState<Record<string, string | null>>({});
   const [ounwanDisplayTarget, setOunwanDisplayTarget] = useState<string | null>(null);
 
+  const [showManagerOnboarding, setShowManagerOnboarding] = useState(false);
+
+  // 매니저 첫 로그인 온보딩: role === 'manager' && managerOnboarded === false 일 때 1회 표시
+  useEffect(() => {
+    if (user?.role === 'manager' && user?.managerOnboarded === false) {
+      setShowManagerOnboarding(true);
+    }
+  }, [user?.id, user?.role, user?.managerOnboarded]);
+
   useFocusEffect(
     useCallback(() => {
       let active = true;
       async function load() {
         let target: string | null = null;
+        let todayTargetsArr: string[] = [];
 
         if (user) {
           const [logs, config] = await Promise.all([
@@ -299,6 +313,9 @@ export default function HomeScreen() {
           if (!active) return;
           setSessions(logs);
           setSplitConfig(config);
+          todayTargetsArr = config
+            ? getTodayTargets(config.splitType, config.workoutSplit, config.splitCurrentIndex)
+            : [];
 
           const todayStr = new Date().toDateString();
           const todayLogs = logs.filter(l =>
@@ -306,7 +323,9 @@ export default function HomeScreen() {
           );
 
           if (todayLogs.length > 0) {
-            const todayMuscle = todayLogs[0].machines[0]?.targetMuscle ?? null;
+            const todayMuscles = (todayLogs[0].targetMuscles && todayLogs[0].targetMuscles.length > 0)
+              ? todayLogs[0].targetMuscles
+              : [...new Set(todayLogs[0].machines.map(m => m.targetMuscle).filter(Boolean))];
             target = config
               ? getTodayTarget(config.splitType, config.workoutSplit, config.splitCurrentIndex)
               : null;
@@ -314,15 +333,15 @@ export default function HomeScreen() {
             const posts = await fetchActiveFeedPosts().catch(() => [] as WorkoutFeedPost[]);
             if (!active) return;
 
-            if (todayMuscle) {
-              const filtered = posts.filter(p => p.muscles.some(m => m === todayMuscle));
+            if (todayMuscles.length > 0) {
+              const filtered = posts.filter(p => p.muscles.some(m => todayMuscles.includes(m)));
               setOunwanPosts(filtered.length > 0 ? filtered : posts);
             } else {
               setOunwanPosts(posts);
             }
 
             setTodayTarget(target);
-            setOunwanDisplayTarget(todayMuscle ? toKoMuscle(todayMuscle) : target);
+            setOunwanDisplayTarget(todayMuscles.length > 0 ? todayMuscles.map(toKoMuscle).join(', ') : (todayTargetsArr.join(', ') || null));
             const weekDates = getThisWeekDates();
             setWeekTargetMap(getWeekTargetMap(config, weekDates));
             return;
@@ -332,7 +351,7 @@ export default function HomeScreen() {
             ? getTodayTarget(config.splitType, config.workoutSplit, config.splitCurrentIndex)
             : null;
           setTodayTarget(target);
-          setOunwanDisplayTarget(target);
+          setOunwanDisplayTarget(todayTargetsArr.join(', ') || null);
 
           const weekDates = getThisWeekDates();
           setWeekTargetMap(getWeekTargetMap(config, weekDates));
@@ -341,9 +360,9 @@ export default function HomeScreen() {
         const posts = await fetchActiveFeedPosts().catch(() => [] as WorkoutFeedPost[]);
         if (!active) return;
 
-        if (target && target !== '휴식') {
-          const targetEn = toEnMuscle(target);
-          const filtered = posts.filter(p => p.muscles.some(m => m === targetEn));
+        if (todayTargetsArr.length > 0) {
+          const targetsEn = todayTargetsArr.map(toEnMuscle);
+          const filtered = posts.filter(p => p.muscles.some(m => targetsEn.includes(m)));
           setOunwanPosts(filtered.length > 0 ? filtered : posts);
         } else {
           setOunwanPosts(posts);
@@ -557,6 +576,15 @@ export default function HomeScreen() {
         visible={gymDetailVisible}
         gymId={gymDetailId}
         onClose={() => setGymDetailVisible(false)}
+      />
+
+      <ManagerOnboardingModal
+        visible={showManagerOnboarding}
+        onComplete={() => {
+          setShowManagerOnboarding(false);
+          markManagerOnboarded();
+        }}
+        onFinish={() => nav.navigate('Profile')}
       />
     </SafeAreaView>
   );

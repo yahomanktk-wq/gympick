@@ -26,6 +26,7 @@ type GymRow = {
   latitude?:      number | null;
   longitude?:     number | null;
   hours?:         string | null;
+  hours_note?:    string | null;
   phone?:         string | null;
   website?:       string | null;
   manager_id?:    string | null;
@@ -40,9 +41,10 @@ function rowToGym(row: GymRow): Gym {
     description:   row.description,
     latitude:      row.latitude  ?? null,
     longitude:     row.longitude ?? null,
-    hours:         row.hours    ?? null,
-    phone:         row.phone    ?? null,
-    website:       row.website  ?? null,
+    hours:         row.hours      ?? null,
+    hoursNote:     row.hours_note ?? null,
+    phone:         row.phone      ?? null,
+    website:       row.website    ?? null,
     managerId:     row.manager_id ?? null,
   };
 }
@@ -52,7 +54,7 @@ function rowToGym(row: GymRow): Gym {
 export async function fetchGyms(): Promise<Gym[]> {
   const { data, error } = await supabase
     .from('gyms')
-    .select('id, name, location, address_detail, description, latitude, longitude, hours, phone, website')
+    .select('id, name, location, address_detail, description, latitude, longitude, hours, hours_note, phone, website')
     .order('name');
 
   if (error || !data?.length) {
@@ -65,7 +67,7 @@ export async function fetchGyms(): Promise<Gym[]> {
 export async function fetchGym(id: string): Promise<Gym | undefined> {
   const { data, error } = await supabase
     .from('gyms')
-    .select('id, name, location, address_detail, description, latitude, longitude, hours, phone, website')
+    .select('id, name, location, address_detail, description, latitude, longitude, hours, hours_note, phone, website')
     .eq('id', id)
     .single();
 
@@ -89,7 +91,7 @@ export async function fetchGymsWithMachines(): Promise<GymWithMachines[]> {
       .from('gyms')
       .select(`
         id, name, location, address_detail, description,
-        latitude, longitude, hours, phone, website,
+        latitude, longitude, hours, hours_note, phone, website,
         manager_id,
         gym_machines ( machine_id ),
         gym_official_brands ( brand )
@@ -114,9 +116,10 @@ export async function fetchGymsWithMachines(): Promise<GymWithMachines[]> {
         description:   row.description,
         latitude:      row.latitude  ?? null,
         longitude:     row.longitude ?? null,
-        hours:         row.hours    ?? null,
-        phone:         row.phone    ?? null,
-        website:       row.website  ?? null,
+        hours:         row.hours      ?? null,
+        hoursNote:     row.hours_note ?? null,
+        phone:         row.phone      ?? null,
+        website:       row.website    ?? null,
         managerId:      row.manager_id ?? null,
         officialBrands: (row.gym_official_brands ?? []).map((ob: any) => ob.brand),
         machineIds,

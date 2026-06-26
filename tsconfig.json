@@ -4,6 +4,7 @@
     "strict": true
   },
   "exclude": [
-    "archive_check"
+    "archive_check",
+    "supabase"
   ]
 }

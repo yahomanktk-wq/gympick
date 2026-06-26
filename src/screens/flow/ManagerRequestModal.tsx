@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T } from '../../theme';
-import { addManagerApplication } from '../../data/managerApplicationStore';
 import { useAuth } from '../../context/AuthContext';
 import { geocodeAddress } from '../../lib/geocoding';
 
@@ -34,6 +33,34 @@ export default function ManagerRequestModal({ visible, userId, onClose }: Props)
   const [phone,    setPhone]    = useState('');
   const [message,  setMessage]  = useState('');
   const [loading,  setLoading]  = useState(false);
+  const [blockReason,  setBlockReason]  = useState<'managed' | 'pending' | null>(null);
+  const [blockGymName, setBlockGymName] = useState('');
+
+  useEffect(() => {
+    if (!visible || !userId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { supabase } = await import('../../lib/supabase');
+        const [{ data: managedGym }, { data: pending }] = await Promise.all([
+          supabase.from('gyms').select('id, name').eq('manager_id', userId).maybeSingle(),
+          supabase.from('manager_requests').select('id').eq('user_id', userId).eq('status', 'pending').maybeSingle(),
+        ]);
+        if (cancelled) return;
+        if (managedGym) {
+          setBlockReason('managed');
+          setBlockGymName((managedGym as any).name ?? '');
+        } else if (pending) {
+          setBlockReason('pending');
+          setBlockGymName('');
+        } else {
+          setBlockReason(null);
+          setBlockGymName('');
+        }
+      } catch { /* 제출 시점 체크가 실제 gate */ }
+    })();
+    return () => { cancelled = true; };
+  }, [visible, userId]);
 
   function handleClose() {
     setStep('form');
@@ -42,6 +69,8 @@ export default function ManagerRequestModal({ visible, userId, onClose }: Props)
     setPhone('');
     setMessage('');
     setLoading(false);
+    setBlockReason(null);
+    setBlockGymName('');
     onClose();
   }
 
@@ -110,16 +139,6 @@ export default function ManagerRequestModal({ visible, userId, onClose }: Props)
         console.warn('[ManagerRequestModal] Supabase 저장 실패:', error.message);
       }
 
-      // 로컬 Mock에도 저장 (Fallback)
-      addManagerApplication({
-        applicantUserId: userId,
-        applicantName: user?.name ?? user?.nickname ?? userId,
-        gymName: gymName.trim(),
-        location: location.trim(),
-        phone: phone.trim(),
-        message: message.trim(),
-      });
-
       setStep('complete');
     } catch (e: any) {
       console.warn('[ManagerRequestModal] 오류:', e.message);
@@ -129,7 +148,7 @@ export default function ManagerRequestModal({ visible, userId, onClose }: Props)
     }
   }
 
-  const canSubmit = gymName.trim().length > 0 && location.trim().length > 0 && !loading;
+  const canSubmit = gymName.trim().length > 0 && location.trim().length > 0 && !loading && !blockReason;
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={handleClose}>
@@ -168,8 +187,19 @@ export default function ManagerRequestModal({ visible, userId, onClose }: Props)
               keyboardShouldPersistTaps="handled"
             >
               <Text style={s.desc}>
-                헬스장 운영자라면 신청 후 승인을 받아 헬스장을 GymPick에 등록하고 관리할 수 있습니다.
+                매니저 신청을 위한 참고 정보입니다. 승인 후 매니저 대시보드에서 헬스장을 직접 등록할 수 있어요.
               </Text>
+
+              {blockReason && (
+                <View style={s.blockBanner}>
+                  <Ionicons name="warning" size={14} color="#f4a623" />
+                  <Text style={s.blockBannerText}>
+                    {blockReason === 'managed'
+                      ? `이미 ${blockGymName} 헬스장을 관리 중이에요. 매니저는 하나의 헬스장만 관리할 수 있어요.`
+                      : '이미 검토 대기 중인 신청이 있어요. 처리 완료 후 재신청해주세요.'}
+                  </Text>
+                </View>
+              )}
 
               <Text style={s.fieldLabel}>헬스장 이름 <Text style={s.required}>*</Text></Text>
               <TextInput
@@ -291,6 +321,18 @@ const s = StyleSheet.create({
     minHeight: 110,
     paddingTop: 14,
   },
+
+  blockBanner: {
+    flexDirection: 'row',
+    gap: 8,
+    backgroundColor: '#2a2000',
+    borderRadius: R.inner,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#5a3d00',
+  },
+  blockBannerText: { flex: 1, fontSize: 13, color: '#f4a623', lineHeight: 18 },
 
   noteCard: {
     flexDirection: 'row',

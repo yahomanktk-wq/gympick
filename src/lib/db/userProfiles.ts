@@ -41,3 +41,10 @@ export async function upsertUserProfile(
     birth_date: updates.birthDate,
   });
 }
+
+export async function setManagerOnboarded(userId: string): Promise<void> {
+  await supabase
+    .from('profiles')
+    .update({ manager_onboarded: true })
+    .eq('id', userId);
+}

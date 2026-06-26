@@ -21,7 +21,7 @@ import { brandLogos } from '../../constants/brandLogos';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { GymReportType } from '../../lib/db/gymReports';
-import { addGymInfoReport } from '../../data/gymReportStore';
+import { submitGymInfoReport } from '../../lib/db/gymInfoReports';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { C, R, T } from '../../theme';
@@ -207,6 +207,46 @@ function HoursText({ hours }: { hours: string }) {
           <Text style={s.infoText}>{line.slice(1).trim()}</Text>
         </View>
       ))}
+    </View>
+  );
+}
+
+// DB hours 문자열("월 09:00~22:00, 화 ...")을 월~일 7요일로 전개.
+// 문자열에 없는 요일은 '휴무'로 표시. (enabled 요일만 저장되는 형식을 보완)
+const HANGUL_DAYS = ['월', '화', '수', '목', '금', '토', '일'] as const;
+const TODAY_KO = ['일', '월', '화', '수', '목', '금', '토'][new Date().getDay()];
+
+function HoursTextAllDays({ hours }: { hours: string }) {
+  // "월 09:00~22:00" → { '월': '09:00~22:00', ... }
+  const map: Record<string, string> = {};
+  hours.split(',').map(s => s.trim()).filter(Boolean).forEach(seg => {
+    const sp = seg.indexOf(' ');
+    if (sp < 0) return;
+    const label = seg.slice(0, sp).trim();
+    const time  = seg.slice(sp + 1).trim();
+    if (label) map[label] = time;
+  });
+
+  return (
+    <View style={s.hoursTable}>
+      {HANGUL_DAYS.map((d, i) => {
+        const isToday  = d === TODAY_KO;
+        const time     = map[d];
+        const isClosed = !time;
+        return (
+          <View key={d} style={[s.hoursRow, i > 0 && s.hoursRowBorder]}>
+            <View style={s.hoursDayWrap}>
+              {isToday && <View style={s.todayDot} />}
+              <Text style={[s.hoursDay, isToday && s.hoursDayToday]}>{d}</Text>
+            </View>
+            {isClosed ? (
+              <Text style={s.hoursClosed}>휴무</Text>
+            ) : (
+              <Text style={[s.hoursTime, isToday && s.hoursTimeToday]}>{time}</Text>
+            )}
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -432,6 +472,12 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
                 <Ionicons name="location-outline" size={13} color={C.textSub} />
                 <Text style={s.gymLoc}>{gym.location}</Text>
               </View>
+              {gym.managerId && (
+                <View style={s.managerBadge}>
+                  <Ionicons name="shield-checkmark" size={11} color="#4A90E2" />
+                  <Text style={s.managerBadgeText}>헬스장 직접 관리</Text>
+                </View>
+              )}
             </View>
 
             {/* ── 헬스장 소개 ── */}
@@ -458,7 +504,7 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
                 <View style={s.infoIcon}>
                   <Ionicons name="location-outline" size={14} color={C.accent} />
                 </View>
-                <Text style={s.infoText}>{gym.location}, Seoul</Text>
+                <Text style={s.infoText}>{gym.location}</Text>
               </View>
             </View>
 
@@ -466,13 +512,18 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
             <Text style={s.sectionTitle}>영업 시간</Text>
             <View style={s.card}>
               {gym.hours ? (
-                <HoursText hours={gym.hours} />
+                <HoursTextAllDays hours={gym.hours} />
               ) : details?.hours ? (
                 <HoursTable hours={details.hours} />
               ) : (
                 <Text style={[s.infoText, { padding: 16 }]}>운영시간 정보 없음</Text>
               )}
             </View>
+            {gym.hoursNote ? (
+              <View style={[s.card, { marginTop: 8, padding: 14 }]}>
+                <Text style={[s.infoText, { color: C.textSub }]}>{gym.hoursNote}</Text>
+              </View>
+            ) : null}
 
             {/* ── Notices ── */}
             {details?.notices && details.notices.length > 0 && (
@@ -671,7 +722,7 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
                       return;
                     }
                     setReportLoading(true);
-                    addGymInfoReport({
+                    const { error: reportError } = await submitGymInfoReport({
                       gymId: gym.id,
                       gymName: gym.name,
                       reporterUserId: user?.id,
@@ -679,6 +730,10 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
                       content: reportMsg.trim() || reportType,
                     });
                     setReportLoading(false);
+                    if (reportError) {
+                      Alert.alert('제보 실패', '잠시 후 다시 시도해주세요.');
+                      return;
+                    }
                     setReportSent(true);
                   }}
                 >
@@ -809,6 +864,8 @@ const s = StyleSheet.create({
   gymName:   { fontSize: 26, fontWeight: '900', color: C.text, letterSpacing: -0.6 },
   gymLocRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5 },
   gymLoc:    { fontSize: 13, color: C.textSub },
+  managerBadge:     { flexDirection: 'row', alignItems: 'center', gap: 3, alignSelf: 'flex-start', backgroundColor: '#4A90E218', borderRadius: R.pill, paddingHorizontal: 8, paddingVertical: 3, marginTop: 8 },
+  managerBadgeText: { fontSize: 11, fontWeight: '700', color: '#4A90E2' },
 
   // Info card
   infoCard: {

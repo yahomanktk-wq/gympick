@@ -18,9 +18,10 @@ export function getAllAdminGyms(): AdminRegisteredGym[] {
 
 export function addAdminGym(
   gym: Omit<AdminRegisteredGym, 'id' | 'createdAt'>,
+  id?: string,
 ): AdminRegisteredGym {
   const g: AdminRegisteredGym = {
-    id: `admin_gym_${Date.now()}`,
+    id: id ?? `admin_gym_${Date.now()}`,
     ...gym,
     createdAt: new Date().toISOString(),
   };

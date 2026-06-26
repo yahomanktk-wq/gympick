@@ -239,7 +239,7 @@ export default function WorkoutCameraOverlay({
                 <ArchDayOverlay
                   exercises={exercises}
                   logs={logs}
-                  nickname={nickname}
+                  nickname={nickname ?? ''}
                   timestamp={timestamp}
                   muscleLabel={muscleLabel}
                   tc={textColor}

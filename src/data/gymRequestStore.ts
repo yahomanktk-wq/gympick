@@ -11,11 +11,7 @@ export interface GymRequest {
 
 // ── In-memory storage ──────────────────────────────────────────
 
-let requests: GymRequest[] = [
-  { id: 'req1', gymId: 'g01', message: '랫풀다운 그립 교체 부탁드립니다.', createdAt: '2026-03-14T09:00:00Z', read: false },
-  { id: 'req2', gymId: 'g01', message: '레그프레스 머신 한 대 더 있으면 좋겠습니다.', createdAt: '2026-03-13T14:30:00Z', read: false },
-  { id: 'req3', gymId: 'g01', message: '샤워실 온수가 잘 안 나옵니다.', createdAt: '2026-03-12T08:15:00Z', read: false },
-];
+let requests: GymRequest[] = [];
 
 // ── Mutations ─────────────────────────────────────────────────
 

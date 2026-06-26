@@ -1,12 +1,17 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet,
+  View, Text, TouchableOpacity, StyleSheet, Image,
 } from 'react-native';
+import { brandLogos } from '../constants/brandLogos';
 import MapView, { Marker, PROVIDER_DEFAULT, Region } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R } from '../theme';
 import { GymWithMachines } from '../data/types';
 import { calcDistanceKm, formatDistance } from '../lib/geocoding';
+
+function truncateGymName(name: string, maxLen: number): string {
+  return name.length > maxLen ? name.slice(0, maxLen) + '…' : name;
+}
 
 interface GymMapViewProps {
   gyms:          GymWithMachines[];
@@ -20,6 +25,15 @@ export default function GymMapView({
   gyms, userLocation, onSelectGym, selectedGymId, height,
 }: GymMapViewProps) {
   const mapRef = useRef<MapView>(null);
+
+  // 새 아키텍처 비활성화 후 tracksViewChanges가 다시 동작하므로, 초기 레이아웃 완료
+  // 후 스냅샷이 찍히도록 500ms 동안 true 유지 후 false로 전환해 텍스트 잘림을 방지.
+  const [tracksChanges, setTracksChanges] = useState(true);
+  useEffect(() => {
+    setTracksChanges(true);
+    const t = setTimeout(() => setTracksChanges(false), 500);
+    return () => clearTimeout(t);
+  }, [gyms]);
 
   const initialRegion: Region = userLocation
     ? {
@@ -94,6 +108,7 @@ export default function GymMapView({
                 longitude: gym.longitude!,
               }}
               onPress={() => onSelectGym(gym)}
+              tracksViewChanges={tracksChanges}
             >
               <View style={[styles.marker, isSelected && styles.markerSelected]}>
                 <Ionicons
@@ -104,8 +119,9 @@ export default function GymMapView({
                 <Text
                   style={[styles.markerText, isSelected && styles.markerTextSelected]}
                   numberOfLines={1}
+                  ellipsizeMode="clip"
                 >
-                  {gym.name}
+                  {truncateGymName(gym.name, 6)}
                 </Text>
               </View>
             </Marker>
@@ -151,6 +167,27 @@ export default function GymMapView({
                 </View>
               ) : null}
             </View>
+            {selectedGym.managerId && (
+              <View style={styles.gymCardManagerBadge}>
+                <Ionicons name="shield-checkmark" size={11} color="#4A90E2" />
+                <Text style={styles.gymCardManagerBadgeText}>헬스장 직접 관리</Text>
+              </View>
+            )}
+            {selectedGym.officialBrands && selectedGym.officialBrands.length > 0 && (
+              <View style={styles.gymCardBrands}>
+                {selectedGym.officialBrands.slice(0, 3).map(brand => {
+                  const key = brand.toUpperCase().replace(/\s+/g, '_');
+                  const logo = brandLogos[key];
+                  return logo ? (
+                    <View key={brand} style={styles.gymCardBrandLogo}>
+                      <Image source={logo} style={{ width: 32, height: 12 }} resizeMode="contain" />
+                    </View>
+                  ) : (
+                    <Text key={brand} style={styles.gymCardBrandText}>{brand}</Text>
+                  );
+                })}
+              </View>
+            )}
           </View>
           <View style={styles.gymCardArrow}>
             <Ionicons name="chevron-forward" size={16} color={C.bg} />
@@ -186,7 +223,7 @@ const styles = StyleSheet.create({
     fontSize:   11,
     fontWeight: '700',
     color:      C.accent,
-    maxWidth:   80,
+    maxWidth:   100,
   },
   markerTextSelected: {
     color: C.bg,
@@ -270,5 +307,39 @@ const styles = StyleSheet.create({
     alignItems:      'center',
     justifyContent:  'center',
     marginLeft:      10,
+  },
+  gymCardManagerBadge: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               3,
+    alignSelf:         'flex-start',
+    backgroundColor:   '#4A90E218',
+    borderRadius:      R.pill,
+    paddingHorizontal: 7,
+    paddingVertical:   3,
+    marginTop:         6,
+  },
+  gymCardManagerBadgeText: {
+    fontSize:   11,
+    fontWeight: '700',
+    color:      '#4A90E2',
+  },
+  gymCardBrands: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           5,
+    marginTop:     7,
+    flexWrap:      'wrap',
+  },
+  gymCardBrandLogo: {
+    backgroundColor:   '#ffffff',
+    borderRadius:      4,
+    paddingHorizontal: 5,
+    paddingVertical:   2,
+  },
+  gymCardBrandText: {
+    fontSize:   9,
+    fontWeight: '700',
+    color:      '#5ba4ff',
   },
 });

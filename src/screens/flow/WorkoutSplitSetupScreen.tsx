@@ -43,7 +43,7 @@ const CurrentSplitDisplay = React.memo(({
   currentIndex: number;
 }) => {
   if (splitType === 'sequential') {
-    const split    = workoutSplit as string[];
+    const split    = workoutSplit as string[][];
     const activeIdx = split.length > 0 ? currentIndex % split.length : 0;
     return (
       <View style={csd.container}>
@@ -52,16 +52,20 @@ const CurrentSplitDisplay = React.memo(({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={csd.seqRow}
         >
-          {split.map((item, idx) => (
-            <React.Fragment key={idx}>
-              {idx > 0 && <Text style={csd.arrow}>→</Text>}
-              <View style={[csd.seqChip, idx === activeIdx && csd.seqChipActive]}>
-                <Text style={[csd.seqChipText, idx === activeIdx && csd.seqChipTextActive]}>
-                  {item}
-                </Text>
-              </View>
-            </React.Fragment>
-          ))}
+          {split.map((muscles, idx) => {
+            const work  = muscles.filter(m => m !== '휴식');
+            const label = work.length > 0 ? work.join('·') : '휴식';
+            return (
+              <React.Fragment key={idx}>
+                {idx > 0 && <Text style={csd.arrow}>→</Text>}
+                <View style={[csd.seqChip, idx === activeIdx && csd.seqChipActive]}>
+                  <Text style={[csd.seqChipText, idx === activeIdx && csd.seqChipTextActive]}>
+                    {label}
+                  </Text>
+                </View>
+              </React.Fragment>
+            );
+          })}
         </ScrollView>
       </View>
     );
@@ -175,45 +179,64 @@ function WeekdayRow({
   );
 }
 
-// ── SequentialItem ────────────────────────────────────────────────────────────
+// ── SequentialSlotItem ────────────────────────────────────────────────────────
 
-function SequentialItem({
-  name, index, total, onRemove, onMoveUp, onMoveDown,
+function SequentialSlotItem({
+  slotIndex, muscles, total, onToggleMuscle, onRemove, onMoveUp, onMoveDown,
 }: {
-  name:       string;
-  index:      number;
-  total:      number;
-  onRemove:   () => void;
-  onMoveUp:   () => void;
-  onMoveDown: () => void;
+  slotIndex:      number;
+  muscles:        string[];
+  total:          number;
+  onToggleMuscle: (m: string) => void;
+  onRemove:       () => void;
+  onMoveUp:       () => void;
+  onMoveDown:     () => void;
 }) {
+  const work  = muscles.filter(m => m !== '휴식');
+  const label = work.length > 0 ? work.join('·') : (muscles.includes('휴식') ? '휴식' : '부위 선택');
   return (
-    <View style={s.seqItem}>
-      <View style={s.seqIndex}>
-        <Text style={s.seqIndexText}>{index + 1}</Text>
+    <View style={s.seqSlotItem}>
+      <View style={s.seqSlotHeader}>
+        <View style={s.seqIndex}>
+          <Text style={s.seqIndexText}>{slotIndex + 1}</Text>
+        </View>
+        <Text style={s.seqSlotLabel} numberOfLines={1}>{label}</Text>
+        <View style={s.seqActions}>
+          <TouchableOpacity
+            style={[s.seqBtn, slotIndex === 0 && s.seqBtnDisabled]}
+            onPress={onMoveUp}
+            disabled={slotIndex === 0}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chevron-up" size={14} color={slotIndex === 0 ? C.textDim : C.textSub} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.seqBtn, slotIndex === total - 1 && s.seqBtnDisabled]}
+            onPress={onMoveDown}
+            disabled={slotIndex === total - 1}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chevron-down" size={14} color={slotIndex === total - 1 ? C.textDim : C.textSub} />
+          </TouchableOpacity>
+          <TouchableOpacity style={s.seqRemoveBtn} onPress={onRemove} activeOpacity={0.7}>
+            <Ionicons name="close" size={14} color={C.danger} />
+          </TouchableOpacity>
+        </View>
       </View>
-      <Text style={s.seqName}>{name}</Text>
-      <View style={s.seqActions}>
-        <TouchableOpacity
-          style={[s.seqBtn, index === 0 && s.seqBtnDisabled]}
-          onPress={onMoveUp}
-          disabled={index === 0}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="chevron-up" size={14} color={index === 0 ? C.textDim : C.textSub} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[s.seqBtn, index === total - 1 && s.seqBtnDisabled]}
-          onPress={onMoveDown}
-          disabled={index === total - 1}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="chevron-down" size={14} color={index === total - 1 ? C.textDim : C.textSub} />
-        </TouchableOpacity>
-        <TouchableOpacity style={s.seqRemoveBtn} onPress={onRemove} activeOpacity={0.7}>
-          <Ionicons name="close" size={14} color={C.danger} />
-        </TouchableOpacity>
-      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ gap: 6, paddingTop: 10 }}
+      >
+        {SPLIT_MUSCLES.map(m => (
+          <MuscleChip
+            key={m}
+            label={m}
+            selected={muscles.includes(m)}
+            onPress={() => onToggleMuscle(m)}
+          />
+        ))}
+      </ScrollView>
     </View>
   );
 }
@@ -270,7 +293,7 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
   const [existingConfig, setExistingConfig] = useState<UserSplitConfig | null>(null);
   const [type,           setType]           = useState<SplitType>('sequential');
   const [weekday,        setWeekday]        = useState<WeekdaySplit>(EMPTY_WEEKDAY);
-  const [seqList,        setSeqList]        = useState<string[]>([]);
+  const [seqList,        setSeqList]        = useState<string[][]>([]);
   const [startIndex,     setStartIndex]     = useState(0);
   const [saving,         setSaving]         = useState(false);
 
@@ -298,29 +321,25 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
       if (current.includes(muscle)) {
         return { ...prev, [key]: current.filter(m => m !== muscle) };
       }
-      // 이미 1개 선택된 상태에서 추가 선택 시도 → 안내 메시지
-      if (current.length >= 1) {
-        Alert.alert(
-          '준비 중인 기능이에요',
-          '하루에 두 개 이상의 부위를 설정하는 기능은 곧 추가될 예정이에요.',
-        );
-        return prev;
-      }
       return { ...prev, [key]: [...current, muscle] };
     });
   }
 
-  function addToSeq(muscle: string) {
+  function addSeqSlot() {
+    setSeqList(prev => [...prev, ['휴식']]);
+  }
+
+  function toggleSeqSlotMuscle(slotIndex: number, muscle: string) {
     setSeqList(prev => {
-      // 바로 직전 항목과 같은 부위면 안내 (실수 방지)
-      if (prev.length > 0 && prev[prev.length - 1] === muscle) {
-        Alert.alert(
-          '준비 중인 기능이에요',
-          '하루에 두 개 이상의 부위를 묶는 기능은 곧 추가될 예정이에요.',
-        );
-        return prev;
-      }
-      return [...prev, muscle];
+      const next = prev.map((slot, i) => {
+        if (i !== slotIndex) return slot;
+        if (muscle === '휴식') return ['휴식'];         // 휴식 선택 → 슬롯 = ['휴식']
+        const without = slot.filter(m => m !== '휴식'); // 다른 부위 선택 → 휴식 제거
+        return without.includes(muscle)
+          ? without.filter(m => m !== muscle)           // 토글 off
+          : [...without, muscle];                       // 토글 on
+      });
+      return next;
     });
   }
 
@@ -380,7 +399,7 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
       if (!canProceed) return;
       setSaving(true);
       try {
-        const split = type === 'weekday' ? weekday : seqList;
+        const split = type === 'weekday' ? weekday : seqList.filter(slot => slot.length > 0) as unknown as WorkoutSplit;
         await saveSplitConfig(userId, type, split);
       } catch {}
       setSaving(false);
@@ -405,7 +424,7 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
     : step === 2
     ? type === 'weekday'
       ? Object.values(weekday).some((arr: any) => arr.length > 0)
-      : seqList.length > 0
+      : seqList.length > 0 && seqList.every(slot => slot.length > 0)
     : true;
 
   // 로딩 중
@@ -531,16 +550,17 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
             <Text style={s.sectionLabel}>운동 순서 목록</Text>
             {seqList.length === 0 ? (
               <View style={s.seqEmpty}>
-                <Text style={s.seqEmptyText}>아래 부위를 탭해서 추가하세요</Text>
+                <Text style={s.seqEmptyText}>아래 버튼으로 슬롯을 추가하세요</Text>
               </View>
             ) : (
               <View style={s.seqList}>
-                {seqList.map((name, idx) => (
-                  <SequentialItem
-                    key={`${name}-${idx}`}
-                    name={name}
-                    index={idx}
+                {seqList.map((muscles, idx) => (
+                  <SequentialSlotItem
+                    key={idx}
+                    slotIndex={idx}
+                    muscles={muscles}
                     total={seqList.length}
+                    onToggleMuscle={(m) => toggleSeqSlotMuscle(idx, m)}
                     onRemove={() => removeFromSeq(idx)}
                     onMoveUp={() => moveSeqUp(idx)}
                     onMoveDown={() => moveSeqDown(idx)}
@@ -548,17 +568,10 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
                 ))}
               </View>
             )}
-            <Text style={[s.sectionLabel, { marginTop: 20 }]}>부위 추가 (중복 허용)</Text>
-            <View style={s.chipRow}>
-              {SPLIT_MUSCLES.map(m => (
-                <MuscleChip
-                  key={m}
-                  label={m}
-                  selected={false}
-                  onPress={() => addToSeq(m)}
-                />
-              ))}
-            </View>
+            <TouchableOpacity style={s.addSlotBtn} onPress={addSeqSlot} activeOpacity={0.8}>
+              <Ionicons name="add" size={16} color={C.accent} />
+              <Text style={s.addSlotText}>슬롯 추가</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -580,16 +593,20 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
         {/* ── Step 3: 시작 부위 선택 ── */}
         {step === 3 && (
           <View style={s.section}>
-            <Text style={s.sectionLabel}>시작할 부위를 선택하세요</Text>
+            <Text style={s.sectionLabel}>시작할 슬롯을 선택하세요</Text>
             <View style={s.startList}>
-              {seqList.map((name, idx) => (
-                <StartPositionItem
-                  key={`${name}-${idx}`}
-                  name={name}
-                  selected={startIndex === idx}
-                  onPress={() => setStartIndex(idx)}
-                />
-              ))}
+              {seqList.map((muscles, idx) => {
+                const work  = muscles.filter(m => m !== '휴식');
+                const label = work.length > 0 ? work.join('·') : '휴식';
+                return (
+                  <StartPositionItem
+                    key={idx}
+                    name={label}
+                    selected={startIndex === idx}
+                    onPress={() => setStartIndex(idx)}
+                  />
+                );
+              })}
             </View>
           </View>
         )}
@@ -890,6 +907,38 @@ const s = StyleSheet.create({
     width: 28, height: 28, borderRadius: 8,
     backgroundColor: '#ff4d6d18',
     alignItems: 'center', justifyContent: 'center',
+  },
+  seqSlotItem: {
+    backgroundColor: C.surfaceHigh,
+    borderRadius: R.inner,
+    padding: 14,
+    marginBottom: 10,
+  },
+  seqSlotHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  seqSlotLabel: {
+    flex: 1,
+    ...T.body,
+    color: C.text,
+  },
+  addSlotBtn: {
+    flexDirection:    'row',
+    alignItems:       'center',
+    justifyContent:   'center',
+    gap:              6,
+    marginTop:        12,
+    paddingVertical:  12,
+    borderRadius:     R.inner,
+    borderWidth:      1,
+    borderColor:      C.accent + '60',
+    backgroundColor:  C.accentBg,
+  },
+  addSlotText: {
+    ...T.label,
+    color: C.accent,
   },
 
   // Start position list (Step 3)

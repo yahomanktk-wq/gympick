@@ -21,6 +21,7 @@ export interface AuthUser {
   gymId?: string;
   profileImageUrl?: string;
   weightUnit?: 'kg' | 'lbs';
+  managerOnboarded?: boolean;
 }
 
 interface AuthContextValue {
@@ -34,29 +35,14 @@ interface AuthContextValue {
   signOut:      () => Promise<void>;
   signInGoogle:    () => Promise<{ error: string | null }>;
   signInApple:     () => Promise<{ error: string | null }>;
-  switchRole:         (role: UserRole) => void;
   updateNickname:     (nickname: string) => Promise<{ error: string | null }>;
   updateProfileImage: (url: string) => void;
   updateWeightUnit:   (unit: 'kg' | 'lbs') => void;
   refreshUser:        () => Promise<void>;
+  markManagerOnboarded: () => Promise<void>;
 }
 
-// --- Mock users
-
-const MOCK_USERS: Record<UserRole, AuthUser> = {
-  user: {
-    id: 'u1', name: 'Alex Park', nickname: 'AlexP', email: 'alex@gympick.io',
-    role: 'user', managedGymIds: [],
-  },
-  manager: {
-    id: 'u2', name: 'Jordan Kim', nickname: 'JordanK', email: 'jordan@ironhub.kr',
-    role: 'manager', managedGymIds: ['g01', 'g02'],
-  },
-  admin: {
-    id: 'u3', name: 'Sam Lee', nickname: 'SamL', email: 'sam@gympick.io',
-    role: 'admin', managedGymIds: [],
-  },
-};
+// --- Demo accounts (앱 심사용 — Supabase 미설정 환경에서만 사용)
 
 const DEMO_USER: AuthUser = {
   id: 'u1', name: '짐픽 사용자', nickname: '짐픽유저', email: 'demo@gympick.app',
@@ -68,11 +54,8 @@ const DEMO_MANAGER: AuthUser = {
 };
 
 const MOCK_CREDENTIALS: Record<string, { user: AuthUser; password: string }> = {
-  'alex@gympick.io':      { user: MOCK_USERS.user,    password: 'gympick123' },
-  'jordan@ironhub.kr':    { user: MOCK_USERS.manager, password: 'gympick123' },
-  'sam@gympick.io':       { user: MOCK_USERS.admin,   password: 'gympick123' },
-  'demo@gympick.app':     { user: DEMO_USER,           password: 'Demo1234!' },
-  'manager@gympick.app':  { user: DEMO_MANAGER,        password: 'Demo1234!' },
+  'demo@gympick.app':     { user: DEMO_USER,    password: 'Demo1234!' },
+  'manager@gympick.app':  { user: DEMO_MANAGER, password: 'Demo1234!' },
 };
 
 interface ProfileData {
@@ -80,11 +63,10 @@ interface ProfileData {
   nickname?:      string;
   role?:          'user' | 'manager' | 'admin';
   managedGymIds?: string[];
+  managerOnboarded?: boolean;
 }
 
 function mapSupabaseUser(sbUser: SupabaseUser, profileData?: ProfileData): AuthUser {
-  const mock = Object.values(MOCK_USERS).find(m => m.email === sbUser.email);
-  if (mock) return { ...mock, profileImageUrl: profileData?.avatarUrl };
   return {
     id:              sbUser.id,
     name:            sbUser.user_metadata?.name ?? sbUser.email?.split('@')[0] ?? 'User',
@@ -93,6 +75,7 @@ function mapSupabaseUser(sbUser: SupabaseUser, profileData?: ProfileData): AuthU
     role:            (profileData?.role ?? 'user') as UserRole,
     managedGymIds:   profileData?.managedGymIds ?? [],
     profileImageUrl: profileData?.avatarUrl,
+    managerOnboarded: profileData?.managerOnboarded,
   };
 }
 
@@ -101,7 +84,7 @@ async function fetchProfileData(userId: string): Promise<ProfileData> {
     const [profileRes, gymsRes] = await Promise.all([
       supabase
         .from('profiles')
-        .select('avatar_url, nickname, role')
+        .select('avatar_url, nickname, role, manager_onboarded')
         .eq('id', userId)
         .single(),
       supabase
@@ -118,6 +101,7 @@ async function fetchProfileData(userId: string): Promise<ProfileData> {
       nickname:      data?.nickname   ?? undefined,
       role:          data?.role       ?? undefined,
       managedGymIds: gymsData.map((g: { id: string }) => g.id),
+      managerOnboarded: data?.manager_onboarded ?? false,
     };
   } catch {
     return {};
@@ -181,11 +165,11 @@ const AuthContext = createContext<AuthContextValue>({
   signOut:      async () => {},
   signInGoogle:   async () => ({ error: null }),
   signInApple:    async () => ({ error: null }),
-  switchRole:         () => {},
   updateNickname:     async () => ({ error: null }),
   updateProfileImage: () => {},
   updateWeightUnit:   () => {},
   refreshUser:        async () => {},
+  markManagerOnboarded: async () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -389,6 +373,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const markManagerOnboarded = async (): Promise<void> => {
+    try {
+      if (!user) return;
+      setUser(prev => prev ? { ...prev, managerOnboarded: true } : prev);
+      if (supabaseConfigured) {
+        const { setManagerOnboarded } = await import('../lib/db/userProfiles');
+        await setManagerOnboarded(user.id);
+      }
+    } catch (e) {
+      if (__DEV__) console.warn('[AuthContext] markManagerOnboarded 오류:', e);
+    }
+  };
+
   const signInGoogle = async (): Promise<{ error: string | null }> => {
     try {
       if (!supabaseConfigured) {
@@ -519,11 +516,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       signInGoogle,
       signInApple,
-      switchRole:         role => setUser(MOCK_USERS[role]),
       updateNickname,
       updateProfileImage,
       updateWeightUnit,
       refreshUser,
+      markManagerOnboarded,
     }}>
       {children}
     </AuthContext.Provider>

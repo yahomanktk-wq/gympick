@@ -7,6 +7,7 @@ export interface GymRegistrationRequest {
   location:      string;
   addressDetail: string | null;
   notes:         string;
+  hours:         string | null;
   status:        'pending' | 'reviewed' | 'resolved';
   requesterRole: 'user' | 'manager';
   createdAt:     string;
@@ -19,6 +20,7 @@ export async function submitGymRegistrationRequest(
   addressDetail: string,
   notes:         string,
   requesterRole: 'user' | 'manager' = 'user',
+  hours:         string = '',
 ): Promise<{ error: string | null }> {
   try {
     const { error } = await supabase
@@ -29,6 +31,7 @@ export async function submitGymRegistrationRequest(
         location,
         address_detail: addressDetail || null,
         notes:          notes || null,
+        hours:          hours || null,
         status:         'pending',
         requester_role: requesterRole,
       });
@@ -42,7 +45,7 @@ export async function submitGymRegistrationRequest(
 export async function fetchGymRegistrationRequests(): Promise<GymRegistrationRequest[]> {
   const { data, error } = await supabase
     .from('gym_registration_requests')
-    .select('id, gym_name, location, address_detail, notes, status, user_id, requester_role, created_at')
+    .select('id, gym_name, location, address_detail, notes, hours, status, user_id, requester_role, created_at')
     .order('created_at', { ascending: false });
 
   if (error || !data) return [];
@@ -53,6 +56,7 @@ export async function fetchGymRegistrationRequests(): Promise<GymRegistrationReq
     location:      r.location,
     addressDetail: r.address_detail ?? null,
     notes:         r.notes ?? '',
+    hours:         r.hours ?? null,
     status:        r.status,
     requesterRole: r.requester_role ?? 'user',
     createdAt:     r.created_at,

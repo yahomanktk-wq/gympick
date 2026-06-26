@@ -24,7 +24,7 @@ import { C, R, T } from '../theme';
 import { screenPad, cardPadH, cardPadV } from '../theme/responsive';
 import { UserRole, ManagedGym } from '../data/types';
 import { useAuth } from '../context/AuthContext';
-import { MANAGED_GYMS, PENDING_GYMS, PENDING_EDITS, FLAGGED_ITEMS } from '../data/mockAdmin';
+import { PENDING_GYMS, PENDING_EDITS, FLAGGED_ITEMS } from '../data/mockAdmin';
 import ManagerDashboard from './manager/ManagerDashboard';
 import AdminDashboard from './admin/AdminDashboard';
 import FavoritesScreen from './FavoritesScreen';
@@ -33,6 +33,7 @@ import PrivacyPolicyScreen from './PrivacyPolicyScreen';
 import AuthFlow from './auth/AuthFlow';
 import NotificationsScreen from './NotificationsScreen';
 import ManagerRequestModal from './flow/ManagerRequestModal';
+import ManagerManualScreen from './manager/ManagerManualScreen';
 import { fetchUnreadCount } from '../lib/db/notifications';
 import { setWorkoutGuideSeen } from '../lib/db/onboarding';
 import { supabase } from '../lib/supabase';
@@ -181,6 +182,7 @@ function BadgeCollectionSection() {
 function ManagerSection({ onOpen, gyms }: { onOpen: () => void; gyms: ManagedGym[] }) {
   const approvedGyms = gyms.filter(g => g.status === 'approved');
   const pendingGyms  = gyms.filter(g => g.status === 'pending');
+  const isEmpty      = gyms.length === 0;
 
   return (
     <View style={styles.roleSection}>
@@ -192,9 +194,11 @@ function ManagerSection({ onOpen, gyms }: { onOpen: () => void; gyms: ManagedGym
           </View>
           <View>
             <Text style={styles.roleSectionTitle}>헬스장 관리</Text>
-            <Text style={styles.roleSectionSub}>
-              {gyms.length} 헬스장 등록됨
-            </Text>
+            {!isEmpty && (
+              <Text style={styles.roleSectionSub}>
+                {gyms.length} 헬스장 등록됨
+              </Text>
+            )}
           </View>
         </View>
         <TouchableOpacity style={styles.openPanelBtn} onPress={onOpen} activeOpacity={0.85}>
@@ -203,43 +207,45 @@ function ManagerSection({ onOpen, gyms }: { onOpen: () => void; gyms: ManagedGym
         </TouchableOpacity>
       </View>
 
-      {/* Gym quick-status rows */}
-      {gyms.map((gym, i) => (
-        <React.Fragment key={gym.id}>
-          {i > 0 && <CardDivider />}
-          <TouchableOpacity style={styles.gymSummaryRow} onPress={onOpen} activeOpacity={0.75}>
-            <View style={[
-              styles.gymSummaryDot,
-              { backgroundColor: gym.status === 'approved' ? C.accent : gym.status === 'pending' ? '#ffb547' : C.danger },
-            ]} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.gymSummaryName}>{gym.name}</Text>
-              <Text style={styles.gymSummaryLoc}>{gym.location}</Text>
-            </View>
-            <View style={styles.gymSummaryMeta}>
-              <Text style={styles.gymSummaryMetaText}>머신 {gym.machineIds.length}개</Text>
-            </View>
-          </TouchableOpacity>
-        </React.Fragment>
-      ))}
+      {isEmpty ? (
+        <Text style={styles.managerEmptyText}>아직 등록한 헬스장이 없어요</Text>
+      ) : (
+        <>
+          {/* Gym quick-status rows */}
+          {gyms.map((gym, i) => (
+            <React.Fragment key={gym.id}>
+              {i > 0 && <CardDivider />}
+              <TouchableOpacity style={styles.gymSummaryRow} onPress={onOpen} activeOpacity={0.75}>
+                <View style={[
+                  styles.gymSummaryDot,
+                  { backgroundColor: gym.status === 'approved' ? C.accent : gym.status === 'pending' ? '#ffb547' : C.danger },
+                ]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.gymSummaryName}>{gym.name}</Text>
+                  <Text style={styles.gymSummaryLoc}>{gym.location}</Text>
+                </View>
+                <View style={styles.gymSummaryMeta}>
+                  <Text style={styles.gymSummaryMetaText}>머신 {gym.machineIds.length}개</Text>
+                </View>
+              </TouchableOpacity>
+            </React.Fragment>
+          ))}
 
-      {/* Status summary chips */}
-      <View style={styles.roleSummaryChips}>
-        <View style={styles.summaryChip}>
-          <View style={[styles.summaryChipDot, { backgroundColor: C.accent }]} />
-          <Text style={styles.summaryChipText}>{approvedGyms.length} 운영 중</Text>
-        </View>
-        {pendingGyms.length > 0 && (
-          <View style={styles.summaryChip}>
-            <View style={[styles.summaryChipDot, { backgroundColor: '#ffb547' }]} />
-            <Text style={styles.summaryChipText}>{pendingGyms.length} 검토 중</Text>
+          {/* Status summary chips */}
+          <View style={styles.roleSummaryChips}>
+            <View style={styles.summaryChip}>
+              <View style={[styles.summaryChipDot, { backgroundColor: C.accent }]} />
+              <Text style={styles.summaryChipText}>{approvedGyms.length} 운영 중</Text>
+            </View>
+            {pendingGyms.length > 0 && (
+              <View style={styles.summaryChip}>
+                <View style={[styles.summaryChipDot, { backgroundColor: '#ffb547' }]} />
+                <Text style={styles.summaryChipText}>{pendingGyms.length} 검토 중</Text>
+              </View>
+            )}
           </View>
-        )}
-        <TouchableOpacity style={styles.registerGymChip} onPress={onOpen} activeOpacity={0.8}>
-          <Ionicons name="add" size={12} color={C.accent} />
-          <Text style={styles.registerGymChipText}>헬스장 등록</Text>
-        </TouchableOpacity>
-      </View>
+        </>
+      )}
     </View>
   );
 }
@@ -342,6 +348,7 @@ export default function ProfileScreen() {
   }
 
   const [showHelpModal,     setShowHelpModal]     = useState(false);
+  const [showManagerManual, setShowManagerManual] = useState(false);
   const [resetLoading,      setResetLoading]      = useState<'app' | 'workout' | null>(null);
   const [showFeedbackSheet, setShowFeedbackSheet] = useState(false);
   const [feedbackText,      setFeedbackText]      = useState('');
@@ -369,8 +376,6 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (!user?.id || user.role !== 'manager') return;
 
-    const mockGyms = MANAGED_GYMS.filter(g => g.managerId === user.id);
-
     async function loadGyms() {
       try {
         const { supabase } = await import('../lib/supabase');
@@ -380,7 +385,7 @@ export default function ProfileScreen() {
           .eq('manager_id', user!.id);
 
         if (error || !data || data.length === 0) {
-          setManagerGyms(mockGyms.length > 0 ? mockGyms : MANAGED_GYMS);
+          setManagerGyms([]);
           return;
         }
 
@@ -399,12 +404,10 @@ export default function ProfileScreen() {
           photoCount:  0,
         }));
 
-        const existingIds = new Set(supabaseGyms.map(g => g.id));
-        const uniqueMockGyms = mockGyms.filter(g => !existingIds.has(g.id));
-        setManagerGyms([...supabaseGyms, ...uniqueMockGyms]);
+        setManagerGyms(supabaseGyms);
       } catch (e: any) {
         console.warn('[ProfileScreen] 헬스장 로딩 오류:', e.message);
-        setManagerGyms(mockGyms.length > 0 ? mockGyms : MANAGED_GYMS);
+        setManagerGyms([]);
       }
     }
 
@@ -903,6 +906,9 @@ export default function ProfileScreen() {
       <Modal visible={showAdmin} animationType="slide" onRequestClose={() => setShowAdmin(false)}>
         <AdminDashboard onClose={() => setShowAdmin(false)} />
       </Modal>
+      <Modal visible={showManagerManual} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowManagerManual(false)}>
+        <ManagerManualScreen onClose={() => setShowManagerManual(false)} />
+      </Modal>
       <Modal visible={showPrivacy} animationType="slide" onRequestClose={() => setShowPrivacy(false)}>
         <PrivacyPolicyScreen onClose={() => setShowPrivacy(false)} />
       </Modal>
@@ -1014,6 +1020,28 @@ export default function ProfileScreen() {
                   <Text style={{ fontSize: 14, fontWeight: '800', color: '#fff' }}>
                     {resetLoading === 'workout' ? '초기화 중...' : '다음 운동일지 작성 시 다시 보기'}
                   </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* 매니저 운영 가이드 (매니저만) */}
+            {user?.role === 'manager' && (
+              <View style={{ backgroundColor: C.surface, borderRadius: R.card, borderWidth: 1, borderColor: C.border, padding: 16, gap: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: C.accentBg, alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="business-outline" size={18} color={C.accent} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: C.text }}>헬스장 운영 가이드</Text>
+                    <Text style={{ fontSize: 12, color: C.textSub, marginTop: 2 }}>헬스장 등록·머신 관리 매뉴얼을 다시 볼 수 있어요</Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={{ backgroundColor: C.accent, borderRadius: R.btn, paddingVertical: 12, alignItems: 'center' }}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowManagerManual(true); }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: C.bg }}>가이드 보기</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -1372,6 +1400,7 @@ const styles = StyleSheet.create({
   },
   roleSectionTitle: { fontSize: 15, fontWeight: '700', color: C.text },
   roleSectionSub:   { fontSize: 12, color: C.textSub, marginTop: 2 },
+  managerEmptyText: { fontSize: 13, color: C.textSub, textAlign: 'center', paddingVertical: 18 },
   openPanelBtn: {
     flexDirection: 'row',
     alignItems: 'center',

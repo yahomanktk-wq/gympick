@@ -452,7 +452,7 @@ export default function WorkoutFeedScreen() {
       if (todayLogs.length > 0) {
         // 오늘 일지 있음 → 일지 타겟 부위(영어)를 한글로 변환
         const { toKoMuscle } = await import('../lib/splitUtils');
-        const todayMuscleEn  = todayLogs[0].targetMuscle ?? null;
+        const todayMuscleEn  = todayLogs[0].targetMuscles?.[0] ?? null;
         targetKo = todayMuscleEn ? toKoMuscle(todayMuscleEn) : null;
       } else if (config) {
         // 오늘 일지 없음 → 현재 인덱스 타겟 부위

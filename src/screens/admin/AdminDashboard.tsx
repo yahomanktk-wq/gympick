@@ -17,34 +17,27 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T } from '../../theme';
-import { PendingGym, PendingEdit, FlaggedItem, ReviewStatus, FlagType } from '../../data/types';
+import { PendingGym, ReviewStatus } from '../../data/types';
 import { MACHINES } from '../../data/machines';
 import type { Machine } from '../../data/types';
 import { Switch } from 'react-native';
+import { fetchMachineRequests, updateMachineRequestStatus, type MachineRequest } from '../../lib/db/machineRequests';
 import {
   getBrandCopyrightList,
   setBrandCopyrightStatus,
 } from '../../data/brandCopyrightStore';
 import {
   getAllGymsForAdmin,
-  getAllEditRequests,
   updateGymStatus,
-  updateEditRequestStatus,
   type RegistrationGym,
-  type EditRequest as RegEditRequest,
   type GymRegStatus,
 } from '../../data/gymRegistrationStore';
 import {
-  getAllGymInfoReports,
+  fetchGymInfoReports,
   markReportReviewed,
   deleteGymInfoReport,
   type GymInfoReport,
-} from '../../data/gymReportStore';
-import {
-  getAllManagerApplications,
-  updateApplicationStatus,
-  type ManagerApplication,
-} from '../../data/managerApplicationStore';
+} from '../../lib/db/gymInfoReports';
 import {
   getAllAdminGyms,
   addAdminGym,
@@ -80,7 +73,7 @@ const CAT_BRANDS   = ['All', ...Array.from(new Set(MACHINES.map(m => m.brand))).
 
 // --- Types
 
-type AdminView = 'home' | 'pending-gyms' | 'gym-detail' | 'pending-edits' | 'flagged' | 'machine-catalog' | 'brand-copyright' | 'gym-reports' | 'manager-requests' | 'register-gym' | 'gym-registration-requests' | 'gym-official-brands' | 'all-gyms-official';
+type AdminView = 'home' | 'pending-gyms' | 'gym-detail' | 'machine-catalog' | 'brand-copyright' | 'gym-reports' | 'manager-requests' | 'register-gym' | 'gym-registration-requests' | 'gym-official-brands' | 'all-gyms-official' | 'machine-requests';
 
 // --- Shared components
 
@@ -124,12 +117,6 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-const FLAG_META: Record<FlagType, { label: string; color: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = {
-  duplicate:      { label: '중복',     color: '#ffb547', icon: 'copy-outline' },
-  incorrect_info: { label: '정보 오류', color: '#ff7c47', icon: 'alert-circle-outline' },
-  closed:         { label: '폐업',     color: C.danger,  icon: 'lock-closed-outline' },
-};
-
 function EmptyQueue({ label }: { label: string }) {
   return (
     <View style={styles.emptyQueue}>
@@ -143,12 +130,11 @@ function EmptyQueue({ label }: { label: string }) {
 
 interface HomeViewProps {
   pendingGymCount: number;
-  pendingEditCount: number;
-  openFlagCount: number;
   gymReportCount: number;
   managerRequestCount: number;
   registeredGymCount: number;
   gymRequestCount: number;
+  machineRequestCount: number;
   onPush: (v: AdminView) => void;
 }
 
@@ -164,19 +150,6 @@ interface GymDetailViewProps {
   selectedGym: PendingGym;
   onReview: (gymId: string, action: ReviewStatus) => void;
   onBack: () => void;
-}
-
-interface PendingEditsViewProps {
-  pendingEdits: PendingEdit[];
-  editList: RegEditRequest[];
-  onReviewEdit:  (edit: PendingEdit, action: ReviewStatus) => void;
-  onApproveEdit: (id: string) => void;
-  onRejectEdit:  (id: string) => void;
-}
-
-interface FlaggedViewProps {
-  flaggedItems: FlaggedItem[];
-  onResolveFlag: (item: FlaggedItem, resolution: 'resolved' | 'delete' | 'merge') => void;
 }
 
 interface MachineCatalogViewProps {
@@ -258,16 +231,88 @@ function GymRequestsView({
   );
 }
 
-function HomeView({ pendingGymCount, pendingEditCount, openFlagCount, gymReportCount, managerRequestCount, registeredGymCount, gymRequestCount, onPush }: HomeViewProps) {
+function MachineRequestsView({
+  requests,
+  onUpdateStatus,
+  onBack,
+}: {
+  requests:       MachineRequest[];
+  onUpdateStatus: (id: string, status: 'reviewed' | 'resolved') => void;
+  onBack:         () => void;
+}) {
+  const pending  = requests.filter(r => r.status === 'pending');
+  const reviewed = requests.filter(r => r.status !== 'pending');
+
+  return (
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+      <TouchableOpacity onPress={onBack} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <Ionicons name="chevron-back" size={20} color={C.text} />
+        <Text style={{ fontSize: 16, fontWeight: '800', color: C.text }}>머신 등록 신청(매니저)</Text>
+      </TouchableOpacity>
+
+      <Text style={{ fontSize: 12, fontWeight: '700', color: C.textDim, letterSpacing: 1 }}>검토 대기 ({pending.length})</Text>
+      {pending.length === 0 && (
+        <Text style={{ fontSize: 13, color: C.textDim, paddingVertical: 12 }}>검토 대기 중인 신청이 없어요.</Text>
+      )}
+      {pending.map(req => (
+        <View key={req.id} style={{ backgroundColor: C.surface, borderRadius: R.card, padding: 16, gap: 8 }}>
+          {req.photoUrl ? (
+            <Image
+              source={{ uri: req.photoUrl }}
+              style={{ width: '100%', height: 180, borderRadius: R.inner, backgroundColor: C.bg }}
+              resizeMode="cover"
+            />
+          ) : null}
+          <Text style={{ fontSize: 15, fontWeight: '800', color: C.text }}>{req.machineName}</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            {req.brand ? (
+              <View style={{ backgroundColor: C.bg, borderRadius: R.pill, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: C.border }}>
+                <Text style={{ fontSize: 11, color: C.textSub, fontWeight: '600' }}>{req.brand}</Text>
+              </View>
+            ) : null}
+            {req.targetMuscle ? (
+              <View style={{ backgroundColor: C.accentBg, borderRadius: R.pill, paddingHorizontal: 8, paddingVertical: 3 }}>
+                <Text style={{ fontSize: 11, color: C.accent, fontWeight: '700' }}>{req.targetMuscle}</Text>
+              </View>
+            ) : null}
+          </View>
+          <Text style={{ fontSize: 13, color: C.textSub }}>헬스장: {req.gymName}</Text>
+          <Text style={{ fontSize: 11, color: C.textDim }}>신청자: {req.requesterId} · {new Date(req.createdAt).toLocaleDateString('ko-KR')}</Text>
+          <TouchableOpacity
+            style={{ padding: 12, borderRadius: R.btn, backgroundColor: C.accent, alignItems: 'center', marginTop: 4 }}
+            onPress={() => onUpdateStatus(req.id, 'resolved')}
+          >
+            <Text style={{ color: C.bg, fontWeight: '800', fontSize: 13 }}>확인 완료</Text>
+          </TouchableOpacity>
+        </View>
+      ))}
+
+      {reviewed.length > 0 && (
+        <>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: C.textDim, letterSpacing: 1, marginTop: 8 }}>처리된 신청 ({reviewed.length})</Text>
+          {reviewed.map(req => (
+            <View key={req.id} style={{ backgroundColor: C.surface, borderRadius: R.card, padding: 16, gap: 4, opacity: 0.6 }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: C.text }}>{req.machineName}</Text>
+              <Text style={{ fontSize: 12, color: C.textSub }}>{req.gymName}{req.brand ? ` · ${req.brand}` : ''}</Text>
+              <Text style={{ fontSize: 11, color: C.accent, fontWeight: '600' }}>확인 완료</Text>
+            </View>
+          ))}
+        </>
+      )}
+    </ScrollView>
+  );
+}
+
+function HomeView({ pendingGymCount, gymReportCount, managerRequestCount, registeredGymCount, gymRequestCount, machineRequestCount, onPush }: HomeViewProps) {
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
       {/* Stats */}
-      <Text style={styles.sectionTitle}>관리자 개요</Text>
+      <Text style={styles.sectionTitle}>처리 대기 현황</Text>
       <View style={styles.statsRow}>
         {[
-          { label: '전체 헬스장', value: '8',  icon: 'business' as const, color: C.accent },
-          { label: '오늘 승인',   value: '2',  icon: 'checkmark-circle' as const, color: '#3dd68c' },
-          { label: '전체 머신',   value: '23', icon: 'barbell' as const, color: '#5ba4ff' },
+          { label: '매니저 신청', value: String(managerRequestCount), icon: 'person-add' as const, color: '#a78bfa' },
+          { label: '헬스장 심사', value: String(pendingGymCount),     icon: 'business' as const,   color: '#ffb547' },
+          { label: '정보 제보',   value: String(gymReportCount),      icon: 'flag' as const,       color: '#ff7eb3' },
         ].map(s => (
           <View key={s.label} style={styles.statCard}>
             <Ionicons name={s.icon} size={20} color={s.color} />
@@ -287,22 +332,6 @@ function HomeView({ pendingGymCount, pendingEditCount, openFlagCount, gymReportC
           sub: `${pendingGymCount}개 검토 대기`,
           onPress: () => onPush('pending-gyms'),
           color: '#ffb547',
-        },
-        {
-          icon: 'create-outline' as const,
-          title: '정보 수정 요청 대기',
-          count: pendingEditCount,
-          sub: `${pendingEditCount}개 검토 대기`,
-          onPress: () => onPush('pending-edits'),
-          color: '#5ba4ff',
-        },
-        {
-          icon: 'flag-outline' as const,
-          title: '신고 접수',
-          count: openFlagCount,
-          sub: `${openFlagCount}개 신고 접수`,
-          onPress: () => onPush('flagged'),
-          color: C.danger,
         },
         {
           icon: 'barbell-outline' as const,
@@ -353,6 +382,14 @@ function HomeView({ pendingGymCount, pendingEditCount, openFlagCount, gymReportC
           color: '#fb923c',
         },
         {
+          icon: 'barbell-outline' as const,
+          title: '머신 등록 신청(매니저)',
+          count: machineRequestCount,
+          sub: machineRequestCount > 0 ? `${machineRequestCount}개 검토 대기` : '접수된 신청 없음',
+          onPress: () => onPush('machine-requests'),
+          color: '#22d3ee',
+        },
+        {
           icon: 'shield-checkmark-outline' as const,
           title: '헬스장 오피셜 관리',
           count: 0,
@@ -378,25 +415,6 @@ function HomeView({ pendingGymCount, pendingEditCount, openFlagCount, gymReportC
         </TouchableOpacity>
       ))}
 
-      {/* Recent activity */}
-      <Text style={[styles.sectionTitle, { marginTop: 24 }]}>최근 활동</Text>
-      <View style={styles.activityCard}>
-        {[
-          { icon: 'checkmark-circle' as const, color: '#3dd68c', text: 'IronHub Fitness approved',  time: '2h ago' },
-          { icon: 'checkmark-circle' as const, color: '#3dd68c', text: 'PulseZone Gym approved',    time: '5h ago' },
-          { icon: 'close-circle'     as const, color: C.danger,  text: 'Duplicate gym rejected',   time: 'Yesterday' },
-          { icon: 'flag'             as const, color: '#ffb547', text: 'UrbanSweat Gym flagged',    time: '2 days ago' },
-        ].map((a, i) => (
-          <React.Fragment key={i}>
-            <View style={styles.activityRow}>
-              <Ionicons name={a.icon} size={16} color={a.color} />
-              <Text style={styles.activityText}>{a.text}</Text>
-              <Text style={styles.activityTime}>{a.time}</Text>
-            </View>
-            {i < 3 && <View style={styles.divider} />}
-          </React.Fragment>
-        ))}
-      </View>
     </ScrollView>
   );
 }
@@ -501,186 +519,6 @@ function GymDetailView({ selectedGym, onReview, onBack }: GymDetailViewProps) {
           </TouchableOpacity>
         </View>
       )}
-    </ScrollView>
-  );
-}
-
-function PendingEditsView({ pendingEdits, editList, onReviewEdit, onApproveEdit, onRejectEdit }: PendingEditsViewProps) {
-  const pending  = pendingEdits.filter(e => e.status === 'pending');
-  const reviewed = pendingEdits.filter(e => e.status !== 'pending');
-  const regPending = editList.filter(e => e.status === 'pending').length;
-  return (
-    <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-
-      {/* ── 정보 수정 요청 (gymRegistrationStore) ── */}
-      <Text style={styles.sectionTitle}>정보 수정 요청</Text>
-      <Text style={styles.sectionSub}>{regPending}개 검토 대기</Text>
-
-      {editList.length === 0 && <EmptyQueue label="수정 요청이 없어요" />}
-
-      {editList.map(req => {
-        const isPending  = req.status === 'pending';
-        const isApproved = req.status === 'approved';
-        return (
-          <View key={req.id} style={[styles.editCard, !isPending && { opacity: 0.65 }]}>
-            <View style={styles.editCardTop}>
-              <Text style={styles.editGymName}>{req.gymName}</Text>
-              <View style={styles.editFieldBadge}>
-                <Text style={styles.editFieldBadgeText}>{req.field}</Text>
-              </View>
-              {!isPending && (
-                <View style={[styles.reviewedBadge, { backgroundColor: isApproved ? C.accentBg : C.dangerBg }]}>
-                  <Text style={[styles.reviewedBadgeText, { color: isApproved ? C.accent : C.danger }]}>
-                    {isApproved ? '승인됨' : '거절됨'}
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.diffBlock}>
-              <View style={styles.diffRow}>
-                <View style={styles.diffOldDot} />
-                <Text style={styles.diffOldText} numberOfLines={2}>{req.oldValue}</Text>
-              </View>
-              <View style={styles.diffArrow}>
-                <Ionicons name="arrow-down" size={12} color={C.textDim} />
-              </View>
-              <View style={styles.diffRow}>
-                <View style={styles.diffNewDot} />
-                <Text style={styles.diffNewText} numberOfLines={2}>{req.newValue}</Text>
-              </View>
-            </View>
-
-            <View style={styles.submittedRow}>
-              <Ionicons name="time-outline" size={11} color={C.textSub} />
-              <Text style={styles.submittedText}>{req.submittedAt.slice(0, 10)}</Text>
-            </View>
-
-            {isPending && (
-              <ReviewButtons
-                onApprove={() => onApproveEdit(req.id)}
-                onReject={() => onRejectEdit(req.id)}
-              />
-            )}
-          </View>
-        );
-      })}
-
-      {/* ── 수정 요청 (mockAdmin) ── */}
-      {(pending.length > 0 || reviewed.length > 0) && (
-        <>
-          <Text style={[styles.sectionTitle, { marginTop: 24 }]}>수정 요청 (기존)</Text>
-          <Text style={styles.sectionSub}>{pending.length}개 수정 요청 대기</Text>
-
-          {pending.length === 0 && <EmptyQueue label="모든 수정 요청이 검토되었어요" />}
-
-          {[...pending, ...reviewed].map(edit => {
-            const isPending  = edit.status === 'pending';
-            const isApproved = edit.status === 'approved';
-            return (
-              <View key={edit.id} style={[styles.editCard, !isPending && { opacity: 0.65 }]}>
-                <View style={styles.editCardTop}>
-                  <Text style={styles.editGymName}>{edit.gymName}</Text>
-                  <View style={styles.editFieldBadge}>
-                    <Text style={styles.editFieldBadgeText}>{edit.field}</Text>
-                  </View>
-                  {!isPending && (
-                    <View style={[styles.reviewedBadge, { backgroundColor: isApproved ? C.accentBg : C.dangerBg }]}>
-                      <Text style={[styles.reviewedBadgeText, { color: isApproved ? C.accent : C.danger }]}>
-                        {isApproved ? '승인됨' : '거절됨'}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-
-                <View style={styles.diffBlock}>
-                  <View style={styles.diffRow}>
-                    <View style={styles.diffOldDot} />
-                    <Text style={styles.diffOldText} numberOfLines={2}>{edit.oldValue}</Text>
-                  </View>
-                  <View style={styles.diffArrow}>
-                    <Ionicons name="arrow-down" size={12} color={C.textDim} />
-                  </View>
-                  <View style={styles.diffRow}>
-                    <View style={styles.diffNewDot} />
-                    <Text style={styles.diffNewText} numberOfLines={2}>{edit.newValue}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.submittedRow}>
-                  <Ionicons name="person-outline" size={11} color={C.textSub} />
-                  <Text style={styles.submittedText}>{edit.managerName} · {edit.submittedAt}</Text>
-                </View>
-
-                {isPending && (
-                  <ReviewButtons
-                    onApprove={() => onReviewEdit(edit, 'approved')}
-                    onReject={() => onReviewEdit(edit, 'rejected')}
-                  />
-                )}
-              </View>
-            );
-          })}
-        </>
-      )}
-    </ScrollView>
-  );
-}
-
-function FlaggedView({ flaggedItems, onResolveFlag }: FlaggedViewProps) {
-  const items = flaggedItems.filter(f => f.status === 'open');
-  return (
-    <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-      <Text style={styles.sectionTitle}>신고 접수</Text>
-      <Text style={styles.sectionSub}>{items.length}개 신고 접수</Text>
-
-      {items.length === 0 && <EmptyQueue label="신고된 항목이 없어요" />}
-
-      {items.map(item => {
-        const meta = FLAG_META[item.type];
-        return (
-          <View key={item.id} style={styles.flagCard}>
-            <View style={styles.flagCardTop}>
-              <View style={[styles.flagTypeIcon, { backgroundColor: meta.color + '18' }]}>
-                <Ionicons name={meta.icon} size={16} color={meta.color} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.flagGymName}>{item.gymName}</Text>
-                <View style={[styles.flagTypeBadge, { backgroundColor: meta.color + '18' }]}>
-                  <Text style={[styles.flagTypeBadgeText, { color: meta.color }]}>{meta.label}</Text>
-                </View>
-              </View>
-            </View>
-
-            <Text style={styles.flagDesc}>{item.description}</Text>
-
-            <View style={styles.submittedRow}>
-              <Ionicons name="flag-outline" size={11} color={C.textSub} />
-              <Text style={styles.submittedText}>신청자: {item.reportedBy} · {item.reportedAt}</Text>
-            </View>
-
-            {/* Context-aware actions */}
-            <View style={styles.flagActions}>
-              {item.type === 'duplicate' && (
-                <TouchableOpacity style={styles.flagActionBtn} onPress={() => onResolveFlag(item, 'merge')} activeOpacity={0.8}>
-                  <Ionicons name="git-merge-outline" size={13} color='#ffb547' />
-                  <Text style={[styles.flagActionText, { color: '#ffb547' }]}>병합</Text>
-                </TouchableOpacity>
-              )}
-              {item.type === 'closed' && (
-                <TouchableOpacity style={styles.flagActionBtn} onPress={() => onResolveFlag(item, 'delete')} activeOpacity={0.8}>
-                  <Ionicons name="trash-outline" size={13} color={C.danger} />
-                  <Text style={[styles.flagActionText, { color: C.danger }]}>삭제</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity style={[styles.flagActionBtn, styles.flagResolveBtn]} onPress={() => onResolveFlag(item, 'resolved')} activeOpacity={0.8}>
-                <Ionicons name="checkmark" size={13} color={C.bg} />
-                <Text style={[styles.flagActionText, { color: C.bg }]}>처리 완료</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        );
-      })}
     </ScrollView>
   );
 }
@@ -980,83 +818,6 @@ function GymReportsView({ reports, onMarkReviewed, onDelete }: GymReportsViewPro
   );
 }
 
-// --- ManagerRequestsAdminView
-
-interface ManagerRequestsAdminViewProps {
-  applications: ManagerApplication[];
-  onApprove: (id: string) => void;
-  onReject: (id: string) => void;
-}
-
-function ManagerRequestsAdminView({ applications, onApprove, onReject }: ManagerRequestsAdminViewProps) {
-  const pending  = applications.filter(a => a.status === 'pending');
-  const reviewed = applications.filter(a => a.status !== 'pending');
-
-  return (
-    <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-      <Text style={styles.sectionTitle}>매니저 신청 관리</Text>
-      <Text style={styles.sectionSub}>{pending.length}개 심사 대기</Text>
-
-      {pending.length === 0 && <EmptyQueue label="대기 중인 매니저 신청이 없어요" />}
-
-      {pending.map(a => (
-        <View key={a.id} style={styles.pendingCard}>
-          <View style={styles.pendingCardTop}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.pendingName}>{a.gymName}</Text>
-              <View style={styles.locRow}>
-                <Ionicons name="location-outline" size={11} color={C.textSub} />
-                <Text style={styles.locText}>{a.location}</Text>
-              </View>
-            </View>
-          </View>
-          <View style={styles.submittedRow}>
-            <Ionicons name="person-outline" size={11} color={C.textSub} />
-            <Text style={styles.submittedText}>신청자: {a.applicantName} · {a.createdAt.slice(0, 10)}</Text>
-          </View>
-          {a.phone.length > 0 && (
-            <View style={styles.submittedRow}>
-              <Ionicons name="call-outline" size={11} color={C.textSub} />
-              <Text style={styles.submittedText}>{a.phone}</Text>
-            </View>
-          )}
-          {a.message.length > 0 && (
-            <Text style={[styles.pendingDesc, { marginTop: 6 }]} numberOfLines={3}>{a.message}</Text>
-          )}
-          <ReviewButtons
-            onApprove={() => onApprove(a.id)}
-            onReject={() => onReject(a.id)}
-          />
-        </View>
-      ))}
-
-      {reviewed.length > 0 && (
-        <>
-          <Text style={[styles.sectionTitle, { marginTop: 20, fontSize: 12, color: C.textDim }]}>처리 완료</Text>
-          {reviewed.map(a => {
-            const isApproved = a.status === 'approved';
-            return (
-              <View key={a.id} style={[styles.pendingCard, { opacity: 0.65 }]}>
-                <View style={styles.pendingCardTop}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.pendingName}>{a.gymName}</Text>
-                    <Text style={styles.locText}>{a.applicantName}</Text>
-                  </View>
-                  <View style={[styles.reviewedBadge, { backgroundColor: isApproved ? C.accentBg : C.dangerBg }]}>
-                    <Text style={[styles.reviewedBadgeText, { color: isApproved ? C.accent : C.danger }]}>
-                      {isApproved ? '승인됨' : '거절됨'}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            );
-          })}
-        </>
-      )}
-    </ScrollView>
-  );
-}
-
 // --- RegisterGymAdminView
 
 const ADMIN_GYM_MUSCLES = ['All', ...Array.from(new Set(MACHINES.map(m => m.targetMuscle))).sort()];
@@ -1089,7 +850,7 @@ const AdminMachineItem = React.memo(({ machine, isSelected, onToggle, cardWidth 
 
 interface RegisterGymAdminViewProps {
   registeredGyms: AdminRegisteredGym[];
-  onSave: (name: string, location: string, phone: string, hours: string, machineIds: string[]) => void;
+  onSave: (name: string, location: string, phone: string, hours: string, machineIds: string[]) => void | Promise<void>;
   onUpdate: (id: string, name: string, location: string, phone: string, hours: string, machineIds: string[]) => void;
   onOfficialBrands: (gymId: string, gymName: string) => void;
 }
@@ -1596,20 +1357,30 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
 
   // --- State
   const [pendingGyms,   setPendingGyms]   = useState<PendingGym[]>([]);
-  const [pendingEdits,  setPendingEdits]  = useState<PendingEdit[]>([]);
-  const [flaggedItems,  setFlaggedItems]  = useState<FlaggedItem[]>([]);
   const [selectedGym,  setSelectedGym]   = useState<PendingGym | null>(null);
   const [gymList,      setGymList]       = useState<RegistrationGym[]>(() => getAllGymsForAdmin());
-  const [editList,     setEditList]      = useState<RegEditRequest[]>(() => getAllEditRequests());
-  const [gymReports,   setGymReports]    = useState<GymInfoReport[]>(() => getAllGymInfoReports());
-  const [managerApps,  setManagerApps]   = useState<ManagerApplication[]>(() => getAllManagerApplications());
+  const [gymReports,   setGymReports]    = useState<GymInfoReport[]>([]);
 
   const [registeredGyms, setRegisteredGyms] = useState<AdminRegisteredGym[]>(() => getAllAdminGyms());
   const [gymRequests,    setGymRequests]    = useState<GymRegistrationRequest[]>([]);
+  const [machineRequests, setMachineRequests] = useState<MachineRequest[]>([]);
 
   useEffect(() => {
     fetchGymRegistrationRequests().then(setGymRequests);
   }, []);
+
+  useEffect(() => {
+    fetchMachineRequests().then(setMachineRequests);
+  }, []);
+
+  const loadGymReports = useCallback(async () => {
+    const data = await fetchGymInfoReports();
+    setGymReports(data);
+  }, []);
+
+  useEffect(() => {
+    loadGymReports();
+  }, [loadGymReports]);
 
   const [managerRequests,        setManagerRequests]        = useState<ManagerRequest[]>([]);
   const [managerRequestsLoading, setManagerRequestsLoading] = useState(false);
@@ -1663,7 +1434,7 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
       description: r.notes ?? '',
       phone:       '',
       website:     '',
-      hours:       '',
+      hours:       r.hours ?? '',
       managerId:   r.userId,
       managerName: r.userId,
       submittedAt: r.createdAt,
@@ -1674,13 +1445,11 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
   const pendingGymCount     = pendingGyms.filter(g => g.status === 'pending').length
                             + gymList.filter(g => g.status === 'pending').length
                             + managerGymRequests.filter(g => g.status === 'pending').length;
-  const pendingEditCount    = pendingEdits.filter(e => e.status === 'pending').length
-                            + editList.filter(e => e.status === 'pending').length;
-  const openFlagCount       = flaggedItems.filter(f => f.status === 'open').length;
   const gymReportCount      = gymReports.filter(r => r.status === 'pending').length;
   const managerRequestCount = managerRequests.filter(r => r.status === 'pending').length;
   const registeredGymCount  = registeredGyms.length;
   const gymRequestCount     = gymRequests.filter(r => r.status === 'pending' && (r.requesterRole ?? 'user') === 'user').length;
+  const machineRequestCount = machineRequests.filter(r => r.status === 'pending').length;
 
   // --- Actions
 
@@ -1688,15 +1457,6 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     updateGymStatus(gymId, action as any);
     setPendingGyms(prev => prev.map(g => g.id === gymId ? { ...g, status: action } : g));
     setSelectedGym(prev => prev?.id === gymId ? { ...prev!, status: action } : prev);
-  }, []);
-
-  const reviewEdit = useCallback((edit: PendingEdit, action: ReviewStatus) => {
-    updateEditRequestStatus(edit.id, action as 'approved' | 'rejected');
-    setPendingEdits(prev => prev.map(e => e.id === edit.id ? { ...e, status: action } : e));
-  }, []);
-
-  const resolveFlag = useCallback((item: FlaggedItem, resolution: 'resolved' | 'delete' | 'merge') => {
-    setFlaggedItems(prev => prev.map(f => f.id === item.id ? { ...f, status: 'resolved' } : f));
   }, []);
 
   const handleApproveGym  = useCallback(async (id: string) => {
@@ -1715,7 +1475,7 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
         description: r.notes ?? '',
         phone:       '',
         website:     '',
-        hours:       '',
+        hours:       r.hours ?? '',
         managerId:   r.userId,
         managerName: r.userId,
         submittedAt: r.createdAt,
@@ -1738,6 +1498,7 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
         location:       baseLocation,
         address_detail: addressDetail,
         description:    gym.description ?? '',
+        hours:          gym.hours || null,
         manager_id:     gym.managerId ?? null,
         latitude:       coords?.latitude  ?? null,
         longitude:      coords?.longitude ?? null,
@@ -1778,74 +1539,39 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     setGymList(prev => prev.map(g => g.id === id ? { ...g, status: 'rejected' } : g));
   }, []);
 
-  const handleApproveEdit = useCallback((id: string) => {
-    updateEditRequestStatus(id, 'approved');
-    setEditList(prev => prev.map(r => r.id === id ? { ...r, status: 'approved' } : r));
-  }, []);
-
-  const handleRejectEdit  = useCallback((id: string) => {
-    updateEditRequestStatus(id, 'rejected');
-    setEditList(prev => prev.map(r => r.id === id ? { ...r, status: 'rejected' } : r));
-  }, []);
-
   const handleSelectGym = useCallback((gym: PendingGym) => {
     setSelectedGym(gym);
     push('gym-detail');
   }, [push]);
 
-  const handleMarkReportReviewed = useCallback((id: string) => {
-    markReportReviewed(id);
-    setGymReports(getAllGymInfoReports());
-  }, []);
+  const handleMarkReportReviewed = useCallback(async (id: string) => {
+    await markReportReviewed(id);
+    await loadGymReports();
+  }, [loadGymReports]);
 
-  const handleDeleteReport = useCallback((id: string) => {
-    deleteGymInfoReport(id);
-    setGymReports(getAllGymInfoReports());
-  }, []);
+  const handleDeleteReport = useCallback(async (id: string) => {
+    await deleteGymInfoReport(id);
+    await loadGymReports();
+  }, [loadGymReports]);
 
   const handleApproveApplication = useCallback(async (id: string) => {
-    // 1. 로컬 상태 업데이트
-    updateApplicationStatus(id, 'approved');
-    setManagerApps(getAllManagerApplications());
-
     try {
       const { supabase } = await import('../../lib/supabase');
 
-      // 2. manager_requests 테이블에서 신청 정보 조회
+      // manager_requests 테이블에서 신청 정보 조회
       const { data: reqData, error: reqError } = await supabase
         .from('manager_requests')
-        .select('user_id, gym_name, location, phone')
+        .select('user_id, gym_name')
         .eq('id', id)
         .single();
 
       if (reqError || !reqData) {
-        // manager_requests에 없으면 로컬 mock에서 조회
-        const localApp = getAllManagerApplications().find(a => a.id === id);
-        if (!localApp) {
-          if (__DEV__) console.warn('[AdminDashboard] 매니저 신청 정보를 찾을 수 없음:', id);
-          return;
-        }
-        // 로컬 데이터로 처리 (Supabase 미연동 환경)
-        Alert.alert('승인 완료', '로컬 환경에서는 DB 연결이 생략됩니다.');
+        if (__DEV__) console.warn('[AdminDashboard] 매니저 신청 정보를 찾을 수 없음:', id);
+        Alert.alert('오류', '신청 정보를 불러올 수 없어요. 다시 시도해주세요.');
         return;
       }
 
-      const { user_id, gym_name, location, phone } = reqData;
-
-      // 이미 관리 중인 헬스장이 있는지 확인
-      const { data: existingManaged } = await supabase
-        .from('gyms')
-        .select('id, name')
-        .eq('manager_id', user_id)
-        .maybeSingle();
-
-      if (existingManaged) {
-        Alert.alert(
-          '승인 불가',
-          `이 유저는 이미 ${existingManaged.name} 헬스장을 관리 중이에요.\n매니저는 하나의 헬스장만 관리할 수 있어요.`
-        );
-        return;
-      }
+      const { user_id, gym_name } = reqData;
 
       // 3. profiles.role = 'manager' 업데이트
       const { error: profileError } = await supabase
@@ -1857,60 +1583,15 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
         if (__DEV__) console.warn('[AdminDashboard] profiles role 업데이트 실패:', profileError.message);
       }
 
-      // 4. gyms 테이블에서 동일 이름 헬스장 검색
-      const { data: existingGym } = await supabase
-        .from('gyms')
-        .select('id')
-        .ilike('name', gym_name.trim())
-        .maybeSingle();
-
-      let gymId: string;
-
-      if (existingGym) {
-        // 4-1. 기존 헬스장에 manager_id 연결
-        gymId = existingGym.id;
-        const { error: gymUpdateError } = await supabase
-          .from('gyms')
-          .update({ manager_id: user_id })
-          .eq('id', gymId);
-
-        if (gymUpdateError) {
-          if (__DEV__) console.warn('[AdminDashboard] gyms manager_id 업데이트 실패:', gymUpdateError.message);
-        }
-      } else {
-        // 4-2. 새 헬스장 생성 후 manager_id 연결
-        gymId = `g_${Date.now()}`;
-        const { error: gymInsertError } = await supabase
-          .from('gyms')
-          .insert({
-            id:          gymId,
-            name:        gym_name.trim(),
-            location:    location?.trim() ?? '',
-            phone:       phone?.trim() ?? '',
-            description: '',
-            manager_id:  user_id,
-          });
-
-        if (gymInsertError) {
-          if (__DEV__) console.warn('[AdminDashboard] gyms 신규 생성 실패:', gymInsertError.message);
-        }
-      }
-
-      // 5. manager_requests.status = 'approved' 업데이트
+      // 4. manager_requests.status = 'approved' 업데이트
       await supabase
         .from('manager_requests')
         .update({ status: 'approved' })
         .eq('id', id);
 
-      // 6. 헬스장 캐시 무효화
-      const { invalidateGymsCache } = await import('../../lib/db/gyms');
-      invalidateGymsCache();
-
       Alert.alert(
         '승인 완료',
-        existingGym
-          ? `${gym_name} 헬스장에 매니저가 연결됐어요.`
-          : `${gym_name} 헬스장이 새로 등록되고 매니저가 연결됐어요.`,
+        `${gym_name} 헬스장 매니저 신청이 승인됐어요.\n매니저 대시보드에서 헬스장을 직접 등록할 수 있어요.`,
       );
 
     } catch (e: any) {
@@ -1919,14 +1600,30 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     }
   }, []);
 
-  const handleRejectApplication = useCallback((id: string) => {
-    updateApplicationStatus(id, 'rejected');
-    setManagerApps(getAllManagerApplications());
-  }, []);
-
-  const handleRegisterGym = useCallback((name: string, location: string, phone: string, hours: string, machineIds: string[]) => {
-    addAdminGym({ name, location, phone, hours, machineIds });
+  const handleRegisterGym = useCallback(async (name: string, location: string, phone: string, hours: string, machineIds: string[]) => {
+    const gymId = `g_${Date.now()}`;
+    addAdminGym({ name, location, phone, hours, machineIds }, gymId);
     setRegisteredGyms(getAllAdminGyms());
+    try {
+      const { supabase } = await import('../../lib/supabase');
+      const coords = await geocodeAddress(location.trim());
+      const { error } = await supabase.from('gyms').insert({
+        id:          gymId,
+        name:        name.trim(),
+        location:    location.trim(),
+        phone:       phone.trim(),
+        hours:       hours.trim(),
+        description: '',
+        latitude:    coords?.latitude  ?? null,
+        longitude:   coords?.longitude ?? null,
+        manager_id:  null,
+      });
+      if (error) {
+        if (__DEV__) console.warn('[AdminDashboard] gyms INSERT 실패:', error.message);
+      }
+    } catch (e: any) {
+      if (__DEV__) console.warn('[AdminDashboard] 헬스장 등록 Supabase 오류:', e.message);
+    }
   }, []);
 
   const openOfficialBrands = useCallback(async (gymId: string, gymName: string) => {
@@ -1962,14 +1659,13 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     'home':              '관리자 대시보드',
     'pending-gyms':      '헬스장 승인 대기',
     'gym-detail':        selectedGym?.name ?? '헬스장 상세',
-    'pending-edits':     '수정 요청 대기',
-    'flagged':           '신고 접수',
     'machine-catalog':   '머신 카탈로그',
     'brand-copyright':   '브랜드 저작권',
     'gym-reports':       '정보 제보 관리',
     'manager-requests':  '매니저 신청 관리',
     'register-gym':               '헬스장 직접 등록',
     'gym-registration-requests':  '헬스장 신규 등록 제안(유저)',
+    'machine-requests':           '머신 등록 신청(매니저)',
     'gym-official-brands':        `${officialGymName} 오피셜 브랜드`,
     'all-gyms-official':          '헬스장 오피셜 관리',
   };
@@ -1996,12 +1692,11 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
       {currentView === 'home' && (
         <HomeView
           pendingGymCount={pendingGymCount}
-          pendingEditCount={pendingEditCount}
-          openFlagCount={openFlagCount}
           gymReportCount={gymReportCount}
           managerRequestCount={managerRequestCount}
           registeredGymCount={registeredGymCount}
           gymRequestCount={gymRequestCount}
+          machineRequestCount={machineRequestCount}
           onPush={push}
         />
       )}
@@ -2019,21 +1714,6 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
           selectedGym={selectedGym}
           onReview={reviewGym}
           onBack={pop}
-        />
-      )}
-      {currentView === 'pending-edits' && (
-        <PendingEditsView
-          pendingEdits={pendingEdits}
-          editList={editList}
-          onReviewEdit={reviewEdit}
-          onApproveEdit={handleApproveEdit}
-          onRejectEdit={handleRejectEdit}
-        />
-      )}
-      {currentView === 'flagged' && (
-        <FlaggedView
-          flaggedItems={flaggedItems}
-          onResolveFlag={resolveFlag}
         />
       )}
       {currentView === 'machine-catalog' && (
@@ -2130,6 +1810,17 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
             await updateGymRequestStatus(id, status);
             const updated = await fetchGymRegistrationRequests();
             setGymRequests(updated);
+          }}
+          onBack={pop}
+        />
+      )}
+      {currentView === 'machine-requests' && (
+        <MachineRequestsView
+          requests={machineRequests}
+          onUpdateStatus={async (id, status) => {
+            await updateMachineRequestStatus(id, status);
+            const updated = await fetchMachineRequests();
+            setMachineRequests(updated);
           }}
           onBack={pop}
         />

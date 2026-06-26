@@ -256,6 +256,12 @@ function GymDetailView({
                 <Ionicons name="location-outline" size={13} color={C.textSub} />
                 <Text style={s.heroLoc}>{gym.location}</Text>
               </View>
+              {gym.managerId && (
+                <View style={s.managerBadge}>
+                  <Ionicons name="shield-checkmark" size={11} color="#4A90E2" />
+                  <Text style={s.managerBadgeText}>헬스장 직접 관리</Text>
+                </View>
+              )}
             </View>
             <TouchableOpacity
               style={{ padding: 4, marginRight: 8 }}
@@ -1001,6 +1007,8 @@ const s = StyleSheet.create({
   heroName: { fontSize: 20, fontWeight: '800', color: C.text, letterSpacing: -0.5 },
   heroMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
   heroLoc: { fontSize: 13, color: C.textSub },
+  managerBadge:     { flexDirection: 'row', alignItems: 'center', gap: 3, alignSelf: 'flex-start', backgroundColor: '#4A90E218', borderRadius: R.pill, paddingHorizontal: 8, paddingVertical: 3, marginTop: 6 },
+  managerBadgeText: { fontSize: 11, fontWeight: '700', color: '#4A90E2' },
   heroDesc: { fontSize: 14, color: C.textSub, lineHeight: 20, marginBottom: 14 },
   heroStats: { flexDirection: 'row', alignItems: 'center' },
   heroStat: { flex: 1, alignItems: 'center' },

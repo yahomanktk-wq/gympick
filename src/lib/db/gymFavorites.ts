@@ -40,3 +40,17 @@ export async function removeGymFavoriteDB(userId: string, gymId: string): Promis
     if (__DEV__) console.warn('[gymFavorites] removeGymFavoriteDB 오류:', e);
   }
 }
+
+// 이 헬스장을 즐겨찾기한 유저 수
+export async function fetchGymFavoriteCount(gymId: string): Promise<number> {
+  try {
+    const { count, error } = await supabase
+      .from('gym_favorites')
+      .select('user_id', { count: 'exact', head: true })
+      .eq('gym_id', gymId);
+    if (error) return 0;
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
+}

@@ -17,7 +17,7 @@ import {
   ActionSheetIOS,
 } from 'react-native';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as MediaLibrary from 'expo-media-library';
 import { captureRef } from 'react-native-view-shot';
@@ -29,7 +29,7 @@ import { C, R, T } from '../theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WorkoutLog, Machine, UserSplitConfig, SequentialSplit, WeekdaySplit } from '../data/types';
 import { fetchSplitConfig, updateSplitIndex } from '../lib/db/splitRoutine';
-import { getTodayTarget, getNextTarget, calcNextIndex, extractCompletedTargets } from '../lib/splitUtils';
+import { getTodayTargets, isRestToday, getNextTargets, collectRoutineMuscles, calcNextIndex, extractCompletedTargets } from '../lib/splitUtils';
 import { getSessionPRMachines } from '../data/workoutSessions';
 import { fetchWorkoutLogs } from '../lib/db';
 import { deleteWorkoutSession } from '../lib/db/workouts';
@@ -159,39 +159,47 @@ function getSplitBannerMessage(
   const split = splitConfig.workoutSplit;
   if (!split || (Array.isArray(split) && split.length === 0)) return null;
 
-  const todayTarget = getTodayTarget(
+  const todayTargets = getTodayTargets(
+    splitConfig.splitType,
+    split,
+    splitConfig.splitCurrentIndex
+  );
+  const rest = isRestToday(
     splitConfig.splitType,
     split,
     splitConfig.splitCurrentIndex
   );
 
-  if (todayTarget === '휴식') {
+  if (rest) {
     return { message: '오늘은 휴식 Day예요 🛌' };
   }
 
+  const todayStr = todayTargets.join('·');
+
   if (todaySessions.length === 0) {
-    return todayTarget
-      ? { message: `오늘은 ${todayTarget} Day예요 💪` }
+    return todayTargets.length > 0
+      ? { message: `오늘은 ${todayStr} Day예요 💪` }
       : null;
   }
 
   const completedTargets = extractCompletedTargets(todaySessions.flatMap(s => s.machines));
-  const nextTarget = getNextTarget(
+  const nextTargets = getNextTargets(
     splitConfig.splitType,
     split,
     splitConfig.splitCurrentIndex,
     completedTargets
   );
+  const nextStr = nextTargets.join('·');
 
-  const routineTargets = Array.isArray(split) ? (split as string[]) : [];
+  const routineTargets = collectRoutineMuscles(splitConfig.splitType, split);
   const completedRoutine = completedTargets.filter(t =>
     routineTargets.includes(t) && t !== '휴식'
   );
 
   if (completedRoutine.length > 0) {
     const completedStr = completedRoutine.join(' + ');
-    if (nextTarget && nextTarget !== '휴식') {
-      return { message: `오늘 ${completedStr} 완료! 🔥`, sub: `다음은 ${nextTarget} Day예요` };
+    if (nextTargets.length > 0) {
+      return { message: `오늘 ${completedStr} 완료! 🔥`, sub: `다음은 ${nextStr} Day예요` };
     }
     return { message: `오늘 ${completedStr} 완료! 🔥` };
   }
@@ -199,7 +207,7 @@ function getSplitBannerMessage(
   const completedStr = completedTargets.filter(t => t !== '휴식').join(' + ');
   return {
     message: `오늘은 ${completedStr} 운동 했군요!`,
-    sub: todayTarget ? `${todayTarget} Day는 다음 운동 때 해요` : undefined,
+    sub: todayTargets.length > 0 ? `${todayStr} Day는 다음 운동 때 해요` : undefined,
   };
 }
 
@@ -222,12 +230,13 @@ function getWeekTargetMap(
     weekDates.forEach(d => {
       const key     = DAY_KEYS[d.getDay()] as keyof WeekdaySplit;
       const targets = (split[key] ?? []) as string[];
-      result[d.toDateString()] = targets.length > 0 ? targets[0] : null;
+      const work = targets.filter(m => m !== '휴식');
+      result[d.toDateString()] = work.length > 0 ? work.join('·') : (targets.length > 0 ? '휴식' : null);
     });
     return result;
   }
 
-  const split  = splitConfig.workoutSplit as string[];
+  const split  = splitConfig.workoutSplit as string[][];
   const len    = split.length;
   if (len === 0) {
     weekDates.forEach(d => { result[d.toDateString()] = null; });
@@ -243,7 +252,9 @@ function getWeekTargetMap(
     date.setHours(0, 0, 0, 0);
     const diffDays = Math.round((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     const idx = ((currentIdx + diffDays) % len + len) % len;
-    result[d.toDateString()] = split[idx] ?? null;
+    const slot = split[idx] ?? [];
+    const work = slot.filter(m => m !== '휴식');
+    result[d.toDateString()] = work.length > 0 ? work.join('·') : (slot.length > 0 ? '휴식' : null);
   });
 
   return result;
@@ -439,13 +450,18 @@ function SessionDetailModal({
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
   });
 
+  function getMachineImageUrl(machineId: string): string {
+    return `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${machineId}.webp`;
+  }
+
   async function downloadToLocal(remoteUri: string, filename: string): Promise<string> {
     if (!remoteUri.startsWith('http')) return remoteUri;
-    const localPath = `${FileSystem.cacheDirectory}gympick_${filename}`;
+    const localPath = `${FileSystem.cacheDirectory ?? ''}gympick_${filename}`;
     try {
       const info = await FileSystem.getInfoAsync(localPath);
       if (info.exists) return localPath;
       const result = await FileSystem.downloadAsync(remoteUri, localPath);
+      if (result.status < 200 || result.status >= 300) return remoteUri;
       return result.uri;
     } catch {
       return remoteUri;
@@ -462,7 +478,7 @@ function SessionDetailModal({
     const machines = session.machines ?? [];
     const newMap: Record<string, string> = {};
     for (const m of machines) {
-      const remoteUrl = `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${m.machineId}.webp`;
+      const remoteUrl = getMachineImageUrl(m.machineId);
       const localUri = await downloadToLocal(remoteUrl, `machine_${m.machineId}.webp`);
       if (localUri !== remoteUrl) newMap[m.machineId] = localUri;
     }
@@ -497,10 +513,13 @@ function SessionDetailModal({
         if (ref) {
           await new Promise(resolve => requestAnimationFrame(resolve));
           await new Promise(resolve => setTimeout(resolve, 100));
+          const ratio = Math.max(PixelRatio.get(), 4);
           const pageUri = await captureRef(ref, {
             format: 'png', quality: 1, result: 'tmpfile',
-            width: PHOTO_W_J, height: ROUTINE_CARD_H_J,
-            pixelRatio: Math.max(PixelRatio.get(), 3),
+            pixelRatio: ratio,
+            ...(Platform.OS === 'android'
+              ? { width: Math.round(PHOTO_W_J * ratio), height: Math.round(ROUTINE_CARD_H_J * ratio) }
+              : {}),
           });
           await MediaLibrary.saveToLibraryAsync(pageUri);
         }
@@ -538,10 +557,13 @@ function SessionDetailModal({
         if (ref) {
           await new Promise(resolve => requestAnimationFrame(resolve));
           await new Promise(resolve => setTimeout(resolve, 100));
+          const ratio = Math.max(PixelRatio.get(), 4);
           const pageUri = await captureRef(ref, {
             format: 'png', quality: 1, result: 'tmpfile',
-            width: PHOTO_W_J, height: ROUTINE_CARD_H_J,
-            pixelRatio: Math.max(PixelRatio.get(), 3),
+            pixelRatio: ratio,
+            ...(Platform.OS === 'android'
+              ? { width: Math.round(PHOTO_W_J * ratio), height: Math.round(ROUTINE_CARD_H_J * ratio) }
+              : {}),
           });
           const asset = await MediaLibrary.createAssetAsync(pageUri);
           savedAssets.push(asset);
@@ -629,19 +651,15 @@ function SessionDetailModal({
             const vol        = sessionVolume(session);
             const machines   = session.machines ?? [];
             const totalSets  = machines.reduce((a, m) => a + m.sets, 0);
-            const muscles    = [...new Set(machines.map(m => m.targetMuscle))];
+            const muscles    = (session.targetMuscles && session.targetMuscles.length > 0)
+              ? session.targetMuscles
+              : [...new Set(machines.map(m => m.targetMuscle))];
             const photoUri   = session.compositeUri ?? session.photoUri;
             const photoHeight = photoHeights[session.id] ?? DET_PHOTO_H_DEFAULT;
 
-            const muscleCounts = machines.reduce<Record<string, number>>((acc, m) => {
-              acc[m.targetMuscle] = (acc[m.targetMuscle] ?? 0) + 1; return acc;
-            }, {});
-            const sortedMuscles = Object.entries(muscleCounts)
-              .sort(([, a], [, b]) => b - a)
-              .map(([m]) => m.toUpperCase());
-            const muscleTitle = sortedMuscles.length > 1
-              ? sortedMuscles.slice(0, 2).join(' + ')
-              : `${sortedMuscles[0] ?? 'WORKOUT'} DAY`;
+            const muscleTitle = muscles.length > 1
+              ? muscles.map(m => m.toUpperCase()).join(' + ')
+              : `${(muscles[0] ?? 'WORKOUT').toUpperCase()} DAY`;
 
             return (
               <View key={session.id}>
@@ -876,7 +894,7 @@ function SessionDetailModal({
                   {machines.map((m, i) => {
                     const brandKey  = m.machineBrand.toUpperCase().replace(/\s+/g, '_');
                     const brandLogo = brandLogos[brandKey];
-                    const imageUrl  = `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${m.machineId}.webp`;
+                    const imageUrl  = getMachineImageUrl(m.machineId);
                     return (
                       <React.Fragment key={m.machineId}>
                         {i > 0 && <View style={det.routineDivider} />}
@@ -981,7 +999,7 @@ function SessionDetailModal({
                             {pageMachines.map((m, i) => {
                               const brandKey  = m.machineBrand.toUpperCase().replace(/\s+/g, '_');
                               const brandLogo = brandLogos[brandKey];
-                              const imageUrl  = `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${m.machineId}.webp`;
+                              const imageUrl  = getMachineImageUrl(m.machineId);
                               return (
                                 <React.Fragment key={m.machineId}>
                                   {i > 0 && <View style={{ height: 1, backgroundColor: '#E5E5E5' }} />}
@@ -1269,7 +1287,7 @@ export default function JournalScreen() {
                     try {
                       const cfg = await fetchSplitConfig(user.id);
                       if (cfg && cfg.splitType === 'sequential') {
-                        const split = cfg.workoutSplit as string[];
+                        const split = cfg.workoutSplit as string[][];
                         const len   = split.length;
                         if (len > 0) {
                           const prevIndex = ((cfg.splitCurrentIndex - 1) + len) % len;

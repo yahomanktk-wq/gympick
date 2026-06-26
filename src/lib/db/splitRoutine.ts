@@ -14,6 +14,18 @@ function migrateLegacyWeekdaySplit(raw: any): WeekdaySplit {
   return result as WeekdaySplit;
 }
 
+// 레거시 순차 분할(string[]) → string[][] 변환. 이미 string[][]이면 그대로.
+function migrateLegacySequentialSplit(raw: any): string[][] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item: any) => {
+      if (Array.isArray(item)) return item.filter((x: any) => typeof x === 'string');
+      if (typeof item === 'string') return item ? [item] : [];
+      return [];
+    })
+    .filter((slot: string[]) => slot.length > 0);
+}
+
 export async function fetchSplitConfig(userId: string): Promise<UserSplitConfig | null> {
   const { data, error } = await supabase
     .from('profiles')
@@ -28,6 +40,9 @@ export async function fetchSplitConfig(userId: string): Promise<UserSplitConfig 
 
   if (splitType === 'weekday' && workoutSplit && !Array.isArray(workoutSplit)) {
     workoutSplit = migrateLegacyWeekdaySplit(workoutSplit);
+  }
+  if (splitType === 'sequential' && Array.isArray(workoutSplit)) {
+    workoutSplit = migrateLegacySequentialSplit(workoutSplit) as unknown as WorkoutSplit;
   }
 
   return {

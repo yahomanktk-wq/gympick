@@ -245,7 +245,7 @@ export default function TodayWorkoutListScreen({
 
   useEffect(() => {
     if (!onboardingActive) return;
-    const measure = (key: OnboardingPointKey, ref: React.RefObject<View>) => {
+    const measure = (key: OnboardingPointKey, ref: React.RefObject<View | null>) => {
       requestAnimationFrame(() => {
         ref.current?.measureInWindow((x, y, width, height) => {
           onRegisterRect?.(key, { x, y, width, height });

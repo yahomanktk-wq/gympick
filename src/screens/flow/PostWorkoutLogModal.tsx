@@ -61,7 +61,7 @@ import { calcDistanceKm, formatDistance } from '../../lib/geocoding';
 import { fetchGymsWithMachines } from '../../lib/db/gyms';
 import { brandLogos } from '../../constants/brandLogos';
 import { fetchSplitConfig } from '../../lib/db/splitRoutine';
-import { getTodayTarget, toEnMuscle } from '../../lib/splitUtils';
+import { getTodayTargets, isRestToday, toEnMuscle } from '../../lib/splitUtils';
 import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path as SvgPath, Text as SvgText, TextPath, Defs } from 'react-native-svg';
@@ -153,6 +153,15 @@ const REPS_PRESETS   = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20];
 const ALL_MACHINES_MAP: Record<string, Machine> = Object.fromEntries(
   MACHINES.map((m) => [m.id, m]),
 );
+
+// 부위 그룹 라벨 → 머신 targetMuscle 표준명으로 정규화
+// (예: 'Hip (Glutes)' → 'Glutes'). 저장/표시 경계에서만 사용한다.
+const MUSCLE_GROUP_TO_CANON: Record<string, string> = {
+  'Hip (Glutes)': 'Glutes',
+};
+function toCanonMuscle(m: string): string {
+  return MUSCLE_GROUP_TO_CANON[m] ?? m;
+}
 
 // --- Muscle palette
 
@@ -1056,7 +1065,7 @@ function SetCard({ ex, sets, onChange, onAdd, onCopyPrev, onRemove, onSetLayout,
 
   useEffect(() => {
     if (!onboardingActive) return;
-    const measure = (key: OnboardingPointKey, ref: React.RefObject<View>) => {
+    const measure = (key: OnboardingPointKey, ref: React.RefObject<View | null>) => {
       requestAnimationFrame(() => {
         ref.current?.measureInWindow((x, y, width, height) => {
           onRegisterRect?.(key, { x, y, width, height });
@@ -2329,9 +2338,10 @@ export function ArchDayOverlay({ exercises, logs, nickname, timestamp, muscleLab
 
 // --- Step 5: Photo
 
-function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname, onColorChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera, onRegisterRect, onboardingActive, onboardingKey, onOnboardingNext, onOnboardingJump }: {
+function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, photoUri, nickname, onColorChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera, onRegisterRect, onboardingActive, onboardingKey, onOnboardingNext, onOnboardingJump }: {
   gym: GymWithMachines;
   exercises: ExerciseInfo[];
+  selectedMuscles: string[];
   logs: Record<string, SetEntry[]>;
   photoTaken: boolean;
   photoUri?: string;
@@ -2367,7 +2377,7 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
 
   useEffect(() => {
     if (!onboardingActive) return;
-    const measure = (key: OnboardingPointKey, ref: React.RefObject<View>) => {
+    const measure = (key: OnboardingPointKey, ref: React.RefObject<View | null>) => {
       requestAnimationFrame(() => {
         ref.current?.measureInWindow((x, y, width, height) => {
           onRegisterRect?.(key, { x, y, width, height });
@@ -2377,9 +2387,9 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
 
     // 스크롤 후 measureInWindow: photo-overlay/color/save-share 전용
     // 스크롤 완료(380ms) 후에 좌표를 재측정해야 스포트라이트가 정확하게 표시됨
-    const scrollThenMeasure = (key: OnboardingPointKey, ref: React.RefObject<View>) => {
+    const scrollThenMeasure = (key: OnboardingPointKey, ref: React.RefObject<View | null>) => {
       ref.current?.measureInWindow((ex, ey) => {
-        photoScrollRef.current?.measureInWindow((_sx, sy) => {
+        (photoScrollRef.current as any)?.measureInWindow((_sx: number, sy: number) => {
           const contentY = (ey - sy) + photoScrollYRef.current;
           photoScrollRef.current?.scrollTo({ y: Math.max(0, contentY - 50), animated: true });
           setTimeout(() => {
@@ -2493,7 +2503,8 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
   const timestamp = `${dateLabel}_${pad(now.getHours())}:${pad(now.getMinutes())}`;
   const displayName = nickname ?? 'gympick_user';
 
-  // Derive muscle label: "Chest Day" or "Chest + Triceps"
+  // 사용자가 고른 타겟부위(selectedMuscles) 기준으로 라벨 생성 (경로 2).
+  // 비어 있으면 기록된 운동에서 역산한 부위로 fallback.
   const muscleCounts = exercises.reduce<Record<string, number>>((acc, ex) => {
     acc[ex.targetMuscle] = (acc[ex.targetMuscle] ?? 0) + 1;
     return acc;
@@ -2501,9 +2512,12 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
   const sortedMuscles = Object.entries(muscleCounts)
     .sort(([, a], [, b]) => b - a)
     .map(([m]) => m);
-  const muscleLabel = sortedMuscles.length > 1
-    ? sortedMuscles.slice(0, 2).join(' + ')
-    : `${sortedMuscles[0] ?? 'WORKOUT'} Day`;
+  const labelMuscles = (selectedMuscles && selectedMuscles.length > 0)
+    ? selectedMuscles
+    : sortedMuscles;
+  const muscleLabel = labelMuscles.length > 1
+    ? labelMuscles.join(' + ')
+    : `${labelMuscles[0] ?? 'WORKOUT'} Day`;
 
   async function handleSaveImage() {
     console.log('[handleSaveImage] called');
@@ -2522,7 +2536,12 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
         Alert.alert('저장 실패', '저장에 실패했습니다.');
         return;
       }
-      const capturedUri = await captureRef(overlayRef, { format: 'png', quality: 1, result: 'tmpfile', width: PHOTO_W, height: photoH, pixelRatio: Math.max(PixelRatio.get(), 3) });
+      const ratio = Math.max(PixelRatio.get(), 4);
+      const capturedUri = await captureRef(overlayRef, {
+        format: 'png', quality: 1, result: 'tmpfile',
+        pixelRatio: ratio,
+        ...(Platform.OS === 'android' ? { width: Math.round(PHOTO_W * ratio), height: Math.round(photoH * ratio) } : {}),
+      });
       onCompositeUri(capturedUri);
       await MediaLibrary.saveToLibraryAsync(capturedUri);
 
@@ -2534,10 +2553,11 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
           try {
             await new Promise(resolve => requestAnimationFrame(resolve));
             await new Promise(resolve => setTimeout(resolve, 100));
+            const ratio = Math.max(PixelRatio.get(), 4);
             const pageUri = await captureRef(ref, {
               format: 'png', quality: 1, result: 'tmpfile',
-              width: PHOTO_W, height: ROUTINE_CARD_H,
-              pixelRatio: Math.max(PixelRatio.get(), 3),
+              pixelRatio: ratio,
+              ...(Platform.OS === 'android' ? { width: Math.round(PHOTO_W * ratio), height: Math.round(ROUTINE_CARD_H * ratio) } : {}),
             });
             routineUris.push(pageUri);
             await MediaLibrary.saveToLibraryAsync(pageUri);
@@ -2572,9 +2592,11 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
       // 1. 인증샷 캡처
       let capturedUri: string;
       try {
+        const ratio = Math.max(PixelRatio.get(), 4);
         capturedUri = await captureRef(overlayRef, {
           format: 'png', quality: 1, result: 'tmpfile',
-          width: PHOTO_W, height: photoH, pixelRatio: Math.max(PixelRatio.get(), 3),
+          pixelRatio: ratio,
+          ...(Platform.OS === 'android' ? { width: Math.round(PHOTO_W * ratio), height: Math.round(photoH * ratio) } : {}),
         });
       } catch (e) {
         console.error('[Instagram] 인증샷 캡처 실패:', e);
@@ -2590,9 +2612,11 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
           try {
             await new Promise(resolve => requestAnimationFrame(resolve));
             await new Promise(resolve => setTimeout(resolve, 100));
+            const ratio = Math.max(PixelRatio.get(), 4);
             const pageUri = await captureRef(ref, {
               format: 'png', quality: 1, result: 'tmpfile',
-              width: PHOTO_W, height: ROUTINE_CARD_H, pixelRatio: Math.max(PixelRatio.get(), 3),
+              pixelRatio: ratio,
+              ...(Platform.OS === 'android' ? { width: Math.round(PHOTO_W * ratio), height: Math.round(ROUTINE_CARD_H * ratio) } : {}),
             });
             pageUris.push(pageUri);
           } catch (e) {
@@ -3356,14 +3380,27 @@ function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname
             try {
               await new Promise(resolve => requestAnimationFrame(resolve));
               await new Promise<void>(resolve => InteractionManager.runAfterInteractions(() => resolve()));
+              const ratio = Math.max(PixelRatio.get(), 4);
               if (overlayRef.current) {
-                captured = await captureRef(overlayRef, { format: 'png', quality: 1, result: 'tmpfile', width: PHOTO_W, height: photoH, pixelRatio: Math.max(PixelRatio.get(), 3) });
+                captured = await captureRef(overlayRef, {
+                  format: 'png', quality: 1, result: 'tmpfile',
+                  pixelRatio: ratio,
+                  ...(Platform.OS === 'android' ? { width: Math.round(PHOTO_W * ratio), height: Math.round(photoH * ratio) } : {}),
+                });
                 onCompositeUri(captured);
               }
               if (routineCardRef.current) {
                 await new Promise(resolve => requestAnimationFrame(resolve));
+                let measuredHeight = 0;
+                if (Platform.OS === 'android') {
+                  measuredHeight = await new Promise<number>((resolve) => {
+                    routineCardRef.current!.measure((_x, _y, _w, h) => resolve(h > 0 ? h : ROUTINE_CARD_H));
+                  });
+                }
                 capturedRoutineUri = await captureRef(routineCardRef, {
-                  format: 'png', quality: 1, result: 'tmpfile', pixelRatio: Math.max(PixelRatio.get(), 3),
+                  format: 'png', quality: 1, result: 'tmpfile',
+                  pixelRatio: ratio,
+                  ...(Platform.OS === 'android' ? { width: Math.round(PHOTO_W * ratio), height: Math.round(measuredHeight * ratio) } : {}),
                 });
                 onRoutineCardUri?.(capturedRoutineUri);
               }
@@ -3407,7 +3444,7 @@ function WorkoutDoneStep({ gym, exercises, logs, detectedPRs, selectedMuscles, o
     saveTemplate({
       name,
       exerciseIds: exercises.map(e => e.id),
-      muscles:     [...selectedMuscles],
+      muscles:     Array.from(selectedMuscles).map(toCanonMuscle),
     });
     setTplSaved(true);
   }
@@ -3636,15 +3673,15 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     if (!visible || !user?.id) return;
     fetchSplitConfig(user.id).then(config => {
       if (!config) return;
-      const target = getTodayTarget(config.splitType, config.workoutSplit, config.splitCurrentIndex);
-      if (!target || target === '휴식') {
-        if (target === '휴식') setIsRestDay(true);
+      if (isRestToday(config.splitType, config.workoutSplit, config.splitCurrentIndex)) {
+        setIsRestDay(true);
         return;
       }
       setIsRestDay(false);
-      const targetEn = toEnMuscle(target);
-      if (targetEn) {
-        setSelectedMuscles(new Set([targetEn]));
+      const targets = getTodayTargets(config.splitType, config.workoutSplit, config.splitCurrentIndex);
+      if (targets.length > 0) {
+        const en = targets.map(toEnMuscle).filter(Boolean);
+        if (en.length > 0) setSelectedMuscles(new Set(en));
       }
     }).catch(() => {});
   }, [visible, user?.id]);
@@ -3838,6 +3875,8 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
       finalPhotoUrl = await uploadWorkoutPhoto(photoUri, user.id, sessionId, false);
     }
 
+    const sessionMuscles = Array.from(selectedMuscles).map(toCanonMuscle);
+
     const workoutLog: WorkoutLog = {
       id:               sessionId,
       gymId:            gym.id,
@@ -3845,6 +3884,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
       gymLocation:      gym.location,
       date:             new Date().toISOString(),
       overlayTextColor: selectedColor,
+      targetMuscles:    sessionMuscles,
       machines:         selectedExercises.map(ex => {
         const exSets = logs[ex.id] ?? [];
         const maxSet = exSets.reduce<{ weight: number; reps: number } | null>(
@@ -3878,6 +3918,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
           gymId:            gym.id,
           date:             workoutLog.date,
           overlayTextColor: selectedColor,
+          targetMuscles:    sessionMuscles,
         });
         dbSessionId = savedSession?.id;
 
@@ -3948,7 +3989,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
           compositeUri:   finalPhotoUrl ?? effectiveCompositeUri ?? undefined,
           routineCardUri: passedRoutineCardUri ?? routineCardUri ?? undefined,
           sessionId:      dbSessionId ?? sessionId,
-          muscles:        Array.from(selectedMuscles),
+          muscles:        Array.from(selectedMuscles).map(toCanonMuscle),
           isPublic:       true,
         }).catch(err => {
           if (__DEV__) console.warn('[feed] insertFeedPost failed:', err);
@@ -4135,6 +4176,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
           <WorkoutPhotoStep
             gym={gym!}
             exercises={selectedExercises}
+            selectedMuscles={Array.from(selectedMuscles).map(toCanonMuscle)}
             logs={logs}
             photoTaken={photoTaken}
             photoUri={photoUri ?? undefined}

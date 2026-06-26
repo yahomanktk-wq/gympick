@@ -34,6 +34,7 @@ export interface Gym {
   latitude?:      number | null;
   longitude?:     number | null;
   hours?:         string | null;
+  hoursNote?:     string | null;
   phone?:         string | null;
   website?:       string | null;
   managerId?:     string | null;
@@ -74,6 +75,7 @@ export interface WorkoutSession {
   bodyWeight?:       number;    // kg
   notes?:            string;
   overlayTextColor?: string;
+  targetMuscles?:    string[];  // 사용자가 선택한 타겟 부위 (경로 2)
 }
 
 // --- workout_entries
@@ -192,6 +194,7 @@ export interface WorkoutLog {
   photoUri?:         string;   // local URI of the raw camera photo
   compositeUri?:     string;   // local URI of the overlay composite image (captureRef result)
   overlayTextColor?: string;
+  targetMuscles?:    string[]; // 세션 타겟 부위 (없으면 machines에서 역산)
 }
 
 // --- Workout Overlay Badges
@@ -282,6 +285,7 @@ export interface ManagedGym {
   phone:       string;
   website:     string;
   hours:       string;
+  hoursNote?:  string | null;
   managerId:   string;
   status:      GymStatus;
   submittedAt: string;
@@ -335,7 +339,7 @@ export interface FlaggedItem {
 
 export type SplitType = 'weekday' | 'sequential';
 
-export type SequentialSplit = string[];
+export type SequentialSplit = string[][];
 
 export type WeekdaySplit = {
   mon: string[];

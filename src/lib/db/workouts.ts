@@ -9,13 +9,11 @@ import type {
   ExerciseKind,
   PhotoAspectRatio,
 } from '../../data/types';
-import { GYMS } from '../../data/gyms';
 import {
   RAW_WORKOUT_SESSIONS,
   WORKOUT_ENTRIES,
   WORKOUT_SETS,
   WORKOUT_PHOTOS,
-  MOCK_SESSIONS,
 } from '../../data/workoutSessions';
 import { getNewSessions } from '../../data/sessionStore';
 
@@ -33,6 +31,7 @@ type SessionRow = {
   body_weight:        number | null;
   notes:              string | null;
   overlay_text_color: string | null;
+  target_muscles:     string[] | null;
 };
 
 type EntryRow = {
@@ -77,6 +76,7 @@ function rowToSession(r: SessionRow): WorkoutSession {
     bodyWeight:       r.body_weight ?? undefined,
     notes:            r.notes ?? undefined,
     overlayTextColor: r.overlay_text_color ?? undefined,
+    targetMuscles:    r.target_muscles ?? undefined,
   };
 }
 
@@ -123,7 +123,7 @@ function rowToPhoto(r: PhotoRow): WorkoutPhoto {
 export async function fetchWorkoutSessions(userId: string): Promise<WorkoutSession[]> {
   const { data, error } = await supabase
     .from('workout_sessions')
-    .select('id, user_id, gym_id, date, body_weight, notes, overlay_text_color')
+    .select('id, user_id, gym_id, date, body_weight, notes, overlay_text_color, target_muscles')
     .eq('user_id', userId)
     .order('date', { ascending: false });
 
@@ -138,7 +138,7 @@ export async function fetchWorkoutSessions(userId: string): Promise<WorkoutSessi
 export async function fetchWorkoutSession(id: string): Promise<WorkoutSession | undefined> {
   const { data, error } = await supabase
     .from('workout_sessions')
-    .select('id, user_id, gym_id, date, body_weight, notes, overlay_text_color')
+    .select('id, user_id, gym_id, date, body_weight, notes, overlay_text_color, target_muscles')
     .eq('id', id)
     .single();
 
@@ -313,10 +313,6 @@ export async function fetchWorkoutLogs(userId: string): Promise<WorkoutLog[]> {
     // If every session ID belongs to the mock dataset, skip reassembly and
     // return MOCK_SESSIONS (which already has gym names, machines, and photos).
     if (sessions.length === 0) return getNewSessions(userId);
-    const mockIds = new Set(RAW_WORKOUT_SESSIONS.map(s => s.id));
-    if (sessions.every(s => mockIds.has(s.id))) {
-      return [...getNewSessions(userId), ...MOCK_SESSIONS];
-    }
 
     const sessionIds = sessions.map(s => s.id);
     const gymIds     = [...new Set(sessions.map(s => s.gymId))];
@@ -342,10 +338,9 @@ export async function fetchWorkoutLogs(userId: string): Promise<WorkoutLog[]> {
       const live = (gymData ?? []).find(
         (g: { id: string }) => g.id === gymId,
       ) as { id: string; name: string; location: string } | undefined;
-      const mock = GYMS.find(g => g.id === gymId);
       gymMap.set(gymId, {
-        name:     live?.name     ?? mock?.name     ?? gymId,
-        location: live?.location ?? mock?.location ?? '',
+        name:     live?.name     ?? gymId,
+        location: live?.location ?? '',
       });
     }
 
@@ -374,6 +369,11 @@ export async function fetchWorkoutLogs(userId: string): Promise<WorkoutLog[]> {
         };
       });
 
+      const derivedMuscles = [...new Set(machines.map(m => m.targetMuscle).filter(Boolean))];
+      const sessionMuscles = (session.targetMuscles && session.targetMuscles.length > 0)
+        ? session.targetMuscles
+        : derivedMuscles;
+
       return {
         id:               session.id,
         gymId:            session.gymId,
@@ -386,14 +386,15 @@ export async function fetchWorkoutLogs(userId: string): Promise<WorkoutLog[]> {
         compositeUri:     photoMap.get(session.id)?.compositeUri,
         photoUri:         photoMap.get(session.id)?.photoUri,
         overlayTextColor: session.overlayTextColor ?? '#ffffff',
+        targetMuscles:    sessionMuscles,
       };
     });
     const assembledIds = new Set(assembled.map(s => s.id));
     const newSessions  = getNewSessions(userId).filter(s => !assembledIds.has(s.id));
     return [...newSessions, ...assembled];
   } catch (err) {
-    if (__DEV__) console.warn('[db/workouts] fetchWorkoutLogs error, using mock:', err);
-    return [...getNewSessions(userId), ...MOCK_SESSIONS];
+    if (__DEV__) console.warn('[db/workouts] fetchWorkoutLogs error:', err);
+    return getNewSessions(userId);
   }
 }
 
@@ -413,6 +414,7 @@ export async function insertWorkoutSession(
       body_weight:        session.bodyWeight ?? null,
       notes:              session.notes ?? null,
       overlay_text_color: session.overlayTextColor ?? '#ffffff',
+      target_muscles:     session.targetMuscles ?? null,
     })
     .select()
     .single();

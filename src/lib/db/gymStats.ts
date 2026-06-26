@@ -296,3 +296,23 @@ export async function fetchMachineAvgStats(
     return [];
   }
 }
+
+// 이번 주(월~일) 이 헬스장에서 운동 기록한 고유 유저 수
+export async function fetchWeeklyVisitors(
+  gymId:        string,
+  weekStartISO: string,  // 'YYYY-MM-DD' (월요일)
+  weekEndISO:   string,  // 'YYYY-MM-DD' (일요일)
+): Promise<number> {
+  try {
+    const { data, error } = await supabase
+      .from('workout_sessions')
+      .select('user_id')
+      .eq('gym_id', gymId)
+      .gte('date', weekStartISO)
+      .lte('date', weekEndISO + 'T23:59:59');
+    if (error || !data) return 0;
+    return new Set(data.map((r: any) => r.user_id)).size;
+  } catch {
+    return 0;
+  }
+}

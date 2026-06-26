@@ -171,11 +171,10 @@ function GymCard({
           <Text style={s.gymCardName}>{gym.name}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             {gym.managerId && (
-              <Ionicons
-                name="shield-checkmark"
-                size={15}
-                color="#5ba4ff"
-              />
+              <View style={s.managerBadge}>
+                <Ionicons name="shield-checkmark" size={11} color="#4A90E2" />
+                <Text style={s.managerBadgeText}>헬스장 직접 관리</Text>
+              </View>
             )}
             <View style={[s.openBadge, { backgroundColor: C.accentBg }]}>
               <Text style={[s.openBadgeText, { color: C.accent }]}>영업 중</Text>
@@ -839,7 +838,7 @@ export default function FindGymScreen() {
                 activeOpacity={0.8}
               >
                 <Ionicons name="add-circle-outline" size={18} color={C.accent} />
-                <Text style={s.gymRequestBtnText}>내 헬스장 등록 요청하기</Text>
+                <Text style={s.gymRequestBtnText}>내가 다니는 헬스장 등록요청하기</Text>
               </TouchableOpacity>
               <View style={{ height: 32 }} />
             </ScrollView>
@@ -1181,6 +1180,8 @@ const s = StyleSheet.create({
   gymCardFooter: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   openBadge:     { paddingHorizontal: 7, paddingVertical: 2, borderRadius: R.pill },
   openBadgeText: { fontSize: 10, fontWeight: '700' },
+  managerBadge:     { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#4A90E218', borderRadius: R.pill, paddingHorizontal: 7, paddingVertical: 3 },
+  managerBadgeText: { fontSize: 11, fontWeight: '700', color: '#4A90E2' },
   distBadge:     { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.accentBg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: R.pill },
   distText:      { fontSize: 11, fontWeight: '700', color: C.accent },
   gymMatchText:  { fontSize: 12, color: C.textSub },
