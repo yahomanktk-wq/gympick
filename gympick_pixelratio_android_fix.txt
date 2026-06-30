@@ -1,0 +1,64 @@
+[배경 — 확정된 사실]
+[QUALITY_DEBUG] 로그로 직접 확인됨: handleSaveImage, handleInstagramShare의 overlayRef와
+routinePageRefs[0] 캡처 결과가 layout 크기와 정확히 1:1로 동일함(352x469 = 352x469).
+pixelRatio: Math.max(PixelRatio.get(), 3)을 넘겼는데도 실제로는 1배율로 캡처되고 있다는
+뜻 — 안드로이드에서 captureRef의 pixelRatio 옵션이 무시되고 있음.
+
+Expo 공식 문서(captureRef)와 react-native-view-shot 깃허브 이슈를 확인한 결과: pixelRatio
+옵션만으로는 신뢰할 수 없고, width/height를 View의 레이아웃 크기(dp)로 명시적으로 같이
+넘겨줘야 실제로 배율이 적용되는 것으로 확인됨. 이 방식으로 고친다.
+
+
+[1] overlayRef 캡처 3곳에 명시적 width/height 추가 (실제로 코드 수정)
+
+대상: handleSaveImage, handleInstagramShare, "운동 저장" 버튼 핸들러(saveBtn) — 이 3곳의
+overlayRef를 캡처하는 captureRef 호출.
+
+각 호출의 옵션에 width, height를 추가해줘. 값은 그 View 자체가 스타일로 쓰고 있는 가로/세로
+값(PHOTO_W, photoH 등 — 실제 코드에 있는 변수/상수 이름을 그대로 사용, 새로 만들지 말 것)을
+그대로 넣어줘. 기존 pixelRatio, quality, format, result 옵션은 그대로 유지해줘.
+
+예시 형태(실제 변수명은 코드에 있는 것 사용):
+captureRef(overlayRef, {
+  format: 'png', quality: 1, result: 'tmpfile',
+  width: PHOTO_W, height: photoH,
+  pixelRatio: Math.max(PixelRatio.get(), 3),
+})
+
+수정 전/후 3곳 모두 빠짐없이 보여줘.
+
+
+[2] routinePageRefs[i] 캡처 2곳에 명시적 width/height 추가 (실제로 코드 수정)
+
+대상: handleSaveImage, handleInstagramShare의 routinePageRefs[i] 캡처.
+
+[1]과 동일한 방식으로, 이 View가 쓰는 가로/세로 값(PHOTO_W, ROUTINE_CARD_H 등 실제 코드의
+변수명)을 width/height로 추가해줘.
+
+수정 전/후 2곳 모두 빠짐없이 보여줘.
+
+
+[3] saveBtn의 routineCardRef(singular) — 먼저 확인만 하고 판단
+
+이 캡처는 layout height가 "auto height"로 고정값이 없어서 [1][2]와 같은 방식을 바로 쓸 수
+없음. 코드를 확인해서 다음을 판단해줘:
+
+1. 이 routineCardRef 캡처가 실제로 사용자가 저장하는 결과물(Supabase에 올라가는
+   compositeUri/photoUri)을 만드는 코드인지, 아니면 온보딩 튜토리얼 미리보기 전용으로 화면에
+   잠깐 보여주고 끝나는 코드(실제 저장과 무관)인지 확인해줘. 주변 코드(함수명, 호출되는
+   시점, 결과물을 어디에 쓰는지)를 보고 판단해줘.
+
+2-A. 만약 온보딩 미리보기 전용이라면: 우선순위가 낮으니 수정하지 말고 그렇다고만 보고해줘.
+
+2-B. 만약 실제 저장 경로의 일부라면: 캡처 직전에 ref.current?.measure() 또는
+     measureInWindow()로 그 순간의 실제 height를 측정해서, 그 값을 width/height 옵션으로
+     같이 넘겨주는 방식으로 고쳐줘. width는 기존 PHOTO_W 같은 고정값을 그대로 쓰면 돼.
+
+어느 쪽인지와, 2-B라면 수정 전/후를 보여줘.
+
+
+[전체 진행 방식]
+[1][2]는 실제로 코드를 수정. [3]은 먼저 판단하고, 결과에 따라 필요하면 수정.
+기존 [QUALITY_DEBUG] 로그는 이번엔 지우지 말고 그대로 둬 — 다음 테스트에서 캡처 크기가
+실제로 커졌는지 다시 확인해야 함.
+확인이나 중단 없이 끝까지 완료해줘.

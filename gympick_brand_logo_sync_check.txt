@@ -1,0 +1,57 @@
+[목표]
+src/assets/brand-logos/ 폴더에 있는 모든 이미지 파일이 src/constants/brandLogos.ts에
+빠짐없이 등록되어 있는지 확인하고, 빠진 게 있으면 등록한다. 그리고 실제 머신 데이터의
+브랜드 값과 비교해서 불일치가 있으면 보고한다 (이번엔 머신 데이터를 새로 만들어내지 않음 —
+지금까지 두 번이나 겪었던, "로고는 있는데 데이터가 없어서 안 보였던" 상황을 미리 잡아내는
+용도).
+
+
+[1] brand-logos 폴더 ↔ brandLogos.ts 동기화 — 실제로 수정함
+
+1. src/assets/brand-logos/ 디렉터리의 모든 이미지 파일(.png, .jpg, .jpeg, .webp 등)
+   목록을 가져온다.
+
+2. src/constants/brandLogos.ts에 현재 등록된 키 전체 목록을 가져온다
+   (각 require() 항목의 키).
+
+3. 각 이미지 파일명을 기준으로 예상 키를 만든다 — 확장자 제거 후 대문자로 변환하고,
+   공백을 언더스코어로 바꾼다.
+   예) "Imagine strength.png" → IMAGINE_STRENGTH
+       "LIFE_FITNESS.png" → LIFE_FITNESS
+
+4. 이 예상 키가 brandLogos.ts에 아직 없는 파일이 있으면, 기존 알파벳 순서를 유지하면서
+   require() 항목을 새로 추가한다. require() 경로는 실제 파일명 그대로 사용하고
+   (파일명 자체는 바꾸지 않음), 키만 표준 규칙(대문자+언더스코어)으로 만든다.
+
+5. 반대로 brandLogos.ts에는 등록돼 있는데 실제로 폴더에 해당 파일이 없는(require 경로가
+   깨진) 항목이 있으면 삭제하지 말고 별도로 보고만 한다.
+
+수정 전/후로 brandLogos.ts에서 실제로 바뀐 줄만 빠짐없이 보여준다.
+
+
+[2] 브랜드 데이터 일치 여부 보고 — 조사만, 데이터 생성/수정 절대 금지
+
+1. data/machines.ts에서 distinct brand 값 전체를 뽑는다.
+
+2. Supabase의 machines 테이블에서도 distinct brand 값 전체를 뽑는다
+   (.env의 EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY로 간단한 Node
+   스크립트 작성, @supabase/supabase-js 사용, 조회 전용이라 anon key로 충분함).
+
+3. [1]번 작업 후 최종적으로 brandLogos.ts에 등록된 키 전체를 가져온다.
+
+4. 아래 세 가지로 정리해서 표로 보여준다.
+   - 로고는 있는데 machines.ts와 Supabase 양쪽 다 해당 브랜드 머신이 하나도 없는 경우
+     (즉 로고만 있고 실제로 쓰이는 곳이 없는 브랜드)
+   - machines.ts 또는 Supabase에는 브랜드 머신이 있는데 로고가 없는 경우
+   - 이름이 비슷해서 헷갈릴 수 있지만 정확히 일치하지는 않는 경우
+     (예: "Southern Strength" 로고 vs "Southern Xercise" 데이터처럼, 이전에 한 번
+     발견됐던 패턴)
+
+이 [2]번 항목은 보고만 하고, machines.ts나 Supabase의 머신 데이터를 새로 만들거나
+수정하지 않는다.
+
+
+[전체 진행 방식]
+[1]은 실제로 brandLogos.ts를 수정하고 수정 전/후를 보여준다.
+[2]는 조사 결과만 정리해서 표로 보여준다.
+확인이나 중단 없이 끝까지 완료해줘.

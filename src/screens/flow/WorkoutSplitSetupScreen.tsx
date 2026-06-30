@@ -17,7 +17,7 @@ import { fetchSplitConfig, saveSplitConfig, updateSplitIndex } from '../../lib/d
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const SPLIT_MUSCLES = ['가슴', '등', '하체', '어깨', '팔', '휴식'];
+const SPLIT_MUSCLES = ['가슴', '등', '하체', '엉덩이', '어깨', '팔', '휴식'];
 
 const DAY_LABELS: { key: keyof WeekdaySplit; label: string }[] = [
   { key: 'mon', label: '월' },

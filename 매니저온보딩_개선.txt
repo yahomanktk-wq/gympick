@@ -1,0 +1,185 @@
+================================================================================
+[매니저 온보딩 개선] 문구 다듬기 + 폰트 확대 + 완료 시 프로필 이동
+================================================================================
+
+■ 작업 개요
+매니저 첫 로그인 온보딩(슬라이드 5개)을 개선한다.
+  (1) 전체 슬라이드 문구를 간결하게 다듬고 줄바꿈(\n) 추가
+  (2) 슬라이드 2: '머신으로 찾아요' 본문을 '직접 관리 + 헬스장 직접 관리 뱃지' 안내로 교체
+  (3) 폰트 확대: title 22→25, body 15→17 (lineHeight 24→28)
+  (4) 마지막 "시작하기" → 온보딩 완료 처리 + 프로필 탭으로 이동
+
+■ 변경 파일 (3개)
+  1. src/data/managerManual.ts                      ← 슬라이드 문구
+  2. src/screens/manager/ManagerOnboardingModal.tsx ← 폰트 + 완료 시 프로필 이동(콜백)
+  3. src/screens/HomeScreen.tsx                     ← 모달 onComplete에서 프로필 이동 연결
+
+⚠ 파일은 Windows(CRLF)에서 작성됐을 수 있음. str_replace 매칭 실패 시
+  해당 파일을 Read로 먼저 확인하고, 깨진 한글/공백을 실제 파일 기준으로 맞출 것.
+
+================================================================================
+[파일 1] src/data/managerManual.ts — MANAGER_ONBOARDING_SLIDES 문구 교체
+================================================================================
+MANAGER_ONBOARDING_SLIDES 배열 전체를 아래로 교체한다.
+(title은 슬라이드 2 외 유지, body는 모두 다듬음 + \n 줄바꿈)
+
+OLD:
+export const MANAGER_ONBOARDING_SLIDES: OnboardingSlide[] = [
+  {
+    icon: 'happy-outline',
+    title: '환영합니다, 매니저님 👋',
+    body: '이제 짐픽에서 내 헬스장을 직접 운영할 수 있어요. 신청하신 정보를 바탕으로 등록부터 시작해볼게요.',
+  },
+  {
+    icon: 'barbell-outline',
+    title: "짐픽은 '머신'으로 헬스장을 찾아요",
+    body: '유저들은 "이 헬스장에 어떤 머신이 있는지" 보고 찾아와요. 보유 머신을 정확히 등록할수록 더 많은 유저에게 노출돼요.',
+  },
+  {
+    icon: 'options-outline',
+    title: '이렇게 관리해요',
+    body: '·보유 머신 등록 — 우리 헬스장 머신 추가\n·추천 루틴 — 유저에게 보여줄 운동 루틴 작성\n·공지·요청 — 공지를 올리고 유저 제보를 확인',
+  },
+  {
+    icon: 'stats-chart-outline',
+    title: '데이터로 확인해요',
+    body: '어떤 머신이 가장 많이 쓰이는지, 언제 사람이 몰리는지, 회원이 다시 오는지까지 한눈에 볼 수 있어요.',
+  },
+  {
+    icon: 'rocket-outline',
+    title: '지금 시작해볼까요?',
+    body: '프로필 > 헬스장 관리에서 신청하신 헬스장 등록을 완료하고 보유 머신을 추가해보세요. 이 가이드는 프로필 > 도움말에서 다시 볼 수 있어요.',
+  },
+];
+
+NEW:
+export const MANAGER_ONBOARDING_SLIDES: OnboardingSlide[] = [
+  {
+    icon: 'happy-outline',
+    title: '환영합니다, 매니저님 👋',
+    body: '이제 짐픽에서\n내 헬스장을 직접 운영할 수 있어요.\n\n신청하신 정보로\n등록부터 시작해볼게요.',
+  },
+  {
+    icon: 'barbell-outline',
+    title: "짐픽은 '머신'으로 헬스장을 찾아요",
+    body: '직접 머신을 등록하고 관리하면\n머신이 바뀌어도 바로 반영할 수 있어요.\n\n등록한 헬스장에는 \'헬스장 직접 관리\' 표시가 붙어,\n유저가 믿고 볼 수 있어요.',
+  },
+  {
+    icon: 'options-outline',
+    title: '이렇게 관리해요',
+    body: '· 보유 머신 등록\n  우리 헬스장 머신을 추가해요\n\n· 추천 루틴\n  유저에게 보여줄 운동 루틴을 만들어요\n\n· 공지·요청\n  공지를 올리고 유저 제보를 확인해요',
+  },
+  {
+    icon: 'stats-chart-outline',
+    title: '데이터로 확인해요',
+    body: '어떤 머신이 많이 쓰이는지,\n언제 붐비는지,\n회원이 다시 오는지\n한눈에 볼 수 있어요.',
+  },
+  {
+    icon: 'rocket-outline',
+    title: '지금 시작해볼까요?',
+    body: '프로필 > 헬스장 관리에서\n등록을 완료하고 머신을 추가해보세요.\n\n이 가이드는\n프로필 > 도움말에서 다시 볼 수 있어요.',
+  },
+];
+
+================================================================================
+[파일 2] src/screens/manager/ManagerOnboardingModal.tsx
+================================================================================
+
+--- 2-1. props에 onFinish(완료 후 이동) 추가
+         기존 onComplete는 그대로 두고, 마지막 슬라이드 완료 시 호출할
+         onFinish 콜백을 추가한다. (온보딩 표시 처리 + 화면 이동을 호출부에서 함께 처리)
+
+OLD:
+export default function ManagerOnboardingModal({
+  visible,
+  onComplete,
+}: {
+  visible:    boolean;
+  onComplete: () => void;
+}) {
+NEW:
+export default function ManagerOnboardingModal({
+  visible,
+  onComplete,
+  onFinish,
+}: {
+  visible:    boolean;
+  onComplete: () => void;
+  onFinish?:  () => void;
+}) {
+
+--- 2-2. 마지막 "시작하기" 누를 때 onFinish도 호출
+OLD:
+    function goNext() {
+      if (isLast) { onComplete(); return; }
+      const next = index + 1;
+      scrollRef.current?.scrollTo({ x: next * SCREEN_W, animated: true });
+      setIndex(next);
+    }
+NEW:
+    function goNext() {
+      if (isLast) { onComplete(); onFinish?.(); return; }
+      const next = index + 1;
+      scrollRef.current?.scrollTo({ x: next * SCREEN_W, animated: true });
+      setIndex(next);
+    }
+
+  ※ '건너뛰기'(onComplete만)는 그대로 둔다 — 건너뛰면 이동 없이 닫히고,
+    끝까지 보고 '시작하기'를 누르면 프로필로 이동.
+
+--- 2-3. 폰트 확대 (styles)
+OLD:
+  title:   { fontSize: 22, fontWeight: '900', color: C.text, textAlign: 'center', marginBottom: 16, letterSpacing: -0.5 },
+  body:    { fontSize: 15, color: C.textSub, textAlign: 'center', lineHeight: 24 },
+NEW:
+  title:   { fontSize: 25, fontWeight: '900', color: C.text, textAlign: 'center', marginBottom: 18, letterSpacing: -0.5 },
+  body:    { fontSize: 17, color: C.textSub, textAlign: 'center', lineHeight: 28 },
+
+================================================================================
+[파일 3] src/screens/HomeScreen.tsx — onFinish로 프로필 이동 연결
+================================================================================
+ManagerOnboardingModal 렌더(581~587번 근처)에 onFinish prop을 추가해
+온보딩 끝까지 본 뒤 프로필 탭으로 이동시킨다.
+
+※ 먼저 해당 렌더부를 확인한다. 보통 아래 형태:
+    <ManagerOnboardingModal
+      visible={showManagerOnboarding}
+      onComplete={markManagerOnboarded}
+    />
+  (onComplete에 넘기는 함수명/형태는 실제 코드에 맞춰 유지)
+
+위 요소에 onFinish 콜백을 아래처럼 추가한다.
+(HomeScreen에는 이미 네비게이션 객체가 있음: 이 파일은 nav.navigate(...)를
+ 여러 곳에서 사용 중 — 동일한 nav 변수를 사용한다.)
+
+예시(실제 onComplete 줄은 보존하고 onFinish만 추가):
+    <ManagerOnboardingModal
+      visible={showManagerOnboarding}
+      onComplete={markManagerOnboarded}
+      onFinish={() => nav.navigate('Profile')}
+    />
+
+  ※ 만약 이 파일의 네비게이션 변수명이 nav가 아니라 navigation이면 그 이름을 사용.
+    (HomeScreen 상단에서 useNavigation() 결과를 받는 변수명을 그대로 사용)
+  ※ 프로필 탭의 라우트명이 'Profile'이 맞는지 확인. 다른 이름이면(예: 'ProfileTab')
+    그 이름으로 navigate. (TabNavigator의 프로필 탭 name 기준)
+
+================================================================================
+■ 완료 후 자체 점검
+================================================================================
+1) npx tsc --noEmit → 신규 에러 0건
+2) managerManual.ts: 슬라이드 2 body가 '직접 머신을 등록하고...' + '헬스장 직접 관리' 안내로 바뀌었는지
+   ('헬스장 직접 관리' 작은따옴표가 \' 로 이스케이프되어 문자열이 안 깨지는지 확인)
+3) 모달 title 25 / body 17 / lineHeight 28 적용됐는지
+4) HomeScreen 모달에 onFinish 추가됐는지 (onComplete는 보존)
+
+■ 사람이 직접 할 일 (디바이스 테스트)
+- 매니저 신규 계정(또는 profiles.manager_onboarded=false로 리셋) 로그인 → 홈에서 온보딩 모달
+- 각 슬라이드 줄바꿈/글자 크기 가독성 확인 (특히 슬라이드 2/3이 한 화면에 잘 들어오는지)
+- '건너뛰기' → 이동 없이 닫힘
+- 끝까지 넘겨 '시작하기' → 모달 닫히고 프로필 탭으로 이동되는지
+- (재확인) 온보딩 다시 안 뜨는지(manager_onboarded=true 저장)
+
+※ 온보딩 다시 보려면 Supabase에서:
+  update profiles set manager_onboarded = false where id = '<매니저 user id>';
+================================================================================

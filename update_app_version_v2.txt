@@ -1,0 +1,26 @@
+파일 경로: app.json
+
+확인이나 중단 없이 끝까지 완료해줘.
+
+## 작업 1 — version 수정
+현재:
+    "version": "1.0.5",
+
+아래로 교체:
+    "version": "1.0.6",
+
+## 작업 2 — ios buildNumber 수정
+현재:
+      "buildNumber": "16",
+
+아래로 교체:
+      "buildNumber": "26",
+
+## 작업 3 — android versionCode 수정
+현재:
+      "versionCode": 6,
+
+아래로 교체:
+      "versionCode": 7,
+
+완료 후 변경된 세 곳을 다시 출력해서 정확히 반영됐는지 확인해줘.

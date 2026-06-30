@@ -1,0 +1,67 @@
+[1] 인스타그램 공유 에러 — 원인 파악 및 수정
+
+배경: JournalScreen에서 운동일지 저장(handleSave)은 정상 동작하지만, 인스타그램
+공유(handleInstagramShare)에서 아래 에러가 발생함:
+
+"Error: Call to function 'ExpoSharing.shareAsync' has been rejected.
+ → Caused by: Only local file URLs are supported (expected scheme to be
+ 'file', got 'https')."
+
+이미 확인된 사실: 같은 함수 안에서 메인 인증샷(compositeUri)은 "원격 URL이라
+captureRef로 재캡처"하는 로직이 있다고 이전에 확인된 적이 있음. 그런데도 에러가
+발생하는 걸 보면, 루틴카드 쪽 경로나 다른 asset 경로에는 이 재캡처 로직이 빠져
+있거나, 재캡처된 로컬 URI가 아니라 다른 변수(원격 https URL)가 실수로
+Sharing.shareAsync()에 전달되고 있을 가능성이 높음.
+
+조사:
+1. JournalScreen.tsx의 handleInstagramShare 함수 전체를 생략 없이 보여줘.
+2. 그 함수 안에서 Sharing.shareAsync()를 호출하는 모든 위치를 찾아서, 각각
+   어떤 변수를 인자로 넘기는지 확인해줘.
+3. 그 변수가 어디서 만들어지는지 역추적해줘 — captureRef의 결과(로컬 file://
+   URI)인지, compositeUri/photoUri를 그대로 쓰는 건지(Supabase 원격 https://
+   URL), 아니면 다른 곳에서 온 건지.
+4. 비교를 위해 PostWorkoutLogModal.tsx의 handleInstagramShare도 같은 방식으로
+   확인해줘 — 같은 문제가 있는지, 아니면 처음부터 로컬 캡처만 쓰는 구조라
+   문제가 없는지.
+
+수정:
+원격 URL(https)이 Sharing.shareAsync()에 직접 전달되는 부분을 찾으면, 그 부분을
+같은 함수 안에 이미 있는 captureRef 재캡처 패턴과 동일하게 고쳐줘 — 즉 공유
+직전에 해당 요소를 captureRef로 다시 캡처해서 나온 로컬 URI를 사용하도록
+바꿔줘. (이미 그 요소에 ref가 있다면 재사용하고, 없으면 적절한 ref를 새로
+잡아줘.) PostWorkoutLogModal.tsx에서도 같은 문제가 발견되면 동일한 패턴으로
+같이 고쳐줘.
+
+수정 전/후 전체를 빠짐없이 보여줘.
+
+
+[2] 안드로이드 저장 품질 저하 — 조사만 (코드 수정 금지)
+
+증상: 안드로이드에서만 발생. 운동일지 작성 중 오운완 사진 촬영/선택 직후
+미리보기는 고화질로 보이는데, 운동일지를 최종 저장하면 인증샷과 루틴카드 둘
+다 저화질로 저장됨.
+
+PostWorkoutLogModal.tsx에서 운동일지 저장/완료 시 오운완 인증샷과 루틴카드를
+Supabase에 업로드하거나 WorkoutLog로 저장하는 함수를 찾아서 전체 내용을
+보여줘.
+
+이 함수 안에서 다음을 확인해줘:
+1. captureRef 호출 시 quality/pixelRatio 옵션이 어떻게 설정돼 있는지
+2. 캡처 후 업로드 전에 리사이즈/압축하는 코드(expo-image-manipulator 등)가
+   있는지, 있다면 Platform.OS === 'android' 분기가 있는지
+3. supabase.storage.from(...).upload(...) 호출의 옵션(contentType, 압축 관련
+   설정 등)
+4. 사진 촬영/선택 시 quality 파라미터(CameraView.takePictureAsync,
+   launchImageLibraryAsync 등)가 플랫폼별로 다르게 설정돼 있는지
+
+lib/db/workouts.ts 등 사진 업로드를 담당하는 다른 파일에서도 같은 패턴을
+grep으로 확인해줘. 특히 Platform.OS === 'android' 분기가 있는 압축/리사이즈
+코드가 있는지 중점적으로 봐줘.
+
+이 항목은 조사 결과만 정리해서 보여주고, 코드는 절대 수정하지 마.
+
+
+[전체 진행 방식]
+[1]은 원인을 찾아서 실제로 코드를 수정하고 수정 전/후를 보여줘.
+[2]는 조사 결과만 정리해서 보여줘.
+확인이나 중단 없이 끝까지 완료해줘.

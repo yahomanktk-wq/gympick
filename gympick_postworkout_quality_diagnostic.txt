@@ -1,0 +1,43 @@
+[배경]
+확인된 사실: 안드로이드에서 PostWorkoutLogModal의 오운완 인증샷 미리보기는 원본 화질로
+정상 표시됨. 그런데 그 아래 저장 버튼(기기에 저장 / 인스타그램 공유)을 탭하는 순간
+captureRef가 처음 실행되는데, 이 시점에 인증샷과 루틴카드 둘 다 저화질로 떨어짐. 이
+저화질 결과가 compositeUri/photoUri로 그대로 Supabase에 올라가기 때문에, 이후 전체
+운동일지를 마무리하는 "운동 저장" 버튼을 눌렀을 때도, 그리고 그 결과를 보여주는 모든
+화면(홈 화면의 "오늘의 오운완", JournalScreen 등)에도 똑같이 저화질로 보임. 즉 최초
+발생 지점은 PostWorkoutLogModal 안의 captureRef 호출들이고, 그 이후 화면들은 전부 그
+결과를 그대로 복제/표시하는 것뿐임.
+
+대상 함수 3곳, 이전 조사에서 전부 동일한 옵션을 쓰는 것으로 확인됨
+(quality: 1, pixelRatio: Math.max(PixelRatio.get(), 3), format: 'png', 플랫폼 분기 없음):
+- handleSaveImage (오운완 단계의 "기기에 저장")
+- handleInstagramShare (오운완 단계의 "인스타그램 공유")
+- "운동 저장" 버튼 핸들러 (전체 운동일지를 최종 마무리하면서 compositeUri/photoUri를
+  만들어 Supabase에 업로드하는 지점 — 이전 조사에서 L3360, L3365 근처로 확인됨)
+
+
+[1] 진단용 로그 추가 — 실제 캡처 결과의 픽셀 크기 확인 (실제로 코드 수정)
+
+위 3개 함수 전부에서, overlayRef를 캡처하는 captureRef 호출 직후와 routinePageRefs[i]를
+캡처하는 captureRef 호출 직후 각각에 아래를 추가해줘:
+
+1. Image.getSize(캡처된 uri, (w, h) => {...}, (err) => {...}) 를 호출해서 실제로
+   캡처된 이미지의 가로/세로 픽셀 크기를 콘솔에 출력해줘.
+   예: console.log('[QUALITY_DEBUG] handleSaveImage - overlayRef captured:', w, 'x', h);
+   함수명과 ref 종류(overlayRef인지 routinePageRefs인지)를 로그 문구에 구분해서 넣어줘 —
+   나중에 로그만 보고 어느 호출인지 바로 알아볼 수 있게.
+
+2. 그 View의 레이아웃 크기(이미 코드에 있는 photoH, PHOTO_W, ROUTINE_CARD_H 같은
+   상수/변수)도 같은 로그 줄 또는 바로 다음 줄에 같이 출력해줘.
+
+3. 그 시점에 실제 사용된 pixelRatio 값(Math.max(PixelRatio.get(), 3)의 결과)도 같이
+   출력해줘.
+
+모든 로그 줄 위에 "// TODO: 디버그용 — 확인 후 제거" 주석을 달아줘.
+
+수정 전/후 3개 함수 모두 빠짐없이 보여줘.
+
+
+[전체 진행 방식]
+실제로 코드를 수정하고 수정 전/후를 보여줘.
+확인이나 중단 없이 끝까지 완료해줘.

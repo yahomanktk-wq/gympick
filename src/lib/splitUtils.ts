@@ -2,27 +2,29 @@ import { SplitType, WorkoutSplit, WeekdaySplit, SequentialSplit } from '../data/
 
 // 머신 targetMuscle(영어) → 분할 루틴 부위명(한글) 매핑
 export const MUSCLE_EN_TO_KO: Record<string, string> = {
-  'Chest':     '가슴',
-  'Back':      '등',
-  'Leg':      '하체',
-  'Shoulder': '어깨',
-  'Arms':      '팔',
-  'Core':      '코어',
-  'Cardio':    '유산소',
-  'Full Body': '전신',
-  'Glutes':    '하체',
+  'Chest':        '가슴',
+  'Back':         '등',
+  'Leg':          '하체',
+  'Shoulder':     '어깨',
+  'Arms':         '팔',
+  'Core':         '코어',
+  'Cardio':       '유산소',
+  'Full Body':    '전신',
+  'Glutes':       '엉덩이',
+  'Hip (Glutes)': '엉덩이',
 };
 
 // 분할 루틴 부위명(한글) → 머신 targetMuscle(영어) 매핑
 export const MUSCLE_KO_TO_EN: Record<string, string> = {
-  '가슴': 'Chest',
-  '등':   'Back',
-  '하체': 'Leg',
-  '어깨': 'Shoulder',
-  '팔':   'Arms',
-  '코어': 'Core',
+  '가슴':   'Chest',
+  '등':     'Back',
+  '하체':   'Leg',
+  '엉덩이': 'Hip (Glutes)',
+  '어깨':   'Shoulder',
+  '팔':     'Arms',
+  '코어':   'Core',
   '유산소': 'Cardio',
-  '전신': 'Full Body',
+  '전신':   'Full Body',
 };
 
 export function toKoMuscle(en: string): string {

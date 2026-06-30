@@ -1,0 +1,443 @@
+================================================================================
+MUSCLE_FLOW_DUMP.txt  —  부위(근육) 변환·표시 흐름 전체 덤프
+생성일: 2026-06-27
+================================================================================
+
+===== [1] splitUtils.ts — 전체 매핑 + 변환 함수 =====
+파일: src/lib/splitUtils.ts  (1~34줄)
+
+ 1  import { SplitType, WorkoutSplit, WeekdaySplit, SequentialSplit } from '../data/types';
+ 2
+ 3  // 머신 targetMuscle(영어) → 분할 루틴 부위명(한글) 매핑
+ 4  export const MUSCLE_EN_TO_KO: Record<string, string> = {
+ 5    'Chest':     '가슴',
+ 6    'Back':      '등',
+ 7    'Leg':      '하체',
+ 8    'Shoulder': '어깨',
+ 9    'Arms':      '팔',
+10    'Core':      '코어',
+11    'Cardio':    '유산소',
+12    'Full Body': '전신',
+13    'Glutes':    '하체',   // ← Glutes도 하체로 표시
+14  };
+15
+16  // 분할 루틴 부위명(한글) → 머신 targetMuscle(영어) 매핑
+17  export const MUSCLE_KO_TO_EN: Record<string, string> = {
+18    '가슴': 'Chest',
+19    '등':   'Back',
+20    '하체': 'Leg',         // ← 역방향은 Leg만 (Glutes 없음)
+21    '어깨': 'Shoulder',
+22    '팔':   'Arms',
+23    '코어': 'Core',
+24    '유산소': 'Cardio',
+25    '전신': 'Full Body',
+26  };
+27
+28  export function toKoMuscle(en: string): string {
+29    return MUSCLE_EN_TO_KO[en] ?? en;
+30  }
+31
+32  export function toEnMuscle(ko: string): string {
+33    return MUSCLE_KO_TO_EN[ko] ?? ko;
+34  }
+
+[NOTE] '엉덩이'/'둔근' 항목 없음. Glutes → 하체(영→한) OK, 하체 → Leg만(한→영).
+
+
+================================================================================
+
+===== [2] WorkoutSplitSetupScreen.tsx — SPLIT_MUSCLES 정의 + MuscleChip 컴포넌트 =====
+파일: src/screens/flow/WorkoutSplitSetupScreen.tsx
+
+─── SPLIT_MUSCLES (19줄) ───────────────────────────────────────────────────────
+17  // ── Constants ─────────────────────────────────────────────────────────────────
+18
+19  const SPLIT_MUSCLES = ['가슴', '등', '하체', '어깨', '팔', '휴식'];
+
+[NOTE] 분할 설정 화면에서 선택 가능한 부위는 6개.
+       '엉덩이'/'둔근' 별도 항목 없음 — 하체로 통합.
+
+─── DAY_LABELS (21~29줄) ───────────────────────────────────────────────────────
+21  const DAY_LABELS: { key: keyof WeekdaySplit; label: string }[] = [
+22    { key: 'mon', label: '월' },
+23    { key: 'tue', label: '화' },
+24    { key: 'wed', label: '수' },
+25    { key: 'thu', label: '목' },
+26    { key: 'fri', label: '금' },
+27    { key: 'sat', label: '토' },
+28    { key: 'sun', label: '일' },
+29  ];
+
+─── MuscleChip 컴포넌트 (121~138줄) ────────────────────────────────────────────
+121  // ── MuscleChip ────────────────────────────────────────────────────────────────
+122
+123  function MuscleChip({
+124    label, selected, onPress,
+125  }: {
+126    label:    string;
+127    selected: boolean;
+128    onPress:  () => void;
+129  }) {
+130    return (
+131      <TouchableOpacity
+132        style={[s.chip, selected && s.chipSelected]}
+133        onPress={onPress}
+134        activeOpacity={0.75}
+135      >
+136        <Text style={[s.chipText, selected && s.chipTextSelected]}>{label}</Text>
+137      </TouchableOpacity>
+138    );
+139  }
+
+[NOTE] SPLIT_MUSCLES 배열을 map()해 칩 렌더링. label이 한글 그대로 표시됨.
+
+
+================================================================================
+
+===== [3] PostWorkoutLogModal.tsx — MUSCLE_GROUP_TO_CANON + toCanonMuscle + MUSCLE_GROUPS =====
+파일: src/screens/flow/PostWorkoutLogModal.tsx  (154~195줄)
+
+154  const ALL_MACHINES_MAP = new Map<string, Machine>(
+155    MACHINES.map((m) => [m.id, m]),
+156  );
+157
+158  // 부위 그룹 라벨 → 머신 targetMuscle 표준명으로 정규화
+159  // (예: 'Hip (Glutes)' → 'Glutes'). 저장/표시 경계에서만 사용한다.
+160  const MUSCLE_GROUP_TO_CANON: Record<string, string> = {
+161    'Hip (Glutes)': 'Glutes',
+162  };
+163  function toCanonMuscle(m: string): string {
+164    return MUSCLE_GROUP_TO_CANON[m] ?? m;
+165  }
+166
+167  // --- Muscle palette
+168
+169  const MUSCLE_COLORS: Record<string, { fg: string; bg: string }> = {
+170    Chest:            C.tagMachine,
+171    Back:             C.tagBrand,
+172    Leg:             C.tagMuscle,
+173    Shoulder:        { fg: '#ffd166', bg: '#ffd16618' },
+174    Arms:             C.tagCategory,
+175    Core:             { fg: '#06d6a0', bg: '#06d6a018' },
+176    'Full Body':      { fg: '#a8dadc', bg: '#a8dadc18' },
+177    'Hip (Glutes)':   { fg: '#ff9ecd', bg: '#ff9ecd18' },
+178    Glutes:           { fg: '#ff9ecd', bg: '#ff9ecd18' }, // alias kept for machine data
+179  };
+180
+181  function mp(muscle: string) {
+182    return MUSCLE_COLORS[muscle] ?? { fg: C.textSub, bg: C.border };
+183  }
+184
+185  // --- Muscle group definitions
+186
+187  type SvgComponent = React.FC<{ width?: number; height?: number; color?: string }>;
+188
+189  const MUSCLE_GROUPS: { name: string; sub: string; SvgIcon: SvgComponent }[] = [
+190    { name: 'Chest',        sub: 'Pectorals',              SvgIcon: ChestIcon     },
+191    { name: 'Back',         sub: 'Lats & Rhomboids',       SvgIcon: BackIcon      },
+192    { name: 'Shoulder',    sub: 'Deltoids',               SvgIcon: ShouldersIcon },
+193    { name: 'Arms',         sub: 'Biceps & Triceps',       SvgIcon: ArmsIcon      },
+194    { name: 'Leg',         sub: 'Quads & Hamstrings',     SvgIcon: LegsIcon      },
+195    { name: 'Hip (Glutes)', sub: 'Glutes & Hip Abductors', SvgIcon: GlutesIcon    },
+196  ];
+
+[NOTE] 운동기록 부위 카드: 'Leg'와 'Hip (Glutes)' 분리. 유저가 'Hip (Glutes)' 선택 시
+       toCanonMuscle → 'Glutes'로 변환되어 저장/오버레이에 사용.
+
+
+================================================================================
+
+===== [4] PostWorkoutLogModal.tsx — matchesMuscle (머신 필터) 현재 상태 =====
+파일: src/screens/flow/PostWorkoutLogModal.tsx  (732~744줄)
+
+732    // 'Hip (Glutes)' selection should match machines with targetMuscle 'Glutes'
+733    function matchesMuscle(targetMuscle: string): boolean {
+734      if (selectedMuscles.has(targetMuscle)) return true;
+735      if (targetMuscle === 'Glutes' && selectedMuscles.has('Hip (Glutes)')) return true;
+736      if (targetMuscle === 'Glutes' && selectedMuscles.has('Leg')) return true;   // ← 추가됨
+737      return false;
+738    }
+739
+740    const hasPreloaded = preloadedIds.size > 0;
+741    let machines: Machine[];
+742    let routineOrderedAll: Machine[] = [];
+743
+744    if (hasPreloaded) {
+
+[NOTE] 세 가지 경로로 Glutes 머신 매칭:
+  1) selectedMuscles에 'Glutes' 직접 있을 때 (line 734)
+  2) 유저가 'Hip (Glutes)' 카드 수동 선택 시 (line 735)
+  3) 스플릿 '하체' pre-select → selectedMuscles={'Leg'} 일 때 (line 736) ← 이번 수정
+
+
+================================================================================
+
+===== [5] PostWorkoutLogModal.tsx — 스플릿 자동선택 (pre-select) =====
+파일: src/screens/flow/PostWorkoutLogModal.tsx  (3673~3699줄)
+
+3673    React.useEffect(() => {
+3674      if (!visible || !user?.id) return;
+3675      fetchSplitConfig(user.id).then(config => {
+3676        if (!config) return;
+3677        if (isRestToday(config.splitType, config.workoutSplit, config.splitCurrentIndex)) {
+3678          setIsRestDay(true);
+3679          return;
+3680        }
+3681        setIsRestDay(false);
+3682        const targets = getTodayTargets(config.splitType, config.workoutSplit, config.splitCurrentIndex);
+3683        if (targets.length > 0) {
+3684          const en = targets.map(toEnMuscle).filter(Boolean);
+3685          if (en.length > 0) setSelectedMuscles(new Set(en));
+3686        }
+3687      }).catch(() => {});
+3688    }, [visible, user?.id]);
+3689
+3690    function toggleMuscle(m: string) {
+3691      setSelectedMuscles(prev => {
+3692        const next = new Set(prev);
+3693        next.has(m) ? next.delete(m) : next.add(m);
+3694        return next;
+3695      });
+3696    }
+
+[NOTE] 흐름: 스플릿 '하체' → toEnMuscle('하체') → 'Leg' → selectedMuscles = { 'Leg' }.
+       'Hip (Glutes)'는 pre-select에 포함되지 않음.
+       Glutes 머신은 matchesMuscle line 736에서 'Leg' 조건으로 필터 통과.
+
+
+================================================================================
+
+===== [6] PostWorkoutLogModal.tsx — muscleLabel 생성 + WorkoutPhotoStep 호출 =====
+파일: src/screens/flow/PostWorkoutLogModal.tsx
+
+─── (가) muscleLabel 생성 (2505~2521줄, WorkoutPhotoStep 내부) ──────────────────
+2505    const displayName = nickname ?? 'gympick_user';
+2506
+2507    // 사용자가 고른 타겟부위(selectedMuscles) 기준으로 라벨 생성 (경로 2).
+2508    // 비어 있으면 기록된 운동에서 역산한 부위로 fallback.
+2509    const muscleCounts = exercises.reduce<Record<string, number>>((acc, ex) => {
+2510      acc[ex.targetMuscle] = (acc[ex.targetMuscle] ?? 0) + 1;
+2511      return acc;
+2512    }, {});
+2513    const sortedMuscles = Object.entries(muscleCounts)
+2514      .sort(([, a], [, b]) => b - a)
+2515      .map(([m]) => m);
+2516    const labelMuscles = (selectedMuscles && selectedMuscles.length > 0)
+2517      ? selectedMuscles
+2518      : sortedMuscles;
+2519    const muscleLabel = labelMuscles.length > 1
+2520      ? labelMuscles.join(' + ')
+2521      : `${labelMuscles[0] ?? 'WORKOUT'} Day`;
+
+─── (나) WorkoutPhotoStep 호출부 (4177~4190줄) ─────────────────────────────────
+4177          <WorkoutPhotoStep
+4178            gym={gym!}
+4179            exercises={selectedExercises}
+4180            selectedMuscles={Array.from(selectedMuscles).map(toCanonMuscle)}
+4181            logs={logs}
+4182            photoTaken={photoTaken}
+4183            photoUri={photoUri ?? undefined}
+4184            nickname={user?.nickname ?? user?.name ?? undefined}
+4185            onColorChange={setSelectedColor}
+4186            onCapture={(aspect) => handleCapture(aspect)}
+4187            onCameraCapture={(uri) => {
+4188              setShowCamera(false);
+4189              setPhotoUri(uri);
+4190              setPhotoTaken(true);
+
+[NOTE] selectedMuscles(Set<string>) → Array.from → toCanonMuscle 변환 후 전달.
+  - 유저 수동 선택: 'Hip (Glutes)' → toCanonMuscle → 'Glutes' → muscleLabel = 'Glutes Day'
+  - 스플릿 pre-select: 'Leg' → toCanonMuscle → 'Leg' → muscleLabel = 'Leg Day' (변경 없음)
+  - 두 경우 모두 오버레이 라벨에 깔끔한 영어 표시.
+
+WorkoutPhotoStep props 시그니처:
+2341  function WorkoutPhotoStep({ ..., selectedMuscles, ... }: {
+2344    selectedMuscles: string[];   // string[] (배열, Set 아님)
+...
+2364  }) {
+
+
+================================================================================
+
+===== [7] HomeScreen.tsx — toKoMuscle / getTodayTargets 사용 (부위 표시) =====
+파일: src/screens/HomeScreen.tsx  (334~374줄)
+
+334              if (!active) return;
+335
+336              if (todayMuscles.length > 0) {
+337                const filtered = posts.filter(p => p.muscles.some(m => todayMuscles.includes(m)));
+338                setOunwanPosts(filtered.length > 0 ? filtered : posts);
+339              } else {
+340                setOunwanPosts(posts);
+341              }
+342
+343              setTodayTarget(target);
+344              setOunwanDisplayTarget(todayMuscles.length > 0 ? todayMuscles.map(toKoMuscle).join(', ') : (todayTargetsArr.join(', ') || null));
+345              const weekDates = getThisWeekDates();
+346              setWeekTargetMap(getWeekTargetMap(config, weekDates));
+347              return;
+348            }
+349
+350            target = config
+351              ? getTodayTarget(config.splitType, config.workoutSplit, config.splitCurrentIndex)
+352              : null;
+353            setTodayTarget(target);
+354            setOunwanDisplayTarget(todayTargetsArr.join(', ') || null);
+355
+356            const weekDates = getThisWeekDates();
+357            setWeekTargetMap(getWeekTargetMap(config, weekDates));
+358          }
+359
+360          const posts = await fetchActiveFeedPosts().catch(() => [] as WorkoutFeedPost[]);
+361          if (!active) return;
+362
+363          if (todayTargetsArr.length > 0) {
+364            const targetsEn = todayTargetsArr.map(toEnMuscle);
+365            const filtered = posts.filter(p => p.muscles.some(m => targetsEn.includes(m)));
+366            setOunwanPosts(filtered.length > 0 ? filtered : posts);
+367          } else {
+368            setOunwanPosts(posts);
+369          }
+370        }
+371        load();
+372        return () => { active = false; };
+373      }, [user?.id])
+374    );
+
+[NOTE] line 344: todayMuscles(영어)를 toKoMuscle로 변환해 한글로 표시.
+       'Glutes' → '하체'로 표시됨 (MUSCLE_EN_TO_KO line 13).
+       line 364: 오운완 피드 필터 시 toEnMuscle 사용 — '하체' → 'Leg'만 매핑,
+       Glutes 게시물 필터 누락 가능성 있음 (별도 검토 필요).
+
+
+================================================================================
+
+===== [8] JournalScreen.tsx — 부위 표시 관련 코드 =====
+파일: src/screens/JournalScreen.tsx
+
+─── getWeekTargetMap 함수 (216~239줄) ──────────────────────────────────────────
+216  function getWeekTargetMap(
+217    splitConfig: UserSplitConfig | null,
+218    weekDates:   Date[]
+219  ): Record<string, string | null> {
+220    const result: Record<string, string | null> = {};
+221
+222    if (!splitConfig || !splitConfig.workoutSplit) {
+223      weekDates.forEach(d => { result[d.toDateString()] = null; });
+224      return result;
+225    }
+226
+227    if (splitConfig.splitType === 'weekday') {
+228      const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+229      const split = splitConfig.workoutSplit as WeekdaySplit;
+230      weekDates.forEach(d => {
+231        const key     = DAY_KEYS[d.getDay()] as keyof WeekdaySplit;
+232        const targets = (split[key] ?? []) as string[];
+233        const work = targets.filter(m => m !== '휴식');
+234        result[d.toDateString()] = work.length > 0 ? work.join('·') : (targets.length > 0 ? '휴식' : null);
+235      });
+236      return result;
+237    }
+238
+239    const split  = splitConfig.workoutSplit as string[][];
+
+[NOTE] 분할 부위명(한글)을 그대로 캘린더에 표시. 변환 없음.
+       '하체'가 그대로 표시됨. '엉덩이' 추가 시 그대로 표시될 것.
+
+─── 세션 카드 targetMuscles 표시 (649~662줄) ────────────────────────────────────
+649          {sessions.map((session, idx) => {
+650            const vol        = sessionVolume(session);
+651            const machines   = session.machines ?? [];
+652            const totalSets  = machines.reduce((a, m) => a + m.sets, 0);
+653            const muscles    = (session.targetMuscles && session.targetMuscles.length > 0)
+654              ? session.targetMuscles
+655              : [...new Set(machines.map(m => m.targetMuscle))];
+656            const photoUri   = session.compositeUri ?? session.photoUri;
+657            const photoHeight = photoHeights[session.id] ?? DET_PHOTO_H_DEFAULT;
+658
+659            const muscleTitle = muscles.length > 1
+660              ? muscles.map(m => m.toUpperCase()).join(' + ')
+661              : `${(muscles[0] ?? 'WORKOUT').toUpperCase()} DAY`;
+
+[NOTE] muscles는 영어 targetMuscle 배열 그대로 사용.
+       'Glutes'가 있으면 'GLUTES DAY'로 표시됨. toKoMuscle 변환 없음.
+
+─── 세션 디테일 근육 카운트 (868~879줄) ─────────────────────────────────────────
+868                          letterSpacing: 0.5,
+869                          textTransform: 'uppercase',
+870                        }}>
+871                          {(() => {
+872                            const muscleCounts = machines.reduce<Record<string, number>>((acc, m) => {
+873                              acc[m.targetMuscle] = (acc[m.targetMuscle] ?? 0) + 1;
+874                              return acc;
+875                            }, {});
+876                            const sorted = Object.entries(muscleCounts)
+877                              .sort(([, a], [, b]) => b - a)
+878                              .map(([m]) => m);
+879                            return sorted.length > 1
+
+[NOTE] 디테일 모달에서도 targetMuscle(영어) 직접 표시. 'Glutes'면 'GLUTES'로 렌더됨.
+
+
+================================================================================
+
+===== [9] WorkoutFeedScreen.tsx — 부위 표시 (toKoMuscle / toEnMuscle 사용처) =====
+파일: src/screens/WorkoutFeedScreen.tsx
+
+─── 오늘 일지 부위 → 한글 변환 (444~462줄) ─────────────────────────────────────
+444      // 오늘 운동일지 확인
+445      const todayStr  = new Date().toDateString();
+446      const todayLogs = logs.filter((l: any) =>
+447        new Date(l.date).toDateString() === todayStr
+448      );
+449
+450      let targetKo: string | null = null;
+451
+452      if (todayLogs.length > 0) {
+453        // 오늘 일지 있음 → 일지 타겟 부위(영어)를 한글로 변환
+454        const { toKoMuscle } = await import('../lib/splitUtils');
+455        const todayMuscleEn  = todayLogs[0].targetMuscles?.[0] ?? null;
+456        targetKo = todayMuscleEn ? toKoMuscle(todayMuscleEn) : null;
+457      } else if (config) {
+458        // 오늘 일지 없음 → 현재 인덱스 타겟 부위
+459        targetKo = getTodayTarget(config.splitType, config.workoutSplit, config.splitCurrentIndex);
+460      }
+461
+462      if (
+463        targetKo &&
+
+[NOTE] line 456: targetMuscles[0]가 'Glutes'이면 toKoMuscle → '하체' 표시. OK.
+       line 459: 스플릿 타겟은 한글 그대로 반환 (getTodayTarget이 한글 반환).
+
+─── 피드 부위 필터 (554~563줄) ─────────────────────────────────────────────────
+554      base = filterWithMyPosts(posts, filterByDistance(posts, 5));
+555    } else {
+556      base = sortByLatest(posts);
+557    }
+558
+559    // 부위 필터 (muscleFilter는 한글, p.muscles는 영어이므로 변환 후 비교)
+560    if (muscleFilter === '전체') return base;
+561    const targetEn = toEnMuscle(muscleFilter);
+562    const return base.filter(p => p.muscles.some(m => m === targetEn));
+563    return base.filter(p => p.muscles.some(m => m === targetEn));
+
+[NOTE] line 561: toEnMuscle('하체') → 'Leg'.
+       피드에 'Glutes' 태깅된 게시물은 '하체' 필터 시 누락될 수 있음.
+       → '엉덩이' 부위 추가 시 여기도 확인 필요.
+
+
+================================================================================
+요약: '엉덩이' 부위 추가 시 영향받는 지점
+================================================================================
+
+  지점                              현재 상태              추가 시 필요 작업
+  ────────────────────────────────────────────────────────────────────────────
+  splitUtils MUSCLE_EN_TO_KO       Glutes → 하체           '엉덩이' 항목 추가 검토
+  splitUtils MUSCLE_KO_TO_EN       하체 → Leg만            '엉덩이' → 'Glutes' 추가 필요
+  WorkoutSplitSetupScreen          SPLIT_MUSCLES 6개       '엉덩이' 칩 추가 필요
+  PostWorkoutLogModal MUSCLE_GROUPS Hip(Glutes) 있음       분할 '엉덩이' → pre-select 연동
+  matchesMuscle                    Leg/Hip(Glutes) → OK    '엉덩이' selectedMuscle 조건 추가
+  JournalScreen getWeekTargetMap   한글 그대로 표시         자동 적용됨
+  WorkoutFeedScreen 피드 필터      toEnMuscle 단일 값       '엉덩이' → ['Glutes'] 매핑 추가
+
+================================================================================

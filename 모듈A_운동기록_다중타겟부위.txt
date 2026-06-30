@@ -1,0 +1,486 @@
+================================================================================
+[모듈 A] 운동 기록 - 타겟부위 2개 이상 저장/표시 (경로 2)
+================================================================================
+
+■ 작업 개요
+운동을 기록할 때 사용자가 선택한 타겟부위(selectedMuscles)를 세션에 직접 저장하고
+(현재는 저장 안 됨 → 머신에서 역산), 인증샷/홈/운동일지가 그 저장값을 읽어
+부위 2개 이상을 끝에서 끝까지 표시하도록 수정한다.
+
+■ 핵심 설계 원칙 (꼭 지킬 것)
+1) 부위 표준화(예: 'Hip (Glutes)' → 'Glutes')는 **저장 직전 한 곳(PostWorkoutLogModal)**
+   에서만 한다. DB/홈/일지는 표준값을 "읽기만" 한다.
+2) 선택·머신필터에 쓰이는 prop은 **절대 건드리지 않는다** (그룹 라벨 그대로여야 필터 동작).
+   → PostWorkoutLogModal 4076번/4102번 줄의 selectedMuscles prop은 변경 금지.
+3) 기존(옛) 세션은 새 컬럼이 비어 있으므로 → 머신에서 역산한 값으로 fallback (옛 기록 안 깨짐).
+4) 부위 3개 이상이면 '가슴 + 등 + 어깨'처럼 전부 이어붙인다 (2개 cap 제거).
+
+--------------------------------------------------------------------------------
+⚠ 사전 필수 (코드 적용 전에 사람이 직접 실행) : Supabase SQL Editor
+--------------------------------------------------------------------------------
+아래 SQL을 Supabase SQL Editor에서 **먼저** 실행해야 한다.
+(코드가 target_muscles 컬럼을 SELECT 하는데, 컬럼이 없으면 쿼리가 에러나고
+ mock 데이터로 fallback 되어 실제 세션이 안 보이게 됨)
+
+  ALTER TABLE workout_sessions
+    ADD COLUMN IF NOT EXISTS target_muscles text[];
+
+※ Claude Code는 이 SQL을 실행하지 말 것. 코드 수정만 진행한다.
+  (사용자가 별도로 Supabase에서 실행함)
+
+================================================================================
+변경 파일 목록 (총 5개 + SQL)
+================================================================================
+  1. src/data/types.ts
+  2. src/lib/db/workouts.ts
+  3. src/screens/flow/PostWorkoutLogModal.tsx
+  4. src/screens/HomeScreen.tsx
+  5. src/screens/JournalScreen.tsx
+
+아래 각 파일의 OLD(현재) → NEW(변경)를 정확히 적용한다.
+들여쓰기/공백은 해당 파일의 기존 스타일을 따른다.
+
+================================================================================
+[파일 1] src/data/types.ts
+================================================================================
+
+--- 1-1. WorkoutSession 인터페이스에 targetMuscles 추가
+
+OLD:
+  export interface WorkoutSession {
+    id:                string;
+    userId:            string;
+    gymId:             string;
+    date:              string;    // ISO 8601
+    bodyWeight?:       number;    // kg
+    notes?:            string;
+    overlayTextColor?: string;
+  }
+
+NEW:
+  export interface WorkoutSession {
+    id:                string;
+    userId:            string;
+    gymId:             string;
+    date:              string;    // ISO 8601
+    bodyWeight?:       number;    // kg
+    notes?:            string;
+    overlayTextColor?: string;
+    targetMuscles?:    string[];  // 사용자가 선택한 타겟 부위 (경로 2)
+  }
+
+--- 1-2. WorkoutLog 인터페이스에 targetMuscles 추가
+
+OLD:
+  export interface WorkoutLog {
+    id:                string;
+    gymId:             string;
+    gymName:           string;
+    gymLocation:       string;
+    date:              string;
+    bodyWeight?:       number;
+    machines:          LoggedMachineEntry[];
+    hasPhoto:          boolean;
+    photoUri?:         string;   // local URI of the raw camera photo
+    compositeUri?:     string;   // local URI of the overlay composite image (captureRef result)
+    overlayTextColor?: string;
+  }
+
+NEW:
+  export interface WorkoutLog {
+    id:                string;
+    gymId:             string;
+    gymName:           string;
+    gymLocation:       string;
+    date:              string;
+    bodyWeight?:       number;
+    machines:          LoggedMachineEntry[];
+    hasPhoto:          boolean;
+    photoUri?:         string;   // local URI of the raw camera photo
+    compositeUri?:     string;   // local URI of the overlay composite image (captureRef result)
+    overlayTextColor?: string;
+    targetMuscles?:    string[]; // 세션 타겟 부위 (없으면 machines에서 역산)
+  }
+
+================================================================================
+[파일 2] src/lib/db/workouts.ts
+================================================================================
+
+--- 2-1. SessionRow 타입에 target_muscles 추가
+
+OLD:
+  type SessionRow = {
+    id:                 string;
+    user_id:            string;
+    gym_id:             string;
+    date:               string;
+    body_weight:        number | null;
+    notes:              string | null;
+    overlay_text_color: string | null;
+  };
+
+NEW:
+  type SessionRow = {
+    id:                 string;
+    user_id:            string;
+    gym_id:             string;
+    date:               string;
+    body_weight:        number | null;
+    notes:              string | null;
+    overlay_text_color: string | null;
+    target_muscles:     string[] | null;
+  };
+
+--- 2-2. rowToSession 변환 함수에 targetMuscles 매핑 추가
+
+OLD:
+  function rowToSession(r: SessionRow): WorkoutSession {
+    return {
+      id:               r.id,
+      userId:           r.user_id,
+      gymId:            r.gym_id,
+      date:             r.date,
+      bodyWeight:       r.body_weight ?? undefined,
+      notes:            r.notes ?? undefined,
+      overlayTextColor: r.overlay_text_color ?? undefined,
+    };
+  }
+
+NEW:
+  function rowToSession(r: SessionRow): WorkoutSession {
+    return {
+      id:               r.id,
+      userId:           r.user_id,
+      gymId:            r.gym_id,
+      date:             r.date,
+      bodyWeight:       r.body_weight ?? undefined,
+      notes:            r.notes ?? undefined,
+      overlayTextColor: r.overlay_text_color ?? undefined,
+      targetMuscles:    r.target_muscles ?? undefined,
+    };
+  }
+
+--- 2-3. SELECT 문에 target_muscles 추가 (★ 동일 문자열이 2군데 있음: 둘 다 수정)
+         fetchWorkoutSessions, fetchWorkoutSession 두 함수 모두.
+
+OLD (2군데 모두):
+    .select('id, user_id, gym_id, date, body_weight, notes, overlay_text_color')
+
+NEW (2군데 모두):
+    .select('id, user_id, gym_id, date, body_weight, notes, overlay_text_color, target_muscles')
+
+--- 2-4. insertWorkoutSession insert 객체에 target_muscles 추가
+
+OLD:
+    .insert({
+      id:                 session.id,
+      user_id:            session.userId,
+      gym_id:             session.gymId,
+      date:               session.date,
+      body_weight:        session.bodyWeight ?? null,
+      notes:              session.notes ?? null,
+      overlay_text_color: session.overlayTextColor ?? '#ffffff',
+    })
+
+NEW:
+    .insert({
+      id:                 session.id,
+      user_id:            session.userId,
+      gym_id:             session.gymId,
+      date:               session.date,
+      body_weight:        session.bodyWeight ?? null,
+      notes:              session.notes ?? null,
+      overlay_text_color: session.overlayTextColor ?? '#ffffff',
+      target_muscles:     session.targetMuscles ?? null,
+    })
+
+--- 2-5. fetchWorkoutLogs 조립부: targetMuscles 계산(+fallback) 후 반환 객체에 추가
+         (함수 내 sessions.map(session => { ... }) 안, machines 배열을 만든 직후)
+
+OLD (해당 return 블록):
+        return {
+          id:               session.id,
+          gymId:            session.gymId,
+          gymName:          gym.name,
+          gymLocation:      gym.location,
+          date:             session.date,
+          bodyWeight:       session.bodyWeight,
+          machines,
+          hasPhoto:         photoMap.has(session.id),
+          compositeUri:     photoMap.get(session.id)?.compositeUri,
+          photoUri:         photoMap.get(session.id)?.photoUri,
+          overlayTextColor: session.overlayTextColor ?? '#ffffff',
+        };
+
+NEW (return 바로 위에 fallback 계산 추가 + 필드 추가):
+        const derivedMuscles = [...new Set(machines.map(m => m.targetMuscle).filter(Boolean))];
+        const sessionMuscles = (session.targetMuscles && session.targetMuscles.length > 0)
+          ? session.targetMuscles
+          : derivedMuscles;
+
+        return {
+          id:               session.id,
+          gymId:            session.gymId,
+          gymName:          gym.name,
+          gymLocation:      gym.location,
+          date:             session.date,
+          bodyWeight:       session.bodyWeight,
+          machines,
+          hasPhoto:         photoMap.has(session.id),
+          compositeUri:     photoMap.get(session.id)?.compositeUri,
+          photoUri:         photoMap.get(session.id)?.photoUri,
+          overlayTextColor: session.overlayTextColor ?? '#ffffff',
+          targetMuscles:    sessionMuscles,
+        };
+
+================================================================================
+[파일 3] src/screens/flow/PostWorkoutLogModal.tsx
+================================================================================
+
+--- 3-1. 모듈 레벨 표준화 헬퍼 추가 (import 구문들 바로 아래, 컴포넌트 정의 전)
+
+추가할 코드:
+  // 부위 그룹 라벨 → 머신 targetMuscle 표준명으로 정규화
+  // (예: 'Hip (Glutes)' → 'Glutes'). 저장/표시 경계에서만 사용한다.
+  const MUSCLE_GROUP_TO_CANON: Record<string, string> = {
+    'Hip (Glutes)': 'Glutes',
+  };
+  function toCanonMuscle(m: string): string {
+    return MUSCLE_GROUP_TO_CANON[m] ?? m;
+  }
+
+  ※ 확인: 이 파일 상단의 MUSCLE_GROUPS(부위 그룹 정의)에서 둔근/엉덩이 그룹의
+    라벨이 정확히 'Hip (Glutes)'인지 확인하고, 다르면 위 map의 키를 그 라벨로 맞춘다.
+    (그 외 'Chest','Back','Leg','Shoulder','Arms','Core' 등은 머신 표준명과 동일하므로
+     변환 불필요 — 통과시키면 됨)
+
+--- 3-2. WorkoutPhotoStep 컴포넌트: selectedMuscles prop 추가
+         (함수 시그니처. 2332번 근처)
+
+OLD (구조분해 부분):
+  function WorkoutPhotoStep({ gym, exercises, logs, photoTaken, photoUri, nickname, onColorChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera, onRegisterRect, onboardingActive, onboardingKey, onOnboardingNext, onOnboardingJump }: {
+
+NEW:
+  function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, photoUri, nickname, onColorChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera, onRegisterRect, onboardingActive, onboardingKey, onOnboardingNext, onOnboardingJump }: {
+
+  그리고 바로 이어지는 props 타입(객체 타입 정의)에 아래 한 줄을 추가한다
+  (exercises 타입 줄 근처에 추가):
+    selectedMuscles: string[];
+
+--- 3-3. WorkoutPhotoStep 내부 muscleLabel 계산을 selectedMuscles 기반으로 변경
+         (2504번 근처. 2개 cap 제거 + 고른 부위 사용, 머신 역산은 fallback)
+
+OLD:
+    // Derive muscle label: "Chest Day" or "Chest + Triceps"
+    const muscleCounts = exercises.reduce<Record<string, number>>((acc, ex) => {
+      acc[ex.targetMuscle] = (acc[ex.targetMuscle] ?? 0) + 1;
+      return acc;
+    }, {});
+    const sortedMuscles = Object.entries(muscleCounts)
+      .sort(([, a], [, b]) => b - a)
+      .map(([m]) => m);
+    const muscleLabel = sortedMuscles.length > 1
+      ? sortedMuscles.slice(0, 2).join(' + ')
+      : `${sortedMuscles[0] ?? 'WORKOUT'} Day`;
+
+NEW:
+    // 사용자가 고른 타겟부위(selectedMuscles) 기준으로 라벨 생성 (경로 2).
+    // 비어 있으면 기록된 운동에서 역산한 부위로 fallback.
+    const muscleCounts = exercises.reduce<Record<string, number>>((acc, ex) => {
+      acc[ex.targetMuscle] = (acc[ex.targetMuscle] ?? 0) + 1;
+      return acc;
+    }, {});
+    const sortedMuscles = Object.entries(muscleCounts)
+      .sort(([, a], [, b]) => b - a)
+      .map(([m]) => m);
+    const labelMuscles = (selectedMuscles && selectedMuscles.length > 0)
+      ? selectedMuscles
+      : sortedMuscles;
+    const muscleLabel = labelMuscles.length > 1
+      ? labelMuscles.join(' + ')
+      : `${labelMuscles[0] ?? 'WORKOUT'} Day`;
+
+--- 3-4. 저장 로직: 세션에 targetMuscles 기록 (3864번 근처)
+         workoutLog 객체 정의 바로 위에 sessionMuscles 상수를 만들고,
+         workoutLog와 insertWorkoutSession 두 곳에 추가한다.
+
+(a) workoutLog 정의 바로 위에 추가:
+  OLD:
+      const workoutLog: WorkoutLog = {
+        id:               sessionId,
+        gymId:            gym.id,
+
+  NEW:
+      const sessionMuscles = Array.from(selectedMuscles).map(toCanonMuscle);
+
+      const workoutLog: WorkoutLog = {
+        id:               sessionId,
+        gymId:            gym.id,
+
+(b) workoutLog 객체 안, overlayTextColor 줄 아래에 targetMuscles 추가:
+  OLD:
+        date:             new Date().toISOString(),
+        overlayTextColor: selectedColor,
+        machines:         selectedExercises.map(ex => {
+
+  NEW:
+        date:             new Date().toISOString(),
+        overlayTextColor: selectedColor,
+        targetMuscles:    sessionMuscles,
+        machines:         selectedExercises.map(ex => {
+
+(c) insertWorkoutSession 호출부(3898번 근처)에 targetMuscles 추가:
+  OLD:
+          const savedSession = await insertWorkoutSession({
+            id:               sessionId,
+            userId:           user.id,
+            gymId:            gym.id,
+            date:             workoutLog.date,
+            overlayTextColor: selectedColor,
+          });
+
+  NEW:
+          const savedSession = await insertWorkoutSession({
+            id:               sessionId,
+            userId:           user.id,
+            gymId:            gym.id,
+            date:             workoutLog.date,
+            overlayTextColor: selectedColor,
+            targetMuscles:    sessionMuscles,
+          });
+
+--- 3-5. 오운완 피드 포스트의 muscles도 표준화 (어휘 일치 → 홈 피드 필터 정상 동작)
+         selectedMuscles로 muscles를 채우는 곳 2군데를 .map(toCanonMuscle) 처리.
+
+(★ 주의: 아래 두 곳만 변경. 4076번/4102번의 selectedMuscles prop은 변경 금지!)
+
+(a) 3433번 근처:
+  OLD:
+        muscles:     [...selectedMuscles],
+  NEW:
+        muscles:     Array.from(selectedMuscles).map(toCanonMuscle),
+
+(b) 3974번 근처:
+  OLD:
+            muscles:        Array.from(selectedMuscles),
+  NEW:
+            muscles:        Array.from(selectedMuscles).map(toCanonMuscle),
+
+--- 3-6. WorkoutPhotoStep 렌더에 selectedMuscles prop 전달 (4158번 근처)
+         (표준화된 배열을 넘긴다. 여기는 라벨 표시용이므로 표준화 OK)
+
+OLD:
+          <WorkoutPhotoStep
+            gym={gym!}
+            exercises={selectedExercises}
+            logs={logs}
+
+NEW:
+          <WorkoutPhotoStep
+            gym={gym!}
+            exercises={selectedExercises}
+            selectedMuscles={Array.from(selectedMuscles).map(toCanonMuscle)}
+            logs={logs}
+
+★ 다시 강조: 4076번/4102번 줄의
+    selectedMuscles={Array.from(selectedMuscles)}
+  (MuscleSelectStep / ExerciseSelectStep 등 선택·필터용)은 **절대 변경하지 말 것.**
+  거기는 그룹 라벨('Hip (Glutes)' 포함)이 그대로 있어야 머신 필터가 동작한다.
+
+================================================================================
+[파일 4] src/screens/HomeScreen.tsx
+================================================================================
+
+--- 4-1. 오늘 부위를 "첫 머신 1개"가 아니라 세션 저장값(배열)에서 읽도록 변경
+         (useFocusEffect 안, todayLogs.length > 0 분기)
+
+(a) todayMuscle(단일) → todayMuscles(배열):
+  OLD:
+            const todayMuscle = todayLogs[0].machines[0]?.targetMuscle ?? null;
+  NEW:
+            const todayMuscles = (todayLogs[0].targetMuscles && todayLogs[0].targetMuscles.length > 0)
+              ? todayLogs[0].targetMuscles
+              : [...new Set(todayLogs[0].machines.map(m => m.targetMuscle).filter(Boolean))];
+
+(b) 피드 필터를 배열 기준(some+includes)으로:
+  OLD:
+            if (todayMuscle) {
+              const filtered = posts.filter(p => p.muscles.some(m => m === todayMuscle));
+              setOunwanPosts(filtered.length > 0 ? filtered : posts);
+            } else {
+              setOunwanPosts(posts);
+            }
+  NEW:
+            if (todayMuscles.length > 0) {
+              const filtered = posts.filter(p => p.muscles.some(m => todayMuscles.includes(m)));
+              setOunwanPosts(filtered.length > 0 ? filtered : posts);
+            } else {
+              setOunwanPosts(posts);
+            }
+
+(c) 오운완 헤더 표시 부위를 다중(쉼표 연결)으로:
+  OLD:
+            setOunwanDisplayTarget(todayMuscle ? toKoMuscle(todayMuscle) : target);
+  NEW:
+            setOunwanDisplayTarget(todayMuscles.length > 0 ? todayMuscles.map(toKoMuscle).join(', ') : target);
+
+  ※ toKoMuscle은 이미 import 되어 있음(변경 불필요). 표준값('Glutes' 등)은 toKoMuscle로
+    한글 변환됨.
+
+================================================================================
+[파일 5] src/screens/JournalScreen.tsx
+================================================================================
+
+--- 5-1. 세션 상세: 부위 배열/사진 타이틀을 세션 저장값 기준으로 (633번 근처 map 내부)
+         (부위 칩은 이미 muscles 배열을 쓰므로, muscles 출처만 바꾸면 칩도 자동으로 다중)
+         (사진 타이틀은 2개 cap 제거)
+
+OLD:
+            const muscles    = [...new Set(machines.map(m => m.targetMuscle))];
+            const photoUri   = session.compositeUri ?? session.photoUri;
+            const photoHeight = photoHeights[session.id] ?? DET_PHOTO_H_DEFAULT;
+
+            const muscleCounts = machines.reduce<Record<string, number>>((acc, m) => {
+              acc[m.targetMuscle] = (acc[m.targetMuscle] ?? 0) + 1; return acc;
+            }, {});
+            const sortedMuscles = Object.entries(muscleCounts)
+              .sort(([, a], [, b]) => b - a)
+              .map(([m]) => m.toUpperCase());
+            const muscleTitle = sortedMuscles.length > 1
+              ? sortedMuscles.slice(0, 2).join(' + ')
+              : `${sortedMuscles[0] ?? 'WORKOUT'} DAY`;
+
+NEW:
+            const muscles    = (session.targetMuscles && session.targetMuscles.length > 0)
+              ? session.targetMuscles
+              : [...new Set(machines.map(m => m.targetMuscle))];
+            const photoUri   = session.compositeUri ?? session.photoUri;
+            const photoHeight = photoHeights[session.id] ?? DET_PHOTO_H_DEFAULT;
+
+            const muscleTitle = muscles.length > 1
+              ? muscles.map(m => m.toUpperCase()).join(' + ')
+              : `${(muscles[0] ?? 'WORKOUT').toUpperCase()} DAY`;
+
+  ※ 위 변경으로 muscleCounts / sortedMuscles 변수는 제거된다. 이 둘이 이 map 스코프의
+    다른 곳에서 쓰이지 않는지 확인(원래 타이틀 계산에만 사용됨). 안 쓰이면 그대로 제거.
+
+================================================================================
+■ 완료 후 자체 점검 (코드 레벨)
+================================================================================
+1) tsc(타입체크) 에러 없음:  npx tsc --noEmit
+2) PostWorkoutLogModal 4076/4102번 selectedMuscles prop은 **변경되지 않았는지** 재확인.
+3) toCanonMuscle는 PostWorkoutLogModal에만 존재(다른 파일엔 추가 안 함).
+4) workouts.ts의 SELECT 2군데 모두 target_muscles 포함됐는지.
+5) 변경한 파일 외 다른 파일은 수정하지 않음.
+
+================================================================================
+■ 사람이 직접 할 일 (Claude Code 작업과 별개)
+================================================================================
+- [필수/선행] 위 ALTER TABLE SQL을 Supabase SQL Editor에서 실행.
+- 디바이스 테스트:
+  · 운동 기록 시 부위 2개(예: 가슴+등) 선택 → 머신 둘 다 필터링되는지
+  · 저장 후 인증샷 타이틀이 "Chest + Back"으로 나오는지 (3개면 셋 다)
+  · 홈 오운완 헤더가 "오늘 가슴, 등 운동한 사람들..."로 나오는지
+  · 운동일지 세션 상세의 부위 칩이 2개 다 뜨는지 / 사진 타이틀 2개인지
+  · 기존(옛) 세션 열어도 안 깨지는지 (머신 역산 fallback)
+================================================================================

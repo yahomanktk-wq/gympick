@@ -1,0 +1,83 @@
+================================================================================
+[1단계] 햅틱 강화(찾기 화면) + 'Other' 머신 항상 표시
+================================================================================
+
+■ 작업 2건
+  (1) '머신·헬스장 찾기' 화면(FindGymScreen)의 햅틱 강도 Light → Medium
+  (2) 운동일지 부위 선택 시, 어느 부위를 골라도 targetMuscle='Other' 머신도 함께 표시
+
+■ 변경 파일 (2개)
+  1. src/screens/FindGymScreen.tsx
+  2. src/screens/flow/PostWorkoutLogModal.tsx
+
+⚠ Windows(CRLF) 가능 — str_replace 실패 시 Read로 확인 후 맞출 것.
+⚠ 아래 명시된 것 외에는 수정하지 말 것.
+
+================================================================================
+[파일 1] src/screens/FindGymScreen.tsx — 햅틱 Light → Medium
+================================================================================
+이 파일에서 햅틱 강도를 모두 Medium으로 통일한다.
+FindGymScreen.tsx 안의 모든
+
+    Haptics.ImpactFeedbackStyle.Light
+
+를
+
+    Haptics.ImpactFeedbackStyle.Medium
+
+으로 바꾼다. (해당 파일 내 전부 — 탭 4개, 리스트/지도 토글, 부위/카테고리/브랜드
+필터 칩, 검색 X 버튼, 헬스장 등록요청 버튼 등 조사에서 확인된 모든 위치)
+
+방법:
+- FindGymScreen.tsx 파일만 대상으로, 문자열 'ImpactFeedbackStyle.Light' 를
+  'ImpactFeedbackStyle.Medium' 으로 일괄 치환.
+- 다른 파일은 건드리지 말 것 (FindGymScreen.tsx만).
+- 치환 후, 파일 내에 'ImpactFeedbackStyle.Light' 가 0건 남았는지 확인.
+
+참고(조사에서 확인된 위치, 모두 Light→Medium 대상):
+  L568, L575, L582, L589 (탭 4개)
+  L788, L796 (리스트/지도)
+  L613 (검색 X)
+  L639 (부위 필터)
+  L662, L685 (카테고리 필터)
+  L131 (브랜드 필터 FilterRow)
+  L838 (헬스장 등록요청 버튼)
+  ※ 줄 번호는 참고용. 실제로는 'ImpactFeedbackStyle.Light' 전부를 Medium으로.
+
+================================================================================
+[파일 2] src/screens/flow/PostWorkoutLogModal.tsx — matchesMuscle에 'Other' 추가
+================================================================================
+어느 부위를 선택하든 targetMuscle='Other' 머신이 항상 포함되도록 한 줄 추가.
+
+OLD:
+  function matchesMuscle(targetMuscle: string): boolean {
+    if (selectedMuscles.has(targetMuscle)) return true;
+    if (targetMuscle === 'Glutes' && selectedMuscles.has('Hip (Glutes)')) return true;
+    if (targetMuscle === 'Glutes' && selectedMuscles.has('Leg')) return true;
+    return false;
+  }
+NEW:
+  function matchesMuscle(targetMuscle: string): boolean {
+    if (selectedMuscles.has(targetMuscle)) return true;
+    if (targetMuscle === 'Glutes' && selectedMuscles.has('Hip (Glutes)')) return true;
+    if (targetMuscle === 'Glutes' && selectedMuscles.has('Leg')) return true;
+    if (targetMuscle === 'Other') return true;
+    return false;
+  }
+
+  ※ 이 한 줄로, 부위를 1개 이상 선택한 상태에서 머신 목록에 'Other' 머신이
+    항상 함께 노출된다. (selectedMuscles가 비어있을 때의 동작은 기존 로직을 따르며
+    이 변경으로 달라지지 않음 — matchesMuscle은 부위 선택 후 필터에만 쓰임)
+
+================================================================================
+■ 완료 후 자체 점검
+================================================================================
+1) npx tsc --noEmit → 신규 에러 0건
+2) FindGymScreen.tsx 에 'ImpactFeedbackStyle.Light' 0건, 'Medium'으로 전환됐는지
+3) matchesMuscle에 'Other' 한 줄 추가됐는지 (다른 줄 변경 없이)
+
+■ 사람이 직접 할 일 (디바이스 테스트)
+- 찾기 화면: 탭/필터/리스트·지도 토글 누를 때 햅틱이 더 강하게(Medium) 오는지
+- 운동일지: 아무 부위나 선택 → 머신 목록에 스미스머신/복근기구 등 'Other' 머신이
+  함께 보이는지 (가슴 선택해도 Other 머신 포함되는지)
+================================================================================

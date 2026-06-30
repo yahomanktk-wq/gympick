@@ -1,0 +1,70 @@
+================================================================================
+[tsc 에러 정리] 빌드 전 기존 tsc 에러 3건 수정
+================================================================================
+
+■ 작업 개요
+빌드 전, 기존에 남아있던 tsc 에러 3건을 정리한다. 모두 타입 안전 처리.
+
+■ 변경 파일 (3개)
+  1. src/screens/flow/WorkoutCameraOverlay.tsx
+  2. src/screens/WorkoutFeedScreen.tsx
+  3. src/screens/JournalScreen.tsx
+
+================================================================================
+[파일 1] src/screens/flow/WorkoutCameraOverlay.tsx (242번 근처)
+================================================================================
+nickname이 string | undefined인데 string 필수 prop으로 전달돼서 나는 에러.
+기본값 '' 처리.
+
+OLD:
+                  nickname={nickname}
+NEW:
+                  nickname={nickname ?? ''}
+
+  ※ 만약 위 OLD가 여러 곳과 매칭되면, 242번 줄(ArchDayOverlay 렌더 안의
+    nickname 전달)만 수정한다. 다른 nickname={...} 전달은 건드리지 않는다.
+
+================================================================================
+[파일 2] src/screens/WorkoutFeedScreen.tsx (455번 근처)
+================================================================================
+WorkoutLog는 단수 targetMuscle이 없고 targetMuscles(string[])를 가진다.
+이 값은 바로 아래에서 MUSCLE_FILTERS 단일 필터 값으로 쓰이므로(피드 부위 필터),
+대표 부위 1개(첫 부위)로 처리하는 게 맞다.
+
+OLD:
+        const todayMuscleEn  = todayLogs[0].targetMuscle ?? null;
+NEW:
+        const todayMuscleEn  = todayLogs[0].targetMuscles?.[0] ?? null;
+
+  ※ 들여쓰기(앞 공백)는 실제 파일에 맞춘다. 핵심은
+    `todayLogs[0].targetMuscle` → `todayLogs[0].targetMuscles?.[0]` 이고
+    뒤의 `?? null`은 그대로 유지.
+  ※ 이 줄 아래의 `targetKo = todayMuscleEn ? toKoMuscle(todayMuscleEn) : null;`
+    및 MUSCLE_FILTERS 필터 로직은 변경하지 않는다(단일 값 그대로 동작).
+
+================================================================================
+[파일 3] src/screens/JournalScreen.tsx (459번 근처)
+================================================================================
+expo-file-system/legacy의 cacheDirectory 타입이 string | null이라
+템플릿 리터럴(string 기대)에서 에러. `?? ''`로 처리.
+(downloadToLocal 함수 내부 — 이전에 legacy import로 바꾼 그 함수가 맞음)
+
+OLD:
+    const localPath = `${FileSystem.cacheDirectory}gympick_${filename}`;
+NEW:
+    const localPath = `${FileSystem.cacheDirectory ?? ''}gympick_${filename}`;
+
+  ※ 들여쓰기는 실제 파일에 맞춘다. import는 이미 'expo-file-system/legacy'로
+    되어 있어야 한다(이전 작업에서 변경됨). 그대로 두면 됨.
+
+================================================================================
+■ 완료 후 자체 점검
+================================================================================
+1) npx tsc --noEmit  → 에러 0건 (위 3건이 모두 사라지고 신규 에러 없음)
+2) 세 파일 외에는 변경 없는지 확인
+
+■ 사람이 직접 할 일 (디바이스 — 빌드 전 가벼운 확인)
+- 운동 피드(WorkoutFeed): 오늘 운동 후 진입 시 해당 부위로 필터가 걸리는지(에러 없이)
+- 운동일지 인스타 공유/저장: 이미지 다운로드(downloadToLocal) 정상 동작하는지
+- 인증샷 오버레이(ArchDay 스타일): 닉네임 표시 정상인지
+================================================================================

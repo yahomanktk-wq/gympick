@@ -1,0 +1,129 @@
+================================================================================
+[모듈 B1-추가] 홈 화면 + 운동일지 주간 표시 다중 부위 반영
+================================================================================
+
+■ 작업 개요
+요일 분할에서 하루 2개 이상 설정했을 때, 아래 3곳이 "첫 부위만" 표시되는 걸
+모두 다중(예: 가슴·등)으로 표시한다.
+  (1) 홈 오운완 헤더  "오늘 OO 운동한 사람들이에요!"
+  (2) 홈 "이번 주 운동" 가로 스크롤바의 요일별 부위
+  (3) 운동일지 주간 그리드 빈칸의 요일별 부위
+근본 원인은 두 파일의 getWeekTargetMap이 targets[0]만 쓰고, 홈 load가
+getTodayTarget(단일)만 쓰기 때문. 표시 방식은 "이어붙이기"(가슴·등)로 통일.
+
+■ 핵심 설계
+- splitUtils의 getTodayTargets(배열, B1에서 추가됨)를 홈에서도 쓴다.
+- 기존 getTodayTarget(단일)도 그대로 둔다(setTodayTarget 등에서 계속 사용).
+- 순서 기반 분기는 이번에도 건드리지 않음(B2에서). 요일 분기만 다중화.
+- 함수 레벨 변수 todayTargetsArr를 추가해 if(user) 블록 밖(최종 피드 필터)에서도 접근.
+
+■ 변경 파일 (2개)
+  1. src/screens/HomeScreen.tsx
+  2. src/screens/JournalScreen.tsx
+
+================================================================================
+[파일 1] src/screens/HomeScreen.tsx
+================================================================================
+
+--- 1-1. import에 getTodayTargets 추가 (getTodayTarget은 유지)
+OLD:
+import { getTodayTarget, toEnMuscle, toKoMuscle } from '../lib/splitUtils';
+NEW:
+import { getTodayTarget, getTodayTargets, toEnMuscle, toKoMuscle } from '../lib/splitUtils';
+
+  ※ 만약 import 줄의 형태가 위와 다르면(다른 심볼이 함께 있으면) getTodayTargets만
+    같은 import 구문에 추가하면 된다.
+
+--- 1-2. load 함수 상단: 함수 레벨 배열 변수 선언 추가
+OLD:
+        let target: string | null = null;
+NEW:
+        let target: string | null = null;
+        let todayTargetsArr: string[] = [];
+
+--- 1-3. config 로드 직후 todayTargetsArr 1회 할당 (if(user) 블록 안, todayLogs 체크 전)
+OLD:
+          setSessions(logs);
+          setSplitConfig(config);
+NEW:
+          setSessions(logs);
+          setSplitConfig(config);
+          todayTargetsArr = config
+            ? getTodayTargets(config.splitType, config.workoutSplit, config.splitCurrentIndex)
+            : [];
+
+--- 1-4. 오늘 기록 있는 분기: 오운완 표시 fallback을 다중으로
+OLD:
+            setOunwanDisplayTarget(todayMuscles.length > 0 ? todayMuscles.map(toKoMuscle).join(', ') : target);
+NEW:
+            setOunwanDisplayTarget(todayMuscles.length > 0 ? todayMuscles.map(toKoMuscle).join(', ') : (todayTargetsArr.join(', ') || null));
+
+--- 1-5. 오늘 기록 없는 분기: 오운완 표시를 다중으로
+OLD:
+          setOunwanDisplayTarget(target);
+NEW:
+          setOunwanDisplayTarget(todayTargetsArr.join(', ') || null);
+
+  ※ 이 setOunwanDisplayTarget(target); 줄은 "오늘 기록 없는 분기"에만 있는 형태라
+    유일하게 매칭된다. (기록 있는 분기는 1-4의 긴 형태)
+
+--- 1-6. 최종 피드 필터: 단일 target → 배열 todayTargetsArr 기준으로
+OLD:
+        if (target && target !== '휴식') {
+          const targetEn = toEnMuscle(target);
+          const filtered = posts.filter(p => p.muscles.some(m => m === targetEn));
+          setOunwanPosts(filtered.length > 0 ? filtered : posts);
+        } else {
+          setOunwanPosts(posts);
+        }
+NEW:
+        if (todayTargetsArr.length > 0) {
+          const targetsEn = todayTargetsArr.map(toEnMuscle);
+          const filtered = posts.filter(p => p.muscles.some(m => targetsEn.includes(m)));
+          setOunwanPosts(filtered.length > 0 ? filtered : posts);
+        } else {
+          setOunwanPosts(posts);
+        }
+
+--- 1-7. getWeekTargetMap의 weekday 분기: 첫 부위 → 이어붙이기
+OLD:
+      const targets = (split[key] ?? []) as string[];
+      result[d.toDateString()] = targets.length > 0 ? targets[0] : null;
+NEW:
+      const targets = (split[key] ?? []) as string[];
+      const work = targets.filter(m => m !== '휴식');
+      result[d.toDateString()] = work.length > 0 ? work.join('·') : (targets.length > 0 ? '휴식' : null);
+
+  ※ getWeekTargetMap의 sequential 분기는 이번에도 변경하지 않는다(B2에서).
+
+================================================================================
+[파일 2] src/screens/JournalScreen.tsx
+================================================================================
+
+--- 2-1. getWeekTargetMap의 weekday 분기: 첫 부위 → 이어붙이기 (홈과 동일 패턴)
+OLD:
+      const targets = (split[key] ?? []) as string[];
+      result[d.toDateString()] = targets.length > 0 ? targets[0] : null;
+NEW:
+      const targets = (split[key] ?? []) as string[];
+      const work = targets.filter(m => m !== '휴식');
+      result[d.toDateString()] = work.length > 0 ? work.join('·') : (targets.length > 0 ? '휴식' : null);
+
+  ※ JournalScreen의 getWeekTargetMap도 sequential 분기는 변경하지 않는다(B2).
+  ※ 이 OLD 라인은 JournalScreen 내 getWeekTargetMap weekday 분기에 1회만 존재.
+
+================================================================================
+■ 완료 후 자체 점검
+================================================================================
+1) npx tsc --noEmit → 신규 에러 0건 (기존 에러 개수만 유지)
+2) HomeScreen: getTodayTarget(단일)도 여전히 import/사용되는지 (setTodayTarget용)
+3) 두 파일의 getWeekTargetMap에서 sequential 분기는 그대로인지
+
+■ 사람이 직접 할 일 (디바이스 테스트)
+- 오늘 요일에 부위 2개(예: 가슴·등) 설정 + 오늘 운동 기록 없는 상태에서:
+  · 홈 오운완 헤더가 "오늘 가슴, 등 운동한 사람들이에요!"로 나오는지
+  · 홈 "이번 주 운동" 스크롤바의 오늘 칸이 "가슴·등"으로 나오는지
+  · 운동일지 주간 그리드 빈칸(미작성일)이 "가슴·등"으로 나오는지
+  · 피드가 가슴/등 둘 중 하나라도 해당하는 오운완을 보여주는지
+- 휴식 요일은 여전히 "휴식"으로, 단일 부위 요일은 그대로 1개로 나오는지
+================================================================================

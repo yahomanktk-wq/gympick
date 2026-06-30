@@ -1,0 +1,344 @@
+================================================================================
+[모듈 B1] 분할 루틴 — 요일 기반 하루 2개 이상 + 읽기 API 배열화
+================================================================================
+
+■ 작업 개요
+분할 루틴 "요일 기반"에서 하루에 부위 2개 이상 설정 가능하게 한다.
+요일 기반 데이터는 이미 배열(string[]/요일)이라, 설정 화면의 "인위적 1개 제한"을
+풀고 + 읽기 함수(splitUtils)를 배열 반환으로 확장하면 된다.
+(순서 기반 구조 변경은 다음 단계 B2에서 진행 — 이번엔 건드리지 않음)
+
+■ 핵심 설계
+- splitUtils에 배열 반환 함수(getTodayTargets/isRestToday/getNextTargets/
+  collectRoutineMuscles)를 "추가"한다. 기존 getTodayTarget/getNextTarget는
+  남겨둔다(HomeScreen이 아직 사용 → 깨지지 않게).
+- 순서 기반은 이번 단계에서 여전히 string[]로 취급(B2에서 string[][]로 변경).
+- 분할 부위명은 한글('가슴','등'...)로 저장됨. selectedMuscles는 영어명.
+  → 프리로드에서 toEnMuscle로 변환해 채운다.
+
+■ 변경 파일 (4개, SQL 없음)
+  1. src/lib/splitUtils.ts            (함수 추가)
+  2. src/screens/flow/WorkoutSplitSetupScreen.tsx  (요일 제한 제거)
+  3. src/screens/JournalScreen.tsx    (배너 다중화)
+  4. src/screens/flow/PostWorkoutLogModal.tsx      (프리로드 다중화)
+  ※ HomeScreen은 이번엔 건드리지 않음 (의도적 — 아래 참고 참조)
+
+================================================================================
+[파일 1] src/lib/splitUtils.ts — 배열 반환 API 추가
+================================================================================
+기존 함수(getTodayTarget, getNextTarget, calcNextIndex, extractCompletedTargets,
+toKoMuscle, toEnMuscle 등)는 그대로 두고, 아래 블록을 모듈 레벨에 추가한다.
+(DAY_KEYS 상수가 이미 파일에 있으므로 그대로 사용. SequentialSplit 타입도 이미 import됨)
+
+추가할 코드:
+
+  // ── 다중 타겟부위 지원 API (배열 반환) ─────────────────────────────────
+  // 부위 배열에서 '휴식'/빈값 제외
+  function workoutMusclesOf(muscles: string[]): string[] {
+    return muscles.filter(m => !!m && m !== '휴식');
+  }
+
+  // 오늘의 운동 부위들 (휴식/미설정이면 빈 배열). 한글 부위명.
+  export function getTodayTargets(
+    splitType: SplitType,
+    workoutSplit: WorkoutSplit,
+    splitCurrentIndex: number
+  ): string[] {
+    if (!workoutSplit || (Array.isArray(workoutSplit) && workoutSplit.length === 0)) return [];
+
+    if (splitType === 'weekday') {
+      const split = workoutSplit as WeekdaySplit;
+      const dayKey = DAY_KEYS[new Date().getDay()];
+      return workoutMusclesOf((split[dayKey] ?? []) as string[]);
+    }
+
+    // B1: 순서 기반은 아직 string[] (B2에서 string[][]로 변경)
+    const split = workoutSplit as SequentialSplit;
+    if (split.length === 0) return [];
+    const t = split[splitCurrentIndex % split.length];
+    return t && t !== '휴식' ? [t] : [];
+  }
+
+  // 오늘이 명시적 휴식인지
+  export function isRestToday(
+    splitType: SplitType,
+    workoutSplit: WorkoutSplit,
+    splitCurrentIndex: number
+  ): boolean {
+    if (!workoutSplit) return false;
+
+    if (splitType === 'weekday') {
+      const split = workoutSplit as WeekdaySplit;
+      const dayKey = DAY_KEYS[new Date().getDay()];
+      const m = (split[dayKey] ?? []) as string[];
+      return m.length > 0 && workoutMusclesOf(m).length === 0;
+    }
+
+    const split = workoutSplit as SequentialSplit;
+    if (split.length === 0) return false;
+    return split[splitCurrentIndex % split.length] === '휴식';
+  }
+
+  // 루틴 전체 부위 모으기 (배너의 "루틴 부위 했나" 판정용)
+  export function collectRoutineMuscles(
+    splitType: SplitType,
+    workoutSplit: WorkoutSplit
+  ): string[] {
+    if (splitType === 'sequential') {
+      return ((workoutSplit as SequentialSplit) ?? []).filter(m => m !== '휴식');
+    }
+    const wd = workoutSplit as WeekdaySplit;
+    return DAY_KEYS.flatMap(k => (wd[k] ?? []) as string[]).filter(m => m !== '휴식');
+  }
+
+  // 다음 운동 부위들 (완료 제외, 휴식 건너뜀)
+  export function getNextTargets(
+    splitType: SplitType,
+    workoutSplit: WorkoutSplit,
+    splitCurrentIndex: number,
+    completedTargets: string[]
+  ): string[] {
+    if (!workoutSplit || (Array.isArray(workoutSplit) && workoutSplit.length === 0)) return [];
+    const done = completedTargets.map(t => t.toLowerCase());
+
+    if (splitType === 'sequential') {
+      const split = workoutSplit as SequentialSplit;
+      let idx = splitCurrentIndex, checked = 0;
+      while (checked < split.length) {
+        const t = split[idx % split.length];
+        if (t === '휴식') { idx++; checked++; continue; }
+        if (!done.includes(t.toLowerCase())) return [t];
+        idx++; checked++;
+      }
+      return [];
+    }
+
+    const split = workoutSplit as WeekdaySplit;
+    const todayIdx = new Date().getDay();
+    for (let i = 1; i <= 7; i++) {
+      const dayKey = DAY_KEYS[(todayIdx + i) % 7];
+      const work = workoutMusclesOf((split[dayKey] ?? []) as string[]);
+      if (work.length > 0) return work;
+    }
+    return [];
+  }
+
+================================================================================
+[파일 2] src/screens/flow/WorkoutSplitSetupScreen.tsx — 요일 1개 제한 제거
+================================================================================
+toggleWeekdayMuscle 함수(294번 근처)에서 "1개 있으면 막는" 블록만 제거한다.
+
+OLD:
+      // 이미 선택된 부위를 해제하는 경우 → 허용
+      if (current.includes(muscle)) {
+        return { ...prev, [key]: current.filter(m => m !== muscle) };
+      }
+      // 이미 1개 선택된 상태에서 추가 선택 시도 → 안내 메시지
+      if (current.length >= 1) {
+        Alert.alert(
+          '준비 중인 기능이에요',
+          '하루에 두 개 이상의 부위를 설정하는 기능은 곧 추가될 예정이에요.',
+        );
+        return prev;
+      }
+      return { ...prev, [key]: [...current, muscle] };
+
+NEW:
+      // 이미 선택된 부위를 해제하는 경우 → 허용
+      if (current.includes(muscle)) {
+        return { ...prev, [key]: current.filter(m => m !== muscle) };
+      }
+      return { ...prev, [key]: [...current, muscle] };
+
+※ 주변(WeekdayRow 표시 join '·', CurrentSplitDisplay join ' · ', canProceed의
+  arr.length > 0, 저장)은 이미 배열을 처리하므로 추가 변경 불필요.
+※ 순서 기반(addToSeq)의 제한/알럿은 이번엔 그대로 둔다 (B2에서 처리).
+
+================================================================================
+[파일 3] src/screens/JournalScreen.tsx — 분할 배너 다중화
+================================================================================
+
+--- 3-1. import 교체 (32번 근처)
+OLD:
+import { getTodayTarget, getNextTarget, calcNextIndex, extractCompletedTargets } from '../lib/splitUtils';
+NEW:
+import { getTodayTargets, isRestToday, getNextTargets, collectRoutineMuscles, calcNextIndex, extractCompletedTargets } from '../lib/splitUtils';
+
+--- 3-2. getSplitBannerMessage 함수 전체 교체 (154~204번)
+OLD (함수 전체):
+function getSplitBannerMessage(
+  splitConfig: UserSplitConfig | null,
+  todaySessions: WorkoutLog[]
+): { message: string; sub?: string } | null {
+  if (!splitConfig) return null;
+  const split = splitConfig.workoutSplit;
+  if (!split || (Array.isArray(split) && split.length === 0)) return null;
+
+  const todayTarget = getTodayTarget(
+    splitConfig.splitType,
+    split,
+    splitConfig.splitCurrentIndex
+  );
+
+  if (todayTarget === '휴식') {
+    return { message: '오늘은 휴식 Day예요 🛌' };
+  }
+
+  if (todaySessions.length === 0) {
+    return todayTarget
+      ? { message: `오늘은 ${todayTarget} Day예요 💪` }
+      : null;
+  }
+
+  const completedTargets = extractCompletedTargets(todaySessions.flatMap(s => s.machines));
+  const nextTarget = getNextTarget(
+    splitConfig.splitType,
+    split,
+    splitConfig.splitCurrentIndex,
+    completedTargets
+  );
+
+  const routineTargets = Array.isArray(split) ? (split as string[]) : [];
+  const completedRoutine = completedTargets.filter(t =>
+    routineTargets.includes(t) && t !== '휴식'
+  );
+
+  if (completedRoutine.length > 0) {
+    const completedStr = completedRoutine.join(' + ');
+    if (nextTarget && nextTarget !== '휴식') {
+      return { message: `오늘 ${completedStr} 완료! 🔥`, sub: `다음은 ${nextTarget} Day예요` };
+    }
+    return { message: `오늘 ${completedStr} 완료! 🔥` };
+  }
+
+  const completedStr = completedTargets.filter(t => t !== '휴식').join(' + ');
+  return {
+    message: `오늘은 ${completedStr} 운동 했군요!`,
+    sub: todayTarget ? `${todayTarget} Day는 다음 운동 때 해요` : undefined,
+  };
+}
+
+NEW (함수 전체):
+function getSplitBannerMessage(
+  splitConfig: UserSplitConfig | null,
+  todaySessions: WorkoutLog[]
+): { message: string; sub?: string } | null {
+  if (!splitConfig) return null;
+  const split = splitConfig.workoutSplit;
+  if (!split || (Array.isArray(split) && split.length === 0)) return null;
+
+  const todayTargets = getTodayTargets(
+    splitConfig.splitType,
+    split,
+    splitConfig.splitCurrentIndex
+  );
+  const rest = isRestToday(
+    splitConfig.splitType,
+    split,
+    splitConfig.splitCurrentIndex
+  );
+
+  if (rest) {
+    return { message: '오늘은 휴식 Day예요 🛌' };
+  }
+
+  const todayStr = todayTargets.join('·');
+
+  if (todaySessions.length === 0) {
+    return todayTargets.length > 0
+      ? { message: `오늘은 ${todayStr} Day예요 💪` }
+      : null;
+  }
+
+  const completedTargets = extractCompletedTargets(todaySessions.flatMap(s => s.machines));
+  const nextTargets = getNextTargets(
+    splitConfig.splitType,
+    split,
+    splitConfig.splitCurrentIndex,
+    completedTargets
+  );
+  const nextStr = nextTargets.join('·');
+
+  const routineTargets = collectRoutineMuscles(splitConfig.splitType, split);
+  const completedRoutine = completedTargets.filter(t =>
+    routineTargets.includes(t) && t !== '휴식'
+  );
+
+  if (completedRoutine.length > 0) {
+    const completedStr = completedRoutine.join(' + ');
+    if (nextTargets.length > 0) {
+      return { message: `오늘 ${completedStr} 완료! 🔥`, sub: `다음은 ${nextStr} Day예요` };
+    }
+    return { message: `오늘 ${completedStr} 완료! 🔥` };
+  }
+
+  const completedStr = completedTargets.filter(t => t !== '휴식').join(' + ');
+  return {
+    message: `오늘은 ${completedStr} 운동 했군요!`,
+    sub: todayTargets.length > 0 ? `${todayStr} Day는 다음 운동 때 해요` : undefined,
+  };
+}
+
+※ getWeekTargetMap(208번)은 이번엔 변경하지 않는다.
+  (요일 분기는 이미 targets[0]로 첫 부위 표시 → 다중에서도 동작.
+   순서 분기는 아직 string[]. 주간 썸네일은 미리보기라 첫 부위만 표시 유지.)
+
+================================================================================
+[파일 4] src/screens/flow/PostWorkoutLogModal.tsx — 프리로드 다중화
+================================================================================
+오늘 분할 부위가 2개면, 운동기록 화면 진입 시 selectedMuscles에 2개 자동 선택.
+(모듈 A 덕분에 selectedMuscles는 이미 다중 → 2개 채우면 머신도 둘 다 필터링됨)
+
+--- 4-1. import 교체 (64번 근처)
+OLD:
+import { getTodayTarget, toEnMuscle } from '../../lib/splitUtils';
+NEW:
+import { getTodayTargets, isRestToday, toEnMuscle } from '../../lib/splitUtils';
+
+--- 4-2. 프리로드 useEffect 교체 (3660~3672번)
+OLD:
+    fetchSplitConfig(user.id).then(config => {
+      if (!config) return;
+      const target = getTodayTarget(config.splitType, config.workoutSplit, config.splitCurrentIndex);
+      if (!target || target === '휴식') {
+        if (target === '휴식') setIsRestDay(true);
+        return;
+      }
+      setIsRestDay(false);
+      const targetEn = toEnMuscle(target);
+      if (targetEn) {
+        setSelectedMuscles(new Set([targetEn]));
+      }
+    }).catch(() => {});
+
+NEW:
+    fetchSplitConfig(user.id).then(config => {
+      if (!config) return;
+      if (isRestToday(config.splitType, config.workoutSplit, config.splitCurrentIndex)) {
+        setIsRestDay(true);
+        return;
+      }
+      setIsRestDay(false);
+      const targets = getTodayTargets(config.splitType, config.workoutSplit, config.splitCurrentIndex);
+      if (targets.length > 0) {
+        const en = targets.map(toEnMuscle).filter(Boolean);
+        if (en.length > 0) setSelectedMuscles(new Set(en));
+      }
+    }).catch(() => {});
+
+================================================================================
+■ 완료 후 자체 점검
+================================================================================
+1) npx tsc --noEmit → 신규 에러 0건 (기존 에러 개수만 유지)
+2) splitUtils의 기존 getTodayTarget/getNextTarget는 남아있는지 (HomeScreen용)
+3) HomeScreen은 변경하지 않았는지
+
+■ 사람이 직접 할 일 (디바이스 테스트)
+- 분할 설정 → 요일 기반 → 한 요일에 부위 2개 이상(예: 월=가슴·등) 선택되는지
+  (이전엔 "준비 중" 알럿이 떴음 → 이제 토글로 여러 개 선택돼야 함)
+- 저장 후 운동일지 상단 배너가 "오늘은 가슴·등 Day예요"로 나오는지
+- 그 요일에 운동기록 진입 시 부위 2개가 자동 선택 + 머신 둘 다 필터링되는지
+
+※ 참고: 홈 화면 오운완 헤더는 이번 B1에서 "첫 부위만" 표시될 수 있음(의도).
+  홈도 다중 표시로 확장하려면 별도 작은 작업으로 추가 가능.
+================================================================================

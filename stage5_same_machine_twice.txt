@@ -1,0 +1,455 @@
+================================================================================
+[5단계] 같은 머신 두 번 기록 — 복합키 구조 전환
+================================================================================
+※ 운동기록 핵심 자료구조 변경. 가장 위험한 작업. OLD/NEW 정확히 지킬 것.
+※ 변경 후 반드시 디바이스 테스트 (저장→재조회→두 줄 확인).
+
+■ 목표
+운동일지에서 같은 머신(A)을 두 번 나눠 기록 가능하게.
+A → B → C → A 처럼 A가 두 줄로 나열되고, 각각 독립된 세트를 가짐.
+
+■ 핵심 설계
+- 복합키: `machineId + '#' + slot`  예) 'm02#0', 'm02#1', 'fw01#0'
+  ★ 구분자는 반드시 '#'. 머신 id에 '_'가 많아('cybex_etc_1') '_'로 자르면 깨짐.
+- 한 번만 한 머신도 내부적으로 '#0' 슬롯을 가짐. 화면엔 ex.name(머신명)만 표시되므로
+  복합키는 노출되지 않음 (그냥 "A"로 보임).
+- 같은 머신 두 번 → 화면에 "A"가 두 줄 (구분표시 없음 — 결정대로).
+
+■ UX (옵션 2)
+머신 카드 탭 시:
+  · 그 머신이 아직 기록 안 됨 → 첫 슬롯 'machineId#0' 생성, 세트 입력으로.
+  · 이미 기록됨 → Alert "이미 기록한 머신이에요"
+       - "기존 수정" → 가장 마지막 슬롯 열기
+       - "새로 추가" → 새 슬롯 'machineId#N' 생성, 세트 입력으로.
+
+■ 변경 파일 (1개)
+  src/screens/flow/PostWorkoutLogModal.tsx
+
+⚠ Windows(CRLF) 가능 — str_replace 실패 시 Read로 확인 후 맞출 것.
+⚠ 아래 명시 외 수정 금지. MachineCard/색상/네비/오버레이 레이아웃 불변.
+⚠ 표시(오버레이/카드/done)는 ex.name + logs[ex.id] 기반이라 그대로 둠. 건드리지 말 것.
+
+================================================================================
+[STEP 0] 헬퍼 2개 추가 (메인 컴포넌트 내부, handleSelectExercise 위)
+================================================================================
+findLastFirstSet 정의 근처(메인 컴포넌트 함수 내부)에 추가.
+
+  // 복합키('m02#1')에서 순수 machineId('m02') 추출. 슬롯 없으면 그대로.
+  function machineIdFromKey(key: string): string {
+    const i = key.lastIndexOf('#');
+    return i === -1 ? key : key.slice(0, i);
+  }
+
+  // 특정 머신의 현재 슬롯 키들 (loggedIds + 현재 선택 중 포함). 정렬된 배열 반환.
+  function slotKeysForMachine(machineId: string): string[] {
+    const keys: string[] = [];
+    for (const k of loggedIds) {
+      if (machineIdFromKey(k) === machineId) keys.push(k);
+    }
+    return keys.sort();
+  }
+
+================================================================================
+[STEP 1] handleSelectExercise 교체 — 옵션 2 UX + 복합키
+================================================================================
+머신 카드가 넘기는 id는 '순수 machineId'(예: 'm02', 'fw01')라고 가정한다.
+(머신 선택 화면의 onSelect가 m.id / fw.id 를 넘김 — 복합키 아님)
+
+OLD (현재 코드):
+  function handleSelectExercise(id: string) {
+    setCurrentExerciseId(id);
+    const last = findLastFirstSet(id);
+    setLogs(prev => ({
+      ...prev,
+      [id]: prev[id]?.length
+        ? prev[id]
+        : (last ? [{ weight: last.weight, reps: last.reps }] : [{ weight: 60, reps: 10 }]),
+    }));
+    setPrefillInfo(prev => ({
+      ...prev,
+      [id]: prev[id] !== undefined ? prev[id] : (last ? { date: last.date } : null),
+    }));
+    setStep('log-sets');
+  }
+NEW:
+  // 새 슬롯을 만들어 세트 입력으로 진입 (프리필 적용 여부 isFirstSlot로 제어)
+  function openNewSlot(machineId: string, slotKey: string, isFirstSlot: boolean) {
+    const last = isFirstSlot ? findLastFirstSet(machineId) : null;
+    setCurrentExerciseId(slotKey);
+    setLogs(prev => ({
+      ...prev,
+      [slotKey]: prev[slotKey]?.length
+        ? prev[slotKey]
+        : (last ? [{ weight: last.weight, reps: last.reps }] : [{ weight: 60, reps: 10 }]),
+    }));
+    setPrefillInfo(prev => ({
+      ...prev,
+      [slotKey]: prev[slotKey] !== undefined ? prev[slotKey] : (last ? { date: last.date } : null),
+    }));
+    setStep('log-sets');
+  }
+
+  function handleSelectExercise(id: string) {
+    // id = 순수 machineId
+    const existing = slotKeysForMachine(id); // 이미 기록된 이 머신의 슬롯들
+    if (existing.length === 0) {
+      // 첫 기록 → 슬롯 0
+      openNewSlot(id, `${id}#0`, true);
+      return;
+    }
+    // 이미 기록됨 → 수정 vs 새로 추가
+    Alert.alert(
+      '이미 기록한 머신이에요',
+      '기존 기록을 수정하거나 새로 추가할 수 있어요.',
+      [
+        {
+          text: '기존 수정',
+          onPress: () => {
+            const lastKey = existing[existing.length - 1]; // 마지막 슬롯
+            setCurrentExerciseId(lastKey);
+            setStep('log-sets');
+          },
+        },
+        {
+          text: '새로 추가',
+          onPress: () => {
+            // 다음 슬롯 번호 = 기존 슬롯들의 최대 슬롯+1
+            const maxSlot = existing.reduce((mx, k) => {
+              const n = parseInt(k.slice(k.lastIndexOf('#') + 1), 10);
+              return isNaN(n) ? mx : Math.max(mx, n);
+            }, -1);
+            openNewSlot(id, `${id}#${maxSlot + 1}`, false); // 추가 슬롯은 프리필 안 함
+          },
+        },
+        { text: '취소', style: 'cancel' },
+      ],
+    );
+  }
+
+  ※ 기존 동작과의 차이: 첫 슬롯은 findLastFirstSet 프리필 유지(결정3), 추가 슬롯은 프리필 안 함.
+  ※ '기존 수정'은 logs[lastKey]가 이미 있으므로 그 세트 그대로 보여줌(새로 안 만듦).
+
+================================================================================
+[STEP 2] selectedExercises — 복합키에서 머신 조회
+================================================================================
+OLD:
+  const selectedExercises: ExerciseInfo[] = useMemo(() => {
+    if (!gym) return [];
+    const result: ExerciseInfo[] = [];
+    for (const id of loggedIds) {
+      if (id.startsWith('fw')) {
+        const fw = (dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS).find(f => f.id === id);
+        if (fw) result.push({ id: fw.id, name: fw.name, brand: fw.brand, targetMuscle: fw.targetMuscle });
+      } else {
+        const m = gym.machines.find(m => m.id === id);
+        if (m) result.push({ id: m.id, name: m.name, brand: m.brand, targetMuscle: m.targetMuscle });
+      }
+    }
+    return result;
+  }, [loggedIds, gym]);
+NEW:
+  const selectedExercises: ExerciseInfo[] = useMemo(() => {
+    if (!gym) return [];
+    const result: ExerciseInfo[] = [];
+    for (const key of loggedIds) {
+      const mid = machineIdFromKey(key);
+      if (mid.startsWith('fw')) {
+        const fw = (dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS).find(f => f.id === mid);
+        if (fw) result.push({ id: key, name: fw.name, brand: fw.brand, targetMuscle: fw.targetMuscle });
+      } else {
+        const m = gym.machines.find(m => m.id === mid);
+        if (m) result.push({ id: key, name: m.name, brand: m.brand, targetMuscle: m.targetMuscle });
+      }
+    }
+    return result;
+  }, [loggedIds, gym, dbFreeWeights]);
+
+  ※ ExerciseInfo.id = 복합키(key) 유지 (logs[ex.id] 등이 복합키로 동작해야 하므로).
+    name/brand/targetMuscle은 순수 machineId(mid)로 조회.
+
+================================================================================
+[STEP 3] currentExercise — 복합키에서 머신 조회
+================================================================================
+OLD:
+  const currentExercise: ExerciseInfo | null = useMemo(() => {
+    if (!currentExerciseId || !gym) return null;
+    if (currentExerciseId.startsWith('fw')) {
+      const fw = (dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS).find(f => f.id === currentExerciseId);
+      if (fw) return { id: fw.id, name: fw.name, brand: fw.brand, targetMuscle: fw.targetMuscle };
+    } else {
+      const m = gym.machines.find(m => m.id === currentExerciseId);
+      if (m) return { id: m.id, name: m.name, brand: m.brand, targetMuscle: m.targetMuscle };
+    }
+    return null;
+  }, [currentExerciseId, gym]);
+NEW:
+  const currentExercise: ExerciseInfo | null = useMemo(() => {
+    if (!currentExerciseId || !gym) return null;
+    const mid = machineIdFromKey(currentExerciseId);
+    if (mid.startsWith('fw')) {
+      const fw = (dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS).find(f => f.id === mid);
+      if (fw) return { id: currentExerciseId, name: fw.name, brand: fw.brand, targetMuscle: fw.targetMuscle };
+    } else {
+      const m = gym.machines.find(m => m.id === mid);
+      if (m) return { id: currentExerciseId, name: m.name, brand: m.brand, targetMuscle: m.targetMuscle };
+    }
+    return null;
+  }, [currentExerciseId, gym, dbFreeWeights]);
+
+  ※ id는 복합키(currentExerciseId) 유지. name 등은 mid로 조회.
+
+================================================================================
+[STEP 4] handleSaveExercise — PR 감지/기록을 순수 machineId 기준으로
+================================================================================
+PR은 머신별이지 슬롯별이 아니므로 realPRs/recordPR에 순수 machineId 사용.
+
+OLD (PR detection 블록):
+      const exSets  = logs[currentExerciseId] ?? [];
+
+      // PR detection
+      const curMax  = exSets.length ? Math.max(...exSets.map(s => s.weight)) : 0;
+      const histPR  = realPRs[currentExerciseId];
+      let   isPR    = false;
+      if (curMax > 0 && (histPR === undefined || curMax > histPR.weight)) {
+        const bestSet = exSets.reduce<SetEntry | null>((b, s) => (!b || s.weight > b.weight ? s : b), null);
+        const exInfo  = currentExercise;
+        if (exInfo && bestSet) {
+          isPR = true;
+          const pr = { name: exInfo.name, weight: curMax, reps: bestSet.reps };
+          setPrCelebration(pr);
+          setDetectedPRs(prev => [...prev, pr]);
+          recordPR({
+            exerciseId:   currentExerciseId,
+            exerciseName: exInfo.name,
+            weight:       curMax,
+            reps:         bestSet.reps,
+            date:         new Date().toISOString(),
+          });
+        }
+      }
+NEW:
+      const exSets  = logs[currentExerciseId] ?? [];
+
+      // PR detection (PR은 머신 단위 → 순수 machineId 사용)
+      const midForPR = machineIdFromKey(currentExerciseId);
+      const curMax  = exSets.length ? Math.max(...exSets.map(s => s.weight)) : 0;
+      const histPR  = realPRs[midForPR];
+      let   isPR    = false;
+      if (curMax > 0 && (histPR === undefined || curMax > histPR.weight)) {
+        const bestSet = exSets.reduce<SetEntry | null>((b, s) => (!b || s.weight > b.weight ? s : b), null);
+        const exInfo  = currentExercise;
+        if (exInfo && bestSet) {
+          isPR = true;
+          const pr = { name: exInfo.name, weight: curMax, reps: bestSet.reps };
+          setPrCelebration(pr);
+          setDetectedPRs(prev => [...prev, pr]);
+          recordPR({
+            exerciseId:   midForPR,
+            exerciseName: exInfo.name,
+            weight:       curMax,
+            reps:         bestSet.reps,
+            date:         new Date().toISOString(),
+          });
+        }
+      }
+
+  ※ L3803의 setLoggedIds(prev => new Set([...prev, currentExerciseId])) 는 그대로 둔다.
+    currentExerciseId가 복합키이므로 슬롯별로 Set에 추가됨 (중복 안 됨, 슬롯마다 별개 원소).
+
+================================================================================
+[STEP 5] SetLoggingStep에 넘기는 realPR — 순수 machineId 기준
+================================================================================
+메인의 <SetLoggingStep> 호출부.
+OLD:
+            <SetLoggingStep
+              exercise={currentExercise}
+              sets={logs[currentExercise.id] ?? []}
+              realPR={realPRs[currentExercise.id]}
+              prefill={prefillInfo[currentExercise.id] ?? null}
+              ...
+NEW:
+            <SetLoggingStep
+              exercise={currentExercise}
+              sets={logs[currentExercise.id] ?? []}
+              realPR={realPRs[machineIdFromKey(currentExercise.id)]}
+              prefill={prefillInfo[currentExercise.id] ?? null}
+              ...
+
+  ※ sets/prefill은 복합키(currentExercise.id) 그대로. realPR만 순수 machineId.
+  ※ machineIdFromKey는 메인 컴포넌트 함수 스코프에 있으므로 여기서 호출 가능.
+
+================================================================================
+[STEP 6] 세션 저장 — workoutLog.machines & DB insert의 machineId를 순수값으로
+================================================================================
+--- 6-1. workoutLog.machines 생성 (machineId에 순수 machineId)
+OLD:
+      machines:         selectedExercises.map(ex => {
+        const exSets = logs[ex.id] ?? [];
+        const maxSet = exSets.reduce<{ weight: number; reps: number } | null>(
+          (best, s) => (!best || s.weight > best.weight ? s : best), null
+        );
+        const note = notes[ex.id]?.trim();
+        return {
+          machineId:    ex.id,
+          machineName:  ex.name,
+          machineBrand: ex.brand,
+          targetMuscle: ex.targetMuscle,
+          weight:       maxSet?.weight ?? 0,
+          reps:         maxSet?.reps ?? 0,
+          sets:         exSets.length,
+          ...(note ? { note } : {}),
+        };
+      }),
+NEW:
+      machines:         selectedExercises.map(ex => {
+        const exSets = logs[ex.id] ?? [];
+        const maxSet = exSets.reduce<{ weight: number; reps: number } | null>(
+          (best, s) => (!best || s.weight > best.weight ? s : best), null
+        );
+        const note = notes[ex.id]?.trim();
+        return {
+          machineId:    machineIdFromKey(ex.id),
+          machineName:  ex.name,
+          machineBrand: ex.brand,
+          targetMuscle: ex.targetMuscle,
+          weight:       maxSet?.weight ?? 0,
+          reps:         maxSet?.reps ?? 0,
+          sets:         exSets.length,
+          ...(note ? { note } : {}),
+        };
+      }),
+
+--- 6-2. DB insertWorkoutEntry의 machineId (순수값) + exerciseKind 판정
+OLD:
+        for (let i = 0; i < selectedExercises.length; i++) {
+          const ex = selectedExercises[i];
+          const entryId = `entry-${Date.now()}-${i}`;
+          await insertWorkoutEntry({
+            id:           entryId,
+            sessionId,
+            machineId:    ex.id,
+            machineName:  ex.name,
+            machineBrand: ex.brand,
+            targetMuscle: ex.targetMuscle,
+            exerciseKind: ex.id.startsWith('fw') ? 'freeweight' : 'machine',
+            order:        i,
+          });
+
+          const exSets = logs[ex.id] ?? [];
+          for (let j = 0; j < exSets.length; j++) {
+            await insertWorkoutSet({
+              id:        `set-${Date.now()}-${i}-${j}`,
+              entryId,
+              setNumber: j + 1,
+              weight:    exSets[j].weight,
+              reps:      exSets[j].reps,
+            });
+          }
+        }
+NEW:
+        for (let i = 0; i < selectedExercises.length; i++) {
+          const ex = selectedExercises[i];
+          const mid = machineIdFromKey(ex.id);
+          const entryId = `entry-${Date.now()}-${i}`;
+          await insertWorkoutEntry({
+            id:           entryId,
+            sessionId,
+            machineId:    mid,
+            machineName:  ex.name,
+            machineBrand: ex.brand,
+            targetMuscle: ex.targetMuscle,
+            exerciseKind: mid.startsWith('fw') ? 'freeweight' : 'machine',
+            order:        i,
+          });
+
+          const exSets = logs[ex.id] ?? [];
+          for (let j = 0; j < exSets.length; j++) {
+            await insertWorkoutSet({
+              id:        `set-${Date.now()}-${i}-${j}`,
+              entryId,
+              setNumber: j + 1,
+              weight:    exSets[j].weight,
+              reps:      exSets[j].reps,
+            });
+          }
+        }
+
+  ※ logs[ex.id]는 복합키 그대로(슬롯별 세트). machineId/exerciseKind만 순수값.
+  ※ order: i 로 두 entry(같은 머신)가 순서로 구분되어 저장됨. DB 유니크 제약 없음 → OK.
+
+================================================================================
+[STEP 7] 완료 뱃지 — 복합키 Set에서 machineId 포함 여부 판정
+================================================================================
+머신 선택 화면의 "완료" 뱃지가 loggedIds.has(m.id)로 판정 중. 복합키 Set에서는
+m.id로 has() 불가 → 그 머신의 슬롯이 하나라도 있으면 완료로 본다.
+
+3곳(루틴Ref/StartFresh/프리웨이트) 각각:
+
+--- 7-1. 루틴 Ref 머신 (loggedIds.has(m.id))
+OLD:
+                  {loggedIds.has(m.id) && (
+NEW:
+                  {[...loggedIds].some(k => machineIdFromKey(k) === m.id) && (
+
+--- 7-2. Start Fresh 머신 (loggedIds.has(m.id))
+OLD:
+                  {loggedIds.has(m.id) && (
+NEW:
+                  {[...loggedIds].some(k => machineIdFromKey(k) === m.id) && (
+
+--- 7-3. 프리웨이트 (loggedIds.has(fw.id))
+OLD:
+                  {loggedIds.has(fw.id) && (
+NEW:
+                  {[...loggedIds].some(k => machineIdFromKey(k) === fw.id) && (
+
+  ※ 위 3개 OLD는 파일 내 동일/유사 패턴이 여러 개일 수 있으니, 각 머신 카드 섹션
+    (루틴Ref/StartFresh/프리웨이트)별로 정확히 매칭해 교체할 것.
+    (loggedIds.has(...) 가 완료 뱃지 조건으로 쓰인 3곳)
+  ※ loggedIds.size (운동 종료 카운트, 종료 버튼 표시 조건)는 그대로 둔다.
+    복합키 Set의 size = 슬롯 총개수 = 기록한 운동 줄 수 → 의도대로 동작.
+
+================================================================================
+■ 그대로 두는 것 (복합키로 자동 동작 — 건드리지 말 것)
+================================================================================
+- logs[ex.id] / logs[currentExerciseId] 모든 접근 (오버레이/사진/done/세트핸들러):
+  ex.id, currentExerciseId가 복합키이므로 슬롯별 세트가 정확히 조회됨.
+- prefillInfo[복합키], notes[복합키]: 슬롯별 독립.
+- handleChangeSet/handleAddSet/handleCopyPrev/handleRemoveSet/handleNoteChange:
+  모두 `const id = currentExerciseId`로 logs[id] 접근 → 복합키로 그대로 동작.
+- 인증샷 오버레이(LeftColOverlay 등), 운동카드, WorkoutDoneStep 요약:
+  key={ex.id}(복합키→유니크 OK), logs[ex.id], ex.name 표시 → 그대로. "A"가 두 줄 정상.
+- loggedIds.size 카운트.
+- recordPR/realPRs를 제외한 PR UI(SetCard histPR=realPR): realPR prop을 STEP5에서
+  순수 machineId로 넘기므로 SetCard 내부는 그대로.
+
+================================================================================
+■ 완료 후 자체 점검
+================================================================================
+1) npx tsc --noEmit → 신규 에러 0건
+2) machineIdFromKey / slotKeysForMachine / openNewSlot 추가됨
+3) handleSelectExercise: 첫 선택=슬롯0, 재선택=수정/추가 Alert
+4) selectedExercises/currentExercise: id=복합키, name=순수 machineId 조회
+5) handleSaveExercise: realPRs/recordPR에 순수 machineId
+6) SetLoggingStep realPR prop: 순수 machineId
+7) 저장(workoutLog.machines + insertWorkoutEntry): machineId 순수값, logs는 복합키
+8) 완료 뱃지 3곳: some(machineIdFromKey === id)
+9) 위 외 변경 없음 (logs 접근/오버레이/카드/done/핸들러 그대로)
+
+■ 사람이 직접 할 일 (디바이스 테스트 — 매우 중요)
+- A 선택 → 세트 입력 → 저장 → B 선택 저장 → A 다시 선택
+  → Alert("기존 수정/새로 추가") 뜨는지
+- "새로 추가" → A 두 번째 슬롯 세트 입력(프리필 없이 60×10) → 저장
+  → 운동 종료 화면(요약)에 A가 두 줄로, 각각 다른 세트로 보이는지
+- 운동 종료 카운트가 슬롯 수(A 2개면 +2)로 맞는지
+- 인증샷 생성 → 오버레이에 A가 두 줄(각자 세트)로 찍히는지, 복합키('m02#1') 노출 안 되는지
+- 저장 후 운동일지(Journal)에서 그 세션 열기 → A가 두 entry로 보이는지 (DB 저장 확인)
+- "기존 수정" 선택 시 마지막 슬롯 세트가 그대로 열리는지
+- 한 번만 한 머신은 그냥 "A"로(번호 없이) 보이는지
+- 프리웨이트(fw)도 동일하게 두 번 추가되는지
+
+■ 실패 시 참고
+- 머신 카드 onSelect가 복합키를 넘기면(예상과 달리) handleSelectExercise 진입 id가
+  복합키일 수 있음 → 그 경우 onSelect가 순수 m.id/fw.id를 넘기는지 먼저 확인.
+- 완료 뱃지 OLD가 3곳 외에 더 있거나 형태가 다르면 동일 원리로 교체.
+================================================================================

@@ -1,0 +1,158 @@
+================================================================================
+[머신 신청 보강] 어드민 조회에 신청자 닉네임/이메일 표시
+================================================================================
+
+■ 작업 개요
+어드민이 머신 등록 신청을 볼 때, 신청자 id만으로는 누군지 알기 어렵다.
+신청자의 닉네임/이메일을 함께 보여준다.
+
+■ 방식 (방법 B: profiles 조인)
+- machine_requests에는 requester_id만 저장돼 있음.
+- 어드민 조회 시 requester_id로 profiles(nickname/name/email)를 조회해 매핑.
+- 장점: 테이블/SQL 변경 없음, 기존 신청에도 즉시 적용, 항상 최신 정보.
+- profiles RLS(profiles_all_authenticated)가 authenticated 전체 select 허용이라 조회 가능.
+
+■ 변경 파일 (2개)
+  1. src/lib/db/machineRequests.ts          ← 인터페이스 + fetch에 profiles 매핑
+  2. src/screens/admin/AdminDashboard.tsx   ← 신청자 표시 줄
+
+⚠ Windows(CRLF) 가능 — str_replace 실패 시 Read로 확인 후 맞출 것.
+
+================================================================================
+[파일 1] src/lib/db/machineRequests.ts
+================================================================================
+
+--- 1-1. MachineRequest 인터페이스에 신청자 정보 3개 추가
+OLD:
+export interface MachineRequest {
+  id:           string;
+  gymId:        string | null;
+  gymName:      string;
+  requesterId:  string;
+  brand:        string;
+  machineName:  string;
+  targetMuscle: string;
+  photoUrl:     string | null;
+  status:       'pending' | 'reviewed' | 'resolved';
+  createdAt:    string;
+}
+NEW:
+export interface MachineRequest {
+  id:           string;
+  gymId:        string | null;
+  gymName:      string;
+  requesterId:  string;
+  brand:        string;
+  machineName:  string;
+  targetMuscle: string;
+  photoUrl:     string | null;
+  status:       'pending' | 'reviewed' | 'resolved';
+  createdAt:    string;
+  requesterNickname: string | null;
+  requesterName:     string | null;
+  requesterEmail:    string | null;
+}
+
+--- 1-2. fetchMachineRequests 함수 전체 교체 (profiles 매핑 추가)
+OLD:
+export async function fetchMachineRequests(): Promise<MachineRequest[]> {
+  const { data, error } = await supabase
+    .from('machine_requests')
+    .select('id, gym_id, gym_name, requester_id, brand, machine_name, target_muscle, photo_url, status, created_at')
+    .order('created_at', { ascending: false });
+
+  if (error || !data) return [];
+  return data.map((r: any) => ({
+    id:           r.id,
+    gymId:        r.gym_id ?? null,
+    gymName:      r.gym_name,
+    requesterId:  r.requester_id,
+    brand:        r.brand ?? '',
+    machineName:  r.machine_name,
+    targetMuscle: r.target_muscle ?? '',
+    photoUrl:     r.photo_url ?? null,
+    status:       r.status,
+    createdAt:    r.created_at,
+  }));
+}
+NEW:
+export async function fetchMachineRequests(): Promise<MachineRequest[]> {
+  const { data, error } = await supabase
+    .from('machine_requests')
+    .select('id, gym_id, gym_name, requester_id, brand, machine_name, target_muscle, photo_url, status, created_at')
+    .order('created_at', { ascending: false });
+
+  if (error || !data) return [];
+
+  const base: MachineRequest[] = data.map((r: any) => ({
+    id:                r.id,
+    gymId:             r.gym_id ?? null,
+    gymName:           r.gym_name,
+    requesterId:       r.requester_id,
+    brand:             r.brand ?? '',
+    machineName:       r.machine_name,
+    targetMuscle:      r.target_muscle ?? '',
+    photoUrl:          r.photo_url ?? null,
+    status:            r.status,
+    createdAt:         r.created_at,
+    requesterNickname: null,
+    requesterName:     null,
+    requesterEmail:    null,
+  }));
+
+  // 신청자 정보(닉네임/이름/이메일) 매핑 — requester_id로 profiles 조회
+  const ids = [...new Set(base.map(r => r.requesterId).filter(Boolean))];
+  if (ids.length > 0) {
+    const { data: profs } = await supabase
+      .from('profiles')
+      .select('id, nickname, name, email')
+      .in('id', ids);
+    if (profs) {
+      const map = new Map(profs.map((p: any) => [p.id, p]));
+      for (const r of base) {
+        const p = map.get(r.requesterId);
+        if (p) {
+          r.requesterNickname = p.nickname ?? null;
+          r.requesterName     = p.name ?? null;
+          r.requesterEmail    = p.email ?? null;
+        }
+      }
+    }
+  }
+
+  return base;
+}
+
+================================================================================
+[파일 2] src/screens/admin/AdminDashboard.tsx
+================================================================================
+MachineRequestsView의 대기 신청 카드에서 '신청자:' 줄을
+닉네임(없으면 이름, 없으면 id) + 이메일로 바꾼다.
+
+※ 아래 OLD는 req.requesterId를 쓰는 줄이라 MachineRequestsView에서만 유일하게
+  매칭됨 (GymRequestsView는 이 줄이 없음). GymRequestsView는 건드리지 않는다.
+
+OLD:
+          <Text style={{ fontSize: 11, color: C.textDim }}>신청자: {req.requesterId} · {new Date(req.createdAt).toLocaleDateString('ko-KR')}</Text>
+NEW:
+          <Text style={{ fontSize: 13, color: C.textSub, fontWeight: '600' }}>신청자: {req.requesterNickname || req.requesterName || req.requesterId}</Text>
+          {req.requesterEmail ? (
+            <Text style={{ fontSize: 11, color: C.textDim }}>{req.requesterEmail}</Text>
+          ) : null}
+          <Text style={{ fontSize: 11, color: C.textDim }}>{new Date(req.createdAt).toLocaleDateString('ko-KR')}</Text>
+
+================================================================================
+■ 완료 후 자체 점검
+================================================================================
+1) npx tsc --noEmit → 신규 에러 0건
+2) machineRequests.ts: 인터페이스에 requesterNickname/Name/Email 추가, fetch에서
+   profiles 조회/매핑 추가됐는지
+3) AdminDashboard: 신청자 줄이 닉네임+이메일로 바뀌었는지 (GymRequestsView는 그대로)
+
+■ 사람이 직접 할 일 (디바이스 테스트, 어드민 계정)
+- 어드민 → '머신 등록 신청(매니저)' → 대기 신청에
+  · 신청자가 id가 아니라 닉네임(또는 이름)으로 보이는지
+  · 그 아래 이메일이 보이는지
+  · 닉네임/이메일 없는 계정이면 id로 표시되는지(깨지지 않음)
+- 기존에 신청했던 건들도 신청자 정보가 채워져 보이는지(실시간 조회라 적용됨)
+================================================================================

@@ -39,11 +39,11 @@ import {
   type GymInfoReport,
 } from '../../lib/db/gymInfoReports';
 import {
-  getAllAdminGyms,
-  addAdminGym,
-  updateAdminGym,
-  type AdminRegisteredGym,
-} from '../../data/adminGymStore';
+  fetchAdminGyms,
+  insertAdminGym,
+  updateAdminGymFull,
+  type AdminGym,
+} from '../../lib/db/adminGyms';
 import MachineCard from '../../components/MachineCard';
 import {
   fetchGymRegistrationRequests,
@@ -853,15 +853,15 @@ const AdminMachineItem = React.memo(({ machine, isSelected, onToggle, cardWidth 
 ));
 
 interface RegisterGymAdminViewProps {
-  registeredGyms: AdminRegisteredGym[];
+  registeredGyms: AdminGym[];
   onSave: (name: string, location: string, phone: string, hours: string, machineIds: string[]) => void | Promise<void>;
-  onUpdate: (id: string, name: string, location: string, phone: string, hours: string, machineIds: string[]) => void;
+  onUpdate: (id: string, name: string, location: string, phone: string, hours: string, machineIds: string[]) => void | Promise<void>;
   onOfficialBrands: (gymId: string, gymName: string) => void;
 }
 
 function RegisterGymAdminView({ registeredGyms, onSave, onUpdate, onOfficialBrands }: RegisterGymAdminViewProps) {
   const [showForm,         setShowForm]         = useState(false);
-  const [editingGym,       setEditingGym]       = useState<AdminRegisteredGym | null>(null);
+  const [editingGym,       setEditingGym]       = useState<AdminGym | null>(null);
   const [gymName,          setGymName]          = useState('');
   const [gymLocation,      setGymLocation]      = useState('');
   const [gymPhone,         setGymPhone]         = useState('');
@@ -870,6 +870,7 @@ function RegisterGymAdminView({ registeredGyms, onSave, onUpdate, onOfficialBran
   const [muscleFilter,     setMuscleFilter]     = useState('All');
   const [brandFilter,      setBrandFilter]      = useState('All');
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
+  const [gymSearchQuery,   setGymSearchQuery]   = useState('');
 
   const filteredMachines = MACHINES.filter(m => {
     if (!m || !m.name || !m.brand || !m.targetMuscle) return false;
@@ -888,7 +889,7 @@ function RegisterGymAdminView({ registeredGyms, onSave, onUpdate, onOfficialBran
     setSelectedIds(new Set()); setMuscleFilter('All'); setBrandFilter('All'); setShowSelectedOnly(false);
   }
 
-  function openEdit(gym: AdminRegisteredGym) {
+  function openEdit(gym: AdminGym) {
     setEditingGym(gym);
     setGymName(gym.name);
     setGymLocation(gym.location);
@@ -901,18 +902,18 @@ function RegisterGymAdminView({ registeredGyms, onSave, onUpdate, onOfficialBran
     setShowForm(true);
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!gymName.trim() || !gymLocation.trim()) {
       Alert.alert('입력 오류', '헬스장 이름과 위치는 필수입니다.');
       return;
     }
     if (editingGym) {
-      onUpdate(editingGym.id, gymName.trim(), gymLocation.trim(), gymPhone.trim(), gymHours.trim(), Array.from(selectedIds));
+      await onUpdate(editingGym.id, gymName.trim(), gymLocation.trim(), gymPhone.trim(), gymHours.trim(), Array.from(selectedIds));
       setShowForm(false);
       resetForm();
       Alert.alert('수정 완료', '수정이 완료되었습니다.');
     } else {
-      onSave(gymName.trim(), gymLocation.trim(), gymPhone.trim(), gymHours.trim(), Array.from(selectedIds));
+      await onSave(gymName.trim(), gymLocation.trim(), gymPhone.trim(), gymHours.trim(), Array.from(selectedIds));
       setShowForm(false);
       resetForm();
       Alert.alert('등록 완료', '헬스장이 등록되었습니다.');
@@ -1060,6 +1061,11 @@ function RegisterGymAdminView({ registeredGyms, onSave, onUpdate, onOfficialBran
   }
 
   // ── 등록된 헬스장 목록 ──
+  const q = gymSearchQuery.trim().toLowerCase();
+  const visibleGyms = q
+    ? registeredGyms.filter(g =>
+        g.name.toLowerCase().includes(q) || g.location.toLowerCase().includes(q))
+    : registeredGyms;
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -1070,10 +1076,30 @@ function RegisterGymAdminView({ registeredGyms, onSave, onUpdate, onOfficialBran
         </TouchableOpacity>
       </View>
 
-      {registeredGyms.length === 0 ? (
-        <EmptyQueue label="등록된 헬스장이 없어요" />
+      {/* 검색창 */}
+      <View style={styles.catSearchRow}>
+        <Ionicons name="search" size={15} color={C.textDim} style={{ marginLeft: 12 }} />
+        <TextInput
+          value={gymSearchQuery}
+          onChangeText={setGymSearchQuery}
+          placeholder="헬스장 이름 또는 위치 검색..."
+          placeholderTextColor={C.textDim}
+          style={styles.catSearchInput}
+          autoCorrect={false}
+          autoCapitalize="none"
+          spellCheck={false}
+        />
+        {gymSearchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setGymSearchQuery('')} style={{ marginRight: 10 }}>
+            <Ionicons name="close-circle" size={16} color={C.textDim} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {visibleGyms.length === 0 ? (
+        <EmptyQueue label={q ? '검색 결과가 없어요' : '등록된 헬스장이 없어요'} />
       ) : (
-        registeredGyms.map(gym => (
+        visibleGyms.map(gym => (
           <View key={gym.id} style={styles.pendingCard}>
             <View style={styles.pendingCardTop}>
               <View style={{ flex: 1 }}>
@@ -1365,7 +1391,13 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
   const [gymList,      setGymList]       = useState<RegistrationGym[]>(() => getAllGymsForAdmin());
   const [gymReports,   setGymReports]    = useState<GymInfoReport[]>([]);
 
-  const [registeredGyms, setRegisteredGyms] = useState<AdminRegisteredGym[]>(() => getAllAdminGyms());
+  const [registeredGyms, setRegisteredGyms] = useState<AdminGym[]>([]);
+
+  // 직접등록 헬스장 목록 로드 함수
+  const loadRegisteredGyms = useCallback(async () => {
+    const gyms = await fetchAdminGyms();
+    setRegisteredGyms(gyms);
+  }, []);
   const [gymRequests,    setGymRequests]    = useState<GymRegistrationRequest[]>([]);
   const [machineRequests, setMachineRequests] = useState<MachineRequest[]>([]);
 
@@ -1376,6 +1408,12 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     fetchMachineRequests().then(setMachineRequests);
   }, []);
+
+  useEffect(() => {
+    if (currentView === 'register-gym') {
+      loadRegisteredGyms();
+    }
+  }, [currentView, loadRegisteredGyms]);
 
   const loadGymReports = useCallback(async () => {
     const data = await fetchGymInfoReports();
@@ -1605,30 +1643,13 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
   }, []);
 
   const handleRegisterGym = useCallback(async (name: string, location: string, phone: string, hours: string, machineIds: string[]) => {
-    const gymId = `g_${Date.now()}`;
-    addAdminGym({ name, location, phone, hours, machineIds }, gymId);
-    setRegisteredGyms(getAllAdminGyms());
-    try {
-      const { supabase } = await import('../../lib/supabase');
-      const coords = await geocodeAddress(location.trim());
-      const { error } = await supabase.from('gyms').insert({
-        id:          gymId,
-        name:        name.trim(),
-        location:    location.trim(),
-        phone:       phone.trim(),
-        hours:       hours.trim(),
-        description: '',
-        latitude:    coords?.latitude  ?? null,
-        longitude:   coords?.longitude ?? null,
-        manager_id:  null,
-      });
-      if (error) {
-        if (__DEV__) console.warn('[AdminDashboard] gyms INSERT 실패:', error.message);
-      }
-    } catch (e: any) {
-      if (__DEV__) console.warn('[AdminDashboard] 헬스장 등록 Supabase 오류:', e.message);
+    const { error } = await insertAdminGym(name, location, phone, hours, machineIds);
+    if (error) {
+      Alert.alert('등록 오류', '헬스장 등록에 실패했습니다. ' + error);
+      return;
     }
-  }, []);
+    await loadRegisteredGyms();
+  }, [loadRegisteredGyms]);
 
   const openOfficialBrands = useCallback(async (gymId: string, gymName: string) => {
     setOfficialGymId(gymId);
@@ -1652,10 +1673,14 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     }
   }, [officialGymId, officialBrands]);
 
-  const handleUpdateGym = useCallback((id: string, name: string, location: string, phone: string, hours: string, machineIds: string[]) => {
-    updateAdminGym(id, { name, location, phone, hours, machineIds });
-    setRegisteredGyms(getAllAdminGyms());
-  }, []);
+  const handleUpdateGym = useCallback(async (id: string, name: string, location: string, phone: string, hours: string, machineIds: string[]) => {
+    const { error } = await updateAdminGymFull(id, name, location, phone, hours, machineIds);
+    if (error) {
+      Alert.alert('수정 오류', '헬스장 수정에 실패했습니다. ' + error);
+      return;
+    }
+    await loadRegisteredGyms();
+  }, [loadRegisteredGyms]);
 
   // --- View titles
 

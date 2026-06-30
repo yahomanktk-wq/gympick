@@ -1,0 +1,88 @@
+================================================================================
+[조사 전용] 부위(근육) 변환·표시 흐름 한 번에 덤프하기
+================================================================================
+
+■ 목적
+'엉덩이' 부위를 분할에 추가하기 전에, 부위명이 어떻게 변환되어 화면에
+표시되는지 전체 흐름을 한 파일로 모아서 본다.
+※ 코드 변경 없음. 읽어서 출력만 하는 조사 작업.
+
+■ 하는 일
+아래 항목들을 Read 툴로 읽어서, 그 내용을 그대로
+  D:\시작\gympick\MUSCLE_FLOW_DUMP.txt
+파일 하나에 이어붙여 저장한다. (한글 깨지지 않게 Read 툴 사용)
+각 항목 앞에 "===== [번호] 설명 =====" 구분선을 넣어 구분한다.
+
+--------------------------------------------------------------------------------
+덤프할 항목 목록
+--------------------------------------------------------------------------------
+
+===== [1] splitUtils.ts 전체 매핑 + 함수 =====
+파일: src/lib/splitUtils.ts
+범위: 처음부터 toEnMuscle/toKoMuscle 함수 끝까지 (대략 1~40줄, 매핑 객체
+      MUSCLE_EN_TO_KO / MUSCLE_KO_TO_EN 전체와 toEnMuscle, toKoMuscle 함수 본체 포함)
+→ 부위 한↔영 변환의 핵심. 전체를 그대로.
+
+===== [2] 분할 설정 화면 부위 목록 + 칩 표시 =====
+파일: src/screens/flow/WorkoutSplitSetupScreen.tsx
+범위: SPLIT_MUSCLES 정의 줄(약 20줄) 포함 위아래 30줄.
+      추가로 MuscleChip 컴포넌트 정의 부분(약 115~135줄)도.
+→ 분할에서 부위가 어떻게 표시되는지.
+
+===== [3] 운동기록 화면 MUSCLE_GROUPS + toCanonMuscle =====
+파일: src/screens/flow/PostWorkoutLogModal.tsx
+범위: 약 155~260줄 (MUSCLE_GROUP_TO_CANON, toCanonMuscle, MUSCLE_GROUPS 배열,
+      각 그룹의 라벨/아이콘 정의 전체)
+→ 운동기록에서 부위 카드가 어떻게 정의되는지.
+
+===== [4] matchesMuscle (머신 필터) 현재 상태 =====
+파일: src/screens/flow/PostWorkoutLogModal.tsx
+범위: 약 730~745줄 (matchesMuscle 함수 전체 — 방금 추가한 Leg→Glutes 조건 포함)
+→ 머신이 부위로 어떻게 필터링되는지.
+
+===== [5] 분할 자동선택 (pre-select) =====
+파일: src/screens/flow/PostWorkoutLogModal.tsx
+범위: 약 3670~3700줄 (getTodayTargets로 타겟 가져와 selectedMuscles 세팅하는 부분)
+→ 분할값이 운동기록 부위 선택으로 어떻게 이어지는지.
+
+===== [6] 오버레이 muscleLabel 생성 + WorkoutPhotoStep 호출 =====
+파일: src/screens/flow/PostWorkoutLogModal.tsx
+범위 (가): WorkoutPhotoStep 함수 정의부 약 2339~2420줄 중 muscleLabel을
+          만드는 부분 (selectedMuscles로 라벨 생성하는 로직)
+범위 (나): WorkoutPhotoStep 호출부 약 4170~4190줄
+          (selectedMuscles={Array.from(selectedMuscles).map(toCanonMuscle)} 줄 포함)
+→ 인증샷 오버레이에 부위가 어떻게 영어로 찍히는지.
+
+===== [7] HomeScreen 부위 표시 (toKoMuscle 사용처) =====
+파일: src/screens/HomeScreen.tsx
+범위: toKoMuscle 또는 getTodayTarget(s)를 쓰는 부분 약 335~375줄
+→ 홈에서 미작성칸/오운완 헤더 부위가 어떻게 표시되는지.
+
+===== [8] 운동일지(Journal) 부위 표시 =====
+파일: src/screens/JournalScreen.tsx
+조사: 파일에서 toKoMuscle, getWeekTargetMap, targetMuscle, 부위 표시 관련
+      코드가 있는 줄을 찾아서 그 주변 ±5줄씩 덤프.
+      (Select-String으로 "toKoMuscle|getWeekTargetMap|targetMuscle|target" 찾고
+       해당 구간들을 Read로 읽어 덤프)
+→ 일지에서 미작성칸 부위가 어떻게 표시되는지.
+
+===== [9] WorkoutFeedScreen 부위 표시 =====
+파일: src/screens/WorkoutFeedScreen.tsx
+범위: toKoMuscle 쓰는 부분 약 450~460줄, 560줄 주변 ±6줄
+→ 피드에서 부위가 어떻게 표시되는지 (Glutes 매핑 바꾸면 영향받는지 확인용).
+
+--------------------------------------------------------------------------------
+출력 형식
+--------------------------------------------------------------------------------
+- 각 항목을 "===== [번호] 설명 =====" 구분선으로 나눠서
+  D:\시작\gympick\MUSCLE_FLOW_DUMP.txt 한 파일에 순서대로 저장.
+- 줄 번호도 같이 보이면 좋음(파악에 도움). Read 결과 그대로면 됨.
+- 한글이 깨지지 않게 반드시 Read 툴로 읽을 것 (PowerShell Get-Content는 깨짐).
+- 코드는 어떤 것도 수정하지 말 것. 오직 읽어서 덤프만.
+
+--------------------------------------------------------------------------------
+완료 후
+--------------------------------------------------------------------------------
+- D:\시작\gympick\MUSCLE_FLOW_DUMP.txt 가 생성됐고 9개 섹션이 모두 들어있는지 확인.
+- 파일 크기/줄 수 간단히 보고.
+================================================================================

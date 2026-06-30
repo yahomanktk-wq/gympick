@@ -1,0 +1,107 @@
+================================================================================
+[버그 수정] 운동일지 → 기기 저장 시 운동루틴카드 저화질 문제
+================================================================================
+
+■ 증상
+운동일지 상세화면에서 "기기에 저장" 시,
+- 인증샷(오운완) : 원본화질 정상
+- 운동루틴카드   : 저화질로 저장됨 (버그)
+(오운완 인증샷 생성 화면에서 저장하면 루틴카드도 원본화질 정상)
+
+■ 근본 원인
+운동루틴카드는 WorkoutLog에 URI로 저장되지 않아, 운동일지에서 저장할 때
+captureRef로 그 자리에서 다시 캡처한다. 그 캡처 옵션이 생성 화면과 다름:
+
+  - 생성 화면(정상, PostWorkoutLogModal):
+      const ratio = Math.max(PixelRatio.get(), 4);
+      width: Math.round(PHOTO_W * ratio),   // ← ratio(4배)를 곱한 픽셀 크기
+      height: Math.round(ROUTINE_CARD_H * ratio),
+      (그리고 Android에서만 width/height 지정)
+
+  - 운동일지(버그, JournalScreen):
+      width: PHOTO_W_J, height: ROUTINE_CARD_H_J,   // ← 논리 크기 그대로(ratio 안 곱함)
+      pixelRatio: Math.max(PixelRatio.get(), 3),
+
+captureRef는 명시적 width/height를 주면 그 픽셀 크기로 캡처하면서 pixelRatio를
+무시한다. 운동일지는 논리 크기(약 360px)를 그대로 줘서 저화질로 굳어버린다.
+인증샷(composite)은 width/height를 안 주고 pixelRatio만 줘서 영향이 없었음.
+
+상수 동일 확인:
+  JournalScreen   : PHOTO_W_J = window.width - 32, ROUTINE_CARD_H_J = round(PHOTO_W_J * 4/3)
+  PostWorkoutLog  : PHOTO_W   = SCREEN_W - 32,      ROUTINE_CARD_H   = round(PHOTO_W * 4/3)
+→ 생성 화면에서 검증된 캡처 패턴을 그대로 이식한다.
+
+■ 수정 대상 파일 : src/screens/JournalScreen.tsx (1개)
+  - Platform 은 이미 import 되어 있음 (변경 불필요)
+  - 동일한 captureRef 블록이 2군데 있음 → 둘 다 동일하게 수정
+      (1) handleSave()           : 기기에 저장
+      (2) handleInstagramShare() : 인스타 공유  ← 같은 버그라 함께 수정
+
+--------------------------------------------------------------------------------
+[수정 1] handleSave() 내부 루틴카드 캡처
+--------------------------------------------------------------------------------
+※ 아래 블록은 직후에  await MediaLibrary.saveToLibraryAsync(pageUri);  가 오는 쪽이다.
+
+OLD:
+          const pageUri = await captureRef(ref, {
+            format: 'png', quality: 1, result: 'tmpfile',
+            width: PHOTO_W_J, height: ROUTINE_CARD_H_J,
+            pixelRatio: Math.max(PixelRatio.get(), 3),
+          });
+          await MediaLibrary.saveToLibraryAsync(pageUri);
+
+NEW:
+          const ratio = Math.max(PixelRatio.get(), 4);
+          const pageUri = await captureRef(ref, {
+            format: 'png', quality: 1, result: 'tmpfile',
+            pixelRatio: ratio,
+            ...(Platform.OS === 'android'
+              ? { width: Math.round(PHOTO_W_J * ratio), height: Math.round(ROUTINE_CARD_H_J * ratio) }
+              : {}),
+          });
+          await MediaLibrary.saveToLibraryAsync(pageUri);
+
+--------------------------------------------------------------------------------
+[수정 2] handleInstagramShare() 내부 루틴카드 캡처
+--------------------------------------------------------------------------------
+※ 아래 블록은 직후에  const asset = await MediaLibrary.createAssetAsync(pageUri);  가 오는 쪽이다.
+
+OLD:
+          const pageUri = await captureRef(ref, {
+            format: 'png', quality: 1, result: 'tmpfile',
+            width: PHOTO_W_J, height: ROUTINE_CARD_H_J,
+            pixelRatio: Math.max(PixelRatio.get(), 3),
+          });
+          const asset = await MediaLibrary.createAssetAsync(pageUri);
+
+NEW:
+          const ratio = Math.max(PixelRatio.get(), 4);
+          const pageUri = await captureRef(ref, {
+            format: 'png', quality: 1, result: 'tmpfile',
+            pixelRatio: ratio,
+            ...(Platform.OS === 'android'
+              ? { width: Math.round(PHOTO_W_J * ratio), height: Math.round(ROUTINE_CARD_H_J * ratio) }
+              : {}),
+          });
+          const asset = await MediaLibrary.createAssetAsync(pageUri);
+
+================================================================================
+■ 변경 금지 (이번 작업 범위 아님)
+================================================================================
+- 인증샷(composite) 캡처(= photoNode 캡처, pixelRatio만 쓰는 블록)는 건드리지 말 것.
+  현재 정상 동작 중이며, 이번 버그와 무관하다.
+- JournalScreen 외 다른 파일은 수정하지 않는다.
+
+================================================================================
+■ 완료 후 자체 점검
+================================================================================
+1) npx tsc --noEmit  → 신규 에러 0건 (기존 에러 개수만 유지)
+2) handleSave / handleInstagramShare 두 군데 모두 수정됐는지 확인
+3) 인증샷(composite) 캡처 블록은 그대로인지 확인
+
+■ 사람이 직접 할 일
+- 디바이스 테스트:
+  · 운동 기록 저장 → 운동일지 상세 → "기기에 저장"
+  · 저장된 루틴카드가 원본화질(생성 화면과 동일)로 저장되는지 확인
+  · 부위 2개 세션도 동일하게 확인
+================================================================================

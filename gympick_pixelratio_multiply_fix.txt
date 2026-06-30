@@ -1,0 +1,68 @@
+[배경 — 확정된 원인]
+[QUALITY_DEBUG] 로그 재확인 결과: width: PHOTO_W, height: photoH를 Platform.OS === 'android'
+조건으로 추가했음에도, 캡처 결과가 여전히 레이아웃 크기와 정확히 동일(352x469 = 352x469).
+
+react-native-view-shot 공식 npm 문서 확인 결과: width/height 옵션은 pixelRatio와 곱해지는
+게 아니라, 결과물을 "정확히 그 값으로 강제 리사이즈"하는 옵션임. 즉 지금 코드는
+width: PHOTO_W(레이아웃 dp 값, 예: 352)를 그대로 넘기고 있어서, pixelRatio: 3을 같이
+줘도 width/height가 우선 적용되어 결과물이 352px로 강제로 깎이고 있었음 — 이게 화질이
+여전히 낮았던 진짜 이유.
+
+해결책: width/height에 레이아웃 dp 값을 그대로 넣지 말고, pixelRatio를 미리 곱한 값을
+넣는다. 즉 width: PHOTO_W * pixelRatioValue, height: photoH * pixelRatioValue 형태로
+바꾼다.
+
+
+[1] captureRef 호출 6곳의 width/height 값에 pixelRatio 곱하기 (실제로 코드 수정)
+
+대상 6곳, PostWorkoutLogModal.tsx (전부 현재 Platform.OS === 'android' 조건 안에서
+width/height를 전달하고 있는 곳):
+- handleSaveImage의 overlayRef 캡처
+- handleSaveImage의 routinePageRefs[i] 캡처
+- handleInstagramShare의 overlayRef 캡처
+- handleInstagramShare의 routinePageRefs[i] 캡처
+- saveBtn(운동 저장 핸들러)의 overlayRef 캡처
+- saveBtn의 routineCardRef 캡처
+
+각 호출에서, 현재 이미 계산해서 쓰고 있는 pixelRatio 값(Math.max(PixelRatio.get(), 3))을
+변수로 먼저 추출해서 재사용하고, width/height를 그 변수만큼 곱한 값으로 바꿔줘.
+
+예시 형태 (실제 변수명은 코드에 있는 것 사용):
+const ratio = Math.max(PixelRatio.get(), 3);
+captureRef(overlayRef, {
+  format: 'png', quality: 1, result: 'tmpfile',
+  pixelRatio: ratio,
+  ...(Platform.OS === 'android' ? { width: Math.round(PHOTO_W * ratio), height: Math.round(photoH * ratio) } : {}),
+})
+
+Math.round()로 정수 처리하는 것도 같이 적용해줘 (소수점 픽셀 값은 일부 기기에서 에러를
+일으킬 수 있음).
+
+iOS 쪽 옵션 객체는 이번에도 절대 건드리지 마 — width/height 키 자체가 없어야 함.
+
+6곳 모두 수정 전/후 빠짐없이 보여줘.
+
+
+[2] saveBtn의 routineCardRef — measure() 기반 측정값에도 동일하게 적용 (실제로 코드 수정)
+
+이 캡처는 measure()로 측정한 실제 높이(measuredHeight)를 쓰고 있음. 이 값도 [1]과
+동일하게 pixelRatio를 곱해서 height에 넣어줘 (measuredHeight 자체는 측정된 dp 값이므로,
+그 값에 ratio를 곱한 결과를 height 옵션에 넣는 것).
+
+수정 전/후를 빠짐없이 보여줘.
+
+
+[3] 최종 검증 (실제로 보여주기)
+
+수정 후 captureRef 호출 6곳을 다시 모아서 보여줘 — 안드로이드 경로에서 실제로 전달되는
+width/height 값이 "레이아웃 크기 × pixelRatio"가 맞는지 직접 계산해서 확인시켜줘. (예:
+PHOTO_W가 352이고 pixelRatio가 3이면 width가 1056이 되어야 함 — 실제 코드에 있는 상수
+값으로 계산해서 보여줘.)
+
+[QUALITY_DEBUG] 로그는 이번에도 지우지 말고 그대로 둬 — 다음 테스트에서 실제 캡처 결과가
+이 계산값과 일치하는지 다시 확인해야 함.
+
+
+[전체 진행 방식]
+[1][2] 모두 실제로 코드를 수정하고, [3]으로 최종 확인까지 보여줘.
+확인이나 중단 없이 끝까지 완료해줘.

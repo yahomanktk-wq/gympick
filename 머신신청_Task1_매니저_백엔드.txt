@@ -1,0 +1,536 @@
+================================================================================
+[머신 등록 신청 - Task 1] 매니저 화면 신청 버튼/폼 + 백엔드 (제출까지)
+================================================================================
+
+■ 작업 개요
+매니저 대시보드 '머신 관리' 화면에서, 원하는 머신이 없을 때 머신 등록을
+신청하는 텍스트 버튼 + 신청 폼을 만든다. 신청 내용은 Supabase에 저장되어
+어드민이 조회할 수 있게 한다.
+  (어드민 대시보드 조회 화면은 다음 단계 Task 2에서 추가 — 이번엔 제출까지)
+
+■ 신청 항목
+  - 헬스장명      : 선택된 헬스장에서 자동 (읽기 전용)
+  - 신청자 id     : 로그인 유저에서 자동
+  - 신청 일시     : 서버 시각 자동 (created_at)
+  - 신청 브랜드   : 자유 텍스트
+  - 신청 머신이름 : 자유 텍스트 (필수)
+  - 타겟부위      : 자유 텍스트
+  - 머신 사진     : 선택(업로드 가능)
+
+■ 버튼 위치
+  머신 관리 화면의 '전체'/'보유 중' 칩과 같은 줄, 제일 우측.
+
+■ 설계
+- 자체 완결 모달 컴포넌트(MachineRequestModal)를 만들어 폼/사진업로드/제출을
+  내부에서 처리. 메인 컴포넌트는 boolean 상태 1개 + 렌더 1줄만 추가.
+- 사진 업로드는 기존 handleAddPhoto 패턴 그대로 재사용
+  (gym-photos 버킷, 'machine-requests/{userId}/...' 경로, FormData + 토큰).
+- 부위는 자유 텍스트(머신 카탈로그 부위와 무관).
+
+■ 변경/생성 (3개 + SQL)
+  1. [SQL] machine_requests 테이블 (Supabase SQL Editor)
+  2. [새 파일] src/lib/db/machineRequests.ts
+  3. src/screens/manager/ManagerDashboard.tsx
+
+--------------------------------------------------------------------------------
+⚠ 사전 필수 : Supabase SQL Editor 에서 먼저 실행
+--------------------------------------------------------------------------------
+※ Claude Code는 이 SQL을 실행하지 말 것 (사용자가 별도 실행).
+
+  create table if not exists public.machine_requests (
+    id             uuid primary key default gen_random_uuid(),
+    gym_id         text,
+    gym_name       text not null,
+    requester_id   text not null,
+    brand          text,
+    machine_name   text not null,
+    target_muscle  text,
+    photo_url      text,
+    status         text not null default 'pending',
+    created_at     timestamptz not null default now()
+  );
+
+  alter table public.machine_requests enable row level security;
+
+  create policy "machine_requests_insert_auth"
+    on public.machine_requests for insert to authenticated with check (true);
+  create policy "machine_requests_select_auth"
+    on public.machine_requests for select to authenticated using (true);
+  create policy "machine_requests_update_auth"
+    on public.machine_requests for update to authenticated using (true);
+
+  ※ 기존 gym_registration_requests 등과 동일하게 authenticated 허용 정책.
+    (RLS 강화는 추후 별도 정리 가능)
+
+================================================================================
+[파일 1] (새 파일) src/lib/db/machineRequests.ts
+================================================================================
+아래 내용으로 새 파일 생성. (gymRegistrationRequests.ts와 동일한 패턴)
+
+import { supabase } from '../supabase';
+
+export interface MachineRequest {
+  id:           string;
+  gymId:        string | null;
+  gymName:      string;
+  requesterId:  string;
+  brand:        string;
+  machineName:  string;
+  targetMuscle: string;
+  photoUrl:     string | null;
+  status:       'pending' | 'reviewed' | 'resolved';
+  createdAt:    string;
+}
+
+export async function submitMachineRequest(input: {
+  gymId:        string | null;
+  gymName:      string;
+  requesterId:  string;
+  brand:        string;
+  machineName:  string;
+  targetMuscle: string;
+  photoUrl:     string | null;
+}): Promise<{ error: string | null }> {
+  try {
+    const { error } = await supabase
+      .from('machine_requests')
+      .insert({
+        gym_id:        input.gymId,
+        gym_name:      input.gymName,
+        requester_id:  input.requesterId,
+        brand:         input.brand || null,
+        machine_name:  input.machineName,
+        target_muscle: input.targetMuscle || null,
+        photo_url:     input.photoUrl || null,
+        status:        'pending',
+      });
+    if (error) return { error: error.message };
+    return { error: null };
+  } catch (e: any) {
+    return { error: e.message ?? '요청 중 오류가 발생했습니다.' };
+  }
+}
+
+export async function fetchMachineRequests(): Promise<MachineRequest[]> {
+  const { data, error } = await supabase
+    .from('machine_requests')
+    .select('id, gym_id, gym_name, requester_id, brand, machine_name, target_muscle, photo_url, status, created_at')
+    .order('created_at', { ascending: false });
+
+  if (error || !data) return [];
+  return data.map((r: any) => ({
+    id:           r.id,
+    gymId:        r.gym_id ?? null,
+    gymName:      r.gym_name,
+    requesterId:  r.requester_id,
+    brand:        r.brand ?? '',
+    machineName:  r.machine_name,
+    targetMuscle: r.target_muscle ?? '',
+    photoUrl:     r.photo_url ?? null,
+    status:       r.status,
+    createdAt:    r.created_at,
+  }));
+}
+
+export async function updateMachineRequestStatus(
+  id: string,
+  status: 'reviewed' | 'resolved',
+): Promise<void> {
+  await supabase
+    .from('machine_requests')
+    .update({ status })
+    .eq('id', id);
+}
+
+================================================================================
+[파일 2] src/screens/manager/ManagerDashboard.tsx
+================================================================================
+
+--- 2-1. import 추가 (ImagePicker import 줄 아래, 42번 근처)
+OLD:
+import * as ImagePicker from 'expo-image-picker';
+NEW:
+import * as ImagePicker from 'expo-image-picker';
+import { submitMachineRequest } from '../../lib/db/machineRequests';
+
+--- 2-2. MachinesViewProps에 onRequestMachine 추가 (365~374번)
+OLD:
+interface MachinesViewProps {
+  gymMachineIds: string[];
+  machineMusclFilter: string;
+  setMachineMusclFilter: (v: string) => void;
+  machineBrandFilter: string;
+  setMachineBrandFilter: (v: string) => void;
+  showOwnedOnly: boolean;
+  setShowOwnedOnly: (v: boolean) => void;
+  onToggleMachine: (id: string) => void;
+}
+NEW:
+interface MachinesViewProps {
+  gymMachineIds: string[];
+  machineMusclFilter: string;
+  setMachineMusclFilter: (v: string) => void;
+  machineBrandFilter: string;
+  setMachineBrandFilter: (v: string) => void;
+  showOwnedOnly: boolean;
+  setShowOwnedOnly: (v: boolean) => void;
+  onToggleMachine: (id: string) => void;
+  onRequestMachine: () => void;
+}
+
+--- 2-3. MachinesView 구조분해에 onRequestMachine 추가 (680~685번)
+OLD:
+function MachinesView({
+  gymMachineIds, machineMusclFilter, setMachineMusclFilter,
+  machineBrandFilter, setMachineBrandFilter,
+  showOwnedOnly, setShowOwnedOnly,
+  onToggleMachine,
+}: MachinesViewProps) {
+NEW:
+function MachinesView({
+  gymMachineIds, machineMusclFilter, setMachineMusclFilter,
+  machineBrandFilter, setMachineBrandFilter,
+  showOwnedOnly, setShowOwnedOnly,
+  onToggleMachine, onRequestMachine,
+}: MachinesViewProps) {
+
+--- 2-4. '전체'/'보유 중' 줄 우측 끝에 신청 버튼 추가 (725번, 줄 닫기 직전)
+OLD:
+        <TouchableOpacity
+          style={[styles.ownershipChip, showOwnedOnly && styles.ownershipChipActive]}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowOwnedOnly(true); }}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="checkmark-circle" size={13} color={showOwnedOnly ? '#000000' : C.textSub} />
+          <Text style={[styles.ownershipChipText, showOwnedOnly && styles.ownershipChipTextActive]}>보유 중</Text>
+        </TouchableOpacity>
+      </View>
+
+NEW:
+        <TouchableOpacity
+          style={[styles.ownershipChip, showOwnedOnly && styles.ownershipChipActive]}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowOwnedOnly(true); }}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="checkmark-circle" size={13} color={showOwnedOnly ? '#000000' : C.textSub} />
+          <Text style={[styles.ownershipChipText, showOwnedOnly && styles.ownershipChipTextActive]}>보유 중</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={mrStyles.requestBtn}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onRequestMachine(); }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="add-circle-outline" size={14} color={C.accent} />
+          <Text style={mrStyles.requestBtnText}>머신 등록 신청</Text>
+        </TouchableOpacity>
+      </View>
+
+--- 2-5. 메인 컴포넌트에 모달 상태 추가 (selectedGym 선언 아래, 1123번 근처)
+OLD:
+  const [selectedGym, setSelectedGym] = useState<ManagedGym | null>(null);
+NEW:
+  const [selectedGym, setSelectedGym] = useState<ManagedGym | null>(null);
+  const [machineReqVisible, setMachineReqVisible] = useState(false);
+
+--- 2-6. MachinesView 렌더에 prop 전달 + 모달 렌더 (1801~1810번)
+OLD:
+          <MachinesView
+            gymMachineIds={gymMachineIds}
+            machineMusclFilter={machineMusclFilter}
+            setMachineMusclFilter={setMachineMusclFilter}
+            machineBrandFilter={machineBrandFilter}
+            setMachineBrandFilter={setMachineBrandFilter}
+            showOwnedOnly={showOwnedOnly}
+            setShowOwnedOnly={setShowOwnedOnly}
+            onToggleMachine={toggleMachine}
+          />
+NEW:
+          <MachinesView
+            gymMachineIds={gymMachineIds}
+            machineMusclFilter={machineMusclFilter}
+            setMachineMusclFilter={setMachineMusclFilter}
+            machineBrandFilter={machineBrandFilter}
+            setMachineBrandFilter={setMachineBrandFilter}
+            showOwnedOnly={showOwnedOnly}
+            setShowOwnedOnly={setShowOwnedOnly}
+            onToggleMachine={toggleMachine}
+            onRequestMachine={() => setMachineReqVisible(true)}
+          />
+          <MachineRequestModal
+            visible={machineReqVisible}
+            onClose={() => setMachineReqVisible(false)}
+            gymName={selectedGym?.name ?? ''}
+            gymId={selectedGym?.id ?? null}
+            requesterId={user?.id ?? ''}
+          />
+
+--- 2-7. 파일 맨 끝에 MachineRequestModal 컴포넌트 + 스타일 추가
+         (파일의 가장 마지막, 기존 styles 정의 뒤에 아래 블록 전체를 추가한다)
+
+// ── 머신 등록 신청 모달 ──────────────────────────────────────────────────
+function MachineRequestModal({
+  visible, onClose, gymName, gymId, requesterId,
+}: {
+  visible:     boolean;
+  onClose:     () => void;
+  gymName:     string;
+  gymId:       string | null;
+  requesterId: string;
+}) {
+  const [brand,        setBrand]        = useState('');
+  const [machineName,  setMachineName]  = useState('');
+  const [targetMuscle, setTargetMuscle] = useState('');
+  const [photoUrl,     setPhotoUrl]     = useState<string | null>(null);
+  const [uploading,    setUploading]    = useState(false);
+  const [submitting,   setSubmitting]   = useState(false);
+
+  function resetAndClose() {
+    setBrand(''); setMachineName(''); setTargetMuscle(''); setPhotoUrl(null);
+    setUploading(false); setSubmitting(false);
+    onClose();
+  }
+
+  async function uploadPhoto(uri: string) {
+    if (!requesterId) { Alert.alert('업로드 실패', '로그인이 필요합니다.'); return; }
+    setUploading(true);
+    try {
+      const photoId  = `machine_req_${Date.now()}`;
+      const fileName = `machine-requests/${requesterId}/${photoId}.jpg`;
+      const formData = new FormData();
+      formData.append('file', { uri, name: fileName, type: 'image/jpeg' } as any);
+
+      const { supabase } = await import('../../lib/supabase');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { Alert.alert('업로드 실패', '로그인이 필요합니다.'); setUploading(false); return; }
+
+      const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
+      const uploadUrl    = `${SUPABASE_URL}/storage/v1/object/gym-photos/${fileName}`;
+      const response = await fetch(uploadUrl, {
+        method:  'POST',
+        headers: { 'Authorization': `Bearer ${session.access_token}`, 'x-upsert': 'true' },
+        body:    formData,
+      });
+      if (!response.ok) {
+        if (__DEV__) console.warn('[MachineRequest] 업로드 실패:', await response.text());
+        Alert.alert('업로드 실패', '사진 업로드에 실패했습니다.');
+        setUploading(false);
+        return;
+      }
+      setPhotoUrl(`${SUPABASE_URL}/storage/v1/object/public/gym-photos/${fileName}`);
+    } catch (e) {
+      if (__DEV__) console.warn('[MachineRequest] 업로드 오류:', e);
+      Alert.alert('업로드 실패', '사진 업로드 중 오류가 발생했습니다.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function pickPhoto() {
+    Alert.alert('머신 사진 추가', '사진을 선택하세요', [
+      { text: '카메라로 찍기', onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') { Alert.alert('권한 필요', '카메라 접근 권한이 필요합니다.'); return; }
+          const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.85 });
+          if (!result.canceled && result.assets[0]) await uploadPhoto(result.assets[0].uri);
+        } },
+      { text: '앨범에서 선택', onPress: async () => {
+          let result: ImagePicker.ImagePickerResult;
+          try { result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.85 }); }
+          catch (e) { Alert.alert('권한 필요', '사진 라이브러리 접근 권한이 필요합니다.'); return; }
+          if (!result.canceled && result.assets[0]) await uploadPhoto(result.assets[0].uri);
+        } },
+      { text: '취소', style: 'cancel' },
+    ]);
+  }
+
+  async function handleSubmit() {
+    if (!machineName.trim()) { Alert.alert('입력 확인', '머신 이름을 입력해주세요.'); return; }
+    if (!requesterId)        { Alert.alert('오류', '로그인이 필요합니다.'); return; }
+    setSubmitting(true);
+    const { error } = await submitMachineRequest({
+      gymId,
+      gymName,
+      requesterId,
+      brand:        brand.trim(),
+      machineName:  machineName.trim(),
+      targetMuscle: targetMuscle.trim(),
+      photoUrl,
+    });
+    setSubmitting(false);
+    if (error) { Alert.alert('신청 실패', error); return; }
+    Alert.alert('신청 완료', '머신 등록 신청이 접수되었어요. 관리자 확인 후 반영됩니다.');
+    resetAndClose();
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={resetAndClose}>
+      <View style={mrStyles.overlay}>
+        <View style={mrStyles.sheet}>
+          <View style={mrStyles.header}>
+            <Text style={mrStyles.title}>머신 등록 신청</Text>
+            <TouchableOpacity onPress={resetAndClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close" size={22} color={C.text} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView contentContainerStyle={mrStyles.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <Text style={mrStyles.label}>헬스장</Text>
+            <View style={mrStyles.readonlyField}>
+              <Text style={mrStyles.readonlyText}>{gymName || '—'}</Text>
+            </View>
+
+            <Text style={mrStyles.label}>브랜드</Text>
+            <TextInput
+              style={mrStyles.input}
+              value={brand}
+              onChangeText={setBrand}
+              placeholder="예: Life Fitness"
+              placeholderTextColor={C.textDim}
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+
+            <Text style={mrStyles.label}>머신 이름 *</Text>
+            <TextInput
+              style={mrStyles.input}
+              value={machineName}
+              onChangeText={setMachineName}
+              placeholder="예: Lat Pulldown"
+              placeholderTextColor={C.textDim}
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+
+            <Text style={mrStyles.label}>타겟 부위</Text>
+            <TextInput
+              style={mrStyles.input}
+              value={targetMuscle}
+              onChangeText={setTargetMuscle}
+              placeholder="예: 등"
+              placeholderTextColor={C.textDim}
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+
+            <Text style={mrStyles.label}>머신 사진 (선택)</Text>
+            {photoUrl ? (
+              <View style={mrStyles.photoPreviewWrap}>
+                <ExpoImage source={{ uri: photoUrl }} style={mrStyles.photoPreview} contentFit="cover" />
+                <TouchableOpacity style={mrStyles.photoRemove} onPress={() => setPhotoUrl(null)} activeOpacity={0.8}>
+                  <Ionicons name="close-circle" size={22} color={C.danger} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity style={mrStyles.photoBtn} onPress={pickPhoto} activeOpacity={0.8} disabled={uploading}>
+                <Ionicons name={uploading ? 'hourglass-outline' : 'camera-outline'} size={18} color={C.accent} />
+                <Text style={mrStyles.photoBtnText}>{uploading ? '업로드 중...' : '사진 추가'}</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={[mrStyles.submitBtn, (submitting || uploading) && { opacity: 0.5 }]}
+              onPress={handleSubmit}
+              activeOpacity={0.85}
+              disabled={submitting || uploading}
+            >
+              <Text style={mrStyles.submitBtnText}>{submitting ? '신청 중...' : '신청하기'}</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const mrStyles = StyleSheet.create({
+  requestBtn: {
+    marginLeft:    'auto',
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           4,
+    paddingVertical:   6,
+    paddingHorizontal: 4,
+  },
+  requestBtnText: { fontSize: 13, fontWeight: '700', color: C.accent },
+
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: C.bg,
+    borderTopLeftRadius:  20,
+    borderTopRightRadius: 20,
+    maxHeight: '88%',
+    paddingBottom: 24,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    justifyContent:'space-between',
+    paddingHorizontal: 20,
+    paddingVertical:   16,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  title: { fontSize: 17, fontWeight: '800', color: C.text },
+  body:  { padding: 20, gap: 8 },
+  label: { fontSize: 12, fontWeight: '700', color: C.textSub, marginTop: 10, marginBottom: 2 },
+  input: {
+    backgroundColor: C.surface,
+    borderRadius: R.inner,
+    borderWidth: 1,
+    borderColor: C.border,
+    color: C.text,
+    fontSize: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+  },
+  readonlyField: {
+    backgroundColor: C.surfaceHigh ?? C.surface,
+    borderRadius: R.inner,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+  },
+  readonlyText: { fontSize: 14, color: C.textSub },
+  photoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 13,
+    borderRadius: R.inner,
+    borderWidth: 1.5,
+    borderColor: C.accent + '60',
+    borderStyle: 'dashed',
+  },
+  photoBtnText: { fontSize: 14, fontWeight: '700', color: C.accent },
+  photoPreviewWrap: { position: 'relative', alignSelf: 'flex-start' },
+  photoPreview: { width: 120, height: 120, borderRadius: R.inner, backgroundColor: C.surface },
+  photoRemove: { position: 'absolute', top: -8, right: -8, backgroundColor: C.bg, borderRadius: 12 },
+  submitBtn: {
+    backgroundColor: C.accent,
+    borderRadius: R.btn,
+    paddingVertical: 15,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  submitBtnText: { fontSize: 15, fontWeight: '800', color: C.bg },
+});
+
+================================================================================
+■ 완료 후 자체 점검
+================================================================================
+1) npx tsc --noEmit → 신규 에러 0건 (기존 에러 개수만 유지)
+2) MachineRequestModal / mrStyles 가 파일 맨 끝에 추가됐는지
+3) 2-1 import, 2-2~2-6 연결이 모두 적용됐는지
+
+■ 사람이 직접 할 일
+- [필수/선행] 위 SQL을 Supabase SQL Editor에서 실행 (테이블 + RLS).
+- 디바이스 테스트 (매니저 계정):
+  · 머신 관리 화면 → '전체'/'보유 중' 줄 우측에 "머신 등록 신청" 버튼 보이는지
+  · 버튼 탭 → 모달 열림, 헬스장명 자동 표시(읽기 전용)
+  · 브랜드/머신이름/타겟부위 입력, 사진 선택 업로드(미리보기), 사진 제거
+  · 머신이름 비우고 신청 시 안내, 채우면 "신청 완료"
+  · Supabase Table Editor에서 machine_requests 테이블에 행이 들어왔는지 확인
+    (gym_name, requester_id, brand, machine_name, target_muscle, photo_url, created_at)
+
+※ 어드민 대시보드에서 이 신청들을 "조회"하는 화면은 Task 2에서 추가합니다.
+================================================================================

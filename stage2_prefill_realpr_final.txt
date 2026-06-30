@@ -1,0 +1,322 @@
+================================================================================
+[2단계 최종] 이전 첫 세트 자동 프리필 + 안내문구 + 실제 PR 반영
+================================================================================
+※ 이 버전은 실제 코드 본문으로 모든 앵커를 확정함. 가정 없음.
+
+■ 작업 (한 파일 안에서 3가지)
+  (3-A) 머신 선택 시, 그 머신을 가장 최근에 한 날의 '첫 세트'(무게×횟수)를
+        입력칸에 자동으로 채움 + 안내문구. 기록 없으면 60kg×10.
+  (3-B-표시) "내 PR" 배지를 MOCK(HIST_PRS) 대신 실제 유저 기록으로.
+  (3-B-감지) PR 감지/축하도 실제 유저 기록으로.
+
+■ 변경 파일 (1개)
+  src/screens/flow/PostWorkoutLogModal.tsx
+  (workouts.ts / workoutSessions.ts / types.ts 의 기존 export는 import만 추가)
+
+■ 확정된 구조 (본문으로 확인됨)
+  - WorkoutLog: { id, date, machines, ... } — 세션 식별자=id, 날짜=date
+  - WorkoutEntry: { id, sessionId, machineId, ... }
+  - WorkoutSet: { id, entryId, setNumber, weight, reps, isPR? }
+  - fetchWorkoutEntriesForSessions(sessionIds: string[]): Promise<WorkoutEntry[]>
+  - fetchWorkoutSetsForEntries(entryIds: string[]): Promise<WorkoutSet[]>
+  - getMachinePRsFromSets(entries, sets): Record<machineId, {weight,reps}>  (workoutSessions.ts L225)
+  - SetCard: 모듈레벨 function. props 구조분해. 내부에서 ex(=ExerciseInfo) 사용.
+  - SetLoggingStep: 모듈레벨 function. <SetCard ex={exercise} .../> 를 단일 렌더.
+  - 메인: <SetLoggingStep exercise={currentExercise} .../> 단일 렌더 (L4158).
+  - 프리필 자리: handleSelectExercise (L3716~3723)
+  - PR 감지 자리: handleSaveExercise 내 (L3741~3743)
+  - PR 표시 자리: SetCard 내 histPR (L1061~1063) + 배지 블록 (내 PR)
+
+⚠ Windows(CRLF) 가능 — str_replace 실패 시 Read로 확인 후 맞출 것.
+⚠ 아래 명시된 곳 외 수정 금지. MachineCard/색상(C/R/T)/네비/matchesMuscle/오버레이 불변.
+⚠ HIST_PRS / MOCK_SESSIONS import는 삭제하지 말 것(PR 참조 대상만 교체).
+
+================================================================================
+[STEP 0] import 추가
+================================================================================
+- fetchWorkoutLogs 를 import 하는 동일 구문에 두 함수 추가:
+    fetchWorkoutEntriesForSessions, fetchWorkoutSetsForEntries
+  (둘 다 src/lib/db/workouts.ts 에 존재)
+
+- '../../data/types' import에 없으면 추가:
+    WorkoutEntry, WorkoutSet
+  (이미 있으면 중복 추가 금지)
+
+- '../../data/workoutSessions' 에서 추가:
+    getMachinePRsFromSets
+
+================================================================================
+[STEP 1] 모듈 최상위 헬퍼 추가 (formatAgoForCard)
+================================================================================
+SetCard가 모듈레벨 함수라 컴포넌트 클로저 접근 불가 → 모듈 최상위에 날짜 헬퍼를 둔다.
+파일 상단부(다른 모듈 최상위 함수/상수 근처, 예: HIST_PRS 정의 근처)에 추가:
+
+  // 며칠 전인지 문구 (B안: 13일까지 '일', 그 이상 '주')
+  function formatAgoForCard(dateIso: string): string {
+    const then = new Date(dateIso); then.setHours(0, 0, 0, 0);
+    const now  = new Date();        now.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((now.getTime() - then.getTime()) / 86400000);
+    if (diffDays <= 0) return '오늘';
+    if (diffDays === 1) return '어제';
+    if (diffDays <= 13) return `${diffDays}일 전`;
+    return `${Math.floor(diffDays / 7)}주 전`;
+  }
+
+================================================================================
+[STEP 2] state 추가 (메인 컴포넌트, sessions useState 근처)
+================================================================================
+현재 `const [sessions, setSessions] = useState<WorkoutLog[]>(...)` (대략 L3623) 바로 아래에 추가:
+
+  const [pastEntries, setPastEntries] = useState<WorkoutEntry[]>([]);
+  const [pastSets,    setPastSets]    = useState<WorkoutSet[]>([]);
+  const [realPRs,     setRealPRs]     = useState<Record<string, { weight: number; reps: number }>>({});
+  const [prefillInfo, setPrefillInfo] = useState<Record<string, { date: string } | null>>({});
+
+================================================================================
+[STEP 3] 모달 열릴 때 원본 entries+sets 로드 + realPRs 계산
+================================================================================
+모달 열릴 때 fetchWorkoutLogs(user.id) 로 sessions를 채우는 useEffect(대략 L3640)가 있다.
+그 안에서 setSessions(data) 직후, 원본 entries+sets를 로드하도록 이어붙인다.
+
+지침:
+- 해당 useEffect를 async로 바꾸거나 .then 체인 안에서 처리.
+- sessions(WorkoutLog[]) 데이터(변수명 data로 가정—실제 변수명에 맞출 것)에서:
+    const sessionIds = data.map(s => s.id);
+    const entries = await fetchWorkoutEntriesForSessions(sessionIds);
+    const setsArr = await fetchWorkoutSetsForEntries(entries.map(e => e.id));
+    setPastEntries(entries);
+    setPastSets(setsArr);
+    setRealPRs(getMachinePRsFromSets(entries, setsArr));
+- 빈 데이터/실패 시 빈 배열·{} 유지(MOCK 금지).
+- 기존 setSessions / MOCK 폴백 로직은 그대로 두고, 위 로드만 추가.
+
+  ※ 만약 해당 useEffect가 async가 아니라서 await가 어려우면,
+    fetchWorkoutLogs(user.id).then(data => { setSessions(...); /* 위 로드 */ })
+    형태로 then 콜백 내부에서 처리. 또는 별도 async 함수를 만들어 호출.
+
+================================================================================
+[STEP 4] 헬퍼 추가 (메인 컴포넌트 내부, handleSelectExercise 위)
+================================================================================
+※ 메인 컴포넌트 함수 내부에 정의(pastEntries/pastSets/sessions 클로저 접근).
+
+  // 특정 머신의 '가장 최근 날의 첫 세트' (없으면 null)
+  function findLastFirstSet(machineId: string): { weight: number; reps: number; date: string } | null {
+    const machineEntries = pastEntries.filter(e => e.machineId === machineId);
+    if (machineEntries.length === 0) return null;
+    const sessionDateById: Record<string, string> = {};
+    for (const s of sessions) sessionDateById[s.id] = s.date;
+    let bestEntry = machineEntries[0];
+    let bestDate  = sessionDateById[bestEntry.sessionId] ?? '';
+    for (const e of machineEntries) {
+      const d = sessionDateById[e.sessionId] ?? '';
+      if (d > bestDate) { bestDate = d; bestEntry = e; }
+    }
+    if (!bestDate) return null;
+    const entrySets = pastSets
+      .filter(st => st.entryId === bestEntry.id)
+      .sort((a, b) => a.setNumber - b.setNumber);
+    if (entrySets.length === 0) return null;
+    const first = entrySets[0];
+    return { weight: first.weight, reps: first.reps, date: bestDate };
+  }
+
+================================================================================
+[STEP 5] handleSelectExercise 수정 — 이전 첫 세트 프리필
+================================================================================
+OLD (L3716~3723):
+    function handleSelectExercise(id: string) {
+      setCurrentExerciseId(id);
+      setLogs(prev => ({
+        ...prev,
+        [id]: prev[id]?.length ? prev[id] : [{ weight: 60, reps: 10 }],
+      }));
+      setStep('log-sets');
+    }
+NEW:
+    function handleSelectExercise(id: string) {
+      setCurrentExerciseId(id);
+      const last = findLastFirstSet(id);
+      setLogs(prev => ({
+        ...prev,
+        [id]: prev[id]?.length
+          ? prev[id]
+          : (last ? [{ weight: last.weight, reps: last.reps }] : [{ weight: 60, reps: 10 }]),
+      }));
+      setPrefillInfo(prev => ({
+        ...prev,
+        [id]: prev[id] !== undefined ? prev[id] : (last ? { date: last.date } : null),
+      }));
+      setStep('log-sets');
+    }
+
+================================================================================
+[STEP 6] SetLoggingStep — props 타입에 realPR/prefill 추가 + SetCard로 전달
+================================================================================
+--- 6-1. SetLoggingStep props 타입(구조분해)에 추가
+SetLoggingStep 선언 (L1204~):
+  function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onRemove,
+    onNoteChange, onSave, onFinish, onBack, onClose, onRegisterRect, onboardingActive,
+    onboardingKey }: { ... }) {
+
+(가) 구조분해 인자에 realPR, prefill 추가:
+  function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onRemove,
+    onNoteChange, onSave, onFinish, onBack, onClose, onRegisterRect, onboardingActive,
+    onboardingKey, realPR, prefill }: {
+
+(나) 타입 정의(구조분해 뒤 : { ... } 안)에 추가:
+    realPR?: { weight: number; reps: number };
+    prefill?: { date: string } | null;
+  (exercise: ExerciseInfo; sets: SetEntry[]; ... 들 사이 적당한 위치에 두 줄 추가)
+
+--- 6-2. SetLoggingStep 내부의 <SetCard ...> 에 prop 전달
+<SetCard> 호출 (L1268~):
+    <SetCard
+      ex={exercise}
+      sets={sets}
+      onChange={onChange}
+      ...
+    />
+→ prop 두 개 추가:
+    <SetCard
+      ex={exercise}
+      sets={sets}
+      realPR={realPR}
+      prefill={prefill}
+      onChange={onChange}
+      ...
+    />
+
+================================================================================
+[STEP 7] SetCard — props 타입 추가 + histPR을 realPR로 + 안내문구 렌더
+================================================================================
+--- 7-1. SetCard props 타입(구조분해)에 추가
+SetCard 선언 (L1047~):
+  function SetCard({ ex, sets, onChange, onAdd, onCopyPrev, onRemove, onSetLayout,
+    onRegisterRect, onboardingActive, onboardingKey }: {
+    ex: ExerciseInfo;
+    sets: SetEntry[];
+    ...
+  }) {
+
+(가) 구조분해에 realPR, prefill 추가:
+  function SetCard({ ex, sets, realPR, prefill, onChange, onAdd, onCopyPrev, onRemove,
+    onSetLayout, onRegisterRect, onboardingActive, onboardingKey }: {
+
+(나) 타입 정의에 두 줄 추가:
+    realPR?: { weight: number; reps: number };
+    prefill?: { date: string } | null;
+
+--- 7-2. PR 참조를 실제 데이터로 (L1061~1063)
+OLD:
+    const curMax  = sets.length ? Math.max(...sets.map(s => s.weight)) : 0;
+    const histPR  = HIST_PRS[ex.id]; // { weight, reps } | undefined
+    const isNewPR = curMax > 0 && (histPR === undefined || curMax > histPR.weight);
+NEW:
+    const curMax  = sets.length ? Math.max(...sets.map(s => s.weight)) : 0;
+    const histPR  = realPR; // 실제 유저 기록 기반 PR (없으면 undefined → 배지 미표시)
+    const isNewPR = curMax > 0 && (histPR === undefined || curMax > histPR.weight);
+
+--- 7-3. 프리필 안내문구 추가 ("내 PR" 배지 블록 바로 아래)
+OLD (L1099~1106 부근):
+        {/* Your PR reference */}
+        {histPR && (
+          <View style={s.yourPRRow}>
+            <Text style={s.yourPRLabel}>내 PR</Text>
+            <Text style={s.yourPRVal}>{histPR.weight} kg × {histPR.reps}</Text>
+          </View>
+        )}
+NEW:
+        {/* Your PR reference */}
+        {histPR && (
+          <View style={s.yourPRRow}>
+            <Text style={s.yourPRLabel}>내 PR</Text>
+            <Text style={s.yourPRVal}>{histPR.weight} kg × {histPR.reps}</Text>
+          </View>
+        )}
+        {prefill && (
+          <View style={s.prefillRow}>
+            <Ionicons name="time-outline" size={12} color={C.textDim} />
+            <Text style={s.prefillText}>지난 기록을 불러왔어요 ({formatAgoForCard(prefill.date)})</Text>
+          </View>
+        )}
+
+================================================================================
+[STEP 8] 메인 — <SetLoggingStep>에 realPR/prefill 전달 (L4158~)
+================================================================================
+OLD:
+            <SetLoggingStep
+              exercise={currentExercise}
+              sets={logs[currentExercise.id] ?? []}
+              note={notes[currentExercise.id] ?? ''}
+              onChange={handleChangeSet}
+              ...
+NEW:
+            <SetLoggingStep
+              exercise={currentExercise}
+              sets={logs[currentExercise.id] ?? []}
+              realPR={realPRs[currentExercise.id]}
+              prefill={prefillInfo[currentExercise.id] ?? null}
+              note={notes[currentExercise.id] ?? ''}
+              onChange={handleChangeSet}
+              ...
+
+  ※ currentExercise.id 로 realPRs/prefillInfo 조회. (SetCard 내부 ex.id와 동일 머신)
+
+================================================================================
+[STEP 9] handleSaveExercise PR 감지 — 실제 데이터 기준 (L3741~3743)
+================================================================================
+OLD:
+        const curMax  = exSets.length ? Math.max(...exSets.map(s => s.weight)) : 0;
+        const histPR  = HIST_PRS[currentExerciseId];
+        let   isPR    = false;
+NEW:
+        const curMax  = exSets.length ? Math.max(...exSets.map(s => s.weight)) : 0;
+        const histPR  = realPRs[currentExerciseId];
+        let   isPR    = false;
+
+  ※ recordPR 호출 등 나머지 블록은 그대로.
+
+================================================================================
+[STEP 10] 스타일 추가 (SetCard가 쓰는 StyleSheet, yourPRRow 근처)
+================================================================================
+  prefillRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 6,
+  },
+  prefillText: {
+    fontSize: 12,
+    color: C.textDim,
+    fontWeight: '600',
+  },
+
+================================================================================
+■ 완료 후 자체 점검
+================================================================================
+1) npx tsc --noEmit → 신규 에러 0건
+2) import 4종 추가(fetchWorkoutEntriesForSessions, fetchWorkoutSetsForEntries,
+   getMachinePRsFromSets, WorkoutEntry/WorkoutSet)
+3) formatAgoForCard 모듈 최상위 추가
+4) state 4개 추가
+5) 모달 로드 useEffect에서 entries/sets/realPRs 세팅
+6) findLastFirstSet 추가
+7) handleSelectExercise 프리필+prefillInfo
+8) SetLoggingStep/SetCard props에 realPR·prefill, SetCard에서 histPR→realPR, 안내문구
+9) 메인 <SetLoggingStep>에 realPR·prefill 전달
+10) handleSaveExercise HIST_PRS→realPRs
+11) prefillRow/prefillText 스타일
+12) 위 외 변경 없음(matchesMuscle/오버레이/색상/네비 등 그대로)
+
+■ 사람이 직접 할 일 (디바이스 테스트)
+- 과거 기록 있는 머신 재선택 → 입력칸에 그 머신 최근 날 첫 세트가 자동 입력 +
+  "지난 기록을 불러왔어요 (N일 전/N주 전/어제)" 문구
+- 과거 기록 없는 머신 → 60kg×10, 문구 없음
+- "내 PR" 배지가 실제 본인 최고기록으로(기록 없으면 미표시)
+- 실제 최고기록 초과 입력 시 PR 축하가 뜨는지(실제 기준)
+- 같은 세션 내 그 머신 재선택 시 방금 입력값 유지(프리필이 덮어쓰지 않음)
+
+■ 실패 시 참고
+- 모달 로드 useEffect의 데이터 변수명이 data가 아니면 STEP 3의 data를 실제명으로.
+- WorkoutEntry의 세션 참조 필드가 sessionId가 아니면 STEP 4의 e.sessionId 조정.
+================================================================================

@@ -1,0 +1,38 @@
+[배경]
+GymMapView.tsx의 마커 Text에 truncateGymName(gym.name, 6) + ellipsizeMode="clip"을
+적용했는데, 새로 빌드해서 다시 테스트해도 헬스장 이름이 여전히 한두 글자만 남고 잘리는
+증상이 그대로 발생함. 코드 수정 자체는 이전 diff로 확인됐으므로, 추측하지 말고 다음을
+순서대로 코드로 직접 확인한다.
+
+
+[1] 실제로 화면에 쓰이는 컴포넌트가 GymMapView.tsx가 맞는지 확인
+
+1. src 디렉터리 전체에서 "Marker"를 사용하는 모든 파일을 grep으로 찾아줘
+   (react-native-maps의 <Marker> 컴포넌트를 쓰는 곳 전부). GymMapView.tsx 외에 다른
+   파일에도 헬스장 이름을 표시하는 마커 렌더링 코드가 있는지 확인해줘.
+
+2. FindGymScreen.tsx(머신·헬스장 찾기 화면)에서 "지도" 탭을 눌렀을 때 실제로 어떤
+   컴포넌트가 렌더링되는지 import 구문부터 추적해줘 — GymMapView를 import해서 쓰는지,
+   아니면 다른 이름의 지도 컴포넌트를 쓰는지 정확히 확인해줘.
+
+3. 혹시 GymMapView.tsx와 비슷한 이름이나 역할을 하는 다른 파일(예: GymFlowModal 관련,
+   또는 중복 생성된 파일)이 더 있는지 find로 확인해줘.
+
+
+[2] GymMapView.tsx의 현재 코드 상태 재확인
+
+GymMapView.tsx에서 마커를 렌더링하는 부분(Marker, markerText 스타일, truncateGymName
+함수)을 지금 시점 기준으로 다시 읽어서 그대로 보여줘 — 이전 수정이 실제로 파일에 남아있는
+상태인지, 혹시 다른 작업 중에 되돌아가거나 덮어써진 부분이 없는지 확인해줘.
+
+
+[3] 빌드/캐시 관련 확인
+
+package.json 또는 관련 설정에서 Metro 번들러 캐시 경로를 확인하고, 최근 커밋 또는 파일
+수정 시각(git log -1 --format=%cd -- src/components/GymMapView.tsx 같은 명령, 또는 파일
+시스템 수정 시각 확인)을 통해 이 파일이 마지막으로 언제 수정되었는지 확인해줘. 최근 빌드
+시점과 비교해서 수정이 빌드 이전에 이루어졌는지 확인해줘.
+
+
+이 항목들은 전부 조사만 하고, 코드는 아직 수정하지 마. [1][2][3] 결과를 종합해서 정확히
+어느 지점에서 문제가 생겼는지 결론을 알려줘.

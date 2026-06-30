@@ -1,0 +1,737 @@
+================================================================================
+[모듈 B2] 분할 루틴 — 순서 기반 하루 2개 이상 (string[][] 구조 변경)
+================================================================================
+
+■ 작업 개요
+순서 기반 분할을 "슬롯당 부위 1개(string[])"에서 "슬롯당 부위 여러 개(string[][])"로
+바꾼다. 한 슬롯 = 하루(운동 1회) = 부위 여러 개.
+  - UI: 방식 1 (순서 추가 버튼 → 각 슬롯 안에서 부위 칩 토글)
+  - 완료 판정: 느슨함 (슬롯 부위 중 하나라도 운동하면 그 슬롯 완료로 보고 다음으로)
+  - 마이그레이션: 기존 ['가슴','등','하체'] → [['가슴'],['등'],['하체']]
+
+■ 핵심 설계
+- SequentialSplit 타입을 string[] → string[][]로 변경. 이 한 줄이 tsc로
+  순차 분기 누락 지점을 전부 에러로 잡아준다 → 아래 모든 PART를 적용하면 0건이 됨.
+- 분할 부위명은 한글('가슴','등'). '휴식'은 슬롯에 '휴식'만 든 경우.
+- splitUtils의 단일 함수(getTodayTarget/getNextTarget)는 복수 함수의 [0] 래퍼로
+  단순화 (HomeScreen이 getTodayTarget을 아직 사용 → 깨지지 않게).
+- SQL 없음 (workout_split은 JSON이라 string[][] 그대로 저장됨).
+
+■ 변경 파일 (6개)
+  1. src/data/types.ts
+  2. src/lib/db/splitRoutine.ts
+  3. src/lib/splitUtils.ts
+  4. src/screens/flow/WorkoutSplitSetupScreen.tsx
+  5. src/screens/JournalScreen.tsx
+  6. src/screens/HomeScreen.tsx
+
+================================================================================
+[파일 1] src/data/types.ts — SequentialSplit 타입 변경
+================================================================================
+OLD:
+export type SequentialSplit = string[];
+NEW:
+export type SequentialSplit = string[][];
+
+================================================================================
+[파일 2] src/lib/db/splitRoutine.ts — 순차 마이그레이션 추가
+================================================================================
+
+--- 2-1. migrateLegacySequentialSplit 함수 추가
+         (기존 migrateLegacyWeekdaySplit 함수 정의 "아래"에 추가)
+
+추가할 코드:
+  // 레거시 순차 분할(string[]) → string[][] 변환. 이미 string[][]이면 그대로.
+  function migrateLegacySequentialSplit(raw: any): string[][] {
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .map((item: any) => {
+        if (Array.isArray(item)) return item.filter((x: any) => typeof x === 'string');
+        if (typeof item === 'string') return item ? [item] : [];
+        return [];
+      })
+      .filter((slot: string[]) => slot.length > 0);
+  }
+
+--- 2-2. fetchSplitConfig에서 순차 마이그레이션 호출
+OLD:
+  if (splitType === 'weekday' && workoutSplit && !Array.isArray(workoutSplit)) {
+    workoutSplit = migrateLegacyWeekdaySplit(workoutSplit);
+  }
+
+NEW:
+  if (splitType === 'weekday' && workoutSplit && !Array.isArray(workoutSplit)) {
+    workoutSplit = migrateLegacyWeekdaySplit(workoutSplit);
+  }
+  if (splitType === 'sequential' && Array.isArray(workoutSplit)) {
+    workoutSplit = migrateLegacySequentialSplit(workoutSplit) as unknown as WorkoutSplit;
+  }
+
+================================================================================
+[파일 3] src/lib/splitUtils.ts — 순차 분기 string[][] 대응
+================================================================================
+(workoutMusclesOf 헬퍼는 이미 있음 — function 선언이라 어디서든 호출 가능)
+
+--- 3-1. getTodayTarget 함수 전체를 복수 함수 래퍼로 교체
+OLD (함수 전체):
+export function getTodayTarget(
+  splitType: SplitType,
+  workoutSplit: WorkoutSplit,
+  splitCurrentIndex: number
+): string | null {
+  if (!workoutSplit || (Array.isArray(workoutSplit) && workoutSplit.length === 0)) return null;
+
+  if (splitType === 'weekday') {
+    const split = workoutSplit as WeekdaySplit;
+    const dayKey = DAY_KEYS[new Date().getDay()];
+    const targets = (split[dayKey] ?? []) as string[];
+    const nonRest = targets.filter(t => t !== '휴식');
+    return nonRest.length > 0 ? nonRest[0] : null;
+  }
+
+  const split = workoutSplit as SequentialSplit;
+  if (split.length === 0) return null;
+  const target = split[splitCurrentIndex % split.length] ?? null;
+  return target === '휴식' ? null : target;
+}
+
+NEW:
+export function getTodayTarget(
+  splitType: SplitType,
+  workoutSplit: WorkoutSplit,
+  splitCurrentIndex: number
+): string | null {
+  return getTodayTargets(splitType, workoutSplit, splitCurrentIndex)[0] ?? null;
+}
+
+--- 3-2. getNextTarget 함수 전체를 복수 함수 래퍼로 교체
+OLD (함수 전체):
+export function getNextTarget(
+  splitType: SplitType,
+  workoutSplit: WorkoutSplit,
+  splitCurrentIndex: number,
+  completedTargets: string[]
+): string | null {
+  if (!workoutSplit || (Array.isArray(workoutSplit) && workoutSplit.length === 0)) return null;
+
+  if (splitType === 'sequential') {
+    const split = workoutSplit as SequentialSplit;
+    let idx = splitCurrentIndex;
+    let checked = 0;
+    while (checked < split.length) {
+      const target = split[idx % split.length];
+      if (target === '휴식') { idx++; checked++; continue; }
+      if (!completedTargets.map(t => t.toLowerCase()).includes(target.toLowerCase())) return target;
+      idx++;
+      checked++;
+    }
+    return null;
+  }
+
+  const split = workoutSplit as WeekdaySplit;
+  const todayIdx = new Date().getDay();
+  for (let i = 1; i <= 7; i++) {
+    const dayKey = DAY_KEYS[(todayIdx + i) % 7];
+    const targets = (split[dayKey] ?? []) as string[];
+    const nonRest = targets.filter(t => t !== '휴식');
+    if (nonRest.length > 0) return nonRest[0];
+  }
+  return null;
+}
+
+NEW:
+export function getNextTarget(
+  splitType: SplitType,
+  workoutSplit: WorkoutSplit,
+  splitCurrentIndex: number,
+  completedTargets: string[]
+): string | null {
+  return getNextTargets(splitType, workoutSplit, splitCurrentIndex, completedTargets)[0] ?? null;
+}
+
+--- 3-3. calcNextIndex 함수 전체 교체 (string[][] + 느슨한 완료)
+OLD (함수 전체):
+export function calcNextIndex(
+  workoutSplit: SequentialSplit,
+  currentIndex: number,
+  completedTargets: string[]
+): number {
+  const len = workoutSplit.length;
+  if (len === 0) return 0;
+  let idx = currentIndex;
+  let advanced = 0;
+  while (advanced < len) {
+    const target = workoutSplit[idx % len];
+    if (target === '휴식') { idx++; advanced++; continue; }
+    if (!completedTargets.map(t => t.toLowerCase()).includes(target.toLowerCase())) break;
+    idx++;
+    advanced++;
+  }
+  return idx % len;
+}
+
+NEW:
+export function calcNextIndex(
+  workoutSplit: SequentialSplit,   // string[][]
+  currentIndex: number,
+  completedTargets: string[]
+): number {
+  const len = workoutSplit.length;
+  if (len === 0) return 0;
+  const done = completedTargets.map(t => t.toLowerCase());
+  let idx = currentIndex;
+  let advanced = 0;
+  while (advanced < len) {
+    const slot = workoutSplit[idx % len] ?? [];
+    const work = workoutMusclesOf(slot);
+    if (work.length === 0) { idx++; advanced++; continue; }          // 휴식/빈 슬롯 건너뜀
+    const slotDone = work.some(m => done.includes(m.toLowerCase()));
+    if (!slotDone) break;                                            // 아직 안 한 슬롯에서 멈춤
+    idx++;
+    advanced++;
+  }
+  return idx % len;
+}
+
+--- 3-4. getTodayTargets의 순차 분기 교체
+OLD:
+  // B1: 순서 기반은 아직 string[] (B2에서 string[][]로 변경)
+  const split = workoutSplit as SequentialSplit;
+  if (split.length === 0) return [];
+  const t = split[splitCurrentIndex % split.length];
+  return t && t !== '휴식' ? [t] : [];
+
+NEW:
+  const split = workoutSplit as SequentialSplit; // string[][]
+  if (split.length === 0) return [];
+  const slot = split[splitCurrentIndex % split.length] ?? [];
+  return workoutMusclesOf(slot);
+
+--- 3-5. isRestToday의 순차 분기 교체
+OLD:
+  const split = workoutSplit as SequentialSplit;
+  if (split.length === 0) return false;
+  return split[splitCurrentIndex % split.length] === '휴식';
+
+NEW:
+  const split = workoutSplit as SequentialSplit; // string[][]
+  if (split.length === 0) return false;
+  const slot = split[splitCurrentIndex % split.length] ?? [];
+  return slot.length > 0 && workoutMusclesOf(slot).length === 0;
+
+--- 3-6. collectRoutineMuscles의 순차 분기 교체 (.flat() 추가)
+OLD:
+  if (splitType === 'sequential') {
+    return ((workoutSplit as SequentialSplit) ?? []).filter(m => m !== '휴식');
+  }
+
+NEW:
+  if (splitType === 'sequential') {
+    return ((workoutSplit as SequentialSplit) ?? []).flat().filter(m => m !== '휴식');
+  }
+
+--- 3-7. getNextTargets의 순차 분기 교체 (느슨한 완료)
+OLD:
+  if (splitType === 'sequential') {
+    const split = workoutSplit as SequentialSplit;
+    let idx = splitCurrentIndex, checked = 0;
+    while (checked < split.length) {
+      const t = split[idx % split.length];
+      if (t === '휴식') { idx++; checked++; continue; }
+      if (!done.includes(t.toLowerCase())) return [t];
+      idx++; checked++;
+    }
+    return [];
+  }
+
+NEW:
+  if (splitType === 'sequential') {
+    const split = workoutSplit as SequentialSplit; // string[][]
+    let idx = splitCurrentIndex, checked = 0;
+    while (checked < split.length) {
+      const slot = split[idx % split.length] ?? [];
+      const work = workoutMusclesOf(slot);
+      if (work.length === 0) { idx++; checked++; continue; }          // 휴식/빈 슬롯 건너뜀
+      const slotDone = work.some(m => done.includes(m.toLowerCase()));
+      if (!slotDone) return work;                                     // 느슨한 완료
+      idx++; checked++;
+    }
+    return [];
+  }
+
+================================================================================
+[파일 4] src/screens/flow/WorkoutSplitSetupScreen.tsx — 방식 1 슬롯 UI
+================================================================================
+
+--- 4-1. seqList 상태 타입 변경 (273번 근처)
+OLD:
+  const [seqList,        setSeqList]        = useState<string[]>([]);
+NEW:
+  const [seqList,        setSeqList]        = useState<string[][]>([]);
+
+--- 4-2. CurrentSplitDisplay 순차 분기 교체 (45~67번)
+OLD:
+  if (splitType === 'sequential') {
+    const split    = workoutSplit as string[];
+    const activeIdx = split.length > 0 ? currentIndex % split.length : 0;
+    return (
+      <View style={csd.container}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={csd.seqRow}
+        >
+          {split.map((item, idx) => (
+            <React.Fragment key={idx}>
+              {idx > 0 && <Text style={csd.arrow}>→</Text>}
+              <View style={[csd.seqChip, idx === activeIdx && csd.seqChipActive]}>
+                <Text style={[csd.seqChipText, idx === activeIdx && csd.seqChipTextActive]}>
+                  {item}
+                </Text>
+              </View>
+            </React.Fragment>
+          ))}
+        </ScrollView>
+      </View>
+    );
+  }
+
+NEW:
+  if (splitType === 'sequential') {
+    const split    = workoutSplit as string[][];
+    const activeIdx = split.length > 0 ? currentIndex % split.length : 0;
+    return (
+      <View style={csd.container}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={csd.seqRow}
+        >
+          {split.map((muscles, idx) => {
+            const work  = muscles.filter(m => m !== '휴식');
+            const label = work.length > 0 ? work.join('·') : '휴식';
+            return (
+              <React.Fragment key={idx}>
+                {idx > 0 && <Text style={csd.arrow}>→</Text>}
+                <View style={[csd.seqChip, idx === activeIdx && csd.seqChipActive]}>
+                  <Text style={[csd.seqChipText, idx === activeIdx && csd.seqChipTextActive]}>
+                    {label}
+                  </Text>
+                </View>
+              </React.Fragment>
+            );
+          })}
+        </ScrollView>
+      </View>
+    );
+  }
+
+--- 4-3. SequentialItem 컴포넌트 전체를 SequentialSlotItem으로 교체 (180~219번)
+OLD (함수 전체):
+function SequentialItem({
+  name, index, total, onRemove, onMoveUp, onMoveDown,
+}: {
+  name:       string;
+  index:      number;
+  total:      number;
+  onRemove:   () => void;
+  onMoveUp:   () => void;
+  onMoveDown: () => void;
+}) {
+  return (
+    <View style={s.seqItem}>
+      <View style={s.seqIndex}>
+        <Text style={s.seqIndexText}>{index + 1}</Text>
+      </View>
+      <Text style={s.seqName}>{name}</Text>
+      <View style={s.seqActions}>
+        <TouchableOpacity
+          style={[s.seqBtn, index === 0 && s.seqBtnDisabled]}
+          onPress={onMoveUp}
+          disabled={index === 0}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="chevron-up" size={14} color={index === 0 ? C.textDim : C.textSub} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.seqBtn, index === total - 1 && s.seqBtnDisabled]}
+          onPress={onMoveDown}
+          disabled={index === total - 1}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="chevron-down" size={14} color={index === total - 1 ? C.textDim : C.textSub} />
+        </TouchableOpacity>
+        <TouchableOpacity style={s.seqRemoveBtn} onPress={onRemove} activeOpacity={0.7}>
+          <Ionicons name="close" size={14} color={C.danger} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+NEW (함수 전체):
+function SequentialSlotItem({
+  slotIndex, muscles, total, onToggleMuscle, onRemove, onMoveUp, onMoveDown,
+}: {
+  slotIndex:      number;
+  muscles:        string[];
+  total:          number;
+  onToggleMuscle: (m: string) => void;
+  onRemove:       () => void;
+  onMoveUp:       () => void;
+  onMoveDown:     () => void;
+}) {
+  const work  = muscles.filter(m => m !== '휴식');
+  const label = work.length > 0 ? work.join('·') : (muscles.includes('휴식') ? '휴식' : '부위 선택');
+  return (
+    <View style={s.seqSlotItem}>
+      <View style={s.seqSlotHeader}>
+        <View style={s.seqIndex}>
+          <Text style={s.seqIndexText}>{slotIndex + 1}</Text>
+        </View>
+        <Text style={s.seqSlotLabel} numberOfLines={1}>{label}</Text>
+        <View style={s.seqActions}>
+          <TouchableOpacity
+            style={[s.seqBtn, slotIndex === 0 && s.seqBtnDisabled]}
+            onPress={onMoveUp}
+            disabled={slotIndex === 0}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chevron-up" size={14} color={slotIndex === 0 ? C.textDim : C.textSub} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.seqBtn, slotIndex === total - 1 && s.seqBtnDisabled]}
+            onPress={onMoveDown}
+            disabled={slotIndex === total - 1}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chevron-down" size={14} color={slotIndex === total - 1 ? C.textDim : C.textSub} />
+          </TouchableOpacity>
+          <TouchableOpacity style={s.seqRemoveBtn} onPress={onRemove} activeOpacity={0.7}>
+            <Ionicons name="close" size={14} color={C.danger} />
+          </TouchableOpacity>
+        </View>
+      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ gap: 6, paddingTop: 10 }}
+      >
+        {SPLIT_MUSCLES.map(m => (
+          <MuscleChip
+            key={m}
+            label={m}
+            selected={muscles.includes(m)}
+            onPress={() => onToggleMuscle(m)}
+          />
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+--- 4-4. 순차 핸들러 교체: addToSeq 제거 → addSeqSlot + toggleSeqSlotMuscle
+         (removeFromSeq / moveSeqUp / moveSeqDown 는 그대로 둔다 — string[][]에서도 동작)
+OLD:
+  function addToSeq(muscle: string) {
+    setSeqList(prev => {
+      // 바로 직전 항목과 같은 부위면 안내 (실수 방지)
+      if (prev.length > 0 && prev[prev.length - 1] === muscle) {
+        Alert.alert(
+          '준비 중인 기능이에요',
+          '하루에 두 개 이상의 부위를 묶는 기능은 곧 추가될 예정이에요.',
+        );
+        return prev;
+      }
+      return [...prev, muscle];
+    });
+  }
+
+NEW:
+  function addSeqSlot() {
+    setSeqList(prev => [...prev, []]);
+  }
+
+  function toggleSeqSlotMuscle(slotIdx: number, muscle: string) {
+    setSeqList(prev => prev.map((slot, i) => {
+      if (i !== slotIdx) return slot;
+      return slot.includes(muscle) ? slot.filter(m => m !== muscle) : [...slot, muscle];
+    }));
+  }
+
+--- 4-5. canProceed의 순차 조건 강화 (빈 슬롯 없어야 함) (403~409번)
+OLD:
+  const canProceed = step === 1
+    ? true
+    : step === 2
+    ? type === 'weekday'
+      ? Object.values(weekday).some((arr: any) => arr.length > 0)
+      : seqList.length > 0
+    : true;
+
+NEW:
+  const canProceed = step === 1
+    ? true
+    : step === 2
+    ? type === 'weekday'
+      ? Object.values(weekday).some((arr: any) => arr.length > 0)
+      : seqList.length > 0 && seqList.every(slot => slot.length > 0)
+    : true;
+
+--- 4-6. 저장 시 빈 슬롯 제거 (handleComplete step===2, 383번 근처)
+OLD:
+        const split = type === 'weekday' ? weekday : seqList;
+NEW:
+        const split = type === 'weekday' ? weekday : seqList.filter(slot => slot.length > 0);
+
+--- 4-7. Step 2a (순서 기반 설정) 렌더 교체 (528~563번)
+OLD:
+        {/* ── Step 2a: 순서 기반 설정 ── */}
+        {step === 2 && type === 'sequential' && (
+          <View style={s.section}>
+            <Text style={s.sectionLabel}>운동 순서 목록</Text>
+            {seqList.length === 0 ? (
+              <View style={s.seqEmpty}>
+                <Text style={s.seqEmptyText}>아래 부위를 탭해서 추가하세요</Text>
+              </View>
+            ) : (
+              <View style={s.seqList}>
+                {seqList.map((name, idx) => (
+                  <SequentialItem
+                    key={`${name}-${idx}`}
+                    name={name}
+                    index={idx}
+                    total={seqList.length}
+                    onRemove={() => removeFromSeq(idx)}
+                    onMoveUp={() => moveSeqUp(idx)}
+                    onMoveDown={() => moveSeqDown(idx)}
+                  />
+                ))}
+              </View>
+            )}
+            <Text style={[s.sectionLabel, { marginTop: 20 }]}>부위 추가 (중복 허용)</Text>
+            <View style={s.chipRow}>
+              {SPLIT_MUSCLES.map(m => (
+                <MuscleChip
+                  key={m}
+                  label={m}
+                  selected={false}
+                  onPress={() => addToSeq(m)}
+                />
+              ))}
+            </View>
+          </View>
+        )}
+
+NEW:
+        {/* ── Step 2a: 순서 기반 설정 ── */}
+        {step === 2 && type === 'sequential' && (
+          <View style={s.section}>
+            <Text style={s.sectionLabel}>운동 순서 목록</Text>
+            {seqList.length === 0 ? (
+              <View style={s.seqEmpty}>
+                <Text style={s.seqEmptyText}>'순서 추가'를 눌러 운동 순서를 만드세요</Text>
+              </View>
+            ) : (
+              <View style={{ gap: 10 }}>
+                {seqList.map((muscles, idx) => (
+                  <SequentialSlotItem
+                    key={idx}
+                    slotIndex={idx}
+                    muscles={muscles}
+                    total={seqList.length}
+                    onToggleMuscle={(m) => toggleSeqSlotMuscle(idx, m)}
+                    onRemove={() => removeFromSeq(idx)}
+                    onMoveUp={() => moveSeqUp(idx)}
+                    onMoveDown={() => moveSeqDown(idx)}
+                  />
+                ))}
+              </View>
+            )}
+            <TouchableOpacity style={s.seqAddSlotBtn} onPress={addSeqSlot} activeOpacity={0.8}>
+              <Ionicons name="add" size={18} color={C.accent} />
+              <Text style={s.seqAddSlotText}>순서 추가</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+--- 4-8. Step 3 (시작 부위 선택) 렌더 교체 (580~595번)
+OLD:
+        {/* ── Step 3: 시작 부위 선택 ── */}
+        {step === 3 && (
+          <View style={s.section}>
+            <Text style={s.sectionLabel}>시작할 부위를 선택하세요</Text>
+            <View style={s.startList}>
+              {seqList.map((name, idx) => (
+                <StartPositionItem
+                  key={`${name}-${idx}`}
+                  name={name}
+                  selected={startIndex === idx}
+                  onPress={() => setStartIndex(idx)}
+                />
+              ))}
+            </View>
+          </View>
+        )}
+
+NEW:
+        {/* ── Step 3: 시작 부위 선택 ── */}
+        {step === 3 && (
+          <View style={s.section}>
+            <Text style={s.sectionLabel}>시작할 부위를 선택하세요</Text>
+            <View style={s.startList}>
+              {seqList.map((muscles, idx) => {
+                const work = muscles.filter(m => m !== '휴식');
+                const name = work.length > 0 ? work.join('·') : '휴식';
+                return (
+                  <StartPositionItem
+                    key={idx}
+                    name={name}
+                    selected={startIndex === idx}
+                    onPress={() => setStartIndex(idx)}
+                  />
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+--- 4-9. 스타일 추가 (s StyleSheet 안, seqRemoveBtn 블록 아래에 추가)
+추가할 코드:
+  seqSlotItem: {
+    backgroundColor: C.surface,
+    borderRadius:    R.card,
+    padding:         12,
+    borderWidth:     1,
+    borderColor:     C.border,
+  },
+  seqSlotHeader: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           10,
+  },
+  seqSlotLabel: {
+    flex:       1,
+    fontSize:   14,
+    fontWeight: '700',
+    color:      C.text,
+  },
+  seqAddSlotBtn: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    justifyContent:  'center',
+    gap:             6,
+    marginTop:       12,
+    paddingVertical: 13,
+    borderRadius:    R.btn,
+    borderWidth:     1.5,
+    borderColor:     C.accent + '60',
+    borderStyle:     'dashed',
+  },
+  seqAddSlotText: { fontSize: 14, fontWeight: '700', color: C.accent },
+
+  ※ 기존 seqItem/seqList/seqName 스타일은 사용 안 해도 그대로 둬도 무방(에러 아님).
+
+================================================================================
+[파일 5] src/screens/JournalScreen.tsx — 주간맵 순차 분기 + 되돌리기 캐스트
+================================================================================
+
+--- 5-1. getWeekTargetMap 순차 분기 교체 (230번 근처)
+OLD:
+  const split  = splitConfig.workoutSplit as string[];
+  const len    = split.length;
+  if (len === 0) {
+    weekDates.forEach(d => { result[d.toDateString()] = null; });
+    return result;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const currentIdx = splitConfig.splitCurrentIndex % len;
+
+  weekDates.forEach(d => {
+    const date = new Date(d);
+    date.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const idx = ((currentIdx + diffDays) % len + len) % len;
+    result[d.toDateString()] = split[idx] ?? null;
+  });
+
+  return result;
+
+NEW:
+  const split  = splitConfig.workoutSplit as string[][];
+  const len    = split.length;
+  if (len === 0) {
+    weekDates.forEach(d => { result[d.toDateString()] = null; });
+    return result;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const currentIdx = splitConfig.splitCurrentIndex % len;
+
+  weekDates.forEach(d => {
+    const date = new Date(d);
+    date.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const idx = ((currentIdx + diffDays) % len + len) % len;
+    const slot = split[idx] ?? [];
+    const work = slot.filter(m => m !== '휴식');
+    result[d.toDateString()] = work.length > 0 ? work.join('·') : (slot.length > 0 ? '휴식' : null);
+  });
+
+  return result;
+
+--- 5-2. 인덱스 되돌리기 캐스트 (1277번 근처)
+OLD:
+                        const split = cfg.workoutSplit as string[];
+NEW:
+                        const split = cfg.workoutSplit as string[][];
+
+  ※ 인덱스 자동진행부(calcNextIndex(cfg.workoutSplit as SequentialSplit, ...))는
+    SequentialSplit이 이제 string[][]이므로 변경 불필요.
+
+================================================================================
+[파일 6] src/screens/HomeScreen.tsx — 주간맵 순차 분기
+================================================================================
+
+--- 6-1. getWeekTargetMap 순차 분기 교체
+OLD:
+  // sequential: assign from today onwards
+  const split = splitConfig.workoutSplit as string[];
+NEW:
+  // sequential: assign from today onwards
+  const split = splitConfig.workoutSplit as string[][];
+
+OLD:
+      result[d.toDateString()] = split[idx % split.length];
+      idx++;
+NEW:
+      const slot = split[idx % split.length] ?? [];
+      const work = slot.filter(m => m !== '휴식');
+      result[d.toDateString()] = work.length > 0 ? work.join('·') : (slot.length > 0 ? '휴식' : null);
+      idx++;
+
+================================================================================
+■ 완료 후 자체 점검
+================================================================================
+1) npx tsc --noEmit → 신규 에러 0건.
+   (SequentialSplit 타입 변경으로 순차 분기 누락 시 에러가 뜸 → 0건이면 누락 없음)
+2) 혹시 위에 안 적힌 곳에서 'as string[]'로 순차 split을 쓰는 잔재가 tsc 에러로
+   잡히면, 동일 패턴(slot의 부위 배열 처리)으로 수정.
+3) splitUtils의 getTodayTarget/getNextTarget가 복수 함수 [0] 래퍼로 바뀐 게 맞는지.
+
+■ 사람이 직접 할 일
+- 먼저 SQL 없음 확인 (이번 작업은 스키마 변경 없음).
+- 디바이스 테스트:
+  · 분할 설정 → 순서 기반 → "순서 추가"로 슬롯 만들고, 한 슬롯에 부위 2개(예: 가슴·삼두) 토글
+  · 슬롯 순서 ↑↓ 이동, 슬롯 삭제 동작
+  · 빈 슬롯이 있으면 다음(완료) 버튼 비활성인지
+  · 저장 → 시작 부위 선택 화면에 슬롯이 "가슴·삼두"처럼 표시되는지
+  · 그 슬롯이 오늘이면 운동기록 진입 시 부위 2개 자동선택 + 머신 둘 다 필터링
+  · 가슴 머신만 운동하고 저장 → 다음날 인덱스가 다음 슬롯으로 넘어가는지(느슨한 완료)
+  · 운동일지 배너 "오늘은 가슴·삼두 Day예요" / 주간 그리드 빈칸도 "가슴·삼두"
+  · ★ 기존에 순서 기반을 쓰던 계정으로 로그인 → 기존 순서가 안 깨지고 그대로 보이는지
+    (마이그레이션: ['가슴','등'] → [['가슴'],['등']])
+================================================================================

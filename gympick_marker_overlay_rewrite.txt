@@ -1,0 +1,75 @@
+[배경 — 확정된 원인]
+GitHub PR #5536(react-native-maps)에서 확인: 새 아키텍처(Fabric)에서는 tracksViewChanges
+prop이 안드로이드 네이티브 코드에 더 이상 매핑되지 않는 것으로 보고됨 — 즉 이 prop은 현재
+react-native-maps 버전 + Fabric 조합에서 안드로이드 한정으로 사실상 죽은 옵션. 짐픽은 Expo
+SDK 54(새 아키텍처 기본 적용)를 쓰고 있어 이 버그의 영향을 그대로 받고 있음. 그래서
+tracksViewChanges를 켰다 껐다 해도 마커 텍스트 잘림이 고쳐지지 않았음.
+
+해결 방향: <Marker> 자식 View로 헬스장 이름 라벨을 그리는 방식 자체를 버리고, 지도 위에
+얹는 일반 React Native 오버레이 View로 라벨을 직접 그린다. 좌표→화면 픽셀 변환은
+MapView의 pointForCoordinate() 메서드로 계산한다. 이 방식은 <Marker>의 네이티브 비트맵
+스냅샷 파이프라인을 전혀 거치지 않으므로, 이번에 확인된 Fabric 버그의 영향을 받지 않는다.
+
+
+[1] 현재 GymMapView.tsx의 마커 관련 코드 전체 재확인 (먼저 읽기만)
+
+1. 현재 <Marker> JSX 전체, marker/markerSelected/markerText/markerTextSelected 스타일
+   전체, gyms를 순회하는 .map() 블록 전체를 다시 보여줘 (정확한 기존 스타일/동작을
+   그대로 유지하며 옮기기 위함).
+2. 사용자 현재 위치를 표시하는 마커(있다면, 예: "내 위치" 점)가 헬스장 마커와 같은
+   커스텀 View 방식을 쓰는지, 아니면 showsUserLocation 같은 기본 내장 기능을 쓰는지
+   확인해줘. 헬스장 마커와 다른 방식이라면 이번 작업 범위에서 건드리지 마.
+3. MapView 컴포넌트에 ref가 이미 연결되어 있는지(mapRef) 확인해줘 — pointForCoordinate
+   호출에 필요함.
+
+
+[2] 좌표 기반 오버레이 라벨 방식으로 전환 (실제로 코드 수정)
+
+1. 헬스장별 화면 좌표(x, y)를 담는 state를 추가해줘:
+   const [markerPositions, setMarkerPositions] = useState<Record<string, {x: number; y: number} | null>>({});
+
+2. 모든 보이는 헬스장의 화면 좌표를 한 번에 계산하는 함수를 추가해줘:
+   - mapRef.current?.pointForCoordinate({latitude, longitude})를 각 헬스장에 대해
+     Promise.all로 병렬 호출해서 결과를 markerPositions에 저장.
+   - 이 함수는 다음 시점에 호출되어야 함: 지도 최초 로드 완료 시(onMapReady), gyms 배열이
+     바뀔 때, 그리고 지도가 움직이거나 확대/축소된 후(onRegionChangeComplete) — 매 프레임
+     호출되면 안 되니 onRegionChangeComplete 사용(이미 끝난 시점에만 호출되어 과도한 호출
+     없음).
+
+3. 기존에 <Marker> 안에 있던 View(아이콘 + Text 라벨, marker/markerSelected/markerText/
+   markerTextSelected 스타일 그대로 재사용)를, <MapView> 형제 요소로 절대 위치
+   지정(position: 'absolute', left, top)된 일반 View로 옮겨줘. left/top은
+   markerPositions[gym.id]의 x/y에서 라벨 크기의 절반만큼 빼서 중심이 좌표에 오도록
+   계산해줘 (기존 마커의 anchor 동작과 비슷하게).
+
+4. 이 오버레이 View들을 감싸는 부모 컨테이너에는 pointerEvents="box-none"을 줘서 지도
+   제스처(드래그/핀치줌)를 막지 않도록 하고, 각 오버레이 항목 자체는 기존처럼 onPress로
+   onSelectGym(gym)을 호출하도록 TouchableOpacity로 유지해줘.
+
+5. 기존 <Marker> 엘리먼트는 헬스장에 대해서는 더 이상 자식 View(아이콘+텍스트)를 갖지
+   않도록 제거해줘. coordinate 기반 탭 영역이 더 이상 필요 없다면(오버레이가 탭을
+   전담하므로) <Marker> 자체를 헬스장에 대해 완전히 제거해도 됨 — 다만 혹시 다른 곳에서
+   이 Marker의 존재 자체에 의존하는 로직(예: ref로 특정 마커를 calloutShow 한다든가)이
+   있는지 먼저 확인하고, 있다면 알려줘.
+
+6. truncateGymName, ellipsizeMode="clip", maxWidth: 100은 새 오버레이 Text에도 그대로
+   유지해줘 — 여전히 안전망 역할을 함.
+
+7. tracksViewChanges 관련 state/useEffect(이번 세션 직전에 추가했던 것)는 더 이상
+   필요 없으니 제거해줘.
+
+수정 전/후를 빠짐없이 보여줘.
+
+
+[3] 동작 확인 — 코드 레벨
+
+수정 후 코드를 다시 읽어서, 다음을 스스로 점검하고 결과를 알려줘:
+- 지도를 처음 열었을 때 onMapReady 또는 최초 useEffect에서 좌표 계산이 한 번 실행되는지
+- 지도를 움직인 후 onRegionChangeComplete에서 좌표가 재계산되는지
+- 마커(이제는 오버레이)를 탭했을 때 기존과 동일하게 onSelectGym이 호출되는지
+- 지도 제스처(드래그/핀치줌)가 오버레이 때문에 막히지 않는지(pointerEvents 설정 확인)
+
+
+[전체 진행 방식]
+[1]은 조사, [2]는 실제로 코드 수정, [3]은 셀프 체크 결과 보고.
+확인이나 중단 없이 끝까지 완료해줘.

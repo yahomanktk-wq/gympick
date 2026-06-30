@@ -33,14 +33,14 @@ import { captureRef } from 'react-native-view-shot';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T } from '../../theme';
 import { GymWithMachines, Machine, MACHINES } from '../../data';
-import { MOCK_SESSIONS, getMachinePRsFull } from '../../data/workoutSessions';
-import { WorkoutLog } from '../../data/types';
+import { MOCK_SESSIONS, getMachinePRsFull, getMachinePRsFromSets } from '../../data/workoutSessions';
+import { WorkoutLog, WorkoutEntry, WorkoutSet } from '../../data/types';
 import { addNewSession } from '../../data/sessionStore';
 import { saveTemplate, getTemplates, deleteTemplate, WorkoutTemplate } from '../../data/templateStore';
 import { recordPR } from '../../data/prStore';
 import { useAuth } from '../../context/AuthContext';
 import { submitGymRegistrationRequest } from '../../lib/db/gymRegistrationRequests';
-import { insertWorkoutSession, insertWorkoutEntry, insertWorkoutSet, insertWorkoutPhoto } from '../../lib/db/workouts';
+import { insertWorkoutSession, insertWorkoutEntry, insertWorkoutSet, insertWorkoutPhoto, fetchWorkoutEntriesForSessions, fetchWorkoutSetsForEntries } from '../../lib/db/workouts';
 import { uploadWorkoutPhoto } from '../../lib/photoStorage';
 import { containsBannedWord } from '../../lib/bannedWords';
 import { insertFeedPost } from '../../lib/db/feedPosts';
@@ -85,6 +85,17 @@ const MUSCLE_CARD_W = Math.floor((SCREEN_W - 44) / 2);
 
 // Historical PR map - machineId → { weight, reps } of best set ever logged
 const HIST_PRS = getMachinePRsFull(MOCK_SESSIONS);
+
+// 며칠 전인지 문구 (B안: 13일까지 '일', 그 이상 '주')
+function formatAgoForCard(dateIso: string): string {
+  const then = new Date(dateIso); then.setHours(0, 0, 0, 0);
+  const now  = new Date();        now.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((now.getTime() - then.getTime()) / 86400000);
+  if (diffDays <= 0) return '오늘';
+  if (diffDays === 1) return '어제';
+  if (diffDays <= 13) return `${diffDays}일 전`;
+  return `${Math.floor(diffDays / 7)}주 전`;
+}
 
 // --- Date formatter for overlay
 function formatWorkoutDate(date: Date): string {
@@ -161,6 +172,12 @@ const MUSCLE_GROUP_TO_CANON: Record<string, string> = {
 };
 function toCanonMuscle(m: string): string {
   return MUSCLE_GROUP_TO_CANON[m] ?? m;
+}
+
+// 복합키('m02#1')에서 순수 machineId('m02') 추출. 슬롯 없으면 그대로.
+function machineIdFromKey(key: string): string {
+  const i = key.lastIndexOf('#');
+  return i === -1 ? key : key.slice(0, i);
 }
 
 // --- Muscle palette
@@ -733,6 +750,8 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
   function matchesMuscle(targetMuscle: string): boolean {
     if (selectedMuscles.has(targetMuscle)) return true;
     if (targetMuscle === 'Glutes' && selectedMuscles.has('Hip (Glutes)')) return true;
+    if (targetMuscle === 'Glutes' && selectedMuscles.has('Leg')) return true;
+    if (targetMuscle === 'Other') return true;
     return false;
   }
 
@@ -759,8 +778,14 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
       .filter(Boolean) as Machine[];
     machines = []; // 루틴 모드에서는 분리된 machines 섹션 사용 안 함
   } else {
-    // Start Fresh: 헬스장 머신만 표시
-    machines = gym.machines.filter(m => matchesMuscle(m.targetMuscle));
+    // Start Fresh: 헬스장 머신만 표시 (선택 부위 머신 먼저, Other는 뒤로)
+    machines = gym.machines
+      .filter(m => matchesMuscle(m.targetMuscle))
+      .sort((a, b) => {
+        const aOther = a.targetMuscle === 'Other' ? 1 : 0;
+        const bOther = b.targetMuscle === 'Other' ? 1 : 0;
+        return aOther - bOther;
+      });
   }
 
   // 프리웨이트: 루틴 모드가 아닐 때만 별도 섹션 표시
@@ -845,7 +870,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
                       </View>
                     </View>
                   )}
-                  {loggedIds.has(m.id) && (
+                  {[...loggedIds].some(k => machineIdFromKey(k) === m.id) && (
                     <View style={s.cardCompletedOverlay}>
                       <View style={s.cardCompletedBadge}>
                         <Ionicons name="checkmark-circle" size={13} color={C.accent} />
@@ -900,7 +925,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
                       </View>
                     </View>
                   )}
-                  {loggedIds.has(m.id) && (
+                  {[...loggedIds].some(k => machineIdFromKey(k) === m.id) && (
                     <View style={s.cardCompletedOverlay}>
                       <View style={s.cardCompletedBadge}>
                         <Ionicons name="checkmark-circle" size={13} color={C.accent} />
@@ -948,7 +973,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
                       </View>
                     </View>
                   )}
-                  {loggedIds.has(fw.id) && (
+                  {[...loggedIds].some(k => machineIdFromKey(k) === fw.id) && (
                     <View style={s.cardCompletedOverlay}>
                       <View style={s.cardCompletedBadge}>
                         <Ionicons name="checkmark-circle" size={13} color={C.accent} />
@@ -1042,9 +1067,11 @@ function SetProgressBanner({
 
 // --- Step 4: Log Sets (single exercise)
 
-function SetCard({ ex, sets, onChange, onAdd, onCopyPrev, onRemove, onSetLayout, onRegisterRect, onboardingActive, onboardingKey }: {
+function SetCard({ ex, sets, realPR, prefill, onChange, onAdd, onCopyPrev, onRemove, onSetLayout, onRegisterRect, onboardingActive, onboardingKey }: {
   ex: ExerciseInfo;
   sets: SetEntry[];
+  realPR?: { weight: number; reps: number };
+  prefill?: { date: string } | null;
   onChange: (idx: number, field: keyof SetEntry, val: number) => void;
   onAdd: () => void;
   onCopyPrev: () => void;
@@ -1057,7 +1084,7 @@ function SetCard({ ex, sets, onChange, onAdd, onCopyPrev, onRemove, onSetLayout,
   const col    = mp(ex.targetMuscle);
   const isFW   = ex.id.startsWith('fw');
   const curMax  = sets.length ? Math.max(...sets.map(s => s.weight)) : 0;
-  const histPR  = HIST_PRS[ex.id]; // { weight, reps } | undefined
+  const histPR  = realPR; // 실제 유저 기록 기반 PR (없으면 undefined → 배지 미표시)
   const isNewPR = curMax > 0 && (histPR === undefined || curMax > histPR.weight);
 
   const setInputRef   = useRef<View>(null);
@@ -1101,6 +1128,12 @@ function SetCard({ ex, sets, onChange, onAdd, onCopyPrev, onRemove, onSetLayout,
         <View style={s.yourPRRow}>
           <Text style={s.yourPRLabel}>내 PR</Text>
           <Text style={s.yourPRVal}>{histPR.weight} kg × {histPR.reps}</Text>
+        </View>
+      )}
+      {prefill && (
+        <View style={s.prefillRow}>
+          <Ionicons name="time-outline" size={12} color={C.textDim} />
+          <Text style={s.prefillText}>지난 기록을 불러왔어요 ({formatAgoForCard(prefill.date)})</Text>
         </View>
       )}
 
@@ -1199,7 +1232,7 @@ function SetCard({ ex, sets, onChange, onAdd, onCopyPrev, onRemove, onSetLayout,
   );
 }
 
-function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onRemove, onNoteChange, onSave, onFinish, onBack, onClose, onRegisterRect, onboardingActive, onboardingKey }: {
+function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onRemove, onNoteChange, onSave, onFinish, onBack, onClose, onRegisterRect, onboardingActive, onboardingKey, realPR, prefill }: {
   exercise: ExerciseInfo;
   sets: SetEntry[];
   note: string;
@@ -1215,6 +1248,8 @@ function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onR
   onRegisterRect?: (key: OnboardingPointKey, rect: SpotlightRect) => void;
   onboardingActive?: boolean;
   onboardingKey?: OnboardingPointKey | null;
+  realPR?: { weight: number; reps: number };
+  prefill?: { date: string } | null;
 }) {
   const scrollRef        = useRef<ScrollView>(null);
   const setLayoutsRef    = useRef<number[]>([]);
@@ -1268,6 +1303,8 @@ function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onR
         <SetCard
           ex={exercise}
           sets={sets}
+          realPR={realPR}
+          prefill={prefill}
           onChange={onChange}
           onAdd={handleAdd}
           onCopyPrev={handleCopyPrev}
@@ -2463,8 +2500,8 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
   }, [photoTaken, onboardingActive, onboardingKey]);
 
   const ROUTINE_CARD_H = Math.round(PHOTO_W * 4 / 3);
-  const RC_HEADER_H    = 70;
-  const RC_FOOTER_H    = 36;
+  const RC_HEADER_H    = 64;
+  const RC_FOOTER_H    = 28;
   const RC_AVAIL_H     = ROUTINE_CARD_H - RC_HEADER_H - RC_FOOTER_H - 1;
 
   const [itemHeights, setItemHeights] = useState<number[]>([]);
@@ -2958,7 +2995,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
               const exSets    = logs[ex.id] ?? [];
               const brandKey  = ex.brand.toUpperCase().replace(/\s+/g, '_');
               const brandLogo = brandLogos[brandKey];
-              const imageUrl  = `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${ex.id}.webp`;
+              const imageUrl  = `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${machineIdFromKey(ex.id)}.webp`;
 
               return (
                 <React.Fragment key={ex.id}>
@@ -3017,7 +3054,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
             const exSets    = logs[ex.id] ?? [];
             const brandKey  = ex.brand.toUpperCase().replace(/\s+/g, '_');
             const brandLogo = brandLogos[brandKey];
-            const imageUrl  = `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${ex.id}.webp`;
+            const imageUrl  = `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${machineIdFromKey(ex.id)}.webp`;
             return (
               <View
                 key={`measure-${ex.id}`}
@@ -3102,7 +3139,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
                     const exSets    = logs[ex.id] ?? [];
                     const brandKey  = ex.brand.toUpperCase().replace(/\s+/g, '_');
                     const brandLogo = brandLogos[brandKey];
-                    const imageUrl  = `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${ex.id}.webp`;
+                    const imageUrl  = `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${machineIdFromKey(ex.id)}.webp`;
                     return (
                       <React.Fragment key={ex.id}>
                         {i > 0 && <View style={{ height: 1, backgroundColor: '#E5E5E5' }} />}
@@ -3619,6 +3656,10 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   const [routineReadOnly,     setRoutineReadOnly]     = useState(false);
   const [routineExtraInfo,    setRoutineExtraInfo]    = useState<MachineExtraInfo | undefined>(undefined);
   const [sessions,            setSessions]            = React.useState<WorkoutLog[]>([]);
+  const [pastEntries, setPastEntries] = useState<WorkoutEntry[]>([]);
+  const [pastSets,    setPastSets]    = useState<WorkoutSet[]>([]);
+  const [realPRs,     setRealPRs]     = useState<Record<string, { weight: number; reps: number }>>({});
+  const [prefillInfo, setPrefillInfo] = useState<Record<string, { date: string } | null>>({});
   const [dbFreeWeights,       setDbFreeWeights]       = useState<typeof FREE_WEIGHTS>([]);
 
   React.useEffect(() => {
@@ -3637,8 +3678,20 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
 
   React.useEffect(() => {
     if (!visible || !user) return;
-    fetchWorkoutLogs(user.id).then(data => {
+    fetchWorkoutLogs(user.id).then(async data => {
       setSessions(data);
+      try {
+        const sessionIds = data.map(s => s.id);
+        const entries = await fetchWorkoutEntriesForSessions(sessionIds);
+        const setsArr = await fetchWorkoutSetsForEntries(entries.map(e => e.id));
+        setPastEntries(entries);
+        setPastSets(setsArr);
+        setRealPRs(getMachinePRsFromSets(entries, setsArr));
+      } catch {
+        setPastEntries([]);
+        setPastSets([]);
+        setRealPRs({});
+      }
     }).catch(() => {
       setSessions(MOCK_SESSIONS);
     });
@@ -3712,13 +3765,85 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     setStep('muscle-select');
   }
 
-  function handleSelectExercise(id: string) {
-    setCurrentExerciseId(id);
+  // 특정 머신의 '가장 최근 날의 첫 세트' (없으면 null)
+  function findLastFirstSet(machineId: string): { weight: number; reps: number; date: string } | null {
+    const machineEntries = pastEntries.filter(e => e.machineId === machineId);
+    if (machineEntries.length === 0) return null;
+    const sessionDateById: Record<string, string> = {};
+    for (const s of sessions) sessionDateById[s.id] = s.date;
+    let bestEntry = machineEntries[0];
+    let bestDate  = sessionDateById[bestEntry.sessionId] ?? '';
+    for (const e of machineEntries) {
+      const d = sessionDateById[e.sessionId] ?? '';
+      if (d > bestDate) { bestDate = d; bestEntry = e; }
+    }
+    if (!bestDate) return null;
+    const entrySets = pastSets
+      .filter(st => st.entryId === bestEntry.id)
+      .sort((a, b) => a.setNumber - b.setNumber);
+    if (entrySets.length === 0) return null;
+    const first = entrySets[0];
+    return { weight: first.weight, reps: first.reps, date: bestDate };
+  }
+
+  // 특정 머신의 현재 슬롯 키들 (loggedIds 포함). 정렬된 배열 반환.
+  function slotKeysForMachine(machineId: string): string[] {
+    const keys: string[] = [];
+    for (const k of loggedIds) {
+      if (machineIdFromKey(k) === machineId) keys.push(k);
+    }
+    return keys.sort();
+  }
+
+  // 새 슬롯을 만들어 세트 입력으로 진입 (프리필 적용 여부 isFirstSlot로 제어)
+  function openNewSlot(machineId: string, slotKey: string, isFirstSlot: boolean) {
+    const last = isFirstSlot ? findLastFirstSet(machineId) : null;
+    setCurrentExerciseId(slotKey);
     setLogs(prev => ({
       ...prev,
-      [id]: prev[id]?.length ? prev[id] : [{ weight: 60, reps: 10 }],
+      [slotKey]: prev[slotKey]?.length
+        ? prev[slotKey]
+        : (last ? [{ weight: last.weight, reps: last.reps }] : [{ weight: 60, reps: 10 }]),
+    }));
+    setPrefillInfo(prev => ({
+      ...prev,
+      [slotKey]: prev[slotKey] !== undefined ? prev[slotKey] : (last ? { date: last.date } : null),
     }));
     setStep('log-sets');
+  }
+
+  function handleSelectExercise(id: string) {
+    // id = 순수 machineId
+    const existing = slotKeysForMachine(id);
+    if (existing.length === 0) {
+      openNewSlot(id, `${id}#0`, true);
+      return;
+    }
+    Alert.alert(
+      '이미 기록한 머신이에요',
+      '기존 기록을 수정하거나 새로 추가할 수 있어요.',
+      [
+        {
+          text: '기존 수정',
+          onPress: () => {
+            const lastKey = existing[existing.length - 1];
+            setCurrentExerciseId(lastKey);
+            setStep('log-sets');
+          },
+        },
+        {
+          text: '새로 추가',
+          onPress: () => {
+            const maxSlot = existing.reduce((mx, k) => {
+              const n = parseInt(k.slice(k.lastIndexOf('#') + 1), 10);
+              return isNaN(n) ? mx : Math.max(mx, n);
+            }, -1);
+            openNewSlot(id, `${id}#${maxSlot + 1}`, false);
+          },
+        },
+        { text: '취소', style: 'cancel' },
+      ],
+    );
   }
 
   async function handleSaveExercise() {
@@ -3735,9 +3860,10 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
 
       const exSets  = logs[currentExerciseId] ?? [];
 
-      // PR detection
+      // PR detection (PR은 머신 단위 → 순수 machineId 사용)
+      const midForPR = machineIdFromKey(currentExerciseId);
       const curMax  = exSets.length ? Math.max(...exSets.map(s => s.weight)) : 0;
-      const histPR  = HIST_PRS[currentExerciseId];
+      const histPR  = realPRs[midForPR];
       let   isPR    = false;
       if (curMax > 0 && (histPR === undefined || curMax > histPR.weight)) {
         const bestSet = exSets.reduce<SetEntry | null>((b, s) => (!b || s.weight > b.weight ? s : b), null);
@@ -3748,7 +3874,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
           setPrCelebration(pr);
           setDetectedPRs(prev => [...prev, pr]);
           recordPR({
-            exerciseId:   currentExerciseId,
+            exerciseId:   midForPR,
             exerciseName: exInfo.name,
             weight:       curMax,
             reps:         bestSet.reps,
@@ -3808,30 +3934,32 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   const selectedExercises: ExerciseInfo[] = useMemo(() => {
     if (!gym) return [];
     const result: ExerciseInfo[] = [];
-    for (const id of loggedIds) {
-      if (id.startsWith('fw')) {
-        const fw = (dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS).find(f => f.id === id);
-        if (fw) result.push({ id: fw.id, name: fw.name, brand: fw.brand, targetMuscle: fw.targetMuscle });
+    for (const key of loggedIds) {
+      const mid = machineIdFromKey(key);
+      if (mid.startsWith('fw')) {
+        const fw = (dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS).find(f => f.id === mid);
+        if (fw) result.push({ id: key, name: fw.name, brand: fw.brand, targetMuscle: fw.targetMuscle });
       } else {
-        const m = gym.machines.find(m => m.id === id);
-        if (m) result.push({ id: m.id, name: m.name, brand: m.brand, targetMuscle: m.targetMuscle });
+        const m = gym.machines.find(m => m.id === mid);
+        if (m) result.push({ id: key, name: m.name, brand: m.brand, targetMuscle: m.targetMuscle });
       }
     }
     return result;
-  }, [loggedIds, gym]);
+  }, [loggedIds, gym, dbFreeWeights]);
 
   // currentExercise object for SetLoggingStep
   const currentExercise: ExerciseInfo | null = useMemo(() => {
     if (!currentExerciseId || !gym) return null;
-    if (currentExerciseId.startsWith('fw')) {
-      const fw = (dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS).find(f => f.id === currentExerciseId);
-      if (fw) return { id: fw.id, name: fw.name, brand: fw.brand, targetMuscle: fw.targetMuscle };
+    const mid = machineIdFromKey(currentExerciseId);
+    if (mid.startsWith('fw')) {
+      const fw = (dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS).find(f => f.id === mid);
+      if (fw) return { id: currentExerciseId, name: fw.name, brand: fw.brand, targetMuscle: fw.targetMuscle };
     } else {
-      const m = gym.machines.find(m => m.id === currentExerciseId);
-      if (m) return { id: m.id, name: m.name, brand: m.brand, targetMuscle: m.targetMuscle };
+      const m = gym.machines.find(m => m.id === mid);
+      if (m) return { id: currentExerciseId, name: m.name, brand: m.brand, targetMuscle: m.targetMuscle };
     }
     return null;
-  }, [currentExerciseId, gym]);
+  }, [currentExerciseId, gym, dbFreeWeights]);
 
   const ORDER: Step[] = ['gym-select', 'muscle-select', 'routine-reference', 'today-list', 'exercise-select', 'photo', 'done'];
 
@@ -3892,7 +4020,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
         );
         const note = notes[ex.id]?.trim();
         return {
-          machineId:    ex.id,
+          machineId:    machineIdFromKey(ex.id),
           machineName:  ex.name,
           machineBrand: ex.brand,
           targetMuscle: ex.targetMuscle,
@@ -3924,15 +4052,16 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
 
         for (let i = 0; i < selectedExercises.length; i++) {
           const ex = selectedExercises[i];
+          const mid = machineIdFromKey(ex.id);
           const entryId = `entry-${Date.now()}-${i}`;
           await insertWorkoutEntry({
             id:           entryId,
             sessionId,
-            machineId:    ex.id,
+            machineId:    mid,
             machineName:  ex.name,
             machineBrand: ex.brand,
             targetMuscle: ex.targetMuscle,
-            exerciseKind: ex.id.startsWith('fw') ? 'freeweight' : 'machine',
+            exerciseKind: mid.startsWith('fw') ? 'freeweight' : 'machine',
             order:        i,
           });
 
@@ -4156,6 +4285,8 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
           <SetLoggingStep
             exercise={currentExercise}
             sets={logs[currentExercise.id] ?? []}
+            realPR={realPRs[machineIdFromKey(currentExercise.id)]}
+            prefill={prefillInfo[currentExercise.id] ?? null}
             note={notes[currentExercise.id] ?? ''}
             onChange={handleChangeSet}
             onAdd={handleAddSet}
@@ -4413,6 +4544,8 @@ const s = StyleSheet.create({
   yourPRRow:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: C.accentBg, borderRadius: R.inner, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 8 },
   yourPRLabel:      { fontSize: 9, fontWeight: '900', color: C.accent, letterSpacing: 1 },
   yourPRVal:        { fontSize: 13, fontWeight: '800', color: C.accent },
+  prefillRow:       { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
+  prefillText:      { fontSize: 12, color: C.textDim, fontWeight: '600' },
 
   setBlock:       { backgroundColor: C.surfaceHigh, borderRadius: R.inner, padding: 16, marginBottom: 10 },
   setBlockHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },

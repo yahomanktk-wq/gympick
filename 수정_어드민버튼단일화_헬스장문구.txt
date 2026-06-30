@@ -1,0 +1,84 @@
+================================================================================
+[소규모 수정] 어드민 머신 신청 버튼 단일화 + 헬스장 등록 요청 문구 변경
+================================================================================
+
+■ 작업 2건
+  (1) 어드민 대시보드 '머신 등록 신청(매니저)' 화면: 검토완료/처리완료 2버튼
+      → "확인 완료" 1버튼 (status는 'resolved'로 통일)
+  (2) '머신·헬스장 찾기' 헬스장 탭: "내 헬스장 등록 요청하기"
+      → "내가 다니는 헬스장 등록요청하기"
+
+■ 변경 파일 (2개)
+  1. src/screens/admin/AdminDashboard.tsx
+  2. src/screens/FindGymScreen.tsx
+
+★ 주의: AdminDashboard의 동일한 버튼 코드가 GymRequestsView(헬스장 신청)에도
+  있다. 이번 수정은 MachineRequestsView(머신 신청)에만 적용한다.
+  아래 OLD는 '신청자:' 줄을 포함해 MachineRequestsView에서만 유일하게 매칭된다.
+  GymRequestsView의 검토완료/처리완료 버튼은 건드리지 말 것.
+
+================================================================================
+[파일 1] src/screens/admin/AdminDashboard.tsx — 머신 신청 버튼 단일화
+================================================================================
+
+--- 1-1. 대기 신청의 2버튼 → "확인 완료" 1버튼 (MachineRequestsView)
+OLD:
+          <Text style={{ fontSize: 11, color: C.textDim }}>신청자: {req.requesterId} · {new Date(req.createdAt).toLocaleDateString('ko-KR')}</Text>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+            <TouchableOpacity
+              style={{ flex: 1, padding: 10, borderRadius: R.btn, backgroundColor: C.accent, alignItems: 'center' }}
+              onPress={() => onUpdateStatus(req.id, 'reviewed')}
+            >
+              <Text style={{ color: C.bg, fontWeight: '700', fontSize: 13 }}>검토 완료</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ flex: 1, padding: 10, borderRadius: R.btn, backgroundColor: C.surface, alignItems: 'center', borderWidth: 1, borderColor: C.border }}
+              onPress={() => onUpdateStatus(req.id, 'resolved')}
+            >
+              <Text style={{ color: C.text, fontWeight: '700', fontSize: 13 }}>처리 완료</Text>
+            </TouchableOpacity>
+          </View>
+
+NEW:
+          <Text style={{ fontSize: 11, color: C.textDim }}>신청자: {req.requesterId} · {new Date(req.createdAt).toLocaleDateString('ko-KR')}</Text>
+          <TouchableOpacity
+            style={{ padding: 12, borderRadius: R.btn, backgroundColor: C.accent, alignItems: 'center', marginTop: 4 }}
+            onPress={() => onUpdateStatus(req.id, 'resolved')}
+          >
+            <Text style={{ color: C.bg, fontWeight: '800', fontSize: 13 }}>확인 완료</Text>
+          </TouchableOpacity>
+
+--- 1-2. 처리된 신청 라벨도 "확인 완료"로 통일 (MachineRequestsView)
+         (이 OLD는 req.brand를 쓰는 줄이라 MachineRequestsView에서만 유일하게 매칭됨)
+OLD:
+              <Text style={{ fontSize: 12, color: C.textSub }}>{req.gymName}{req.brand ? ` · ${req.brand}` : ''}</Text>
+              <Text style={{ fontSize: 11, color: C.accent, fontWeight: '600' }}>{req.status === 'reviewed' ? '검토 완료' : '처리 완료'}</Text>
+NEW:
+              <Text style={{ fontSize: 12, color: C.textSub }}>{req.gymName}{req.brand ? ` · ${req.brand}` : ''}</Text>
+              <Text style={{ fontSize: 11, color: C.accent, fontWeight: '600' }}>확인 완료</Text>
+
+================================================================================
+[파일 2] src/screens/FindGymScreen.tsx — 등록 요청 버튼 문구 변경
+================================================================================
+841번 근처의 버튼 문구를 변경한다.
+
+OLD:
+내 헬스장 등록 요청하기
+NEW:
+내가 다니는 헬스장 등록요청하기
+
+  ※ 위 한글 문구만 정확히 치환. 주변 코드/스타일은 변경하지 않는다.
+
+================================================================================
+■ 완료 후 자체 점검
+================================================================================
+1) npx tsc --noEmit → 신규 에러 0건 (기존 에러 개수만 유지)
+2) GymRequestsView(헬스장 신규 등록 제안)의 검토완료/처리완료 2버튼은 그대로인지 확인
+   (이번 수정은 MachineRequestsView에만 적용)
+
+■ 사람이 직접 할 일 (디바이스 테스트)
+- 어드민 → '머신 등록 신청(매니저)' → 대기 신청에 "확인 완료" 버튼 1개만 보이는지
+  · 누르면 처리된 신청으로 내려가고 Supabase status='resolved' 반영
+- '머신·헬스장 찾기' → 헬스장 탭 → 버튼 문구가 "내가 다니는 헬스장 등록요청하기"인지
+- (확인) 어드민 '헬스장 신규 등록 제안(유저)' 화면은 여전히 검토완료/처리완료 2버튼인지
+================================================================================

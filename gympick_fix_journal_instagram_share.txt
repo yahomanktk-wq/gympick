@@ -1,0 +1,88 @@
+Fix a remaining media-permission risk in JournalScreen.tsx's handleInstagramShare.
+Complete without stopping to ask for confirmation. Only report back when 100% complete.
+
+==================================================
+BACKGROUND
+==================================================
+
+This is a follow-up to gympick_fix_media_permission_policy.txt. That task
+already changed MediaLibrary.requestPermissionsAsync() to
+requestPermissionsAsync(true) (writeOnly) across the app, since the app's
+READ_MEDIA_IMAGES/READ_MEDIA_VIDEO permissions are now blocked via
+expo-build-properties to satisfy Google Play policy.
+
+However, handleInstagramShare in src/screens/JournalScreen.tsx still calls
+MediaLibrary.getAssetsAsync(...) right after saveToLibraryAsync(...), purely
+to retrieve the asset id of the file it just saved (needed for the iOS
+Instagram deep link). getAssetsAsync is a read/query operation and will not
+work reliably now that read permission is no longer declared/granted.
+
+The fix: replace the saveToLibraryAsync + getAssetsAsync pair with a single
+call to MediaLibrary.createAssetAsync(uri), which saves the file AND returns
+the Asset object (including .id) directly — no read permission needed. This
+exact pattern is already used successfully in handleInstagramShare inside
+src/screens/flow/PostWorkoutLogModal.tsx; mirror that approach here.
+
+==================================================
+EDIT: src/screens/JournalScreen.tsx — handleInstagramShare
+==================================================
+
+This file may use \r\n line endings. Match content carefully; do not break
+line endings elsewhere in the file.
+
+Step 1 — find this block (inside the "인증샷 저장" section of
+handleInstagramShare):
+
+  await MediaLibrary.saveToLibraryAsync(uri);
+  const { assets } = await MediaLibrary.getAssetsAsync({ first: 1, sortBy: MediaLibrary.SortBy.creationTime });
+  if (assets.length > 0) savedAssets.push(assets[0]);
+
+Replace with:
+
+  const asset = await MediaLibrary.createAssetAsync(uri);
+  savedAssets.push(asset);
+
+Step 2 — find this block (inside the "루틴카드 페이지별 캡처 및 저장" loop,
+same function, different uri variable name "pageUri"):
+
+  await MediaLibrary.saveToLibraryAsync(pageUri);
+  const { assets } = await MediaLibrary.getAssetsAsync({ first: 1, sortBy: MediaLibrary.SortBy.creationTime });
+  if (assets.length > 0) savedAssets.push(assets[0]);
+
+Replace with:
+
+  const asset = await MediaLibrary.createAssetAsync(pageUri);
+  savedAssets.push(asset);
+
+Do not touch handleSave in this same file — it only uses saveToLibraryAsync
+with no read calls, so it is already correct as-is.
+
+Do not touch anything else in this file or any other file.
+
+==================================================
+VERIFY
+==================================================
+
+Run:
+  grep -n "getAssetsAsync" src/screens/JournalScreen.tsx
+
+Expect zero matches after the fix.
+
+Run:
+  npx tsc --noEmit
+
+Confirm no new TypeScript errors were introduced by this change (pre-existing
+errors in unrelated files like temp_restore.tsx are not your concern here).
+
+==================================================
+FINAL INSTRUCTION
+==================================================
+
+Do not stop. Do not ask questions. Apply the fix completely.
+
+When done, report:
+  1. The final code of both edited blocks in handleInstagramShare
+  2. Confirmation that grep for "getAssetsAsync" in JournalScreen.tsx returns
+     no matches
+  3. Confirmation that handleSave was left untouched
+  4. Confirmation tsc shows no new errors related to this file
