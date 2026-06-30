@@ -2557,11 +2557,6 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
     : `${labelMuscles[0] ?? 'WORKOUT'} Day`;
 
   async function handleSaveImage() {
-    console.log('[handleSaveImage] called');
-    console.log('[handleSaveImage] photoUri:', photoUri);
-    console.log('[handleSaveImage] overlayRef.current:', overlayRef.current);
-    console.log('[handleSaveImage] textColor:', textColor);
-    console.log('[handleSaveImage] routineCardRef:', routineCardRef.current);
     if (!photoUri || !overlayRef.current) {
       Alert.alert('사진 없음', '먼저 사진을 찍어주세요.');
       return;
