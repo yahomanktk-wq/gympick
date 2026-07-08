@@ -17,6 +17,7 @@ export const brandLogos: Record<string, number> = {
   FLEX_FITNESS:      require('../assets/brand-logos/FLEX_FITNESS.png'),
   FLEX_LEVERAGE:     require('../assets/brand-logos/FLEX_LEVERAGE.png'),
   FREEMOTION:        require('../assets/brand-logos/FREEMOTION.png'),
+  GLUTEBUILDER:      require('../assets/brand-logos/GLUTEBUILDER.png'),
   GYM80:             require('../assets/brand-logos/GYM80.png'),
   GYMLECO:           require('../assets/brand-logos/GYMLECO.png'),
   HAMMER_STRENGTH:   require('../assets/brand-logos/HAMMER_STRENGTH.png'),
