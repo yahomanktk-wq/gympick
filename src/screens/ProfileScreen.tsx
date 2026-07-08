@@ -63,7 +63,6 @@ const SETTINGS_LIST: { icon: IoniconName; label: string; toggle?: boolean; dange
   { icon: 'git-branch-outline',     label: '운동 분할 설정',   splitSetup: true  },
   { icon: 'document-text-outline',  label: '개인정보처리방침', privacy: true     },
   { icon: 'help-circle-outline',    label: '도움말 및 피드백'                     },
-  { icon: 'trash-outline',          label: '계정 삭제',        deleteAccount: true, danger: true },
   { icon: 'log-out-outline',        label: '로그아웃',          danger: true     },
 ];
 
@@ -879,21 +878,6 @@ export default function ProfileScreen() {
         )}
 
         <Text style={styles.version}>GymPick v1.0.0</Text>
-
-        {/* DEV only — onboarding reset */}
-        {__DEV__ && (
-          <TouchableOpacity
-            style={styles.devResetBtn}
-            onPress={async () => {
-              const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
-              await AsyncStorage.removeItem('onboarding_completed');
-              Alert.alert('온보딩 초기화됨', '앱을 재시작하면 온보딩이 다시 표시돼요.');
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.devResetTxt}>DEV: 온보딩 초기화</Text>
-          </TouchableOpacity>
-        )}
       </ScrollView>
 
       {/* ── Modals ── */}
@@ -1059,6 +1043,24 @@ export default function ProfileScreen() {
                 <Ionicons name="chevron-forward" size={16} color={C.textDim} />
               </TouchableOpacity>
             </View>
+
+            {/* 계정 섹션 */}
+            {user && (
+              <>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: C.textDim, letterSpacing: 1, marginTop: 20, marginBottom: 4 }}>계정</Text>
+                <View style={{ backgroundColor: C.surface, borderRadius: R.card, borderWidth: 1, borderColor: C.border, overflow: 'hidden' }}>
+                  <TouchableOpacity
+                    style={{ flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12 }}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); handleDeleteAccount(); }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="trash-outline" size={18} color="#ff5a5a" />
+                    <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: '#ff5a5a' }}>계정 삭제</Text>
+                    <Ionicons name="chevron-forward" size={16} color={C.textDim} />
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
 
             <View style={{ height: 32 }} />
           </ScrollView>
