@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -19,8 +19,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { C, R, T } from '../../theme';
-import { ManagedGym, Machine, GymStatus } from '../../data/types';
-import { MACHINES } from '../../data/machines';
+import { ManagedGym, Machine, GymStatus, MachineWithGyms } from '../../data/types';
+import { fetchMachines, getMachinesCacheSync } from '../../lib/db';
+import { parseMuscles } from '../../lib/splitUtils';
 import { useAuth } from '../../context/AuthContext';
 import MachineCard from '../../components/MachineCard';
 import {
@@ -114,15 +115,13 @@ function muscleColor(muscle: string) {
 
 function uid() { return Math.random().toString(36).slice(2, 9); }
 
-const CATALOG_MUSCLES = [...new Set(MACHINES.map(m => m.targetMuscle))].sort();
-const CATALOG_BRANDS  = [...new Set(MACHINES.map(m => m.brand))].sort();
 const BODY_PARTS = ['전체', 'Chest', 'Back', 'Leg', 'Shoulder', 'Arms', 'Glutes', 'Other'];
 
 // Seed routine mock data
-function makeMockRoutines(gymId: string): ManagerGymRoutine[] {
+function makeMockRoutines(gymId: string, machines: MachineWithGyms[]): ManagerGymRoutine[] {
   const toEntry = (m: Machine) => ({ id: m.id, name: m.name, brand: m.brand, targetMuscle: m.targetMuscle, category: m.category });
-  const chestMs = MACHINES.filter(m => m.targetMuscle === 'Chest').slice(0, 3).map(toEntry);
-  const backMs  = MACHINES.filter(m => m.targetMuscle === 'Back').slice(0, 3).map(toEntry);
+  const chestMs = machines.filter(m => m.targetMuscle === 'Chest').slice(0, 3).map(toEntry);
+  const backMs  = machines.filter(m => m.targetMuscle === 'Back').slice(0, 3).map(toEntry);
   return gymId === 'g01' ? [
     { id: 'r1', gymId, name: '파워 가슴 루틴', bodyPart: 'Chest', machines: chestMs, createdAt: '2026-03-01T09:00:00Z' },
     { id: 'r2', gymId, name: '등 집중 루틴',   bodyPart: 'Back',  machines: backMs,  createdAt: '2026-03-05T10:00:00Z' },
@@ -364,6 +363,7 @@ interface EditViewProps {
 }
 
 interface MachinesViewProps {
+  machines: MachineWithGyms[];
   gymMachineIds: string[];
   machineMusclFilter: string;
   setMachineMusclFilter: (v: string) => void;
@@ -376,6 +376,7 @@ interface MachinesViewProps {
 }
 
 interface RoutineTabProps {
+  machines: MachineWithGyms[];
   gymRoutines: ManagerGymRoutine[];
   gymMachineIds: string[];
   routineBodyPart: string;
@@ -680,14 +681,18 @@ const MachineItem = React.memo(({ machine, isAdded, onToggle, cardWidth }: {
 ));
 
 function MachinesView({
+  machines,
   gymMachineIds, machineMusclFilter, setMachineMusclFilter,
   machineBrandFilter, setMachineBrandFilter,
   showOwnedOnly, setShowOwnedOnly,
   onToggleMachine, onRequestMachine,
 }: MachinesViewProps) {
-  const filteredMachines = MACHINES.filter(m => {
+  const CATALOG_MUSCLES = useMemo(() => [...new Set(machines.flatMap(m => parseMuscles(m.targetMuscle)))].sort(), [machines]);
+  const CATALOG_BRANDS  = useMemo(() => [...new Set(machines.map(m => m.brand))].sort(), [machines]);
+
+  const filteredMachines = machines.filter(m => {
     if (!m || !m.name || !m.brand || !m.targetMuscle) return false;
-    const muscleOk = machineMusclFilter === '전체' || m.targetMuscle.toLowerCase() === machineMusclFilter.toLowerCase();
+    const muscleOk = machineMusclFilter === '전체' || parseMuscles(m.targetMuscle).some(t => t.toLowerCase() === machineMusclFilter.toLowerCase());
     const brandOk  = machineBrandFilter === '전체' || m.brand.toLowerCase() === machineBrandFilter.toLowerCase();
     const ownedOk  = !showOwnedOnly || gymMachineIds.includes(m.id);
     return muscleOk && brandOk && ownedOk;
@@ -698,8 +703,8 @@ function MachinesView({
       <View style={styles.machinesHeader}>
         {[
           { value: String(gymMachineIds.length), label: '등록 머신' },
-          { value: String([...new Set(gymMachineIds.map(id => MACHINES.find(m => m.id === id)?.targetMuscle).filter(Boolean))].length), label: '운동 부위' },
-          { value: String([...new Set(gymMachineIds.map(id => MACHINES.find(m => m.id === id)?.brand).filter(Boolean))].length), label: '브랜드' },
+          { value: String([...new Set(gymMachineIds.map(id => machines.find(m => m.id === id)?.targetMuscle).filter(Boolean))].length), label: '운동 부위' },
+          { value: String([...new Set(gymMachineIds.map(id => machines.find(m => m.id === id)?.brand).filter(Boolean))].length), label: '브랜드' },
         ].map(s => (
           <View key={s.label} style={styles.machinesStat}>
             <Text style={styles.machinesStatValue}>{s.value}</Text>
@@ -780,20 +785,21 @@ function MachinesView({
 }
 
 function RoutineTab({
+  machines,
   gymRoutines, gymMachineIds, routineBodyPart, routineModalVisible, setRoutineModalVisible,
   routineName, setRoutineName, setRoutineBodyPart, routineSelectedIds,
   setRoutineSelectedIds, editingRoutineId, onOpenAdd, onOpenEdit, onDelete, onSave,
 }: RoutineTabProps) {
   // Gym machines filtered by body part
-  const gymMachines = MACHINES.filter(m => gymMachineIds.includes(m.id));
+  const gymMachines = machines.filter(m => gymMachineIds.includes(m.id));
   const isAll = routineBodyPart === '전체';
   const filteredGymMachines = isAll
     ? gymMachines
-    : gymMachines.filter(m => m.targetMuscle.toLowerCase() === routineBodyPart.toLowerCase());
+    : gymMachines.filter(m => parseMuscles(m.targetMuscle).some(t => t.toLowerCase() === routineBodyPart.toLowerCase()));
   // Free weights filtered by body part
   const filteredFreeWeights = isAll
     ? FREE_WEIGHTS
-    : FREE_WEIGHTS.filter(fw => fw.targetMuscle.toLowerCase() === routineBodyPart.toLowerCase());
+    : FREE_WEIGHTS.filter(fw => parseMuscles(fw.targetMuscle).some(t => t.toLowerCase() === routineBodyPart.toLowerCase()));
   // Combined list: gym machines first, then free weights (cast as Machine for MachineCard)
   const routineFilteredMachines: Machine[] = [
     ...filteredGymMachines,
@@ -1089,6 +1095,13 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
   }, [viewStack.length, onClose]);
 
   const [gyms, setGyms]               = useState<ManagedGym[]>([]);
+  const [machines, setMachines] = useState<MachineWithGyms[]>(() => getMachinesCacheSync());
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchMachines().then(data => { if (!cancelled) setMachines(data); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   // Supabase에서 승인된 헬스장 로딩
   useEffect(() => {
@@ -1338,7 +1351,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
       .order('created_at', { ascending: true });
 
     if (error || !data) {
-      setGymRoutines(makeMockRoutines(gymId));
+      setGymRoutines(makeMockRoutines(gymId, machines));
       return;
     }
 
@@ -1350,7 +1363,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
         name:      r.name,
         bodyPart:  r.body_part,
         machines:  machineIds.map(id => {
-          const m = MACHINES.find(x => x.id === id);
+          const m = machines.find(x => x.id === id);
           return m ? { id: m.id, name: m.name, brand: m.brand, targetMuscle: m.targetMuscle, category: m.category } : { id, name: id, brand: '', targetMuscle: '', category: '' };
         }),
         createdAt: r.created_at,
@@ -1504,8 +1517,8 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
     if (routineSelectedIds.size === 0 || !selectedGym) return;
 
     const machineIds = [...routineSelectedIds];
-    const machines   = machineIds.map(id => {
-      const m = MACHINES.find(x => x.id === id);
+    const machineEntries = machineIds.map(id => {
+      const m = machines.find(x => x.id === id);
       return m ? { id: m.id, name: m.name, brand: m.brand, targetMuscle: m.targetMuscle, category: m.category } : { id, name: id, brand: '', targetMuscle: '', category: '' };
     });
 
@@ -1525,7 +1538,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
       if (error) { Alert.alert('오류', '루틴 수정에 실패했습니다: ' + error.message); return; }
       setGymRoutines(prev =>
         prev.map(r => r.id === editingRoutineId
-          ? { ...r, name: routineName.trim(), bodyPart: routineBodyPart, machines }
+          ? { ...r, name: routineName.trim(), bodyPart: routineBodyPart, machines: machineEntries }
           : r
         )
       );
@@ -1544,14 +1557,14 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
 
       if (error) { Alert.alert('오류', '루틴 저장에 실패했습니다: ' + error.message); return; }
       setGymRoutines(prev => [
-        { id: newId, gymId: selectedGym.id, name: routineName.trim(), bodyPart: routineBodyPart, machines, createdAt: new Date().toISOString() },
+        { id: newId, gymId: selectedGym.id, name: routineName.trim(), bodyPart: routineBodyPart, machines: machineEntries, createdAt: new Date().toISOString() },
         ...prev,
       ]);
     }
 
     setRoutineModalVisible(false);
     setRoutineName(''); setRoutineBodyPart('전체'); setRoutineSelectedIds(new Set()); setEditingRoutineId(null);
-  }, [routineName, routineSelectedIds, editingRoutineId, routineBodyPart, selectedGym]);
+  }, [routineName, routineSelectedIds, editingRoutineId, routineBodyPart, selectedGym, machines]);
 
   const deleteRoutine = useCallback((id: string) =>
     Alert.alert('루틴 삭제', '이 루틴을 삭제할까요?', [
@@ -1810,6 +1823,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
       {currentView === 'machines' && (
         <View style={{ flex: 1 }}>
           <MachinesView
+            machines={machines}
             gymMachineIds={gymMachineIds}
             machineMusclFilter={machineMusclFilter}
             setMachineMusclFilter={setMachineMusclFilter}
@@ -1877,6 +1891,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
           activeManagerTab={activeManagerTab}
           setActiveManagerTab={setActiveManagerTab}
           routineTabProps={{
+            machines,
             gymRoutines,
             gymMachineIds,
             routineBodyPart,

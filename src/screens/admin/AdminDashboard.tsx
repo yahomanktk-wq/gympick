@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,10 +18,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T } from '../../theme';
 import { PendingGym, ReviewStatus } from '../../data/types';
-import { MACHINES } from '../../data/machines';
-import type { Machine } from '../../data/types';
+import type { Machine, MachineWithGyms } from '../../data/types';
 import { Switch } from 'react-native';
 import { fetchMachineRequests, updateMachineRequestStatus, type MachineRequest } from '../../lib/db/machineRequests';
+import { fetchMachines, getMachinesCacheSync } from '../../lib/db';
+import { parseMuscles } from '../../lib/splitUtils';
 import {
   getBrandCopyrightList,
   setBrandCopyrightStatus,
@@ -52,6 +53,14 @@ import {
 } from '../../lib/db/gymRegistrationRequests';
 import { geocodeAddress } from '../../lib/geocoding';
 import {
+  OperatingHoursEditor,
+  serializeHours,
+  parseHours,
+  applyNoticeToggle,
+  DEFAULT_HOURS,
+  type OperatingHours,
+} from '../../components/OperatingHoursEditor';
+import {
   fetchGymOfficialBrands,
   addGymOfficialBrand,
   removeGymOfficialBrand,
@@ -68,8 +77,6 @@ import { sendNotification } from '../../lib/db/notifications';
 
 const SCREEN_W     = Dimensions.get('window').width;
 const CAT_CARD_W   = Math.floor((SCREEN_W - 40 - 12) / 2);
-const CAT_MUSCLES  = ['All', ...Array.from(new Set(MACHINES.map(m => m.targetMuscle))).sort()];
-const CAT_BRANDS   = ['All', ...Array.from(new Set(MACHINES.map(m => m.brand))).sort()];
 
 // --- Types
 
@@ -129,6 +136,7 @@ function EmptyQueue({ label }: { label: string }) {
 // --- Props interfaces
 
 interface HomeViewProps {
+  machines: MachineWithGyms[];
   pendingGymCount: number;
   gymReportCount: number;
   managerRequestCount: number;
@@ -153,6 +161,7 @@ interface GymDetailViewProps {
 }
 
 interface MachineCatalogViewProps {
+  machines: MachineWithGyms[];
   catQuery: string;
   setCatQuery: (v: string) => void;
   catMuscle: string;
@@ -307,7 +316,7 @@ function MachineRequestsView({
   );
 }
 
-function HomeView({ pendingGymCount, gymReportCount, managerRequestCount, registeredGymCount, gymRequestCount, machineRequestCount, onPush }: HomeViewProps) {
+function HomeView({ machines, pendingGymCount, gymReportCount, managerRequestCount, registeredGymCount, gymRequestCount, machineRequestCount, onPush }: HomeViewProps) {
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
       {/* Stats */}
@@ -341,7 +350,7 @@ function HomeView({ pendingGymCount, gymReportCount, managerRequestCount, regist
           icon: 'barbell-outline' as const,
           title: '머신 카탈로그',
           count: 0,
-          sub: `${MACHINES.length}개 머신 등록됨`,
+          sub: `${machines.length}개 머신 등록됨`,
           onPress: () => onPush('machine-catalog'),
           color: '#a78bfa',
         },
@@ -528,9 +537,12 @@ function GymDetailView({ selectedGym, onReview, onBack }: GymDetailViewProps) {
 }
 
 function MachineCatalogView({
+  machines,
   catQuery, setCatQuery, catMuscle, setCatMuscle, catBrand, setCatBrand,
   catSelected, catApproved, onToggleSelect, onApproveSelected,
 }: MachineCatalogViewProps) {
+  const CAT_MUSCLES = useMemo(() => ['All', ...Array.from(new Set(machines.flatMap(m => parseMuscles(m.targetMuscle)))).sort()], [machines]);
+  const CAT_BRANDS  = useMemo(() => ['All', ...Array.from(new Set(machines.map(m => m.brand))).sort()], [machines]);
   const MC: Record<string, { fg: string; bg: string }> = {
     Chest:       { fg: '#ff6b6b', bg: '#ff6b6b18' },
     Back:        { fg: '#5ba4ff', bg: '#5ba4ff18' },
@@ -544,8 +556,8 @@ function MachineCatalogView({
   const mc = (muscle: string) => MC[muscle] ?? { fg: C.textSub, bg: C.border };
 
   const q = catQuery.toLowerCase().trim();
-  const filtered = MACHINES.filter(m => {
-    if (catMuscle !== 'All' && m.targetMuscle !== catMuscle) return false;
+  const filtered = machines.filter(m => {
+    if (catMuscle !== 'All' && !parseMuscles(m.targetMuscle).includes(catMuscle)) return false;
     if (catBrand  !== 'All' && m.brand          !== catBrand)  return false;
     if (q && !m.name.toLowerCase().includes(q) && !m.brand.toLowerCase().includes(q)) return false;
     return true;
@@ -696,8 +708,8 @@ function MachineCatalogView({
   );
 }
 
-function BrandCopyrightView() {
-  const allBrands = Array.from(new Set(MACHINES.map(m => m.brand))).sort();
+function BrandCopyrightView({ machines }: { machines: MachineWithGyms[] }) {
+  const allBrands = useMemo(() => Array.from(new Set(machines.map(m => m.brand))).sort(), [machines]);
   const [entries, setEntries] = useState(() => getBrandCopyrightList(allBrands));
 
   function toggle(brand: string, value: boolean) {
@@ -824,8 +836,6 @@ function GymReportsView({ reports, onMarkReviewed, onDelete }: GymReportsViewPro
 
 // --- RegisterGymAdminView
 
-const ADMIN_GYM_MUSCLES = ['All', ...Array.from(new Set(MACHINES.map(m => m.targetMuscle))).sort()];
-const ADMIN_GYM_BRANDS  = ['All', ...Array.from(new Set(MACHINES.map(m => m.brand))).sort()];
 const ADMIN_FORM_PAD = 16;
 const ADMIN_CARD_W   = Math.floor((Dimensions.get('window').width - ADMIN_FORM_PAD * 2 - 8) / 2);
 
@@ -853,39 +863,53 @@ const AdminMachineItem = React.memo(({ machine, isSelected, onToggle, cardWidth 
 ));
 
 interface RegisterGymAdminViewProps {
+  machines: MachineWithGyms[];
   registeredGyms: AdminGym[];
-  onSave: (name: string, location: string, phone: string, hours: string, machineIds: string[]) => void | Promise<void>;
-  onUpdate: (id: string, name: string, location: string, phone: string, hours: string, machineIds: string[]) => void | Promise<void>;
+  onSave: (name: string, location: string, phone: string, hours: string, hoursNote: string, machineIds: string[]) => void | Promise<void>;
+  onUpdate: (id: string, name: string, location: string, phone: string, hours: string, hoursNote: string, machineIds: string[]) => void | Promise<void>;
   onOfficialBrands: (gymId: string, gymName: string) => void;
 }
 
-function RegisterGymAdminView({ registeredGyms, onSave, onUpdate, onOfficialBrands }: RegisterGymAdminViewProps) {
+function RegisterGymAdminView({ machines, registeredGyms, onSave, onUpdate, onOfficialBrands }: RegisterGymAdminViewProps) {
   const [showForm,         setShowForm]         = useState(false);
   const [editingGym,       setEditingGym]       = useState<AdminGym | null>(null);
   const [gymName,          setGymName]          = useState('');
   const [gymLocation,      setGymLocation]      = useState('');
   const [gymPhone,         setGymPhone]         = useState('');
-  const [gymHours,         setGymHours]         = useState('');
+  const [gymHours2,        setGymHours2]        = useState<OperatingHours>(DEFAULT_HOURS);
+  const [gymNotices,       setGymNotices]       = useState<string[]>([]);
+  const [gymHoursNote,     setGymHoursNote]     = useState('');
   const [selectedIds,      setSelectedIds]      = useState<Set<string>>(new Set());
   const [muscleFilter,     setMuscleFilter]     = useState('All');
   const [brandFilter,      setBrandFilter]      = useState('All');
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
   const [gymSearchQuery,   setGymSearchQuery]   = useState('');
 
-  const filteredMachines = MACHINES.filter(m => {
+  const ADMIN_GYM_MUSCLES = useMemo(() => ['All', ...Array.from(new Set(machines.flatMap(m => parseMuscles(m.targetMuscle)))).sort()], [machines]);
+  const ADMIN_GYM_BRANDS  = useMemo(() => ['All', ...Array.from(new Set(machines.map(m => m.brand))).sort()], [machines]);
+
+  const updateGymDay = useCallback((day: keyof OperatingHours, field: any, value: any) => {
+    setGymHours2(prev => ({ ...prev, [day]: { ...prev[day], [field]: value } }));
+  }, []);
+  const toggleGymNotice = useCallback((chip: string) => {
+    setGymNotices(prev => applyNoticeToggle(chip, prev, setGymHours2));
+  }, []);
+
+  const filteredMachines = machines.filter(m => {
     if (!m || !m.name || !m.brand || !m.targetMuscle) return false;
-    const muscleOk   = muscleFilter === 'All' || m.targetMuscle === muscleFilter;
+    const muscleOk   = muscleFilter === 'All' || parseMuscles(m.targetMuscle).includes(muscleFilter);
     const brandOk    = brandFilter  === 'All' || m.brand        === brandFilter;
     const selectedOk = !showSelectedOnly || selectedIds.has(m.id);
     return muscleOk && brandOk && selectedOk;
   });
 
-  const selectedMuscleCount = new Set(MACHINES.filter(m => selectedIds.has(m.id)).map(m => m.targetMuscle)).size;
-  const selectedBrandCount  = new Set(MACHINES.filter(m => selectedIds.has(m.id)).map(m => m.brand)).size;
+  const selectedMuscleCount = new Set(machines.filter(m => selectedIds.has(m.id)).map(m => m.targetMuscle)).size;
+  const selectedBrandCount  = new Set(machines.filter(m => selectedIds.has(m.id)).map(m => m.brand)).size;
 
   function resetForm() {
     setEditingGym(null);
-    setGymName(''); setGymLocation(''); setGymPhone(''); setGymHours('');
+    setGymName(''); setGymLocation(''); setGymPhone('');
+    setGymHours2(DEFAULT_HOURS); setGymNotices([]); setGymHoursNote('');
     setSelectedIds(new Set()); setMuscleFilter('All'); setBrandFilter('All'); setShowSelectedOnly(false);
   }
 
@@ -894,7 +918,9 @@ function RegisterGymAdminView({ registeredGyms, onSave, onUpdate, onOfficialBran
     setGymName(gym.name);
     setGymLocation(gym.location);
     setGymPhone(gym.phone);
-    setGymHours(gym.hours);
+    setGymHours2(parseHours(gym.hours));
+    setGymNotices([]);
+    setGymHoursNote(gym.hoursNote ?? '');
     setSelectedIds(new Set(gym.machineIds));
     setMuscleFilter('All');
     setBrandFilter('All');
@@ -908,12 +934,12 @@ function RegisterGymAdminView({ registeredGyms, onSave, onUpdate, onOfficialBran
       return;
     }
     if (editingGym) {
-      await onUpdate(editingGym.id, gymName.trim(), gymLocation.trim(), gymPhone.trim(), gymHours.trim(), Array.from(selectedIds));
+      await onUpdate(editingGym.id, gymName.trim(), gymLocation.trim(), gymPhone.trim(), serializeHours(gymHours2), gymHoursNote.trim(), Array.from(selectedIds));
       setShowForm(false);
       resetForm();
       Alert.alert('수정 완료', '수정이 완료되었습니다.');
     } else {
-      await onSave(gymName.trim(), gymLocation.trim(), gymPhone.trim(), gymHours.trim(), Array.from(selectedIds));
+      await onSave(gymName.trim(), gymLocation.trim(), gymPhone.trim(), serializeHours(gymHours2), gymHoursNote.trim(), Array.from(selectedIds));
       setShowForm(false);
       resetForm();
       Alert.alert('등록 완료', '헬스장이 등록되었습니다.');
@@ -943,8 +969,16 @@ function RegisterGymAdminView({ registeredGyms, onSave, onUpdate, onOfficialBran
           <Text style={[styles.detailLabel, { marginBottom: 6, marginTop: 12 }]}>전화번호</Text>
           <TextInput style={styles.adminInput} value={gymPhone} onChangeText={v => setGymPhone(v)} placeholder="예: 02-1234-5678" placeholderTextColor={C.textDim} keyboardType="phone-pad" spellCheck={false} />
           <View style={styles.detailDivider} />
-          <Text style={[styles.detailLabel, { marginBottom: 6, marginTop: 12 }]}>운영시간</Text>
-          <TextInput style={styles.adminInput} value={gymHours} onChangeText={v => setGymHours(v)} placeholder="예: 월~금 06:00~22:00, 주말 08:00~20:00" placeholderTextColor={C.textDim} autoCorrect={false} autoCapitalize="none" spellCheck={false} />
+          <View style={{ marginTop: 12 }}>
+            <OperatingHoursEditor
+              hours={gymHours2}
+              updateDay={updateGymDay}
+              notices={gymNotices}
+              toggleNotice={toggleGymNotice}
+              hoursNote={gymHoursNote}
+              setHoursNote={setGymHoursNote}
+            />
+          </View>
         </View>
 
         {/* ── 보유 머신 선택 ── */}
@@ -1400,6 +1434,7 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
   }, []);
   const [gymRequests,    setGymRequests]    = useState<GymRegistrationRequest[]>([]);
   const [machineRequests, setMachineRequests] = useState<MachineRequest[]>([]);
+  const [machines, setMachines] = useState<MachineWithGyms[]>(() => getMachinesCacheSync());
 
   useEffect(() => {
     fetchGymRegistrationRequests().then(setGymRequests);
@@ -1407,6 +1442,12 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     fetchMachineRequests().then(setMachineRequests);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchMachines().then(data => { if (!cancelled) setMachines(data); }).catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -1642,8 +1683,8 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     }
   }, []);
 
-  const handleRegisterGym = useCallback(async (name: string, location: string, phone: string, hours: string, machineIds: string[]) => {
-    const { error } = await insertAdminGym(name, location, phone, hours, machineIds);
+  const handleRegisterGym = useCallback(async (name: string, location: string, phone: string, hours: string, hoursNote: string, machineIds: string[]) => {
+    const { error } = await insertAdminGym(name, location, phone, hours, hoursNote, machineIds);
     if (error) {
       Alert.alert('등록 오류', '헬스장 등록에 실패했습니다. ' + error);
       return;
@@ -1673,8 +1714,8 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     }
   }, [officialGymId, officialBrands]);
 
-  const handleUpdateGym = useCallback(async (id: string, name: string, location: string, phone: string, hours: string, machineIds: string[]) => {
-    const { error } = await updateAdminGymFull(id, name, location, phone, hours, machineIds);
+  const handleUpdateGym = useCallback(async (id: string, name: string, location: string, phone: string, hours: string, hoursNote: string, machineIds: string[]) => {
+    const { error } = await updateAdminGymFull(id, name, location, phone, hours, hoursNote, machineIds);
     if (error) {
       Alert.alert('수정 오류', '헬스장 수정에 실패했습니다. ' + error);
       return;
@@ -1720,6 +1761,7 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
 
       {currentView === 'home' && (
         <HomeView
+          machines={machines}
           pendingGymCount={pendingGymCount}
           gymReportCount={gymReportCount}
           managerRequestCount={managerRequestCount}
@@ -1747,6 +1789,7 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
       )}
       {currentView === 'machine-catalog' && (
         <MachineCatalogView
+          machines={machines}
           catQuery={catQuery}
           setCatQuery={setCatQuery}
           catMuscle={catMuscle}
@@ -1759,7 +1802,7 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
           onApproveSelected={approveSelected}
         />
       )}
-      {currentView === 'brand-copyright' && <BrandCopyrightView />}
+      {currentView === 'brand-copyright' && <BrandCopyrightView machines={machines} />}
       {currentView === 'gym-reports' && (
         <GymReportsView
           reports={gymReports}
@@ -1811,6 +1854,7 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
       )}
       {currentView === 'register-gym' && (
         <RegisterGymAdminView
+          machines={machines}
           registeredGyms={registeredGyms}
           onSave={handleRegisterGym}
           onUpdate={handleUpdateGym}

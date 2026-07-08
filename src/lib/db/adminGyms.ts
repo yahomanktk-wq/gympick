@@ -9,6 +9,7 @@ export interface AdminGym {
   location:   string;
   phone:      string;
   hours:      string;
+  hoursNote:  string;
   machineIds: string[];
   createdAt:  string;
 }
@@ -18,7 +19,7 @@ export async function fetchAdminGyms(): Promise<AdminGym[]> {
   const { data, error } = await supabase
     .from('gyms')
     .select(`
-      id, name, location, phone, hours, created_at,
+      id, name, location, phone, hours, hours_note, created_at,
       manager_id,
       gym_machines ( machine_id )
     `)
@@ -36,6 +37,7 @@ export async function fetchAdminGyms(): Promise<AdminGym[]> {
     location:   row.location,
     phone:      row.phone ?? '',
     hours:      row.hours ?? '',
+    hoursNote:  row.hours_note ?? '',
     machineIds: (row.gym_machines ?? []).map((gm: any) => gm.machine_id),
     createdAt:  row.created_at ?? '',
   }));
@@ -43,7 +45,7 @@ export async function fetchAdminGyms(): Promise<AdminGym[]> {
 
 // 직접등록 (gyms insert + 머신 저장)
 export async function insertAdminGym(
-  name: string, location: string, phone: string, hours: string, machineIds: string[],
+  name: string, location: string, phone: string, hours: string, hoursNote: string, machineIds: string[],
 ): Promise<{ error: string | null }> {
   try {
     const gymId = `g_${Date.now()}`;
@@ -56,6 +58,7 @@ export async function insertAdminGym(
       location:    location.trim(),
       phone:       phone.trim(),
       hours:       hours.trim(),
+      hours_note:  hoursNote.trim() || null,
       description: '',
       latitude:    coords?.latitude  ?? null,
       longitude:   coords?.longitude ?? null,
@@ -76,7 +79,7 @@ export async function insertAdminGym(
 
 // 직접등록 헬스장 수정 (gyms update + 머신 저장)
 export async function updateAdminGymFull(
-  id: string, name: string, location: string, phone: string, hours: string, machineIds: string[],
+  id: string, name: string, location: string, phone: string, hours: string, hoursNote: string, machineIds: string[],
 ): Promise<{ error: string | null }> {
   try {
     const { geocodeAddress } = await import('../geocoding');
@@ -85,12 +88,13 @@ export async function updateAdminGymFull(
     const { error: updateError } = await supabase
       .from('gyms')
       .update({
-        name:      name.trim(),
-        location:  location.trim(),
-        phone:     phone.trim(),
-        hours:     hours.trim(),
-        latitude:  coords?.latitude  ?? null,
-        longitude: coords?.longitude ?? null,
+        name:       name.trim(),
+        location:   location.trim(),
+        phone:      phone.trim(),
+        hours:      hours.trim(),
+        hours_note: hoursNote.trim() || null,
+        latitude:   coords?.latitude  ?? null,
+        longitude:  coords?.longitude ?? null,
       })
       .eq('id', id);
     if (updateError) return { error: updateError.message };
