@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Image as ExpoImage } from 'expo-image';
 import { fetchGymPhotoUrls } from '../../lib/db/gymPhotos';
+import { parseMuscles } from '../../lib/splitUtils';
 import GymAllMachinesScreen from './GymAllMachinesScreen';
 import {
   View,
@@ -306,7 +307,7 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
   const gymMachines = gym?.machines ?? [];
 
   const muscleOptions = useMemo(() => {
-    const unique = [...new Set(gymMachines.map(m => m.targetMuscle).filter(Boolean))].sort();
+    const unique = [...new Set(gymMachines.flatMap(m => parseMuscles(m.targetMuscle)))].sort();
     return ['전체', ...unique];
   }, [gymMachines]);
 
@@ -318,7 +319,7 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
   const filteredMachines = useMemo(() => {
     return gymMachines.filter(m => {
       const muscleOk = machineMuscleFilter === '전체' ||
-        m.targetMuscle?.toLowerCase() === machineMuscleFilter.toLowerCase();
+        parseMuscles(m.targetMuscle).some(t => t.toLowerCase() === machineMuscleFilter.toLowerCase());
       const brandOk  = machineBrandFilter === '전체' ||
         m.brand?.toLowerCase() === machineBrandFilter.toLowerCase();
       return muscleOk && brandOk;

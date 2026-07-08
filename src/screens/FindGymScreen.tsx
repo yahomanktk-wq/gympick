@@ -43,7 +43,7 @@ import MachineCardBorder  from '../components/MachineCardBorder';
 import * as Location from 'expo-location';
 import { calcDistanceKm, formatDistance } from '../lib/geocoding';
 import FavoriteGymRecommendation from '../components/FavoriteGymRecommendation';
-import { toEnMuscle } from '../lib/splitUtils';
+import { toEnMuscle, parseMuscles } from '../lib/splitUtils';
 import * as Haptics from 'expo-haptics';
 
 const CATEGORY_ORDER: Record<string, string[]> = {
@@ -391,7 +391,7 @@ export default function FindGymScreen() {
 
   const muscleOptions = useMemo(() => {
     const unique = [...new Set(
-      allMachines.map(m => m.targetMuscle).filter(Boolean)
+      allMachines.flatMap(m => parseMuscles(m.targetMuscle))
     )];
     const ordered = MUSCLE_ORDER.filter(m => unique.includes(m));
     const rest = unique.filter(m => !MUSCLE_ORDER.includes(m)).sort();
@@ -402,7 +402,7 @@ export default function FindGymScreen() {
     const sourceMachines = activeMuscle === 'All'
       ? allMachines
       : allMachines.filter(m =>
-          m.targetMuscle?.toLowerCase() === activeMuscle.toLowerCase()
+          parseMuscles(m.targetMuscle).some(t => t.toLowerCase() === activeMuscle.toLowerCase())
         );
     const uniqueBrands = [...new Set(sourceMachines.map(m => m.brand))].sort();
     return ['All', ...uniqueBrands];
@@ -412,7 +412,7 @@ export default function FindGymScreen() {
     if (activeMuscle === 'All') return [];
 
     const muscleFiltered = allMachines.filter(m =>
-      m.targetMuscle?.toLowerCase() === activeMuscle.toLowerCase()
+      parseMuscles(m.targetMuscle).some(t => t.toLowerCase() === activeMuscle.toLowerCase())
     );
 
     const available = new Set(
@@ -495,7 +495,7 @@ export default function FindGymScreen() {
   // --- Filtered machines
   const filteredMachines = useMemo(() => {
     return allMachines.filter(m => {
-      const muscleOk   = activeMuscle === 'All' || m.targetMuscle?.toLowerCase() === activeMuscle.toLowerCase();
+      const muscleOk   = activeMuscle === 'All' || parseMuscles(m.targetMuscle).some(t => t.toLowerCase() === activeMuscle.toLowerCase());
       const brandOk    = activeBrand  === 'All' || m.brand?.toLowerCase()         === activeBrand.toLowerCase();
       const categoryOk = activeCategory === 'All' ||
         m.category?.split(',').map(c => c.trim()).includes(activeCategory);

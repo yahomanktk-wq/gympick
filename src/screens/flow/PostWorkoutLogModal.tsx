@@ -61,7 +61,7 @@ import { calcDistanceKm, formatDistance } from '../../lib/geocoding';
 import { fetchGymsWithMachines } from '../../lib/db/gyms';
 import { brandLogos } from '../../constants/brandLogos';
 import { fetchSplitConfig } from '../../lib/db/splitRoutine';
-import { getTodayTargets, isRestToday, toEnMuscle } from '../../lib/splitUtils';
+import { getTodayTargets, isRestToday, toEnMuscle, parseMuscles } from '../../lib/splitUtils';
 import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path as SvgPath, Text as SvgText, TextPath, Defs } from 'react-native-svg';
@@ -780,10 +780,10 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
   } else {
     // Start Fresh: 헬스장 머신만 표시 (선택 부위 머신 먼저, Other는 뒤로)
     machines = gym.machines
-      .filter(m => matchesMuscle(m.targetMuscle))
+      .filter(m => parseMuscles(m.targetMuscle).some(t => matchesMuscle(t)))
       .sort((a, b) => {
-        const aOther = a.targetMuscle === 'Other' ? 1 : 0;
-        const bOther = b.targetMuscle === 'Other' ? 1 : 0;
+        const aOther = parseMuscles(a.targetMuscle).includes('Other') ? 1 : 0;
+        const bOther = parseMuscles(b.targetMuscle).includes('Other') ? 1 : 0;
         return aOther - bOther;
       });
   }
@@ -792,7 +792,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
   const freeWeights = hasPreloaded
     ? []
     : (dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS)
-        .filter(fw => matchesMuscle(fw.targetMuscle));
+        .filter(fw => parseMuscles(fw.targetMuscle).some(t => matchesMuscle(t)));
   const MACHINE_CARD_W2 = (SCREEN_W - 40) / 2;
 
   function handleCardPress(id: string) {

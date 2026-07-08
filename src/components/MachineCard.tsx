@@ -7,6 +7,7 @@ import { C, R } from '../theme';
 import GymPickLogo from './GymPickLogo';
 import { brandLogos } from '../constants/brandLogos';
 import { getBrandCopyrightStatus } from '../data/brandCopyrightStore';
+import { parseMuscles } from '../lib/splitUtils';
 
 export interface MachineCardMachine {
   id:           string;
@@ -139,10 +140,21 @@ export default function MachineCard({ machine, width, variant = 'detail' }: Prop
         ) : (
           <Text style={[s.bandValue, isGrid && { fontSize: 10 }]} numberOfLines={1}>{machine.brand}</Text>
         )}
-        <View style={[s.musclePill, isGrid && { paddingHorizontal: 6, paddingVertical: 3 }]}>
-          <Text style={[s.muscleText, isGrid && { fontSize: 9, letterSpacing: 0.5 }]}>
-            {machine.targetMuscle.toUpperCase()}
-          </Text>
+        <View style={s.muscleColumn}>
+          {parseMuscles(machine.targetMuscle).slice(0, 2).map((mus, i) => (
+            <View
+              key={i}
+              style={[
+                s.musclePill,
+                isGrid && { paddingHorizontal: 5, paddingVertical: 2 },
+                i > 0 && { marginTop: isGrid ? 2 : 3 },
+              ]}
+            >
+              <Text style={[s.muscleText, isGrid && { fontSize: 8, letterSpacing: 0.3 }]}>
+                {mus.toUpperCase()}
+              </Text>
+            </View>
+          ))}
         </View>
       </View>
 
@@ -320,6 +332,10 @@ const s = StyleSheet.create({
     width:      130,
     height:     46,
     resizeMode: 'contain',
+  },
+  muscleColumn: {
+    alignItems:     'flex-end',
+    justifyContent: 'center',
   },
   musclePill: {
     backgroundColor:   '#7CFF3B',

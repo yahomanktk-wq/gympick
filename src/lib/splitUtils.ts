@@ -35,6 +35,13 @@ export function toEnMuscle(ko: string): string {
   return MUSCLE_KO_TO_EN[ko] ?? ko;
 }
 
+// 머신 targetMuscle 문자열을 부위 배열로 파싱 (콤마구분, 공백 trim)
+// 단일값 "Chest" → ["Chest"], 다중값 "Chest, Shoulder" → ["Chest","Shoulder"]
+export function parseMuscles(targetMuscle?: string | null): string[] {
+  if (!targetMuscle) return [];
+  return targetMuscle.split(',').map(m => m.trim()).filter(Boolean);
+}
+
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 type DayKey = typeof DAY_KEYS[number];
 
@@ -83,8 +90,7 @@ export function extractCompletedTargets(
   return [
     ...new Set(
       machines
-        .map(m => m.targetMuscle)
-        .filter((t): t is string => !!t)
+        .flatMap(m => parseMuscles(m.targetMuscle))
         .map(t => toKoMuscle(t))
     )
   ];
