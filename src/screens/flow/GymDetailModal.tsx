@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Modal,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   SafeAreaView,
   Dimensions,
@@ -194,6 +195,25 @@ function HoursTable({ hours }: { hours: DayHours[] }) {
     </View>
   );
 }
+
+const GymMachineItem = React.memo(({
+  machine,
+  cardWidth,
+  onPress,
+}: {
+  machine: GymWithMachines['machines'][number];
+  cardWidth: number;
+  onPress: (machineId: string) => void;
+}) => (
+  <TouchableOpacity
+    onPress={() => onPress(machine.id)}
+    activeOpacity={0.85}
+  >
+    <MachineCardBorder width={cardWidth}>
+      <MachineCard machine={machine} variant="grid" width={cardWidth} />
+    </MachineCardBorder>
+  </TouchableOpacity>
+));
 
 function HoursText({ hours }: { hours: string }) {
   // "월 09:00~22:00, 화 09:00~22:00" 형식을 줄바꿈으로 분리
@@ -393,70 +413,74 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
 
         {/* ── 머신 tab ── */}
         {activeTab === '머신' && (
-          <ScrollView showsVerticalScrollIndicator={false}>
-
-            {/* 타겟부위 필터 */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={s.filterRow}
-            >
-              {muscleOptions.map(opt => (
-                <TouchableOpacity
-                  key={opt}
-                  style={[s.filterChip, machineMuscleFilter === opt && s.filterChipActive]}
-                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMachineMuscleFilter(opt); }}
-                  activeOpacity={0.8}
+          <FlatList
+            data={filteredMachines}
+            keyExtractor={(m) => m.id}
+            numColumns={2}
+            columnWrapperStyle={{ gap: 8 }}
+            initialNumToRender={12}
+            maxToRenderPerBatch={12}
+            windowSize={5}
+            removeClippedSubviews={true}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32, gap: 8 }}
+            renderItem={({ item: machine }) => (
+              <GymMachineItem
+                machine={machine}
+                cardWidth={CARD_W}
+                onPress={setSelectedMachineId}
+              />
+            )}
+            ListHeaderComponent={
+              <View>
+                {/* 타겟부위 필터 */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={s.filterRow}
                 >
-                  <Text style={[s.filterChipText, machineMuscleFilter === opt && s.filterChipTextActive]}>
-                    {opt}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+                  {muscleOptions.map(opt => (
+                    <TouchableOpacity
+                      key={opt}
+                      style={[s.filterChip, machineMuscleFilter === opt && s.filterChipActive]}
+                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMachineMuscleFilter(opt); }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[s.filterChipText, machineMuscleFilter === opt && s.filterChipTextActive]}>
+                        {opt}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
 
-            {/* 브랜드 필터 */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={s.filterRow}
-            >
-              {brandOptions.map(opt => (
-                <TouchableOpacity
-                  key={opt}
-                  style={[s.filterChip, machineBrandFilter === opt && s.filterChipActive]}
-                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMachineBrandFilter(opt); }}
-                  activeOpacity={0.8}
+                {/* 브랜드 필터 */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={s.filterRow}
                 >
-                  <Text style={[s.filterChipText, machineBrandFilter === opt && s.filterChipTextActive]}>
-                    {opt}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            {/* 머신 카드 그리드 */}
-            {filteredMachines.length === 0 ? (
+                  {brandOptions.map(opt => (
+                    <TouchableOpacity
+                      key={opt}
+                      style={[s.filterChip, machineBrandFilter === opt && s.filterChipActive]}
+                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMachineBrandFilter(opt); }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[s.filterChipText, machineBrandFilter === opt && s.filterChipTextActive]}>
+                        {opt}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            }
+            ListEmptyComponent={
               <View style={s.emptyState}>
                 <Ionicons name="barbell-outline" size={36} color={C.textDim} />
                 <Text style={s.emptyText}>조건에 맞는 머신이 없어요</Text>
               </View>
-            ) : (
-              <View style={s.machineGrid}>
-                {filteredMachines.map(machine => (
-                  <TouchableOpacity
-                    key={machine.id}
-                    onPress={() => setSelectedMachineId(machine.id)}
-                    activeOpacity={0.85}
-                  >
-                    <MachineCardBorder width={CARD_W}>
-                      <MachineCard machine={machine} variant="grid" width={CARD_W} />
-                    </MachineCardBorder>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </ScrollView>
+            }
+          />
         )}
 
         {/* ── 정보 tab ── */}
