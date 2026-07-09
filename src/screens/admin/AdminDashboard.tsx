@@ -68,13 +68,18 @@ import {
   type ManagerRequest,
 } from '../../lib/db/managerRequests';
 import { sendNotification } from '../../lib/db/notifications';
+import {
+  fetchAllUserInquiries,
+  answerUserInquiry,
+  type UserInquiry,
+} from '../../lib/db/userInquiries';
 
 const SCREEN_W     = Dimensions.get('window').width;
 const CAT_CARD_W   = Math.floor((SCREEN_W - 40 - 12) / 2);
 
 // --- Types
 
-type AdminView = 'home' | 'pending-gyms' | 'gym-detail' | 'machine-catalog' | 'brand-copyright' | 'gym-reports' | 'manager-requests' | 'register-gym' | 'gym-registration-requests' | 'gym-official-brands' | 'all-gyms-official' | 'machine-requests';
+type AdminView = 'home' | 'pending-gyms' | 'gym-detail' | 'machine-catalog' | 'brand-copyright' | 'gym-reports' | 'manager-requests' | 'register-gym' | 'gym-registration-requests' | 'gym-official-brands' | 'all-gyms-official' | 'machine-requests' | 'user-inquiries';
 
 // --- Shared components
 
@@ -137,6 +142,7 @@ interface HomeViewProps {
   registeredGymCount: number;
   gymRequestCount: number;
   machineRequestCount: number;
+  userInquiryCount: number;
   onPush: (v: AdminView) => void;
 }
 
@@ -309,7 +315,7 @@ function MachineRequestsView({
   );
 }
 
-function HomeView({ machines, pendingGymCount, gymReportCount, managerRequestCount, registeredGymCount, gymRequestCount, machineRequestCount, onPush }: HomeViewProps) {
+function HomeView({ machines, pendingGymCount, gymReportCount, managerRequestCount, registeredGymCount, gymRequestCount, machineRequestCount, userInquiryCount, onPush }: HomeViewProps) {
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
       {/* Stats */}
@@ -402,6 +408,14 @@ function HomeView({ machines, pendingGymCount, gymReportCount, managerRequestCou
           sub: '헬스장별 오피셜 브랜드 설정',
           onPress: () => onPush('all-gyms-official'),
           color: '#5ba4ff',
+        },
+        {
+          icon: 'chatbubble-outline' as const,
+          title: '유저 문의 관리',
+          count: userInquiryCount,
+          sub: userInquiryCount > 0 ? `${userInquiryCount}개 답변 대기` : '접수된 문의 없음',
+          onPress: () => onPush('user-inquiries'),
+          color: '#facc15',
         },
       ].map(q => (
         <TouchableOpacity key={q.title} style={styles.queueCard} onPress={q.onPress} activeOpacity={0.85}>
@@ -814,6 +828,92 @@ function GymReportsView({ reports, onMarkReviewed, onDelete }: GymReportsViewPro
                 <View style={{ flex: 1 }}>
                   <Text style={styles.flagGymName}>{r.gymName}</Text>
                   <Text style={styles.flagDesc} numberOfLines={1}>{r.content}</Text>
+                </View>
+                <View style={[styles.reviewedBadge, { backgroundColor: C.accentBg }]}>
+                  <Text style={[styles.reviewedBadgeText, { color: C.accent }]}>완료</Text>
+                </View>
+              </View>
+            </View>
+          ))}
+        </>
+      )}
+    </ScrollView>
+  );
+}
+
+// --- UserInquiriesView
+
+interface UserInquiriesViewProps {
+  inquiries: UserInquiry[];
+  onAnswer: (id: string, answer: string) => void;
+}
+
+function UserInquiriesView({ inquiries, onAnswer }: UserInquiriesViewProps) {
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+
+  const pending  = inquiries.filter(i => i.status === 'pending');
+  const answered = inquiries.filter(i => i.status !== 'pending');
+
+  function submitAnswer(id: string) {
+    const answer = (drafts[id] ?? '').trim();
+    if (!answer) return;
+    onAnswer(id, answer);
+    setDrafts(prev => ({ ...prev, [id]: '' }));
+  }
+
+  return (
+    <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <Text style={styles.sectionTitle}>유저 문의 관리</Text>
+      <Text style={styles.sectionSub}>{pending.length}개 답변 대기</Text>
+
+      {pending.length === 0 && <EmptyQueue label="답변 대기 중인 문의가 없어요" />}
+
+      {pending.map(i => (
+        <View key={i.id} style={styles.flagCard}>
+          <View style={styles.flagCardTop}>
+            <View style={[styles.flagTypeIcon, { backgroundColor: '#facc1518' }]}>
+              <Ionicons name="chatbubble-outline" size={16} color="#facc15" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.flagGymName}>{i.title}</Text>
+              <View style={styles.submittedRow}>
+                <Ionicons name="time-outline" size={11} color={C.textSub} />
+                <Text style={styles.submittedText}>{i.createdAt.slice(0, 10)}</Text>
+              </View>
+            </View>
+          </View>
+          <Text style={styles.flagDesc}>{i.content}</Text>
+          <TextInput
+            style={styles.adminInput}
+            value={drafts[i.id] ?? ''}
+            onChangeText={v => setDrafts(prev => ({ ...prev, [i.id]: v }))}
+            placeholder="답변을 입력해주세요"
+            placeholderTextColor={C.textDim}
+            multiline
+          />
+          <View style={styles.flagActions}>
+            <TouchableOpacity
+              style={[styles.flagActionBtn, styles.flagResolveBtn, { opacity: (drafts[i.id] ?? '').trim() ? 1 : 0.5 }]}
+              onPress={() => submitAnswer(i.id)}
+              activeOpacity={0.8}
+              disabled={!(drafts[i.id] ?? '').trim()}
+            >
+              <Ionicons name="checkmark" size={13} color={C.bg} />
+              <Text style={[styles.flagActionText, { color: C.bg }]}>답변 등록</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ))}
+
+      {answered.length > 0 && (
+        <>
+          <Text style={[styles.sectionTitle, { marginTop: 20, fontSize: 12, color: C.textDim }]}>처리 완료</Text>
+          {answered.map(i => (
+            <View key={i.id} style={[styles.flagCard, { opacity: 0.6 }]}>
+              <View style={styles.flagCardTop}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.flagGymName}>{i.title}</Text>
+                  <Text style={styles.flagDesc} numberOfLines={1}>{i.answer}</Text>
                 </View>
                 <View style={[styles.reviewedBadge, { backgroundColor: C.accentBg }]}>
                   <Text style={[styles.reviewedBadgeText, { color: C.accent }]}>완료</Text>
@@ -1427,21 +1527,24 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
   const [gymRequests,    setGymRequests]    = useState<GymRegistrationRequest[]>([]);
   const [machineRequests, setMachineRequests] = useState<MachineRequest[]>([]);
   const [machines, setMachines] = useState<MachineWithGyms[]>(() => getMachinesCacheSync());
+  const [userInquiries, setUserInquiries] = useState<UserInquiry[]>([]);
 
   const refreshQueues = useCallback(async () => {
     try {
-      const [requests, reports, apps, gyms, mReqs] = await Promise.all([
+      const [requests, reports, apps, gyms, mReqs, inquiries] = await Promise.all([
         fetchGymRegistrationRequests(),
         fetchGymInfoReports(),
         fetchManagerRequests(),
         fetchAdminGyms(),
         fetchMachineRequests(),
+        fetchAllUserInquiries(),
       ]);
       setGymRequests(requests);
       setGymReports(reports);
       setManagerRequests(apps);
       setRegisteredGyms(gyms);
       setMachineRequests(mReqs);
+      setUserInquiries(inquiries);
     } catch (e: any) {
       if (__DEV__) console.warn('[AdminDashboard] 큐 새로고침 오류:', e);
     }
@@ -1548,6 +1651,7 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
   const registeredGymCount  = registeredGyms.length;
   const gymRequestCount     = gymRequests.filter(r => r.status === 'pending' && (r.requesterRole ?? 'user') === 'user').length;
   const machineRequestCount = machineRequests.filter(r => r.status === 'pending').length;
+  const userInquiryCount    = userInquiries.filter(i => i.status === 'pending').length;
 
   // --- Actions
 
@@ -1661,6 +1765,21 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     await loadGymReports();
   }, [loadGymReports]);
 
+  const handleAnswerInquiry = useCallback(async (id: string, answer: string) => {
+    // 낙관적 로컬 업데이트 — 답변완료 섹션으로 즉시 이동
+    setUserInquiries(prev => prev.map(i =>
+      i.id === id ? { ...i, status: 'answered' as const, answer, answeredAt: new Date().toISOString() } : i
+    ));
+    try {
+      await answerUserInquiry(id, answer);
+    } catch (e: any) {
+      if (__DEV__) console.warn('[AdminDashboard] 문의 답변 등록 오류:', e);
+      Alert.alert('처리 오류', '답변 등록 중 문제가 발생했습니다.');
+    }
+    // 정합성을 위한 백그라운드 재조회
+    fetchAllUserInquiries().then(setUserInquiries).catch(() => {});
+  }, []);
+
   const handleApproveApplication = useCallback(async (id: string) => {
     try {
       const { supabase } = await import('../../lib/supabase');
@@ -1762,6 +1881,7 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     'machine-requests':           '머신 등록 신청(매니저)',
     'gym-official-brands':        `${officialGymName} 오피셜 브랜드`,
     'all-gyms-official':          '헬스장 오피셜 관리',
+    'user-inquiries':             '유저 문의 관리',
   };
 
   // --- Render
@@ -1792,6 +1912,7 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
           registeredGymCount={registeredGymCount}
           gymRequestCount={gymRequestCount}
           machineRequestCount={machineRequestCount}
+          userInquiryCount={userInquiryCount}
           onPush={push}
         />
       )}
@@ -1919,6 +2040,12 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
             setMachineRequests(updated);
           }}
           onBack={pop}
+        />
+      )}
+      {currentView === 'user-inquiries' && (
+        <UserInquiriesView
+          inquiries={userInquiries}
+          onAnswer={handleAnswerInquiry}
         />
       )}
     </SafeAreaView>

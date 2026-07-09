@@ -37,6 +37,7 @@ import { fetchUnreadCount } from '../lib/db/notifications';
 import { fetchGymRegistrationRequests } from '../lib/db/gymRegistrationRequests';
 import { fetchGymInfoReports } from '../lib/db/gymInfoReports';
 import { fetchManagerRequests } from '../lib/db/managerRequests';
+import { submitUserInquiry, fetchUserInquiries, type UserInquiry } from '../lib/db/userInquiries';
 import { setWorkoutGuideSeen } from '../lib/db/onboarding';
 import { supabase } from '../lib/supabase';
 import { getUserBadges } from '../data/badgeStore';
@@ -60,11 +61,12 @@ const ACHIEVEMENTS = [
   { id: '6', icon: 'medal',   label: '센추리 클럽',  earned: false },
 ];
 
-const SETTINGS_LIST: { icon: IoniconName; label: string; toggle?: boolean; danger?: boolean; privacy?: boolean; splitSetup?: boolean; deleteAccount?: boolean }[] = [
+const SETTINGS_LIST: { icon: IoniconName; label: string; toggle?: boolean; danger?: boolean; privacy?: boolean; splitSetup?: boolean; deleteAccount?: boolean; inquiry?: boolean }[] = [
   { icon: 'barbell-outline',        label: '단위 (kg / lbs)'                     },
   { icon: 'git-branch-outline',     label: '운동 분할 설정',   splitSetup: true  },
   { icon: 'document-text-outline',  label: '개인정보처리방침', privacy: true     },
   { icon: 'help-circle-outline',    label: '도움말 및 피드백'                     },
+  { icon: 'chatbox-ellipses-outline', label: '관리자에게 문의하기', inquiry: true },
   { icon: 'log-out-outline',        label: '로그아웃',          danger: true     },
 ];
 
@@ -92,7 +94,7 @@ function CardDivider() {
 
 function SettingRow({
   icon, label, toggle, danger, deleteAccount, onPress,
-}: { icon: IoniconName; label: string; toggle?: boolean; danger?: boolean; privacy?: boolean; splitSetup?: boolean; deleteAccount?: boolean; onPress?: () => void }) {
+}: { icon: IoniconName; label: string; toggle?: boolean; danger?: boolean; privacy?: boolean; splitSetup?: boolean; deleteAccount?: boolean; inquiry?: boolean; onPress?: () => void }) {
   const [on, setOn] = useState(false);
   return (
     <TouchableOpacity
@@ -309,6 +311,185 @@ function AdminSection({ onOpen, pendingGyms, openFlags, managerRequestCount }: {
   );
 }
 
+// --- Contact-admin inquiry modal
+
+function InquiryModal({ visible, onClose, userId }: { visible: boolean; onClose: () => void; userId: string | undefined }) {
+  const [view,        setView]        = useState<'list' | 'form'>('list');
+  const [inquiries,   setInquiries]   = useState<UserInquiry[]>([]);
+  const [loading,      setLoading]     = useState(false);
+  const [expandedId,  setExpandedId]  = useState<string | null>(null);
+  const [title,       setTitle]       = useState('');
+  const [content,     setContent]     = useState('');
+  const [submitting,  setSubmitting]  = useState(false);
+
+  const loadInquiries = useCallback(async () => {
+    if (!userId) return;
+    setLoading(true);
+    try {
+      const data = await fetchUserInquiries(userId);
+      setInquiries(data);
+    } catch (e: any) {
+      if (__DEV__) console.warn('[InquiryModal] 문의 내역 로딩 오류:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    if (visible) {
+      setView('list');
+      setExpandedId(null);
+      loadInquiries();
+    }
+  }, [visible, loadInquiries]);
+
+  async function handleSubmit() {
+    const t = title.trim();
+    const c = content.trim();
+    if (!t || !c) {
+      Alert.alert('입력 오류', '제목과 내용을 모두 입력해주세요.');
+      return;
+    }
+    if (!userId) return;
+    setSubmitting(true);
+    try {
+      await submitUserInquiry(userId, t, c);
+      setTitle('');
+      setContent('');
+      Alert.alert('문의 완료', '문의가 접수되었어요. 답변까지 시간이 걸릴 수 있어요.');
+      setView('list');
+      await loadInquiries();
+    } catch (e: any) {
+      Alert.alert('오류', '문의 접수 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
+        {/* 헤더 */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: C.border }}>
+          {view === 'form' ? (
+            <TouchableOpacity onPress={() => setView('list')} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="chevron-back" size={22} color={C.text} />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={onClose} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="chevron-down" size={22} color={C.text} />
+            </TouchableOpacity>
+          )}
+          <Text style={{ flex: 1, fontSize: 16, fontWeight: '800', color: C.text, textAlign: 'center' }}>
+            {view === 'form' ? '새 문의 작성' : '관리자에게 문의하기'}
+          </Text>
+          {view === 'list' ? (
+            <TouchableOpacity onPress={() => setView('form')} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="add" size={24} color={C.accent} />
+            </TouchableOpacity>
+          ) : (
+            <View style={{ width: 40 }} />
+          )}
+        </View>
+
+        {view === 'list' ? (
+          <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }}>
+            {loading && inquiries.length === 0 ? (
+              <ActivityIndicator color={C.accent} style={{ marginTop: 40 }} />
+            ) : inquiries.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingVertical: 60, gap: 10 }}>
+                <Ionicons name="chatbox-ellipses-outline" size={36} color={C.textDim} />
+                <Text style={{ fontSize: 14, fontWeight: '600', color: C.textSub }}>아직 문의한 내역이 없어요</Text>
+              </View>
+            ) : (
+              inquiries.map(inq => {
+                const expanded = expandedId === inq.id;
+                const answered = inq.status === 'answered';
+                return (
+                  <TouchableOpacity
+                    key={inq.id}
+                    style={{ backgroundColor: C.surface, borderRadius: R.card, borderWidth: 1, borderColor: C.border, padding: 16, gap: 8 }}
+                    onPress={() => setExpandedId(expanded ? null : inq.id)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={{ flex: 1, fontSize: 14, fontWeight: '700', color: C.text }} numberOfLines={expanded ? undefined : 1}>
+                        {inq.title}
+                      </Text>
+                      <View style={{
+                        paddingHorizontal: 8, paddingVertical: 3, borderRadius: R.pill,
+                        backgroundColor: answered ? C.accentBg : C.tagMuscle.bg,
+                      }}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: answered ? C.accent : C.tagMuscle.fg }}>
+                          {answered ? '답변완료' : '대기중'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 11, color: C.textDim }}>{inq.createdAt.slice(0, 10)}</Text>
+
+                    {expanded && (
+                      <View style={{ marginTop: 4, gap: 10 }}>
+                        <View style={{ height: 1, backgroundColor: C.border }} />
+                        <Text style={{ fontSize: 13, color: C.textSub, lineHeight: 18 }}>{inq.content}</Text>
+                        <View style={{ backgroundColor: C.surfaceHigh, borderRadius: R.inner, padding: 12, gap: 4 }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: C.textDim }}>관리자 답변</Text>
+                          {answered ? (
+                            <Text style={{ fontSize: 13, color: C.text, lineHeight: 18 }}>{inq.answer}</Text>
+                          ) : (
+                            <Text style={{ fontSize: 13, color: C.textDim }}>아직 답변이 등록되지 않았어요</Text>
+                          )}
+                        </View>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })
+            )}
+            <View style={{ height: 24 }} />
+          </ScrollView>
+        ) : (
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <ScrollView contentContainerStyle={{ padding: 20, gap: 14 }} keyboardShouldPersistTaps="handled">
+              <View>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: C.textDim, marginBottom: 6 }}>제목</Text>
+                <TextInput
+                  value={title}
+                  onChangeText={setTitle}
+                  placeholder="문의 제목을 입력해주세요"
+                  placeholderTextColor={C.textDim}
+                  style={{ backgroundColor: C.surface, borderRadius: R.inner, borderWidth: 1, borderColor: C.border, color: C.text, fontSize: 14, paddingHorizontal: 12, paddingVertical: 11 }}
+                />
+              </View>
+              <View>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: C.textDim, marginBottom: 6 }}>내용</Text>
+                <TextInput
+                  value={content}
+                  onChangeText={setContent}
+                  placeholder="문의하실 내용을 자세히 적어주세요"
+                  placeholderTextColor={C.textDim}
+                  multiline
+                  textAlignVertical="top"
+                  style={{ backgroundColor: C.surface, borderRadius: R.inner, borderWidth: 1, borderColor: C.border, color: C.text, fontSize: 14, paddingHorizontal: 12, paddingVertical: 11, minHeight: 140 }}
+                />
+              </View>
+              <TouchableOpacity
+                style={{ backgroundColor: C.accent, borderRadius: R.btn, paddingVertical: 14, alignItems: 'center', opacity: submitting ? 0.6 : 1 }}
+                onPress={handleSubmit}
+                disabled={submitting}
+                activeOpacity={0.85}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '800', color: C.bg }}>
+                  {submitting ? '접수 중...' : '문의 제출'}
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        )}
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
 // --- Main screen
 
 export default function ProfileScreen() {
@@ -345,6 +526,7 @@ export default function ProfileScreen() {
   }
 
   const [showHelpModal,     setShowHelpModal]     = useState(false);
+  const [showInquiryModal,  setShowInquiryModal]  = useState(false);
   const [showManagerManual, setShowManagerManual] = useState(false);
   const [resetLoading,      setResetLoading]      = useState<'app' | 'workout' | null>(null);
   const [showFeedbackSheet, setShowFeedbackSheet] = useState(false);
@@ -869,6 +1051,7 @@ export default function ProfileScreen() {
                   }
                   : s.label === '단위 (kg / lbs)' ? () => handleSettingPress(s.label)
                   : s.label === '도움말 및 피드백' ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowHelpModal(true); }
+                  : s.inquiry ? () => setShowInquiryModal(true)
                   : undefined
                 }
               />
@@ -1168,6 +1351,9 @@ export default function ProfileScreen() {
 
         </SafeAreaView>
       </Modal>
+
+      {/* ── 관리자에게 문의하기 모달 ── */}
+      <InquiryModal visible={showInquiryModal} onClose={() => setShowInquiryModal(false)} userId={user?.id} />
 
       {/* ── 닉네임 수정 모달 ── */}
       <Modal
