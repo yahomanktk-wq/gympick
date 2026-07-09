@@ -19,12 +19,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
 import { pickAndUploadProfileImage, saveProfileImageUrl, loadProfileImageUrl } from '../lib/profileImageStorage';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { C, R, T } from '../theme';
 import { screenPad, cardPadH, cardPadV } from '../theme/responsive';
 import { UserRole, ManagedGym } from '../data/types';
 import { useAuth } from '../context/AuthContext';
-import { PENDING_GYMS, PENDING_EDITS, FLAGGED_ITEMS } from '../data/mockAdmin';
 import ManagerDashboard from './manager/ManagerDashboard';
 import AdminDashboard from './admin/AdminDashboard';
 import FavoritesScreen from './FavoritesScreen';
@@ -35,6 +34,9 @@ import NotificationsScreen from './NotificationsScreen';
 import ManagerRequestModal from './flow/ManagerRequestModal';
 import ManagerManualScreen from './manager/ManagerManualScreen';
 import { fetchUnreadCount } from '../lib/db/notifications';
+import { fetchGymRegistrationRequests } from '../lib/db/gymRegistrationRequests';
+import { fetchGymInfoReports } from '../lib/db/gymInfoReports';
+import { fetchManagerRequests } from '../lib/db/managerRequests';
 import { setWorkoutGuideSeen } from '../lib/db/onboarding';
 import { supabase } from '../lib/supabase';
 import { getUserBadges } from '../data/badgeStore';
@@ -251,15 +253,11 @@ function ManagerSection({ onOpen, gyms }: { onOpen: () => void; gyms: ManagedGym
 
 // --- Admin section
 
-function AdminSection({ onOpen }: { onOpen: () => void }) {
-  const pendingGyms  = PENDING_GYMS.filter(g => g.status === 'pending').length;
-  const pendingEdits = PENDING_EDITS.filter(e => e.status === 'pending').length;
-  const openFlags    = FLAGGED_ITEMS.filter(f => f.status === 'open').length;
-
+function AdminSection({ onOpen, pendingGyms, openFlags, managerRequestCount }: { onOpen: () => void; pendingGyms: number; openFlags: number; managerRequestCount: number }) {
   const queues = [
-    { label: '헬스장',   count: pendingGyms,  color: '#ffb547' },
-    { label: '수정',  count: pendingEdits, color: '#5ba4ff' },
-    { label: '신고',count: openFlags,    color: C.danger  },
+    { label: '매니저 신청 관리', count: managerRequestCount, color: '#a78bfa' },
+    { label: '헬스장 등록 신청', count: pendingGyms,          color: '#ffb547' },
+    { label: '정보 제보 관리',   count: openFlags,            color: C.danger  },
   ];
 
   return (
@@ -295,13 +293,13 @@ function AdminSection({ onOpen }: { onOpen: () => void }) {
       </View>
 
       {/* Alert if anything pending */}
-      {(pendingGyms + pendingEdits + openFlags) > 0 && (
+      {(managerRequestCount + pendingGyms + openFlags) > 0 && (
         <>
           <CardDivider />
           <TouchableOpacity style={styles.adminAlertRow} onPress={onOpen} activeOpacity={0.75}>
             <Ionicons name="alert-circle" size={14} color='#ffb547' />
             <Text style={styles.adminAlertText}>
-              {pendingGyms + pendingEdits + openFlags}개 항목을 확인해주세요
+              {managerRequestCount + pendingGyms + openFlags}개 항목을 확인해주세요
             </Text>
             <Ionicons name="chevron-forward" size={13} color={C.textDim} />
           </TouchableOpacity>
@@ -370,6 +368,9 @@ export default function ProfileScreen() {
   const [unreadCount,       setUnreadCount]       = useState(0);
   const [uploading,         setUploading]         = useState(false);
   const [managerGyms,       setManagerGyms]       = useState<ManagedGym[]>([]);
+  const [adminGymCount,     setAdminGymCount]     = useState(0);
+  const [adminFlagCount,    setAdminFlagCount]    = useState(0);
+  const [adminManagerReqCount, setAdminManagerReqCount] = useState(0);
 
   // 매니저 헬스장 목록 로딩 (Supabase + Mock 합치기)
   useEffect(() => {
@@ -420,6 +421,27 @@ export default function ProfileScreen() {
   }, [user?.id]);
 
   useEffect(() => { loadUnreadCount(); }, [loadUnreadCount]);
+
+  // 관리자 패널 큐 카운트 — AdminDashboard.tsx와 동일한 실데이터/필터 기준 사용
+  const loadAdminCounts = useCallback(async () => {
+    if (user?.role !== 'admin') return;
+    try {
+      const [requests, reports, managerRequests] = await Promise.all([
+        fetchGymRegistrationRequests(),
+        fetchGymInfoReports(),
+        fetchManagerRequests(),
+      ]);
+      setAdminGymCount(
+        requests.filter(r => r.status === 'pending' && (r.requesterRole ?? 'user') === 'manager').length
+      );
+      setAdminFlagCount(reports.filter(r => r.status === 'pending').length);
+      setAdminManagerReqCount(managerRequests.filter(r => r.status === 'pending').length);
+    } catch (e: any) {
+      if (__DEV__) console.warn('[ProfileScreen] 관리자 패널 카운트 로딩 오류:', e);
+    }
+  }, [user?.role]);
+
+  useFocusEffect(useCallback(() => { loadAdminCounts(); }, [loadAdminCounts]));
 
   useEffect(() => {
     if (!user?.id) return;
@@ -757,7 +779,7 @@ export default function ProfileScreen() {
         {user.role === 'admin' && (
           <>
             <SectionLabel text="관리자" />
-            <AdminSection onOpen={() => setShowAdmin(true)} />
+            <AdminSection onOpen={() => setShowAdmin(true)} pendingGyms={adminGymCount} openFlags={adminFlagCount} managerRequestCount={adminManagerReqCount} />
             <View style={{ height: 28 }} />
           </>
         )}
