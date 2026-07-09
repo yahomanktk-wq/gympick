@@ -650,7 +650,7 @@ export default function FindGymScreen() {
 
             {/* Category filter - 부위 선택 시에만 표시 */}
             {activeMuscle !== 'All' && categories.length > 0 && (
-              <View style={{ marginTop: 6 }}>
+              <View style={{ marginTop: 4 }}>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -659,7 +659,7 @@ export default function FindGymScreen() {
                 >
                   <TouchableOpacity
                     style={[
-                      s.filterChip,
+                      s.filterChipSmall,
                       activeCategory === 'All' && { backgroundColor: C.textDim, borderColor: C.textDim },
                     ]}
                     onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setActiveCategory('All'); }}
@@ -667,11 +667,11 @@ export default function FindGymScreen() {
                   >
                     <Ionicons
                       name="refresh-outline"
-                      size={12}
+                      size={11}
                       color={activeCategory === 'All' ? C.bg : C.textSub}
                     />
                     <Text style={[
-                      s.filterChipText,
+                      s.filterChipTextSmall,
                       { marginLeft: 4 },
                       activeCategory === 'All' && { color: C.bg },
                     ]}>전체</Text>
@@ -683,13 +683,13 @@ export default function FindGymScreen() {
                       <TouchableOpacity
                         key={cat}
                         style={[
-                          s.filterChip,
+                          s.filterChipSmall,
                           on && { backgroundColor: C.accent, borderColor: C.accent },
                         ]}
                         onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setActiveCategory(on ? 'All' : cat); }}
                         activeOpacity={0.75}
                       >
-                        <Text style={[s.filterChipText, on && { color: C.bg }]}>{cat}</Text>
+                        <Text style={[s.filterChipTextSmall, on && { color: C.bg }]}>{cat}</Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -708,20 +708,6 @@ export default function FindGymScreen() {
               />
             </View>
 
-            {hasFilters && (
-              <View style={s.filterSummaryRow}>
-                <Ionicons name="options-outline" size={13} color={C.accent} />
-                <Text style={s.filterSummaryText}>
-                  {[
-                    activeMuscle  !== 'All' && activeMuscle,
-                    activeCategory !== 'All' && activeCategory,
-                    activeBrand   !== 'All' && activeBrand,
-                    keyword.trim() && `"${keyword.trim()}"`,
-                  ].filter(Boolean).join(' + ')}
-                </Text>
-                <Text style={s.filterSummaryCount}>{filteredMachines.length}개</Text>
-              </View>
-            )}
           </>
         )}
 
@@ -1095,14 +1081,27 @@ const s = StyleSheet.create({
     alignItems:        'center',
   },
   filterChipText: { fontSize: 13, fontWeight: '600', color: C.textSub },
+  filterChipSmall: {
+    paddingHorizontal: 12,
+    paddingVertical:   4,
+    borderRadius:      R.pill,
+    backgroundColor:   C.surface,
+    minHeight:         26,
+    justifyContent:    'center',
+    alignItems:        'center',
+  },
+  filterChipTextSmall: { fontSize: 12, fontWeight: '600', color: C.textSub },
 
+  // unused
   filterSummaryRow: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 16, paddingVertical: 8,
     backgroundColor: C.accentBg,
     marginBottom: 4,
   },
+  // unused
   filterSummaryText:  { flex: 1, fontSize: 12, fontWeight: '600', color: C.accent },
+  // unused
   filterSummaryCount: { fontSize: 12, fontWeight: '800', color: C.accent },
 
   dividerLine:    { height: 1, backgroundColor: C.border, marginTop: 8 },
