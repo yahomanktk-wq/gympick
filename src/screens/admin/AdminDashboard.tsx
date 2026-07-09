@@ -28,12 +28,6 @@ import {
   setBrandCopyrightStatus,
 } from '../../data/brandCopyrightStore';
 import {
-  getAllGymsForAdmin,
-  updateGymStatus,
-  type RegistrationGym,
-  type GymRegStatus,
-} from '../../data/gymRegistrationStore';
-import {
   fetchGymInfoReports,
   markReportReviewed,
   deleteGymInfoReport,
@@ -148,7 +142,6 @@ interface HomeViewProps {
 
 interface PendingGymsViewProps {
   pendingGyms: PendingGym[];
-  gymList: RegistrationGym[];
   onSelectGym: (gym: PendingGym) => void;
   onApproveGym: (id: string) => void;
   onRejectGym:  (id: string) => void;
@@ -432,8 +425,8 @@ function HomeView({ machines, pendingGymCount, gymReportCount, managerRequestCou
   );
 }
 
-function PendingGymsView({ pendingGyms, gymList, onSelectGym, onApproveGym, onRejectGym }: PendingGymsViewProps) {
-  // 모든 신청 건을 하나로 통합 (pendingGyms + gymList)
+function PendingGymsView({ pendingGyms, onSelectGym, onApproveGym, onRejectGym }: PendingGymsViewProps) {
+  // 모든 신청 건을 하나로 통합 (pendingGyms + managerGymRequests)
   const allPending  = pendingGyms.filter(g => g.status === 'pending');
   const allReviewed = pendingGyms.filter(g => g.status !== 'pending');
 
@@ -1422,7 +1415,6 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
   // --- State
   const [pendingGyms,   setPendingGyms]   = useState<PendingGym[]>([]);
   const [selectedGym,  setSelectedGym]   = useState<PendingGym | null>(null);
-  const [gymList,      setGymList]       = useState<RegistrationGym[]>(() => getAllGymsForAdmin());
   const [gymReports,   setGymReports]    = useState<GymInfoReport[]>([]);
 
   const [registeredGyms, setRegisteredGyms] = useState<AdminGym[]>([]);
@@ -1436,13 +1428,37 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
   const [machineRequests, setMachineRequests] = useState<MachineRequest[]>([]);
   const [machines, setMachines] = useState<MachineWithGyms[]>(() => getMachinesCacheSync());
 
-  useEffect(() => {
-    fetchGymRegistrationRequests().then(setGymRequests);
+  const refreshQueues = useCallback(async () => {
+    try {
+      const [requests, reports, apps, gyms, mReqs] = await Promise.all([
+        fetchGymRegistrationRequests(),
+        fetchGymInfoReports(),
+        fetchManagerRequests(),
+        fetchAdminGyms(),
+        fetchMachineRequests(),
+      ]);
+      setGymRequests(requests);
+      setGymReports(reports);
+      setManagerRequests(apps);
+      setRegisteredGyms(gyms);
+      setMachineRequests(mReqs);
+    } catch (e: any) {
+      if (__DEV__) console.warn('[AdminDashboard] 큐 새로고침 오류:', e);
+    }
   }, []);
 
   useEffect(() => {
-    fetchMachineRequests().then(setMachineRequests);
-  }, []);
+    refreshQueues();
+  }, [refreshQueues]);
+
+  useEffect(() => {
+    if (currentView === 'home') {
+      refreshQueues();
+    }
+    // intentionally NOT depending on refreshQueues to avoid re-running on every
+    // render; refreshQueues is stable (useCallback with empty deps)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentView]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1526,7 +1542,6 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
 
   // --- Counts
   const pendingGymCount     = pendingGyms.filter(g => g.status === 'pending').length
-                            + gymList.filter(g => g.status === 'pending').length
                             + managerGymRequests.filter(g => g.status === 'pending').length;
   const gymReportCount      = gymReports.filter(r => r.status === 'pending').length;
   const managerRequestCount = managerRequests.filter(r => r.status === 'pending').length;
@@ -1537,15 +1552,12 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
   // --- Actions
 
   const reviewGym = useCallback((gymId: string, action: ReviewStatus) => {
-    updateGymStatus(gymId, action as any);
     setPendingGyms(prev => prev.map(g => g.id === gymId ? { ...g, status: action } : g));
     setSelectedGym(prev => prev?.id === gymId ? { ...prev!, status: action } : prev);
   }, []);
 
   const handleApproveGym  = useCallback(async (id: string) => {
     // 로컬 상태 업데이트
-    updateGymStatus(id, 'approved');
-    setGymList(prev => prev.map(g => g.id === id ? { ...g, status: 'approved' } : g));
     setPendingGyms(prev => prev.map(g => g.id === id ? { ...g, status: 'approved' as ReviewStatus } : g));
 
     // 승인된 헬스장 찾기 (pendingGyms + gymRequests 매니저 요청에서)
@@ -1617,10 +1629,22 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     }
   }, [pendingGyms, gymRequests]);
 
-  const handleRejectGym   = useCallback((id: string) => {
-    updateGymStatus(id, 'rejected');
-    setGymList(prev => prev.map(g => g.id === id ? { ...g, status: 'rejected' } : g));
-  }, []);
+  const handleRejectGym = useCallback(async (id: string) => {
+    // 로컬 mock pendingGyms 상태 업데이트 (해당되는 경우)
+    setPendingGyms(prev => prev.map(g => g.id === id ? { ...g, status: 'rejected' as ReviewStatus } : g));
+
+    // 실제 매니저 신청(Supabase gym_registration_requests)인 경우 처리
+    const isManagerRequest = gymRequests.some(r => r.id === id && (r.requesterRole ?? 'user') === 'manager');
+    if (isManagerRequest) {
+      try {
+        await updateGymRequestStatus(id, 'resolved');
+        setGymRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'resolved' } : r));
+      } catch (e: any) {
+        if (__DEV__) console.warn('[AdminDashboard] 헬스장 거절 처리 오류:', e);
+        Alert.alert('처리 오류', '거절 처리 중 문제가 발생했습니다.');
+      }
+    }
+  }, [gymRequests]);
 
   const handleSelectGym = useCallback((gym: PendingGym) => {
     setSelectedGym(gym);
@@ -1774,7 +1798,6 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
       {currentView === 'pending-gyms' && (
         <PendingGymsView
           pendingGyms={[...pendingGyms, ...managerGymRequests]}
-          gymList={gymList}
           onSelectGym={handleSelectGym}
           onApproveGym={handleApproveGym}
           onRejectGym={handleRejectGym}
