@@ -50,6 +50,40 @@ function rowToFavorite(r: FavoriteRow): FavoriteMachine {
   };
 }
 
+/**
+ * Given already-mapped MachineReview[], overwrite each review's userName
+ * with the reviewer's CURRENT nickname from `profiles` (live), falling back
+ * to the review's originally-stored userName if the profile lookup fails,
+ * the profile has no nickname set, or the profile no longer exists.
+ * userInitials is intentionally left as-is (no live equivalent field exists
+ * on profiles) — only the display name is kept in sync with the user's
+ * current nickname.
+ */
+async function withCurrentNicknames(reviews: MachineReview[]): Promise<MachineReview[]> {
+  if (reviews.length === 0) return reviews;
+
+  const uniqueUserIds = [...new Set(reviews.map(r => r.userId))];
+
+  const { data: profiles, error } = await supabase
+    .from('profiles')
+    .select('id, nickname')
+    .in('id', uniqueUserIds);
+
+  if (error || !profiles) {
+    if (__DEV__ && error) console.warn('[db/reviews] withCurrentNicknames profile lookup error, keeping stored names:', error.message);
+    return reviews;
+  }
+
+  const nicknameById = new Map<string, string | null>(
+    profiles.map((p: { id: string; nickname: string | null }) => [p.id, p.nickname])
+  );
+
+  return reviews.map(r => {
+    const currentNickname = nicknameById.get(r.userId);
+    return currentNickname ? { ...r, userName: currentNickname } : r;
+  });
+}
+
 // --- machine_reviews
 
 /** Fetch all reviews for a machine, newest-first. Falls back to mock. */
@@ -64,7 +98,7 @@ export async function fetchMachineReviews(machineId: string): Promise<MachineRev
     if (__DEV__ && error) console.warn('[db/reviews] fetchMachineReviews error, using mock:', error.message);
     return mockGetMachineReviews(machineId);
   }
-  return data.map(rowToReview);
+  return withCurrentNicknames(data.map(rowToReview));
 }
 
 /** Fetch all reviews (admin use). Falls back to mock. */
@@ -78,7 +112,7 @@ export async function fetchAllReviews(): Promise<MachineReview[]> {
     if (__DEV__ && error) console.warn('[db/reviews] fetchAllReviews error, using mock:', error.message);
     return MACHINE_REVIEWS;
   }
-  return data.map(rowToReview);
+  return withCurrentNicknames(data.map(rowToReview));
 }
 
 /** Insert a review. Returns inserted row or throws. */
