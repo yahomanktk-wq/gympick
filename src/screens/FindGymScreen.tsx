@@ -23,7 +23,7 @@ const SCREEN_W = Dimensions.get('window').width;
 const GRID_GAP = 8;
 const CARD_W   = (SCREEN_W - 32 - GRID_GAP) / 2;  // 16px h-padding each side
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import GymMapView from '../components/GymMapView';
 import { C, R, T } from '../theme';
 import { useAuth } from '../context/AuthContext';
@@ -262,6 +262,15 @@ const MachineItem = React.memo(({
   </TouchableOpacity>
 ));
 
+function shuffleMachines<T>(arr: T[]): T[] {
+  const result = [...arr];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
 // --- Screen
 
 export default function FindGymScreen() {
@@ -366,6 +375,19 @@ export default function FindGymScreen() {
 
   const isLoading   = machinesLoading || gymsLoading;
   const allMachines = machinesData ?? [];
+
+  const [shuffleTick, setShuffleTick] = useState(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      setShuffleTick(t => t + 1);
+    }, [])
+  );
+
+  const shuffledMachines = useMemo(
+    () => shuffleMachines(allMachines),
+    [allMachines, shuffleTick]
+  );
 
   const allGyms = useMemo<GymWithMachines[]>(() => {
     const base = gymsData ?? [];
@@ -494,7 +516,7 @@ export default function FindGymScreen() {
 
   // --- Filtered machines
   const filteredMachines = useMemo(() => {
-    return allMachines.filter(m => {
+    return shuffledMachines.filter(m => {
       const muscleOk   = activeMuscle === 'All' || parseMuscles(m.targetMuscle).some(t => t.toLowerCase() === activeMuscle.toLowerCase());
       const brandOk    = activeBrand  === 'All' || m.brand?.toLowerCase()         === activeBrand.toLowerCase();
       const categoryOk = activeCategory === 'All' ||
@@ -506,7 +528,7 @@ export default function FindGymScreen() {
         m.brand?.toLowerCase().includes(kw);
       return muscleOk && brandOk && categoryOk && keyOk;
     });
-  }, [keyword, activeMuscle, activeBrand, activeCategory, allMachines]);
+  }, [keyword, activeMuscle, activeBrand, activeCategory, shuffledMachines]);
 
   useEffect(() => {
     flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
