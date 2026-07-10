@@ -2782,6 +2782,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
             logs={logs}
             nickname={nickname}
             textColor={textColor}
+            muscleLabel={muscleLabel}
             overlayStyle={overlayStyle}
             onCaptureDone={(uri) => {
               onSetShowCamera(false);

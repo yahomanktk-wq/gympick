@@ -33,6 +33,7 @@ interface Props {
   logs: Record<string, { weight: number; reps: number }[]>;
   nickname?: string;
   textColor: string;
+  muscleLabel: string;
   overlayStyle?: 's1a' | 's1b' | 's1c' | 's1d' | 's2a' | 's2b' | 's2c' | 's2d' | 's3a' | 's3b' | 's3c' | 's3d' | 's4a' | 's4b' | 's4c' | 's4d' | 's5a' | 's5b' | 's5c' | 's5d' | 's6a' | 's6b' | 's6c' | 's6d' | 'archday';
   onCaptureDone: (uri: string) => void;
   onCancel: () => void;
@@ -44,6 +45,7 @@ export default function WorkoutCameraOverlay({
   logs,
   nickname,
   textColor,
+  muscleLabel,
   overlayStyle,
   onCaptureDone,
   onCancel,
@@ -115,17 +117,6 @@ export default function WorkoutCameraOverlay({
   const dateLabel   = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}(${ENG_DAYS[now.getDay()]})`;
   const timestamp   = `${dateLabel}_${pad(now.getHours())}:${pad(now.getMinutes())}`;
   const displayName = nickname ?? 'gympick_user';
-
-  const muscleCounts = exercises.reduce<Record<string, number>>((acc, ex) => {
-    acc[ex.targetMuscle] = (acc[ex.targetMuscle] ?? 0) + 1;
-    return acc;
-  }, {});
-  const sortedMuscles = Object.entries(muscleCounts)
-    .sort(([, a], [, b]) => b - a)
-    .map(([m]) => m);
-  const muscleLabel = sortedMuscles.length > 1
-    ? sortedMuscles.slice(0, 2).join(' + ')
-    : `${sortedMuscles[0] ?? 'WORKOUT'} Day`;
 
   const tc = textColor;
 
