@@ -1263,7 +1263,7 @@ function RegisterGymAdminView({ machines, registeredGyms, onSave, onUpdate, onOf
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1 }}>
                 <Ionicons name="person-circle-outline" size={13} color={C.textSub} />
                 <Text style={styles.submittedText} numberOfLines={1}>
-                  {gym.managerNickname ? `매니저: ${gym.managerNickname}` : '매니저 미배정'}
+                  {gym.managerNickname || gym.managerEmail ? `매니저: ${gym.managerNickname ?? gym.managerEmail}` : '매니저 미배정'}
                 </Text>
               </View>
               <View style={{ flexDirection: 'row', gap: 14 }}>
@@ -2033,13 +2033,17 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
         { text: '취소', style: 'cancel' },
         {
           text: '삭제', style: 'destructive', onPress: async () => {
-            const { error } = await deleteGym(gymId);
-            if (error) {
-              Alert.alert('삭제 실패', error);
-              return;
+            try {
+              const { error } = await deleteGym(gymId);
+              if (error) {
+                Alert.alert('삭제 실패', error);
+                return;
+              }
+              await loadRegisteredGyms();
+              Alert.alert('삭제 완료', '헬스장이 삭제되었습니다.');
+            } catch (e: any) {
+              Alert.alert('삭제 실패', e?.message ?? '알 수 없는 오류가 발생했습니다.');
             }
-            await loadRegisteredGyms();
-            Alert.alert('삭제 완료', '헬스장이 삭제되었습니다.');
           },
         },
       ],
