@@ -113,6 +113,19 @@ function computeStreak(logs: WorkoutLog[]): number {
   if (!logs.length) return 0;
   const uniqueDates = [...new Set(logs.map(l => l.date.slice(0, 10)))].sort().reverse();
   if (!uniqueDates.length) return 0;
+
+  // 가장 최근 기록이 오늘 또는 어제가 아니면 스트릭은 이미 끊긴 것
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = today.toISOString().slice(0, 10);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().slice(0, 10);
+
+  if (uniqueDates[0] !== todayStr && uniqueDates[0] !== yesterdayStr) {
+    return 0;
+  }
+
   let streak = 1;
   for (let i = 1; i < uniqueDates.length; i++) {
     const prev = new Date(uniqueDates[i - 1]);
