@@ -1194,12 +1194,13 @@ function RegisterGymAdminView({ machines, registeredGyms, onSave, onUpdate, onOf
     );
   }
 
-  // ── 등록된 헬스장 목록 ──
+  // ── 등록된 헬스장 목록 (가나다순 정렬) ──
   const q = gymSearchQuery.trim().toLowerCase();
+  const sortedGyms = [...registeredGyms].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
   const visibleGyms = q
-    ? registeredGyms.filter(g =>
+    ? sortedGyms.filter(g =>
         g.name.toLowerCase().includes(q) || g.location.toLowerCase().includes(q))
-    : registeredGyms;
+    : sortedGyms;
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
