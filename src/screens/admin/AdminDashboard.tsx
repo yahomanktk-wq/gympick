@@ -966,7 +966,7 @@ interface RegisterGymAdminViewProps {
   onUpdate: (id: string, name: string, location: string, phone: string, hours: string, hoursNote: string, machineIds: string[]) => void | Promise<void>;
   onOfficialBrands: (gymId: string, gymName: string) => void;
   onManagerLink: (gymId: string, gymName: string) => void;
-  onUnlinkManager: (gymId: string) => void | Promise<void>;
+  onUnlinkManager: (gymId: string, managerId: string | null) => void | Promise<void>;
   onDeleteGym: (gymId: string, gymName: string) => void;
 }
 
@@ -1268,7 +1268,7 @@ function RegisterGymAdminView({ machines, registeredGyms, onSave, onUpdate, onOf
               </View>
               <View style={{ flexDirection: 'row', gap: 14 }}>
                 {gym.managerId && (
-                  <TouchableOpacity onPress={() => onUnlinkManager(gym.id)} activeOpacity={0.7}>
+                  <TouchableOpacity onPress={() => onUnlinkManager(gym.id, gym.managerId)} activeOpacity={0.7}>
                     <Text style={{ fontSize: 12, fontWeight: '700', color: C.textSub }}>연결 해제</Text>
                   </TouchableOpacity>
                 )}
@@ -2016,8 +2016,8 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     Alert.alert('연결 완료', `${profile.nickname ?? profile.email ?? '매니저'}님이 연결되었습니다.`);
   }, [linkGymId, loadRegisteredGyms, pop]);
 
-  const handleUnlinkManager = useCallback(async (gymId: string) => {
-    const { error } = await setGymManager(gymId, null);
+  const handleUnlinkManager = useCallback(async (gymId: string, managerId: string | null) => {
+    const { error } = await setGymManager(gymId, null, managerId);
     if (error) {
       Alert.alert('해제 오류', '매니저 연결 해제에 실패했습니다. ' + error);
       return;

@@ -85,14 +85,61 @@ export async function searchProfilesByEmailOrNickname(query: string): Promise<Pr
   return data ?? [];
 }
 
-// 헬스장에 매니저 연결/해제 (managerId=null이면 해제)
-export async function setGymManager(gymId: string, managerId: string | null): Promise<{ error: string | null }> {
+// 헬스장에 매니저 연결/해제 (managerId=null이면 해제).
+// 해제 시 role 동기화를 위해 이전 매니저 id가 필요하면 previousManagerId로 전달.
+export async function setGymManager(
+  gymId: string, managerId: string | null, previousManagerId?: string | null,
+): Promise<{ error: string | null }> {
   const { error } = await supabase
     .from('gyms')
     .update({ manager_id: managerId })
     .eq('id', gymId);
   if (error) return { error: error.message };
   invalidateGymsCache();
+
+  // profiles.role 동기화는 부수 효과 — 실패해도 위 gyms.manager_id 갱신 성공은 그대로 유지.
+  // 매니저 신청 승인 플로우(handleApproveGym/handleApproveApplication)와 동일하게
+  // profiles.update({ role: 'manager' }).eq('id', ...) 패턴을 사용.
+  try {
+    if (managerId) {
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', managerId)
+        .single();
+      if (profileError) {
+        console.warn('[db/adminGyms] role 동기화용 프로필 조회 실패:', profileError.message);
+      } else if (profile?.role === 'admin') {
+        if (__DEV__) console.warn('[db/adminGyms] admin 계정이 매니저로 연결됨 — role 변경 생략:', managerId);
+      } else if (profile?.role !== 'manager') {
+        const { error: roleError } = await supabase.from('profiles').update({ role: 'manager' }).eq('id', managerId);
+        if (roleError) console.warn('[db/adminGyms] profiles.role=manager 업데이트 실패:', roleError.message);
+      }
+    } else if (previousManagerId) {
+      const { data: otherGyms, error: otherGymsError } = await supabase
+        .from('gyms')
+        .select('id')
+        .eq('manager_id', previousManagerId);
+      if (otherGymsError) {
+        console.warn('[db/adminGyms] role 동기화용 다른 헬스장 조회 실패:', otherGymsError.message);
+      } else if (!otherGyms || otherGyms.length === 0) {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', previousManagerId)
+          .single();
+        if (profileError) {
+          console.warn('[db/adminGyms] role 동기화용 프로필 조회 실패:', profileError.message);
+        } else if (profile?.role === 'manager') {
+          const { error: roleError } = await supabase.from('profiles').update({ role: 'user' }).eq('id', previousManagerId);
+          if (roleError) console.warn('[db/adminGyms] profiles.role=user 되돌리기 실패:', roleError.message);
+        }
+      }
+    }
+  } catch (e: any) {
+    console.warn('[db/adminGyms] role 동기화 중 예외:', e?.message ?? e);
+  }
+
   return { error: null };
 }
 
