@@ -37,7 +37,11 @@ import {
   fetchAdminGyms,
   insertAdminGym,
   updateAdminGymFull,
+  searchProfilesByEmailOrNickname,
+  setGymManager,
+  deleteGym,
   type AdminGym,
+  type ProfileSearchResult,
 } from '../../lib/db/adminGyms';
 import MachineCard from '../../components/MachineCard';
 import {
@@ -79,7 +83,7 @@ const CAT_CARD_W   = Math.floor((SCREEN_W - 40 - 12) / 2);
 
 // --- Types
 
-type AdminView = 'home' | 'pending-gyms' | 'gym-detail' | 'machine-catalog' | 'brand-copyright' | 'gym-reports' | 'manager-requests' | 'register-gym' | 'gym-registration-requests' | 'gym-official-brands' | 'all-gyms-official' | 'machine-requests' | 'user-inquiries';
+type AdminView = 'home' | 'pending-gyms' | 'gym-detail' | 'machine-catalog' | 'brand-copyright' | 'gym-reports' | 'manager-requests' | 'register-gym' | 'gym-registration-requests' | 'gym-official-brands' | 'all-gyms-official' | 'machine-requests' | 'user-inquiries' | 'gym-manager-link';
 
 // --- Shared components
 
@@ -379,7 +383,7 @@ function HomeView({ machines, pendingGymCount, gymReportCount, managerRequestCou
         },
         {
           icon: 'add-circle-outline' as const,
-          title: '헬스장 직접 등록',
+          title: '헬스장 관리',
           count: 0,
           sub: registeredGymCount > 0 ? `${registeredGymCount}개 등록됨` : '새 헬스장 등록',
           onPress: () => onPush('register-gym'),
@@ -961,9 +965,12 @@ interface RegisterGymAdminViewProps {
   onSave: (name: string, location: string, phone: string, hours: string, hoursNote: string, machineIds: string[]) => void | Promise<void>;
   onUpdate: (id: string, name: string, location: string, phone: string, hours: string, hoursNote: string, machineIds: string[]) => void | Promise<void>;
   onOfficialBrands: (gymId: string, gymName: string) => void;
+  onManagerLink: (gymId: string, gymName: string) => void;
+  onUnlinkManager: (gymId: string) => void | Promise<void>;
+  onDeleteGym: (gymId: string, gymName: string) => void;
 }
 
-function RegisterGymAdminView({ machines, registeredGyms, onSave, onUpdate, onOfficialBrands }: RegisterGymAdminViewProps) {
+function RegisterGymAdminView({ machines, registeredGyms, onSave, onUpdate, onOfficialBrands, onManagerLink, onUnlinkManager, onDeleteGym }: RegisterGymAdminViewProps) {
   const [showForm,         setShowForm]         = useState(false);
   const [editingGym,       setEditingGym]       = useState<AdminGym | null>(null);
   const [gymName,          setGymName]          = useState('');
@@ -1226,7 +1233,8 @@ function RegisterGymAdminView({ machines, registeredGyms, onSave, onUpdate, onOf
       {visibleGyms.length === 0 ? (
         <EmptyQueue label={q ? '검색 결과가 없어요' : '등록된 헬스장이 없어요'} />
       ) : (
-        visibleGyms.map(gym => (
+        visibleGyms.map(gym => {
+          return (
           <View key={gym.id} style={styles.pendingCard}>
             <View style={styles.pendingCardTop}>
               <View style={{ flex: 1 }}>
@@ -1237,11 +1245,11 @@ function RegisterGymAdminView({ machines, registeredGyms, onSave, onUpdate, onOf
                 </View>
               </View>
               <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity style={[styles.approveBtn, { paddingHorizontal: 12, paddingVertical: 7, backgroundColor: '#5ba4ff' }]} onPress={() => onOfficialBrands(gym.id, gym.name)} activeOpacity={0.85}>
+                <TouchableOpacity style={[styles.approveBtn, { flex: 0, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: '#5ba4ff' }]} onPress={() => onOfficialBrands(gym.id, gym.name)} activeOpacity={0.85}>
                   <Ionicons name="shield-checkmark-outline" size={13} color={C.bg} />
                   <Text style={[styles.approveBtnText, { fontSize: 12 }]}>오피셜</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.approveBtn, { paddingHorizontal: 12, paddingVertical: 7 }]} onPress={() => openEdit(gym)} activeOpacity={0.85}>
+                <TouchableOpacity style={[styles.approveBtn, { flex: 0, paddingHorizontal: 12, paddingVertical: 7 }]} onPress={() => openEdit(gym)} activeOpacity={0.85}>
                   <Ionicons name="create-outline" size={13} color={C.bg} />
                   <Text style={[styles.approveBtnText, { fontSize: 12 }]}>수정</Text>
                 </TouchableOpacity>
@@ -1251,8 +1259,30 @@ function RegisterGymAdminView({ machines, registeredGyms, onSave, onUpdate, onOf
               <Ionicons name="barbell-outline" size={11} color={C.textSub} />
               <Text style={styles.submittedText}>머신 {gym.machineIds.length}개 · {gym.createdAt.slice(0, 10)}</Text>
             </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1 }}>
+                <Ionicons name="person-circle-outline" size={13} color={C.textSub} />
+                <Text style={styles.submittedText} numberOfLines={1}>
+                  {gym.managerNickname ? `매니저: ${gym.managerNickname}` : '매니저 미배정'}
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 14 }}>
+                {gym.managerId && (
+                  <TouchableOpacity onPress={() => onUnlinkManager(gym.id)} activeOpacity={0.7}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: C.textSub }}>연결 해제</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={() => onManagerLink(gym.id, gym.name)} activeOpacity={0.7}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#5ba4ff' }}>{gym.managerId ? '변경' : '매니저 연결'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => onDeleteGym(gym.id, gym.name)} activeOpacity={0.7}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: C.danger }}>삭제</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
-        ))
+          );
+        })
       )}
     </ScrollView>
   );
@@ -1502,6 +1532,92 @@ function GymOfficialBrandsView({
   );
 }
 
+function GymManagerLinkView({
+  gymName,
+  query,
+  results,
+  loading,
+  onSearch,
+  onSelect,
+  onBack,
+}: {
+  gymName: string;
+  query: string;
+  results: ProfileSearchResult[];
+  loading: boolean;
+  onSearch: (query: string) => void;
+  onSelect: (profile: ProfileSearchResult) => void;
+  onBack: () => void;
+}) {
+  const [draft, setDraft] = useState(query);
+
+  return (
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <TouchableOpacity onPress={onBack} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <Ionicons name="chevron-back" size={20} color={C.text} />
+        <Text style={{ fontSize: 16, fontWeight: '800', color: C.text }}>{gymName}</Text>
+      </TouchableOpacity>
+
+      <Text style={{ fontSize: 12, fontWeight: '700', color: C.textDim, letterSpacing: 1 }}>
+        이메일 또는 닉네임으로 검색
+      </Text>
+
+      <View style={styles.catSearchRow}>
+        <Ionicons name="search" size={15} color={C.textDim} style={{ marginLeft: 12 }} />
+        <TextInput
+          value={draft}
+          onChangeText={setDraft}
+          onSubmitEditing={() => onSearch(draft)}
+          placeholder="이메일 또는 닉네임 입력..."
+          placeholderTextColor={C.textDim}
+          style={styles.catSearchInput}
+          autoCorrect={false}
+          autoCapitalize="none"
+          spellCheck={false}
+          returnKeyType="search"
+        />
+      </View>
+      <TouchableOpacity style={styles.approveBtn} onPress={() => onSearch(draft)} activeOpacity={0.85}>
+        <Ionicons name="search" size={14} color={C.bg} />
+        <Text style={styles.approveBtnText}>검색</Text>
+      </TouchableOpacity>
+
+      {loading ? (
+        <Text style={{ fontSize: 13, color: C.textDim, paddingVertical: 20, textAlign: 'center' }}>검색 중...</Text>
+      ) : results.length === 0 ? (
+        query.trim().length > 0 && (
+          <Text style={{ fontSize: 13, color: C.textDim, paddingVertical: 20, textAlign: 'center' }}>검색 결과가 없어요</Text>
+        )
+      ) : (
+        results.map(profile => (
+          <TouchableOpacity
+            key={profile.id}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: C.surface,
+              borderRadius: R.card,
+              borderWidth: 1,
+              borderColor: C.border,
+              padding: 14,
+              gap: 12,
+            }}
+            onPress={() => onSelect(profile)}
+            activeOpacity={0.8}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: C.text }}>{profile.nickname ?? '(닉네임 없음)'}</Text>
+              <Text style={{ fontSize: 12, color: C.textSub, marginTop: 2 }}>{profile.email ?? ''}</Text>
+            </View>
+            <Ionicons name="link-outline" size={18} color={C.textSub} />
+          </TouchableOpacity>
+        ))
+      )}
+      <View style={{ height: 32 }} />
+    </ScrollView>
+  );
+}
+
 export default function AdminDashboard({ onClose }: { onClose: () => void }) {
   // --- Navigation
   const [viewStack, setViewStack] = useState<AdminView[]>(['home']);
@@ -1604,6 +1720,12 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
   const [officialGymName, setOfficialGymName] = useState<string>('');
   const [officialBrands,  setOfficialBrands]  = useState<string[]>([]);
   const [officialLoading, setOfficialLoading] = useState(false);
+
+  const [linkGymId,       setLinkGymId]       = useState<string | null>(null);
+  const [linkGymName,     setLinkGymName]     = useState<string>('');
+  const [linkQuery,       setLinkQuery]       = useState('');
+  const [linkResults,     setLinkResults]     = useState<ProfileSearchResult[]>([]);
+  const [linkLoading,     setLinkLoading]     = useState(false);
 
   // --- Machine catalog state
   const [catQuery,    setCatQuery]    = useState('');
@@ -1866,6 +1988,64 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     await loadRegisteredGyms();
   }, [loadRegisteredGyms]);
 
+  const openManagerLink = useCallback((gymId: string, gymName: string) => {
+    setLinkGymId(gymId);
+    setLinkGymName(gymName);
+    setLinkQuery('');
+    setLinkResults([]);
+    push('gym-manager-link');
+  }, [push]);
+
+  const handleSearchProfiles = useCallback(async (query: string) => {
+    setLinkQuery(query);
+    setLinkLoading(true);
+    const results = await searchProfilesByEmailOrNickname(query);
+    setLinkResults(results);
+    setLinkLoading(false);
+  }, []);
+
+  const handleLinkManager = useCallback(async (profile: ProfileSearchResult) => {
+    if (!linkGymId) return;
+    const { error } = await setGymManager(linkGymId, profile.id);
+    if (error) {
+      Alert.alert('연결 오류', '매니저 연결에 실패했습니다. ' + error);
+      return;
+    }
+    await loadRegisteredGyms();
+    pop();
+    Alert.alert('연결 완료', `${profile.nickname ?? profile.email ?? '매니저'}님이 연결되었습니다.`);
+  }, [linkGymId, loadRegisteredGyms, pop]);
+
+  const handleUnlinkManager = useCallback(async (gymId: string) => {
+    const { error } = await setGymManager(gymId, null);
+    if (error) {
+      Alert.alert('해제 오류', '매니저 연결 해제에 실패했습니다. ' + error);
+      return;
+    }
+    await loadRegisteredGyms();
+  }, [loadRegisteredGyms]);
+
+  const handleDeleteGym = useCallback((gymId: string, gymName: string) => {
+    Alert.alert(
+      '헬스장 삭제',
+      `"${gymName}"을(를) 정말 삭제하시겠어요? 되돌릴 수 없습니다.`,
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '삭제', style: 'destructive', onPress: async () => {
+            const { error } = await deleteGym(gymId);
+            if (error) {
+              Alert.alert('삭제 실패', error);
+              return;
+            }
+            await loadRegisteredGyms();
+            Alert.alert('삭제 완료', '헬스장이 삭제되었습니다.');
+          },
+        },
+      ],
+    );
+  }, [loadRegisteredGyms]);
+
   // --- View titles
 
   const VIEW_TITLES: Record<AdminView, string> = {
@@ -1876,12 +2056,13 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     'brand-copyright':   '브랜드 저작권',
     'gym-reports':       '정보 제보 관리',
     'manager-requests':  '매니저 신청 관리',
-    'register-gym':               '헬스장 직접 등록',
+    'register-gym':               '헬스장 관리',
     'gym-registration-requests':  '헬스장 신규 등록 제안(유저)',
     'machine-requests':           '머신 등록 신청(매니저)',
     'gym-official-brands':        `${officialGymName} 오피셜 브랜드`,
     'all-gyms-official':          '헬스장 오피셜 관리',
     'user-inquiries':             '유저 문의 관리',
+    'gym-manager-link':           `${linkGymName} 매니저 연결`,
   };
 
   // --- Render
@@ -2003,6 +2184,20 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
           onSave={handleRegisterGym}
           onUpdate={handleUpdateGym}
           onOfficialBrands={openOfficialBrands}
+          onManagerLink={openManagerLink}
+          onUnlinkManager={handleUnlinkManager}
+          onDeleteGym={handleDeleteGym}
+        />
+      )}
+      {currentView === 'gym-manager-link' && (
+        <GymManagerLinkView
+          gymName={linkGymName}
+          query={linkQuery}
+          results={linkResults}
+          loading={linkLoading}
+          onSearch={handleSearchProfiles}
+          onSelect={handleLinkManager}
+          onBack={pop}
         />
       )}
       {currentView === 'all-gyms-official' && (
