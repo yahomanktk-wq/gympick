@@ -109,18 +109,25 @@ function greeting() {
   return '좋은 저녁이에요';
 }
 
+// 로컬(KST) 달력일 기준 키 — isSameDay와 동일한 방식(local Date 컴포넌트)으로 통일
+function localDayKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function computeStreak(logs: WorkoutLog[]): number {
   if (!logs.length) return 0;
-  const uniqueDates = [...new Set(logs.map(l => l.date.slice(0, 10)))].sort().reverse();
+  const uniqueDates = [...new Set(logs.map(l => localDayKey(new Date(l.date))))].sort().reverse();
   if (!uniqueDates.length) return 0;
 
   // 가장 최근 기록이 오늘 또는 어제가 아니면 스트릭은 이미 끊긴 것
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayStr = today.toISOString().slice(0, 10);
+  const todayStr = localDayKey(today);
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().slice(0, 10);
+  const yesterdayStr = localDayKey(yesterday);
 
   if (uniqueDates[0] !== todayStr && uniqueDates[0] !== yesterdayStr) {
     return 0;
@@ -128,9 +135,10 @@ function computeStreak(logs: WorkoutLog[]): number {
 
   let streak = 1;
   for (let i = 1; i < uniqueDates.length; i++) {
-    const prev = new Date(uniqueDates[i - 1]);
+    const [py, pm, pd] = uniqueDates[i - 1].split('-').map(Number);
+    const prev = new Date(py, pm - 1, pd);
     prev.setDate(prev.getDate() - 1);
-    if (uniqueDates[i] === prev.toISOString().slice(0, 10)) {
+    if (uniqueDates[i] === localDayKey(prev)) {
       streak++;
     } else {
       break;
