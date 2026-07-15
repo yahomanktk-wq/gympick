@@ -77,13 +77,17 @@ import {
   answerUserInquiry,
   type UserInquiry,
 } from '../../lib/db/userInquiries';
+import {
+  fetchUserOverviewStats,
+  type UserOverviewStats,
+} from '../../lib/db/userStats';
 
 const SCREEN_W     = Dimensions.get('window').width;
 const CAT_CARD_W   = Math.floor((SCREEN_W - 40 - 12) / 2);
 
 // --- Types
 
-type AdminView = 'home' | 'pending-gyms' | 'gym-detail' | 'machine-catalog' | 'brand-copyright' | 'gym-reports' | 'manager-requests' | 'register-gym' | 'gym-registration-requests' | 'gym-official-brands' | 'all-gyms-official' | 'machine-requests' | 'user-inquiries' | 'gym-manager-link';
+type AdminView = 'home' | 'pending-gyms' | 'gym-detail' | 'machine-catalog' | 'brand-copyright' | 'gym-reports' | 'manager-requests' | 'register-gym' | 'gym-registration-requests' | 'gym-official-brands' | 'all-gyms-official' | 'machine-requests' | 'user-inquiries' | 'gym-manager-link' | 'user-overview';
 
 // --- Shared components
 
@@ -420,6 +424,14 @@ function HomeView({ machines, pendingGymCount, gymReportCount, managerRequestCou
           sub: userInquiryCount > 0 ? `${userInquiryCount}개 답변 대기` : '접수된 문의 없음',
           onPress: () => onPush('user-inquiries'),
           color: '#facc15',
+        },
+        {
+          icon: 'stats-chart-outline' as const,
+          title: '유저 현황',
+          count: 0,
+          sub: '가입자 수 · 역할별 분포 · 가입 추이',
+          onPress: () => onPush('user-overview'),
+          color: '#5ba4ff',
         },
       ].map(q => (
         <TouchableOpacity key={q.title} style={styles.queueCard} onPress={q.onPress} activeOpacity={0.85}>
@@ -927,6 +939,90 @@ function UserInquiriesView({ inquiries, onAnswer }: UserInquiriesViewProps) {
           ))}
         </>
       )}
+    </ScrollView>
+  );
+}
+
+// --- UserOverviewView
+
+function SignupTrendChart({ trend }: { trend: { date: string; count: number }[] }) {
+  const CHART_H = 90;
+  const maxCount = Math.max(1, ...trend.map(t => t.count));
+  return (
+    <View style={styles.trendChart}>
+      {trend.map(t => {
+        const barH = t.count > 0 ? Math.max(3, Math.round((t.count / maxCount) * CHART_H)) : 2;
+        return (
+          <View key={t.date} style={styles.trendCol}>
+            <Text style={styles.trendCount}>{t.count > 0 ? t.count : ''}</Text>
+            <View style={styles.trendBarTrack}>
+              <View style={[styles.trendBar, { height: barH, backgroundColor: t.count > 0 ? C.accent : C.border }]} />
+            </View>
+            <Text style={styles.trendLabel}>{t.date.slice(5).replace('-', '/')}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+interface UserOverviewViewProps {
+  stats: UserOverviewStats | null;
+  loading: boolean;
+}
+
+function UserOverviewView({ stats, loading }: UserOverviewViewProps) {
+  if (!stats) {
+    return loading
+      ? (
+        <View style={styles.emptyQueue}>
+          <Text style={styles.emptyQueueText}>불러오는 중…</Text>
+        </View>
+      )
+      : <EmptyQueue label="유저 통계를 불러오지 못했어요" />;
+  }
+
+  const { totalUsers, roleBreakdown, signupTrend, recentlyActiveApprox } = stats;
+
+  return (
+    <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <Text style={styles.sectionTitle}>전체 가입자</Text>
+      <View style={styles.ovTotalCard}>
+        <Ionicons name="people" size={22} color={C.accent} />
+        <Text style={styles.ovTotalValue}>{totalUsers.toLocaleString()}</Text>
+        <Text style={styles.ovTotalLabel}>전체 가입자 수</Text>
+      </View>
+
+      <Text style={[styles.sectionTitle, { marginTop: 20 }]}>역할별 분포</Text>
+      <View style={styles.statsRow}>
+        {[
+          { label: '일반 유저', value: roleBreakdown.user,    icon: 'person-outline' as const,           color: '#5ba4ff' },
+          { label: '매니저',    value: roleBreakdown.manager, icon: 'business-outline' as const,          color: '#a78bfa' },
+          { label: '어드민',    value: roleBreakdown.admin,   icon: 'shield-checkmark-outline' as const,  color: '#ff7eb3' },
+        ].map(s => (
+          <View key={s.label} style={styles.statCard}>
+            <Ionicons name={s.icon} size={20} color={s.color} />
+            <Text style={[styles.statValue, { color: s.color }]}>{s.value}</Text>
+            <Text style={styles.statLabel}>{s.label}</Text>
+          </View>
+        ))}
+      </View>
+
+      <Text style={[styles.sectionTitle, { marginTop: 20 }]}>최근 {signupTrend.length}일 신규가입 추이</Text>
+      <View style={styles.trendCard}>
+        <SignupTrendChart trend={signupTrend} />
+      </View>
+
+      <Text style={[styles.sectionTitle, { marginTop: 20 }]}>활성 유저</Text>
+      <View style={styles.ovActiveCard}>
+        <Ionicons name="pulse-outline" size={20} color="#34d399" />
+        <Text style={[styles.ovTotalValue, { color: '#34d399' }]}>{recentlyActiveApprox}</Text>
+        <Text style={styles.ovTotalLabel}>최근 7일 내 프로필 활동 기준 (근사치)</Text>
+        <Text style={styles.ovActiveNote}>
+          ⚠️ 실제 로그인 기록이 아닌 프로필 수정 시각(updated_at) 기준 근사치예요. 현재 스키마에는
+          로그인 시각을 저장하는 컬럼이 없어 정확한 활성 유저 수는 제공할 수 없어요.
+        </Text>
+      </View>
     </ScrollView>
   );
 }
@@ -1717,6 +1813,22 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     }
   }, [currentView, loadManagerRequests]);
 
+  const [userOverviewStats,  setUserOverviewStats]  = useState<UserOverviewStats | null>(null);
+  const [userOverviewLoading, setUserOverviewLoading] = useState(false);
+
+  const loadUserOverviewStats = useCallback(async () => {
+    setUserOverviewLoading(true);
+    const data = await fetchUserOverviewStats();
+    setUserOverviewStats(data);
+    setUserOverviewLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (currentView === 'user-overview') {
+      loadUserOverviewStats();
+    }
+  }, [currentView, loadUserOverviewStats]);
+
   const [officialGymId,   setOfficialGymId]   = useState<string | null>(null);
   const [officialGymName, setOfficialGymName] = useState<string>('');
   const [officialBrands,  setOfficialBrands]  = useState<string[]>([]);
@@ -2068,6 +2180,7 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
     'all-gyms-official':          '헬스장 오피셜 관리',
     'user-inquiries':             '유저 문의 관리',
     'gym-manager-link':           `${linkGymName} 매니저 연결`,
+    'user-overview':              '유저 현황',
   };
 
   // --- Render
@@ -2248,6 +2361,12 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
           onAnswer={handleAnswerInquiry}
         />
       )}
+      {currentView === 'user-overview' && (
+        <UserOverviewView
+          stats={userOverviewStats}
+          loading={userOverviewLoading}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -2301,6 +2420,48 @@ const styles = StyleSheet.create({
   },
   statValue: { fontSize: 22, fontWeight: '900', letterSpacing: -0.5 },
   statLabel: { fontSize: 10, fontWeight: '600', color: C.textSub, textAlign: 'center' },
+
+  // User overview
+  ovTotalCard: {
+    alignItems: 'center',
+    backgroundColor: C.surface,
+    borderRadius: R.card,
+    paddingVertical: 20,
+    borderWidth: 1,
+    borderColor: C.border,
+    gap: 4,
+  },
+  ovTotalValue: { fontSize: 30, fontWeight: '900', color: C.text, letterSpacing: -0.5 },
+  ovTotalLabel: { fontSize: 12, fontWeight: '600', color: C.textSub },
+  trendCard: {
+    backgroundColor: C.surface,
+    borderRadius: R.card,
+    borderWidth: 1,
+    borderColor: C.border,
+    padding: 16,
+  },
+  trendChart: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 4 },
+  trendCol:   { flex: 1, alignItems: 'center', gap: 4 },
+  trendCount: { fontSize: 9, fontWeight: '700', color: C.textDim, height: 12 },
+  trendBarTrack: { height: 90, width: '100%', justifyContent: 'flex-end', alignItems: 'center' },
+  trendBar:   { width: '55%', minWidth: 4, borderRadius: 3 },
+  trendLabel: { fontSize: 9, color: C.textDim, marginTop: 2 },
+  ovActiveCard: {
+    alignItems: 'center',
+    backgroundColor: C.surface,
+    borderRadius: R.card,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: C.border,
+    gap: 4,
+  },
+  ovActiveNote: {
+    fontSize: 11,
+    color: C.textDim,
+    lineHeight: 16,
+    textAlign: 'center',
+    marginTop: 8,
+  },
 
   // Queue cards
   queueCard: {
