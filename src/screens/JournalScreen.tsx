@@ -33,6 +33,7 @@ import { getTodayTargets, isRestToday, getNextTargets, collectRoutineMuscles, ca
 import { getSessionPRMachines } from '../data/workoutSessions';
 import { fetchWorkoutLogs } from '../lib/db';
 import { deleteWorkoutSession } from '../lib/db/workouts';
+import { removeSession } from '../data/sessionStore';
 import { deleteFeedPostBySession, fetchFeedPostPublicStatus, updateFeedPostPublic } from '../lib/db/feedPosts';
 import { useFetch } from '../lib/useFetch';
 import { useAuth } from '../context/AuthContext';
@@ -1256,6 +1257,10 @@ export default function JournalScreen() {
             onDelete={async (sessionId) => {
               const session = detailSessions.find(s => s.id === sessionId);
               await deleteWorkoutSession(sessionId);
+              // 세션이 Supabase 동기화에 실패해 sessionStore에만 존재하는 경우,
+              // 위 deleteWorkoutSession은 대상 행이 없어 조용히 아무 일도 하지 않는다.
+              // sessionStore에서도 함께 제거해야 refetch 후 목록에 다시 나타나지 않는다.
+              removeSession(user?.id ?? 'guest', sessionId);
               if (user?.id) {
                 await deleteFeedPostBySession(user.id, sessionId);
               }

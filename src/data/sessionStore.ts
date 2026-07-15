@@ -23,6 +23,10 @@ export function getNewSessions(userId: string): WorkoutLog[] {
     .map(s => s.log);
 }
 
+export function removeSession(userId: string, sessionId: string): void {
+  _sessions = _sessions.filter(s => !(s.userId === userId && s.log.id === sessionId));
+}
+
 export function clearSessionStore(): void {
   _sessions = [];
 }
