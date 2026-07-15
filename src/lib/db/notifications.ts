@@ -1,6 +1,10 @@
 import { supabase } from '../supabase';
 
-export type NotificationType = 'manager_approved' | 'manager_rejected' | 'announcement' | 'general';
+export type NotificationType =
+  | 'manager_approved' | 'manager_rejected'
+  | 'gym_request_reviewed' | 'gym_request_resolved'
+  | 'gym_report_reviewed'
+  | 'announcement' | 'general';
 
 export interface AppNotification {
   id: string;

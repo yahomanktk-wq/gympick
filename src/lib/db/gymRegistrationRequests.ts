@@ -10,6 +10,7 @@ export interface GymRegistrationRequest {
   hours:         string | null;
   status:        'pending' | 'reviewed' | 'resolved';
   requesterRole: 'user' | 'manager';
+  adminComment:  string | null;
   createdAt:     string;
 }
 
@@ -45,7 +46,7 @@ export async function submitGymRegistrationRequest(
 export async function fetchGymRegistrationRequests(): Promise<GymRegistrationRequest[]> {
   const { data, error } = await supabase
     .from('gym_registration_requests')
-    .select('id, gym_name, location, address_detail, notes, hours, status, user_id, requester_role, created_at')
+    .select('id, gym_name, location, address_detail, notes, hours, status, user_id, requester_role, admin_comment, created_at')
     .order('created_at', { ascending: false });
 
   if (error || !data) return [];
@@ -59,6 +60,7 @@ export async function fetchGymRegistrationRequests(): Promise<GymRegistrationReq
     hours:         r.hours ?? null,
     status:        r.status,
     requesterRole: r.requester_role ?? 'user',
+    adminComment:  r.admin_comment ?? null,
     createdAt:     r.created_at,
   }));
 }
@@ -66,9 +68,12 @@ export async function fetchGymRegistrationRequests(): Promise<GymRegistrationReq
 export async function updateGymRequestStatus(
   id: string,
   status: 'reviewed' | 'resolved',
+  adminComment?: string,
 ): Promise<void> {
+  const update: { status: string; admin_comment?: string } = { status };
+  if (adminComment && adminComment.trim()) update.admin_comment = adminComment.trim();
   await supabase
     .from('gym_registration_requests')
-    .update({ status })
+    .update(update)
     .eq('id', id);
 }

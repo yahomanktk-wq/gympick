@@ -157,8 +157,8 @@ interface HomeViewProps {
 interface PendingGymsViewProps {
   pendingGyms: PendingGym[];
   onSelectGym: (gym: PendingGym) => void;
-  onApproveGym: (id: string) => void;
-  onRejectGym:  (id: string) => void;
+  onApproveGym: (id: string, comment?: string) => void;
+  onRejectGym:  (id: string, comment?: string) => void;
 }
 
 interface GymDetailViewProps {
@@ -189,13 +189,14 @@ function GymRequestsView({
   onBack,
 }: {
   requests:       GymRegistrationRequest[];
-  onUpdateStatus: (id: string, status: 'reviewed' | 'resolved') => void;
+  onUpdateStatus: (id: string, status: 'reviewed' | 'resolved', comment?: string) => void;
   onBack:         () => void;
 }) {
   // 유저 요청만 표시
   const userRequests = requests.filter(r => (r.requesterRole ?? 'user') === 'user');
   const pending  = userRequests.filter(r => r.status === 'pending');
   const reviewed = userRequests.filter(r => r.status !== 'pending');
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
@@ -214,16 +215,24 @@ function GymRequestsView({
           <Text style={{ fontSize: 13, color: C.textSub }}>{req.location}</Text>
           {req.notes ? <Text style={{ fontSize: 12, color: C.textDim }}>{req.notes}</Text> : null}
           <Text style={{ fontSize: 11, color: C.textDim }}>{new Date(req.createdAt).toLocaleDateString('ko-KR')}</Text>
+          <TextInput
+            style={styles.adminInput}
+            value={drafts[req.id] ?? ''}
+            onChangeText={v => setDrafts(prev => ({ ...prev, [req.id]: v }))}
+            placeholder="처리 사유 코멘트 (선택)"
+            placeholderTextColor={C.textDim}
+            multiline
+          />
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
             <TouchableOpacity
               style={{ flex: 1, padding: 10, borderRadius: R.btn, backgroundColor: C.accent, alignItems: 'center' }}
-              onPress={() => onUpdateStatus(req.id, 'reviewed')}
+              onPress={() => onUpdateStatus(req.id, 'reviewed', drafts[req.id])}
             >
               <Text style={{ color: C.bg, fontWeight: '700', fontSize: 13 }}>검토 완료</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={{ flex: 1, padding: 10, borderRadius: R.btn, backgroundColor: C.surface, alignItems: 'center', borderWidth: 1, borderColor: C.border }}
-              onPress={() => onUpdateStatus(req.id, 'resolved')}
+              onPress={() => onUpdateStatus(req.id, 'resolved', drafts[req.id])}
             >
               <Text style={{ color: C.text, fontWeight: '700', fontSize: 13 }}>처리 완료</Text>
             </TouchableOpacity>
@@ -239,6 +248,9 @@ function GymRequestsView({
               <Text style={{ fontSize: 14, fontWeight: '700', color: C.text }}>{req.gymName}</Text>
               <Text style={{ fontSize: 12, color: C.textSub }}>{req.location}</Text>
               <Text style={{ fontSize: 11, color: C.accent, fontWeight: '600' }}>{req.status === 'reviewed' ? '검토 완료' : '처리 완료'}</Text>
+              {req.adminComment ? (
+                <Text style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>코멘트: {req.adminComment}</Text>
+              ) : null}
             </View>
           ))}
         </>
@@ -459,6 +471,7 @@ function PendingGymsView({ pendingGyms, onSelectGym, onApproveGym, onRejectGym }
   // 모든 신청 건을 하나로 통합 (pendingGyms + managerGymRequests)
   const allPending  = pendingGyms.filter(g => g.status === 'pending');
   const allReviewed = pendingGyms.filter(g => g.status !== 'pending');
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
 
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -496,9 +509,17 @@ function PendingGymsView({ pendingGyms, onSelectGym, onApproveGym, onRejectGym }
               <Text style={styles.submittedText}>신청자: {gym.managerName} · {gym.submittedAt.slice(0, 10)}</Text>
             </View>
           </TouchableOpacity>
+          <TextInput
+            style={[styles.adminInput, { marginTop: 8 }]}
+            value={drafts[gym.id] ?? ''}
+            onChangeText={v => setDrafts(prev => ({ ...prev, [gym.id]: v }))}
+            placeholder="승인/거절 사유 코멘트 (선택)"
+            placeholderTextColor={C.textDim}
+            multiline
+          />
           <ReviewButtons
-            onApprove={() => onApproveGym(gym.id)}
-            onReject={() => onRejectGym(gym.id)}
+            onApprove={() => onApproveGym(gym.id, drafts[gym.id])}
+            onReject={() => onRejectGym(gym.id, drafts[gym.id])}
           />
         </View>
       ))}
@@ -779,13 +800,14 @@ function BrandCopyrightView({ machines }: { machines: MachineWithGyms[] }) {
 
 interface GymReportsViewProps {
   reports: GymInfoReport[];
-  onMarkReviewed: (id: string) => void;
+  onMarkReviewed: (id: string, comment?: string) => void;
   onDelete: (id: string) => void;
 }
 
 function GymReportsView({ reports, onMarkReviewed, onDelete }: GymReportsViewProps) {
   const pending  = reports.filter(r => r.status === 'pending');
   const reviewed = reports.filter(r => r.status !== 'pending');
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
 
   const REPORT_TYPE_LABELS: Record<string, string> = {
     wrong_hours:   '운영시간 오류',
@@ -822,12 +844,22 @@ function GymReportsView({ reports, onMarkReviewed, onDelete }: GymReportsViewPro
             <Ionicons name="time-outline" size={11} color={C.textSub} />
             <Text style={styles.submittedText}>{r.createdAt.slice(0, 10)}</Text>
           </View>
+          {r.reporterUserId ? (
+            <TextInput
+              style={[styles.adminInput, { marginTop: 8 }]}
+              value={drafts[r.id] ?? ''}
+              onChangeText={v => setDrafts(prev => ({ ...prev, [r.id]: v }))}
+              placeholder="제보자에게 남길 코멘트 (선택)"
+              placeholderTextColor={C.textDim}
+              multiline
+            />
+          ) : null}
           <View style={styles.flagActions}>
             <TouchableOpacity style={styles.flagActionBtn} onPress={() => onDelete(r.id)} activeOpacity={0.8}>
               <Ionicons name="trash-outline" size={13} color={C.danger} />
               <Text style={[styles.flagActionText, { color: C.danger }]}>삭제</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.flagActionBtn, styles.flagResolveBtn]} onPress={() => onMarkReviewed(r.id)} activeOpacity={0.8}>
+            <TouchableOpacity style={[styles.flagActionBtn, styles.flagResolveBtn]} onPress={() => onMarkReviewed(r.id, drafts[r.id])} activeOpacity={0.8}>
               <Ionicons name="checkmark" size={13} color={C.bg} />
               <Text style={[styles.flagActionText, { color: C.bg }]}>확인 완료</Text>
             </TouchableOpacity>
@@ -844,6 +876,9 @@ function GymReportsView({ reports, onMarkReviewed, onDelete }: GymReportsViewPro
                 <View style={{ flex: 1 }}>
                   <Text style={styles.flagGymName}>{r.gymName}</Text>
                   <Text style={styles.flagDesc} numberOfLines={1}>{r.content}</Text>
+                  {r.adminComment ? (
+                    <Text style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>코멘트: {r.adminComment}</Text>
+                  ) : null}
                 </View>
                 <View style={[styles.reviewedBadge, { backgroundColor: C.accentBg }]}>
                   <Text style={[styles.reviewedBadgeText, { color: C.accent }]}>완료</Text>
@@ -1395,10 +1430,11 @@ function ManagerRequestsSupabaseView({
 }: {
   requests:  ManagerRequest[];
   loading:   boolean;
-  onApprove: (id: string) => void;
-  onReject:  (id: string) => void;
+  onApprove: (id: string, comment?: string) => void;
+  onReject:  (id: string, comment?: string) => void;
 }) {
   const pending = requests.filter(r => r.status === 'pending');
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
 
   if (loading) {
     return (
@@ -1439,9 +1475,17 @@ function ManagerRequestsSupabaseView({
           {r.message.length > 0 && (
             <Text style={[styles.pendingDesc, { marginTop: 6 }]} numberOfLines={3}>{r.message}</Text>
           )}
+          <TextInput
+            style={[styles.adminInput, { marginTop: 8 }]}
+            value={drafts[r.id] ?? ''}
+            onChangeText={v => setDrafts(prev => ({ ...prev, [r.id]: v }))}
+            placeholder="승인/반려 사유 코멘트 (선택)"
+            placeholderTextColor={C.textDim}
+            multiline
+          />
           <ReviewButtons
-            onApprove={() => onApprove(r.id)}
-            onReject={() => onReject(r.id)}
+            onApprove={() => onApprove(r.id, drafts[r.id])}
+            onReject={() => onReject(r.id, drafts[r.id])}
           />
         </View>
       ))}
@@ -1897,7 +1941,7 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
     setSelectedGym(prev => prev?.id === gymId ? { ...prev!, status: action } : prev);
   }, []);
 
-  const handleApproveGym  = useCallback(async (id: string) => {
+  const handleApproveGym  = useCallback(async (id: string, comment?: string) => {
     // 로컬 상태 업데이트
     setPendingGyms(prev => prev.map(g => g.id === id ? { ...g, status: 'approved' as ReviewStatus } : g));
 
@@ -1946,8 +1990,8 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
 
       // gym_registration_requests 상태도 업데이트
       const { updateGymRequestStatus } = await import('../../lib/db/gymRegistrationRequests');
-      await updateGymRequestStatus(id, 'reviewed');
-      setGymRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'reviewed' } : r));
+      await updateGymRequestStatus(id, 'reviewed', comment);
+      setGymRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'reviewed', adminComment: comment?.trim() || null } : r));
 
       // 신청자 role을 manager로 업데이트
       if (gym.managerId) {
@@ -1962,6 +2006,14 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
         if (updateError) {
           console.warn('[AdminDashboard] role 업데이트 실패:', updateError.message);
         }
+
+        await sendNotification(
+          gym.managerId,
+          'gym_request_reviewed',
+          '헬스장 등록 제안이 승인됐어요! 🎉',
+          `"${gym.name}" 헬스장이 승인되어 등록됐어요.` + (comment?.trim() ? ` 관리자 코멘트: "${comment.trim()}"` : ''),
+          id,
+        );
       }
 
       Alert.alert('승인 완료', `${gym.name}이(가) 승인되어 등록되었습니다.`);
@@ -1970,16 +2022,23 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
     }
   }, [pendingGyms, gymRequests]);
 
-  const handleRejectGym = useCallback(async (id: string) => {
+  const handleRejectGym = useCallback(async (id: string, comment?: string) => {
     // 로컬 mock pendingGyms 상태 업데이트 (해당되는 경우)
     setPendingGyms(prev => prev.map(g => g.id === id ? { ...g, status: 'rejected' as ReviewStatus } : g));
 
     // 실제 매니저 신청(Supabase gym_registration_requests)인 경우 처리
-    const isManagerRequest = gymRequests.some(r => r.id === id && (r.requesterRole ?? 'user') === 'manager');
-    if (isManagerRequest) {
+    const req = gymRequests.find(r => r.id === id && (r.requesterRole ?? 'user') === 'manager');
+    if (req) {
       try {
-        await updateGymRequestStatus(id, 'resolved');
-        setGymRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'resolved' } : r));
+        await updateGymRequestStatus(id, 'resolved', comment);
+        setGymRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'resolved', adminComment: comment?.trim() || null } : r));
+        await sendNotification(
+          req.userId,
+          'gym_request_resolved',
+          '헬스장 등록 제안 처리 결과',
+          `"${req.gymName}" 헬스장 등록 제안이 반려됐어요.` + (comment?.trim() ? ` 관리자 코멘트: "${comment.trim()}"` : ''),
+          id,
+        );
       } catch (e: any) {
         if (__DEV__) console.warn('[AdminDashboard] 헬스장 거절 처리 오류:', e);
         Alert.alert('처리 오류', '거절 처리 중 문제가 발생했습니다.');
@@ -1992,10 +2051,20 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
     push('gym-detail');
   }, [push]);
 
-  const handleMarkReportReviewed = useCallback(async (id: string) => {
-    await markReportReviewed(id);
+  const handleMarkReportReviewed = useCallback(async (id: string, comment?: string) => {
+    await markReportReviewed(id, comment);
+    const report = gymReports.find(r => r.id === id);
+    if (report?.reporterUserId) {
+      await sendNotification(
+        report.reporterUserId,
+        'gym_report_reviewed',
+        '제보하신 내용을 확인했어요',
+        `"${report.gymName}" 헬스장 정보 제보를 확인했어요.` + (comment?.trim() ? ` 관리자 코멘트: "${comment.trim()}"` : ''),
+        id,
+      );
+    }
     await loadGymReports();
-  }, [loadGymReports]);
+  }, [loadGymReports, gymReports]);
 
   const handleDeleteReport = useCallback(async (id: string) => {
     await deleteGymInfoReport(id);
@@ -2259,7 +2328,7 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
         <ManagerRequestsSupabaseView
           requests={managerRequests}
           loading={managerRequestsLoading}
-          onApprove={async (id) => {
+          onApprove={async (id, comment) => {
             const req = managerRequests.find(r => r.id === id);
             // 1. 매니저 승인 처리 (profiles.role 변경 + gyms 연결)
             await handleApproveApplication(id);
@@ -2269,7 +2338,7 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
                 req.userId,
                 'manager_approved',
                 '매니저 신청이 승인됐어요! 🎉',
-                `${req.gymName} 헬스장의 매니저로 승인됐어요. 앱을 재시작하면 헬스장 관리 기능이 활성화돼요.`,
+                `${req.gymName} 헬스장의 매니저로 승인됐어요. 앱을 재시작하면 헬스장 관리 기능이 활성화돼요.` + (comment?.trim() ? ` 관리자 코멘트: "${comment.trim()}"` : ''),
                 req.id,
               );
               // 3. 해당 유저의 모든 신청 내역 삭제 (중복 신청 포함)
@@ -2279,7 +2348,7 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
             }
             await loadManagerRequests();
           }}
-          onReject={async (id) => {
+          onReject={async (id, comment) => {
             const req = managerRequests.find(r => r.id === id);
             // 1. 알림 발송
             if (req?.userId) {
@@ -2287,7 +2356,7 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
                 req.userId,
                 'manager_rejected',
                 '매니저 신청 결과 안내',
-                `${req.gymName} 헬스장 매니저 신청이 반려됐어요. 자세한 문의는 고객센터를 이용해주세요.`,
+                `${req.gymName} 헬스장 매니저 신청이 반려됐어요. 자세한 문의는 고객센터를 이용해주세요.` + (comment?.trim() ? ` 관리자 코멘트: "${comment.trim()}"` : ''),
                 req.id,
               );
             }
@@ -2338,8 +2407,18 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
       {currentView === 'gym-registration-requests' && (
         <GymRequestsView
           requests={gymRequests}
-          onUpdateStatus={async (id, status) => {
-            await updateGymRequestStatus(id, status);
+          onUpdateStatus={async (id, status, comment) => {
+            const req = gymRequests.find(r => r.id === id);
+            await updateGymRequestStatus(id, status, comment);
+            if (req?.userId) {
+              await sendNotification(
+                req.userId,
+                status === 'reviewed' ? 'gym_request_reviewed' : 'gym_request_resolved',
+                '헬스장 등록 제안 처리 안내',
+                `"${req.gymName}" 헬스장 등록 제안이 ${status === 'reviewed' ? '검토 완료' : '처리 완료'}됐어요.` + (comment?.trim() ? ` 관리자 코멘트: "${comment.trim()}"` : ''),
+                id,
+              );
+            }
             const updated = await fetchGymRegistrationRequests();
             setGymRequests(updated);
           }}

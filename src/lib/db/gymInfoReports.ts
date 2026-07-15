@@ -9,6 +9,7 @@ export interface GymInfoReport {
   content:         string;
   createdAt:       string;
   status:          'pending' | 'reviewed';
+  adminComment:    string | null;
 }
 
 function rowTo(r: any): GymInfoReport {
@@ -21,6 +22,7 @@ function rowTo(r: any): GymInfoReport {
     content:        r.content ?? '',
     createdAt:      r.created_at,
     status:         (r.status ?? 'pending') as 'pending' | 'reviewed',
+    adminComment:   r.admin_comment ?? null,
   };
 }
 
@@ -61,8 +63,10 @@ export async function submitGymInfoReport(input: {
   }
 }
 
-export async function markReportReviewed(id: string): Promise<void> {
-  await supabase.from('gym_info_reports').update({ status: 'reviewed' }).eq('id', id);
+export async function markReportReviewed(id: string, adminComment?: string): Promise<void> {
+  const update: { status: string; admin_comment?: string } = { status: 'reviewed' };
+  if (adminComment && adminComment.trim()) update.admin_comment = adminComment.trim();
+  await supabase.from('gym_info_reports').update(update).eq('id', id);
 }
 
 export async function deleteGymInfoReport(id: string): Promise<void> {
