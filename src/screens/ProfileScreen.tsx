@@ -25,7 +25,7 @@ import { screenPad, cardPadH, cardPadV } from '../theme/responsive';
 import { UserRole, ManagedGym } from '../data/types';
 import { useAuth } from '../context/AuthContext';
 import ManagerDashboard from './manager/ManagerDashboard';
-import AdminDashboard from './admin/AdminDashboard';
+import AdminDashboard, { type AdminView } from './admin/AdminDashboard';
 import FavoritesScreen from './FavoritesScreen';
 
 import PrivacyPolicyScreen from './PrivacyPolicyScreen';
@@ -255,12 +255,23 @@ function ManagerSection({ onOpen, gyms }: { onOpen: () => void; gyms: ManagedGym
 
 // --- Admin section
 
-function AdminSection({ onOpen, pendingGyms, openFlags, managerRequestCount }: { onOpen: () => void; pendingGyms: number; openFlags: number; managerRequestCount: number }) {
-  const queues = [
-    { label: '매니저 신청 관리', count: managerRequestCount, color: '#a78bfa' },
-    { label: '헬스장 등록 신청', count: pendingGyms,          color: '#ffb547' },
-    { label: '정보 제보 관리',   count: openFlags,            color: C.danger  },
+function AdminSection({
+  onOpen, pendingGyms, openFlags, managerRequestCount, userGymRequestCount,
+}: {
+  onOpen: (view?: AdminView) => void;
+  pendingGyms: number;
+  openFlags: number;
+  managerRequestCount: number;
+  userGymRequestCount: number;
+}) {
+  const queues: { label: string; count: number; color: string; view: AdminView }[] = [
+    { label: '매니저 신청 관리', count: managerRequestCount, color: '#a78bfa', view: 'manager-requests' },
+    { label: '헬스장 등록 신청', count: pendingGyms,          color: '#ffb547', view: 'pending-gyms' },
+    { label: '정보 제보 관리',   count: openFlags,            color: C.danger,  view: 'gym-reports' },
+    { label: '헬스장 신규 등록 제안(유저)', count: userGymRequestCount, color: '#fb923c', view: 'gym-registration-requests' },
   ];
+
+  const totalPending = managerRequestCount + pendingGyms + openFlags + userGymRequestCount;
 
   return (
     <View style={[styles.roleSection, { borderColor: C.danger + '40' }]}>
@@ -275,7 +286,7 @@ function AdminSection({ onOpen, pendingGyms, openFlags, managerRequestCount }: {
             <Text style={styles.roleSectionSub}>검토 큐 · 데이터 관리</Text>
           </View>
         </View>
-        <TouchableOpacity style={[styles.openPanelBtn, { backgroundColor: C.danger }]} onPress={onOpen} activeOpacity={0.85}>
+        <TouchableOpacity style={[styles.openPanelBtn, { backgroundColor: C.danger }]} onPress={() => onOpen()} activeOpacity={0.85}>
           <Text style={styles.openPanelBtnText}>열기</Text>
           <Ionicons name="chevron-forward" size={13} color={C.bg} />
         </TouchableOpacity>
@@ -286,7 +297,7 @@ function AdminSection({ onOpen, pendingGyms, openFlags, managerRequestCount }: {
       {/* Queue counts */}
       <View style={styles.adminQueues}>
         {queues.map(q => (
-          <TouchableOpacity key={q.label} style={styles.adminQueueCell} onPress={onOpen} activeOpacity={0.75}>
+          <TouchableOpacity key={q.label} style={styles.adminQueueCell} onPress={() => onOpen(q.view)} activeOpacity={0.75}>
             <Text style={[styles.adminQueueCount, { color: q.color }]}>{q.count}</Text>
             <Text style={styles.adminQueueLabel}>{q.label}</Text>
             {q.count > 0 && <View style={[styles.adminQueueDot, { backgroundColor: q.color }]} />}
@@ -295,13 +306,13 @@ function AdminSection({ onOpen, pendingGyms, openFlags, managerRequestCount }: {
       </View>
 
       {/* Alert if anything pending */}
-      {(managerRequestCount + pendingGyms + openFlags) > 0 && (
+      {totalPending > 0 && (
         <>
           <CardDivider />
-          <TouchableOpacity style={styles.adminAlertRow} onPress={onOpen} activeOpacity={0.75}>
+          <TouchableOpacity style={styles.adminAlertRow} onPress={() => onOpen()} activeOpacity={0.75}>
             <Ionicons name="alert-circle" size={14} color='#ffb547' />
             <Text style={styles.adminAlertText}>
-              {managerRequestCount + pendingGyms + openFlags}개 항목을 확인해주세요
+              {totalPending}개 항목을 확인해주세요
             </Text>
             <Ionicons name="chevron-forward" size={13} color={C.textDim} />
           </TouchableOpacity>
@@ -553,6 +564,8 @@ export default function ProfileScreen() {
   const [adminGymCount,     setAdminGymCount]     = useState(0);
   const [adminFlagCount,    setAdminFlagCount]    = useState(0);
   const [adminManagerReqCount, setAdminManagerReqCount] = useState(0);
+  const [adminUserGymRequestCount, setAdminUserGymRequestCount] = useState(0);
+  const [adminInitialView, setAdminInitialView] = useState<AdminView | undefined>(undefined);
 
   // 매니저 헬스장 목록 로딩 (Supabase + Mock 합치기)
   useEffect(() => {
@@ -618,6 +631,9 @@ export default function ProfileScreen() {
       );
       setAdminFlagCount(reports.filter(r => r.status === 'pending').length);
       setAdminManagerReqCount(managerRequests.filter(r => r.status === 'pending').length);
+      setAdminUserGymRequestCount(
+        requests.filter(r => r.status === 'pending' && (r.requesterRole ?? 'user') === 'user').length
+      );
     } catch (e: any) {
       if (__DEV__) console.warn('[ProfileScreen] 관리자 패널 카운트 로딩 오류:', e);
     }
@@ -961,7 +977,13 @@ export default function ProfileScreen() {
         {user.role === 'admin' && (
           <>
             <SectionLabel text="관리자" />
-            <AdminSection onOpen={() => setShowAdmin(true)} pendingGyms={adminGymCount} openFlags={adminFlagCount} managerRequestCount={adminManagerReqCount} />
+            <AdminSection
+              onOpen={(view) => { setAdminInitialView(view); setShowAdmin(true); }}
+              pendingGyms={adminGymCount}
+              openFlags={adminFlagCount}
+              managerRequestCount={adminManagerReqCount}
+              userGymRequestCount={adminUserGymRequestCount}
+            />
             <View style={{ height: 28 }} />
           </>
         )}
@@ -1093,7 +1115,10 @@ export default function ProfileScreen() {
         <ManagerDashboard onClose={() => setShowManager(false)} />
       </Modal>
       <Modal visible={showAdmin} animationType="slide" onRequestClose={() => setShowAdmin(false)}>
-        <AdminDashboard onClose={() => setShowAdmin(false)} />
+        <AdminDashboard
+          onClose={() => { setShowAdmin(false); setAdminInitialView(undefined); }}
+          initialView={adminInitialView}
+        />
       </Modal>
       <Modal visible={showManagerManual} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowManagerManual(false)}>
         <ManagerManualScreen onClose={() => setShowManagerManual(false)} />
@@ -1671,13 +1696,15 @@ const styles = StyleSheet.create({
   // Admin queue cells
   adminQueues: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: 8,
     paddingVertical: 12,
   },
   adminQueueCell: {
-    flex: 1,
+    width: '50%',
     alignItems: 'center',
     gap: 3,
+    paddingVertical: 8,
   },
   adminQueueCount: { fontSize: 28, fontWeight: '900', letterSpacing: -1 },
   adminQueueLabel: { fontSize: 10, fontWeight: '600', color: C.textSub, letterSpacing: 0.3 },

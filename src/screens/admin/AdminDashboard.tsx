@@ -87,7 +87,7 @@ const CAT_CARD_W   = Math.floor((SCREEN_W - 40 - 12) / 2);
 
 // --- Types
 
-type AdminView = 'home' | 'pending-gyms' | 'gym-detail' | 'machine-catalog' | 'brand-copyright' | 'gym-reports' | 'manager-requests' | 'register-gym' | 'gym-registration-requests' | 'gym-official-brands' | 'all-gyms-official' | 'machine-requests' | 'user-inquiries' | 'gym-manager-link' | 'user-overview';
+export type AdminView = 'home' | 'pending-gyms' | 'gym-detail' | 'machine-catalog' | 'brand-copyright' | 'gym-reports' | 'manager-requests' | 'register-gym' | 'gym-registration-requests' | 'gym-official-brands' | 'all-gyms-official' | 'machine-requests' | 'user-inquiries' | 'gym-manager-link' | 'user-overview';
 
 // --- Shared components
 
@@ -1715,9 +1715,11 @@ function GymManagerLinkView({
   );
 }
 
-export default function AdminDashboard({ onClose }: { onClose: () => void }) {
+export default function AdminDashboard({ onClose, initialView }: { onClose: () => void; initialView?: AdminView }) {
   // --- Navigation
-  const [viewStack, setViewStack] = useState<AdminView[]>(['home']);
+  const [viewStack, setViewStack] = useState<AdminView[]>(
+    () => (initialView && initialView !== 'home' ? ['home', initialView] : ['home']),
+  );
   const currentView = viewStack[viewStack.length - 1];
   const push = useCallback((v: AdminView) => setViewStack(p => [...p, v]), []);
   const pop  = useCallback(() => {
