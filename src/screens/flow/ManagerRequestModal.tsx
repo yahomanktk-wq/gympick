@@ -11,11 +11,15 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { C, R, T } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
 import { geocodeAddress } from '../../lib/geocoding';
+import { uploadManagerDoc } from '../../lib/managerDocStorage';
 
 interface Props {
   visible: boolean;
@@ -35,6 +39,9 @@ export default function ManagerRequestModal({ visible, userId, onClose }: Props)
   const [loading,  setLoading]  = useState(false);
   const [blockReason,  setBlockReason]  = useState<'managed' | 'pending' | null>(null);
   const [blockGymName, setBlockGymName] = useState('');
+  const [docLocalUri, setDocLocalUri] = useState<string | null>(null);
+  const [docPath,      setDocPath]     = useState<string | null>(null);
+  const [docUploading, setDocUploading] = useState(false);
 
   useEffect(() => {
     if (!visible || !userId) return;
@@ -71,7 +78,54 @@ export default function ManagerRequestModal({ visible, userId, onClose }: Props)
     setLoading(false);
     setBlockReason(null);
     setBlockGymName('');
+    setDocLocalUri(null);
+    setDocPath(null);
+    setDocUploading(false);
     onClose();
+  }
+
+  function pickDocument() {
+    Alert.alert('인증 서류 첨부', '사업자등록증 또는 재직증명서 사진을 선택하세요', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '카메라로 찍기', onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') { Alert.alert('권한 필요', '카메라 접근 권한이 필요합니다.'); return; }
+          const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 0.85 });
+          if (!result.canceled && result.assets[0]) await handleDocPicked(result.assets[0].uri);
+        },
+      },
+      {
+        text: '앨범에서 선택', onPress: async () => {
+          let result: ImagePicker.ImagePickerResult;
+          try {
+            result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 0.85 });
+          } catch {
+            Alert.alert('권한 필요', '사진 라이브러리 접근 권한이 필요합니다.');
+            return;
+          }
+          if (!result.canceled && result.assets[0]) await handleDocPicked(result.assets[0].uri);
+        },
+      },
+    ]);
+  }
+
+  async function handleDocPicked(uri: string) {
+    setDocLocalUri(uri);
+    setDocUploading(true);
+    const path = await uploadManagerDoc(uri, userId);
+    setDocUploading(false);
+    if (!path) {
+      Alert.alert('업로드 실패', '서류 업로드에 실패했어요. 잠시 후 다시 시도해주세요.');
+      setDocLocalUri(null);
+      return;
+    }
+    setDocPath(path);
+  }
+
+  function removeDocument() {
+    setDocLocalUri(null);
+    setDocPath(null);
   }
 
   async function handleSubmit() {
@@ -127,12 +181,13 @@ export default function ManagerRequestModal({ visible, userId, onClose }: Props)
 
       // Supabase manager_requests 테이블에 저장
       const { error } = await supabase.from('manager_requests').insert({
-        user_id:  userId,
-        gym_name: gymName.trim(),
-        location: location.trim(),
-        phone:    phone.trim(),
-        message:  message.trim(),
-        status:   'pending',
+        user_id:            userId,
+        gym_name:           gymName.trim(),
+        location:           location.trim(),
+        phone:              phone.trim(),
+        message:            message.trim(),
+        status:             'pending',
+        document_photo_url: docPath,
       });
 
       if (error) {
@@ -148,7 +203,7 @@ export default function ManagerRequestModal({ visible, userId, onClose }: Props)
     }
   }
 
-  const canSubmit = gymName.trim().length > 0 && location.trim().length > 0 && !loading && !blockReason;
+  const canSubmit = gymName.trim().length > 0 && location.trim().length > 0 && !loading && !blockReason && !docUploading;
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={handleClose}>
@@ -252,9 +307,30 @@ export default function ManagerRequestModal({ visible, userId, onClose }: Props)
                 textAlignVertical="top"
               />
 
+              <Text style={s.fieldLabel}>인증 서류 (선택)</Text>
+              {docLocalUri ? (
+                <View style={s.docPreviewWrap}>
+                  <Image source={{ uri: docLocalUri }} style={s.docPreviewImg} resizeMode="cover" />
+                  {docUploading ? (
+                    <View style={s.docUploadingOverlay}>
+                      <ActivityIndicator color="#fff" />
+                    </View>
+                  ) : (
+                    <TouchableOpacity style={s.docRemoveBtn} onPress={removeDocument} activeOpacity={0.8}>
+                      <Ionicons name="close" size={16} color="#fff" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ) : (
+                <TouchableOpacity style={s.docAttachBtn} onPress={pickDocument} activeOpacity={0.8}>
+                  <Ionicons name="document-attach-outline" size={18} color={C.textSub} />
+                  <Text style={s.docAttachBtnText}>사업자등록증 · 재직증명서 사진 첨부</Text>
+                </TouchableOpacity>
+              )}
               <View style={s.noteCard}>
                 <Ionicons name="information-circle-outline" size={14} color={C.textDim} />
                 <Text style={s.noteText}>
+                  서류를 첨부하지 않아도 신청할 수 있어요. 다만 첨부하시면 검토가 더 빨라질 수 있어요.{'\n'}
                   신청 내용은 GymPick 관리팀이 검토하며, 승인 시 이메일로 안내드립니다.
                 </Text>
               </View>
@@ -343,6 +419,48 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
   noteText: { flex: 1, fontSize: 12, color: C.textDim, lineHeight: 18 },
+
+  docAttachBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: C.surface,
+    borderRadius: R.inner,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderStyle: 'dashed',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    marginBottom: 16,
+  },
+  docAttachBtnText: { fontSize: 13, color: C.textSub, fontWeight: '600' },
+  docPreviewWrap: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  docPreviewImg: {
+    width: '100%',
+    height: 180,
+    borderRadius: R.inner,
+    backgroundColor: C.surface,
+  },
+  docUploadingOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    borderRadius: R.inner,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  docRemoveBtn: {
+    position: 'absolute',
+    top: 8, right: 8,
+    width: 28, height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   ctaBar: {
     padding: 16,

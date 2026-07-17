@@ -8,6 +8,8 @@ export interface ManagerRequest {
   phone: string;
   message: string;
   status: 'pending' | 'approved' | 'rejected';
+  adminComment: string | null;
+  documentPhotoUrl: string | null;
   createdAt: string;
 }
 
@@ -17,14 +19,16 @@ let mockRequests: ManagerRequest[] = [];
 
 function rowToRequest(r: any): ManagerRequest {
   return {
-    id:        r.id,
-    userId:    r.user_id,
-    gymName:   r.gym_name,
-    location:  r.location,
-    phone:     r.phone ?? '',
-    message:   r.message ?? '',
-    status:    r.status,
-    createdAt: r.created_at,
+    id:               r.id,
+    userId:           r.user_id,
+    gymName:          r.gym_name,
+    location:         r.location,
+    phone:            r.phone ?? '',
+    message:          r.message ?? '',
+    status:           r.status,
+    adminComment:     r.admin_comment ?? null,
+    documentPhotoUrl: r.document_photo_url ?? null,
+    createdAt:        r.created_at,
   };
 }
 
@@ -41,22 +45,29 @@ export async function getManagerRequests(userId: string): Promise<ManagerRequest
 }
 
 export async function addManagerRequest(
-  req: Pick<ManagerRequest, 'userId' | 'gymName' | 'location' | 'phone' | 'message'>,
+  req: Pick<ManagerRequest, 'userId' | 'gymName' | 'location' | 'phone' | 'message'> & { documentPhotoUrl?: string | null },
 ): Promise<void> {
   const { error } = await supabase.from('manager_requests').insert({
-    user_id:  req.userId,
-    gym_name: req.gymName,
-    location: req.location,
-    phone:    req.phone,
-    message:  req.message,
-    status:   'pending',
+    user_id:            req.userId,
+    gym_name:           req.gymName,
+    location:           req.location,
+    phone:              req.phone,
+    message:            req.message,
+    status:             'pending',
+    document_photo_url: req.documentPhotoUrl ?? null,
   });
   if (error) {
     mockRequests.push({
-      id:        `mr${Date.now()}`,
-      ...req,
-      status:    'pending',
-      createdAt: new Date().toISOString(),
+      id:               `mr${Date.now()}`,
+      userId:           req.userId,
+      gymName:          req.gymName,
+      location:         req.location,
+      phone:            req.phone,
+      message:          req.message,
+      status:           'pending',
+      adminComment:     null,
+      documentPhotoUrl: req.documentPhotoUrl ?? null,
+      createdAt:        new Date().toISOString(),
     });
   }
 }
@@ -65,21 +76,12 @@ export async function fetchManagerRequests(): Promise<ManagerRequest[]> {
   try {
     const { data, error } = await supabase
       .from('manager_requests')
-      .select('id, user_id, gym_name, location, phone, message, status, created_at')
+      .select('id, user_id, gym_name, location, phone, message, status, admin_comment, document_photo_url, created_at')
       .order('created_at', { ascending: false });
 
     if (error || !data) return [];
 
-    return data.map((r: any) => ({
-      id:        r.id,
-      userId:    r.user_id,
-      gymName:   r.gym_name,
-      location:  r.location  ?? '',
-      phone:     r.phone     ?? '',
-      message:   r.message   ?? '',
-      status:    r.status    ?? 'pending',
-      createdAt: r.created_at,
-    }));
+    return data.map(rowToRequest);
   } catch {
     return [];
   }
@@ -88,37 +90,18 @@ export async function fetchManagerRequests(): Promise<ManagerRequest[]> {
 export async function updateManagerRequestStatus(
   id: string,
   status: 'approved' | 'rejected',
+  adminComment?: string,
 ): Promise<{ error: string | null }> {
   try {
+    const update: { status: string; admin_comment?: string } = { status };
+    if (adminComment && adminComment.trim()) update.admin_comment = adminComment.trim();
     const { error } = await supabase
       .from('manager_requests')
-      .update({ status })
+      .update(update)
       .eq('id', id);
     if (error) return { error: error.message };
     return { error: null };
   } catch (e: any) {
     return { error: e.message };
   }
-}
-
-export async function deleteManagerRequest(id: string): Promise<{ error: string | null }> {
-  try {
-    const { error } = await supabase
-      .from('manager_requests')
-      .delete()
-      .eq('id', id);
-    if (error) return { error: error.message };
-    return { error: null };
-  } catch (e: any) {
-    return { error: e.message };
-  }
-}
-
-export async function deleteManagerRequestsByUserId(userId: string): Promise<void> {
-  try {
-    await supabase
-      .from('manager_requests')
-      .delete()
-      .eq('user_id', userId);
-  } catch {}
 }

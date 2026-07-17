@@ -14,6 +14,7 @@ import {
   Dimensions,
   Alert,
   Image,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T } from '../../theme';
@@ -67,10 +68,9 @@ import { brandLogos } from '../../constants/brandLogos';
 import {
   fetchManagerRequests,
   updateManagerRequestStatus,
-  deleteManagerRequest,
-  deleteManagerRequestsByUserId,
   type ManagerRequest,
 } from '../../lib/db/managerRequests';
+import { getManagerDocSignedUrl } from '../../lib/managerDocStorage';
 import { sendNotification } from '../../lib/db/notifications';
 import {
   fetchAllUserInquiries,
@@ -1433,8 +1433,31 @@ function ManagerRequestsSupabaseView({
   onApprove: (id: string, comment?: string) => void;
   onReject:  (id: string, comment?: string) => void;
 }) {
-  const pending = requests.filter(r => r.status === 'pending');
+  const pending  = requests.filter(r => r.status === 'pending');
+  const reviewed = requests.filter(r => r.status !== 'pending');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [docUrls, setDocUrls] = useState<Record<string, string>>({});
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  // manager-verification-docs 버킷은 비공개라 document_photo_url에는 storage path만
+  // 저장돼 있음 — 화면에 띄우려면 요청마다 서명된 URL을 따로 발급받아야 함.
+  useEffect(() => {
+    const missing = requests.filter(r => r.documentPhotoUrl && !docUrls[r.id]);
+    if (missing.length === 0) return;
+    (async () => {
+      const entries = await Promise.all(
+        missing.map(async r => {
+          const url = await getManagerDocSignedUrl(r.documentPhotoUrl!);
+          return [r.id, url] as const;
+        }),
+      );
+      const next: Record<string, string> = {};
+      for (const [id, url] of entries) if (url) next[id] = url;
+      if (Object.keys(next).length > 0) {
+        setDocUrls(prev => ({ ...prev, ...next }));
+      }
+    })();
+  }, [requests, docUrls]);
 
   if (loading) {
     return (
@@ -1475,6 +1498,24 @@ function ManagerRequestsSupabaseView({
           {r.message.length > 0 && (
             <Text style={[styles.pendingDesc, { marginTop: 6 }]} numberOfLines={3}>{r.message}</Text>
           )}
+
+          {r.documentPhotoUrl ? (
+            docUrls[r.id] ? (
+              <TouchableOpacity onPress={() => setPreviewUrl(docUrls[r.id])} activeOpacity={0.85} style={{ marginTop: 8 }}>
+                <Image
+                  source={{ uri: docUrls[r.id] }}
+                  style={{ width: '100%', height: 160, borderRadius: R.inner, backgroundColor: C.bg }}
+                  resizeMode="cover"
+                />
+                <Text style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>첨부 서류 (탭하여 크게 보기)</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={{ fontSize: 11, color: C.textDim, marginTop: 8 }}>첨부 서류 불러오는 중...</Text>
+            )
+          ) : (
+            <Text style={{ fontSize: 11, color: C.textDim, marginTop: 8 }}>첨부된 서류 없음</Text>
+          )}
+
           <TextInput
             style={[styles.adminInput, { marginTop: 8 }]}
             value={drafts[r.id] ?? ''}
@@ -1490,6 +1531,46 @@ function ManagerRequestsSupabaseView({
         </View>
       ))}
 
+      {reviewed.length > 0 && (
+        <>
+          <Text style={[styles.sectionTitle, { marginTop: 16 }]}>처리된 신청 ({reviewed.length})</Text>
+          {reviewed.map(r => (
+            <View key={r.id} style={{ backgroundColor: C.surface, borderRadius: R.card, padding: 16, gap: 4, opacity: 0.7 }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: C.text }}>{r.gymName}</Text>
+              <Text style={{ fontSize: 12, color: C.textSub }}>{r.location}</Text>
+              <Text style={{ fontSize: 11, fontWeight: '600', color: r.status === 'approved' ? '#3dd68c' : C.danger }}>
+                {r.status === 'approved' ? '승인 완료' : '반려됨'}
+              </Text>
+              {r.adminComment ? (
+                <Text style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>코멘트: {r.adminComment}</Text>
+              ) : null}
+              {r.documentPhotoUrl && docUrls[r.id] ? (
+                <TouchableOpacity onPress={() => setPreviewUrl(docUrls[r.id])} activeOpacity={0.85} style={{ marginTop: 6 }}>
+                  <Text style={{ fontSize: 11, color: C.accent, fontWeight: '600' }}>첨부 서류 보기</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ))}
+        </>
+      )}
+
+      <Modal visible={!!previewUrl} transparent animationType="fade" onRequestClose={() => setPreviewUrl(null)}>
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' }}
+          activeOpacity={1}
+          onPress={() => setPreviewUrl(null)}
+        >
+          {previewUrl ? (
+            <Image source={{ uri: previewUrl }} style={{ width: '92%', height: '80%' }} resizeMode="contain" />
+          ) : null}
+          <TouchableOpacity
+            onPress={() => setPreviewUrl(null)}
+            style={{ position: 'absolute', top: 48, right: 24, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Ionicons name="close" size={22} color="#fff" />
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </ScrollView>
   );
 }
@@ -2086,7 +2167,7 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
     fetchAllUserInquiries().then(setUserInquiries).catch(() => {});
   }, []);
 
-  const handleApproveApplication = useCallback(async (id: string) => {
+  const handleApproveApplication = useCallback(async (id: string, comment?: string) => {
     try {
       const { supabase } = await import('../../lib/supabase');
 
@@ -2115,11 +2196,8 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
         if (__DEV__) console.warn('[AdminDashboard] profiles role 업데이트 실패:', profileError.message);
       }
 
-      // 4. manager_requests.status = 'approved' 업데이트
-      await supabase
-        .from('manager_requests')
-        .update({ status: 'approved' })
-        .eq('id', id);
+      // 4. manager_requests.status = 'approved' + admin_comment 반영 (행은 삭제하지 않고 영구 보존)
+      await updateManagerRequestStatus(id, 'approved', comment);
 
       Alert.alert(
         '승인 완료',
@@ -2330,8 +2408,8 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
           loading={managerRequestsLoading}
           onApprove={async (id, comment) => {
             const req = managerRequests.find(r => r.id === id);
-            // 1. 매니저 승인 처리 (profiles.role 변경 + gyms 연결)
-            await handleApproveApplication(id);
+            // 1. 매니저 승인 처리 (profiles.role 변경 + status/admin_comment 반영, 행은 보존)
+            await handleApproveApplication(id, comment);
             // 2. 알림 발송
             if (req?.userId) {
               await sendNotification(
@@ -2341,16 +2419,14 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
                 `${req.gymName} 헬스장의 매니저로 승인됐어요. 앱을 재시작하면 헬스장 관리 기능이 활성화돼요.` + (comment?.trim() ? ` 관리자 코멘트: "${comment.trim()}"` : ''),
                 req.id,
               );
-              // 3. 해당 유저의 모든 신청 내역 삭제 (중복 신청 포함)
-              await deleteManagerRequestsByUserId(req.userId);
-            } else {
-              await deleteManagerRequest(id);
             }
             await loadManagerRequests();
           }}
           onReject={async (id, comment) => {
             const req = managerRequests.find(r => r.id === id);
-            // 1. 알림 발송
+            // 1. 상태를 rejected로 반영 + admin_comment 저장 (행은 보존)
+            await updateManagerRequestStatus(id, 'rejected', comment);
+            // 2. 알림 발송
             if (req?.userId) {
               await sendNotification(
                 req.userId,
@@ -2360,8 +2436,6 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
                 req.id,
               );
             }
-            // 2. 해당 신청 내역만 삭제
-            await deleteManagerRequest(id);
             await loadManagerRequests();
           }}
         />
