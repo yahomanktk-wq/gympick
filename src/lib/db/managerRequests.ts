@@ -95,11 +95,19 @@ export async function updateManagerRequestStatus(
   try {
     const update: { status: string; admin_comment?: string } = { status };
     if (adminComment && adminComment.trim()) update.admin_comment = adminComment.trim();
-    const { error } = await supabase
+    // .select('id') is required here — without it, Supabase/PostgREST returns
+    // error: null even when RLS silently filters the row out and 0 rows are
+    // actually updated. Selecting back the affected row(s) lets us tell a real
+    // update apart from a no-op one.
+    const { data, error } = await supabase
       .from('manager_requests')
       .update(update)
-      .eq('id', id);
+      .eq('id', id)
+      .select('id');
     if (error) return { error: error.message };
+    if (!data || data.length === 0) {
+      return { error: '업데이트된 항목이 없어요 (권한 또는 존재하지 않는 신청일 수 있어요).' };
+    }
     return { error: null };
   } catch (e: any) {
     return { error: e.message };

@@ -2167,7 +2167,7 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
     fetchAllUserInquiries().then(setUserInquiries).catch(() => {});
   }, []);
 
-  const handleApproveApplication = useCallback(async (id: string, comment?: string) => {
+  const handleApproveApplication = useCallback(async (id: string, comment?: string): Promise<boolean> => {
     try {
       const { supabase } = await import('../../lib/supabase');
 
@@ -2181,7 +2181,7 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
       if (reqError || !reqData) {
         if (__DEV__) console.warn('[AdminDashboard] 매니저 신청 정보를 찾을 수 없음:', id);
         Alert.alert('오류', '신청 정보를 불러올 수 없어요. 다시 시도해주세요.');
-        return;
+        return false;
       }
 
       const { user_id, gym_name } = reqData;
@@ -2197,17 +2197,26 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
       }
 
       // 4. manager_requests.status = 'approved' + admin_comment 반영 (행은 삭제하지 않고 영구 보존)
-      await updateManagerRequestStatus(id, 'approved', comment);
+      // 반환된 error를 반드시 확인한다 — RLS에 막혀 0행이 갱신돼도 Supabase는 error를 던지지
+      // 않으므로, 이 체크가 없으면 DB에는 반영되지 않았는데 UI/알림은 성공한 것처럼 보인다.
+      const { error: statusError } = await updateManagerRequestStatus(id, 'approved', comment);
+      if (statusError) {
+        if (__DEV__) console.warn('[AdminDashboard] manager_requests 상태 업데이트 실패:', statusError);
+        Alert.alert('승인 처리 실패', `신청 상태를 저장하지 못했어요.\n${statusError}`);
+        return false;
+      }
       setManagerRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'approved', adminComment: comment?.trim() || r.adminComment } : r));
 
       Alert.alert(
         '승인 완료',
         `${gym_name} 헬스장 매니저 신청이 승인됐어요.\n매니저 대시보드에서 헬스장을 직접 등록할 수 있어요.`,
       );
+      return true;
 
     } catch (e: any) {
       if (__DEV__) console.warn('[AdminDashboard] 매니저 승인 처리 오류:', e.message);
-      Alert.alert('승인은 완료됐어요', 'DB 연결 중 일부 오류가 발생했어요. 수동으로 확인해주세요.');
+      Alert.alert('승인 처리 실패', '오류가 발생했어요. 다시 시도해주세요.');
+      return false;
     }
   }, []);
 
@@ -2410,7 +2419,10 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
           onApprove={async (id, comment) => {
             const req = managerRequests.find(r => r.id === id);
             // 1. 매니저 승인 처리 (profiles.role 변경 + status/admin_comment 반영 + 로컬 상태 즉시 갱신, 행은 보존)
-            await handleApproveApplication(id, comment);
+            const ok = await handleApproveApplication(id, comment);
+            // DB 반영이 실제로 성공했을 때만 알림을 보낸다 — 실패 시 handleApproveApplication이
+            // 이미 Alert로 알렸으므로 여기서는 조용히 중단한다.
+            if (!ok) return;
             // 2. 알림 발송
             if (req?.userId) {
               await sendNotification(
@@ -2425,7 +2437,14 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
           onReject={async (id, comment) => {
             const req = managerRequests.find(r => r.id === id);
             // 1. 상태를 rejected로 반영 + admin_comment 저장 (행은 보존)
-            await updateManagerRequestStatus(id, 'rejected', comment);
+            // 반환된 error를 반드시 확인한다 — 확인하지 않으면 RLS 등으로 DB 반영이 실패해도
+            // 로컬 상태와 알림은 성공한 것처럼 진행돼버린다 (이번 버그의 원인).
+            const { error } = await updateManagerRequestStatus(id, 'rejected', comment);
+            if (error) {
+              if (__DEV__) console.warn('[AdminDashboard] manager_requests 반려 처리 실패:', error);
+              Alert.alert('반려 처리 실패', `신청 상태를 저장하지 못했어요.\n${error}`);
+              return;
+            }
             // 2. 로컬 상태 즉시 갱신 — refetch를 기다리지 않고 바로 반영 (refetch 경합으로
             //    이전 응답이 나중에 도착해 상태를 되돌리는 문제 방지)
             setManagerRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'rejected', adminComment: comment?.trim() || r.adminComment } : r));
