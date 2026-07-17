@@ -1179,7 +1179,7 @@ function SetCard({ ex, sets, realPR, prefill, onChange, onAdd, onCopyPrev, onRem
           </View>
           <View style={s.stepperRow}>
             <Text style={s.stepperUnit}>kg</Text>
-            <Stepper value={set.weight} onChange={v => onChange(idx, 'weight', v)} step={2.5} />
+            <Stepper value={set.weight} onChange={v => onChange(idx, 'weight', v)} step={set.weight <= 10 ? 1 : 2.5} />
           </View>
 
           {/* Reps */}
