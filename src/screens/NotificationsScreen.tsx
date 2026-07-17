@@ -46,6 +46,7 @@ export default function NotificationsScreen({ onClose }: Props) {
   const { user, refreshUser } = useAuth();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -66,6 +67,9 @@ export default function NotificationsScreen({ onClose }: Props) {
     if (n.type === 'manager_approved') {
       await refreshUser();
     }
+    // 본문이 2줄 넘게 잘리는 경우가 많아(관리자 코멘트가 뒤에 붙는 경우 등) 탭하면
+    // 전체 텍스트를 펼쳐서 보여준다 — 다시 탭하면 접힘.
+    setExpandedId(prev => (prev === n.id ? null : n.id));
   }
 
   async function handleMarkAllRead() {
@@ -113,6 +117,7 @@ export default function NotificationsScreen({ onClose }: Props) {
           contentContainerStyle={{ paddingVertical: 8 }}
           renderItem={({ item, index }) => {
             const meta = TYPE_META[item.type] ?? TYPE_META.default;
+            const isExpanded = expandedId === item.id;
             return (
               <TouchableOpacity
                 style={[s.item, !item.read && s.itemUnread, index > 0 && s.itemBorder]}
@@ -123,9 +128,14 @@ export default function NotificationsScreen({ onClose }: Props) {
                   <Ionicons name={meta.icon} size={22} color={meta.color} />
                 </View>
                 <View style={{ flex: 1, gap: 3 }}>
-                  <Text style={[s.itemTitle, !item.read && s.itemTitleUnread]}>{item.title}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={[s.itemTitle, !item.read && s.itemTitleUnread, { flex: 1 }]}>{item.title}</Text>
+                    {item.body.length > 0 && (
+                      <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={14} color={C.textDim} />
+                    )}
+                  </View>
                   {item.body.length > 0 && (
-                    <Text style={s.itemBody} numberOfLines={2}>{item.body}</Text>
+                    <Text style={s.itemBody} numberOfLines={isExpanded ? undefined : 2}>{item.body}</Text>
                   )}
                   <Text style={s.itemTime}>{formatDate(item.createdAt)}</Text>
                 </View>
