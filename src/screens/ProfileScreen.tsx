@@ -778,6 +778,17 @@ export default function ProfileScreen() {
     );
   }
 
+  function handleLogout() {
+    Alert.alert(
+      '로그아웃',
+      '로그아웃 하시겠어요?',
+      [
+        { text: '취소', style: 'cancel' },
+        { text: '로그아웃', style: 'destructive', onPress: signOut },
+      ]
+    );
+  }
+
   async function handleResetAppOnboarding() {
     setResetLoading('app');
     try {
@@ -1054,7 +1065,7 @@ export default function ProfileScreen() {
                     : s.label
                 }
                 onPress={
-                  s.label === '로그아웃' ? signOut
+                  s.label === '로그아웃' ? handleLogout
                   : s.privacy ? () => setShowPrivacy(true)
                   : s.deleteAccount ? () => handleDeleteAccount()
                   : s.splitSetup ? async () => {
