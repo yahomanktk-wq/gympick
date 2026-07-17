@@ -2198,6 +2198,7 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
 
       // 4. manager_requests.status = 'approved' + admin_comment 반영 (행은 삭제하지 않고 영구 보존)
       await updateManagerRequestStatus(id, 'approved', comment);
+      setManagerRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'approved', adminComment: comment?.trim() || r.adminComment } : r));
 
       Alert.alert(
         '승인 완료',
@@ -2408,7 +2409,7 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
           loading={managerRequestsLoading}
           onApprove={async (id, comment) => {
             const req = managerRequests.find(r => r.id === id);
-            // 1. 매니저 승인 처리 (profiles.role 변경 + status/admin_comment 반영, 행은 보존)
+            // 1. 매니저 승인 처리 (profiles.role 변경 + status/admin_comment 반영 + 로컬 상태 즉시 갱신, 행은 보존)
             await handleApproveApplication(id, comment);
             // 2. 알림 발송
             if (req?.userId) {
@@ -2420,13 +2421,15 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
                 req.id,
               );
             }
-            await loadManagerRequests();
           }}
           onReject={async (id, comment) => {
             const req = managerRequests.find(r => r.id === id);
             // 1. 상태를 rejected로 반영 + admin_comment 저장 (행은 보존)
             await updateManagerRequestStatus(id, 'rejected', comment);
-            // 2. 알림 발송
+            // 2. 로컬 상태 즉시 갱신 — refetch를 기다리지 않고 바로 반영 (refetch 경합으로
+            //    이전 응답이 나중에 도착해 상태를 되돌리는 문제 방지)
+            setManagerRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'rejected', adminComment: comment?.trim() || r.adminComment } : r));
+            // 3. 알림 발송
             if (req?.userId) {
               await sendNotification(
                 req.userId,
@@ -2436,7 +2439,6 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
                 req.id,
               );
             }
-            await loadManagerRequests();
           }}
         />
       )}

@@ -130,6 +130,10 @@ export default function ManagerRequestModal({ visible, userId, onClose }: Props)
 
   async function handleSubmit() {
     if (!gymName.trim() || !location.trim()) return;
+    if (!docPath) {
+      Alert.alert('서류 사진을 첨부해주세요.', '사업자등록증 또는 재직증명서 사진을 첨부한 후 신청할 수 있어요.');
+      return;
+    }
     setLoading(true);
     const coords = await geocodeAddress(location.trim());
     if (!coords) {
@@ -203,7 +207,7 @@ export default function ManagerRequestModal({ visible, userId, onClose }: Props)
     }
   }
 
-  const canSubmit = gymName.trim().length > 0 && location.trim().length > 0 && !loading && !blockReason && !docUploading;
+  const canSubmit = gymName.trim().length > 0 && location.trim().length > 0 && !!docPath && !loading && !blockReason && !docUploading;
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={handleClose}>
@@ -307,7 +311,7 @@ export default function ManagerRequestModal({ visible, userId, onClose }: Props)
                 textAlignVertical="top"
               />
 
-              <Text style={s.fieldLabel}>인증 서류 (선택)</Text>
+              <Text style={s.fieldLabel}>인증 서류 <Text style={s.required}>*</Text></Text>
               {docLocalUri ? (
                 <View style={s.docPreviewWrap}>
                   <Image source={{ uri: docLocalUri }} style={s.docPreviewImg} resizeMode="cover" />
@@ -330,7 +334,7 @@ export default function ManagerRequestModal({ visible, userId, onClose }: Props)
               <View style={s.noteCard}>
                 <Ionicons name="information-circle-outline" size={14} color={C.textDim} />
                 <Text style={s.noteText}>
-                  서류를 첨부하지 않아도 신청할 수 있어요. 다만 첨부하시면 검토가 더 빨라질 수 있어요.{'\n'}
+                  본인 확인을 위해 사업자등록증 또는 재직증명서 사진 첨부가 필요해요.{'\n'}
                   신청 내용은 GymPick 관리팀이 검토하며, 승인 시 이메일로 안내드립니다.
                 </Text>
               </View>
