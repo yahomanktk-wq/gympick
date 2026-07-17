@@ -33,6 +33,7 @@ import AuthFlow from './auth/AuthFlow';
 import NotificationsScreen from './NotificationsScreen';
 import ManagerRequestModal from './flow/ManagerRequestModal';
 import ManagerManualScreen from './manager/ManagerManualScreen';
+import MyRequestsModal from './MyRequestsModal';
 import { fetchUnreadCount } from '../lib/db/notifications';
 import { fetchGymRegistrationRequests } from '../lib/db/gymRegistrationRequests';
 import { fetchGymInfoReports } from '../lib/db/gymInfoReports';
@@ -61,12 +62,13 @@ const ACHIEVEMENTS = [
   { id: '6', icon: 'medal',   label: '센추리 클럽',  earned: false },
 ];
 
-const SETTINGS_LIST: { icon: IoniconName; label: string; toggle?: boolean; danger?: boolean; privacy?: boolean; splitSetup?: boolean; deleteAccount?: boolean; inquiry?: boolean }[] = [
+const SETTINGS_LIST: { icon: IoniconName; label: string; toggle?: boolean; danger?: boolean; privacy?: boolean; splitSetup?: boolean; deleteAccount?: boolean; inquiry?: boolean; myRequests?: boolean }[] = [
   { icon: 'barbell-outline',        label: '단위 (kg / lbs)'                     },
   { icon: 'git-branch-outline',     label: '운동 분할 설정',   splitSetup: true  },
   { icon: 'document-text-outline',  label: '개인정보처리방침', privacy: true     },
   { icon: 'help-circle-outline',    label: '도움말 및 피드백'                     },
   { icon: 'chatbox-ellipses-outline', label: '관리자에게 문의하기', inquiry: true },
+  { icon: 'time-outline',           label: '내 요청 내역',      myRequests: true },
   { icon: 'log-out-outline',        label: '로그아웃',          danger: true     },
 ];
 
@@ -94,7 +96,7 @@ function CardDivider() {
 
 function SettingRow({
   icon, label, toggle, danger, deleteAccount, onPress,
-}: { icon: IoniconName; label: string; toggle?: boolean; danger?: boolean; privacy?: boolean; splitSetup?: boolean; deleteAccount?: boolean; inquiry?: boolean; onPress?: () => void }) {
+}: { icon: IoniconName; label: string; toggle?: boolean; danger?: boolean; privacy?: boolean; splitSetup?: boolean; deleteAccount?: boolean; inquiry?: boolean; myRequests?: boolean; onPress?: () => void }) {
   const [on, setOn] = useState(false);
   return (
     <TouchableOpacity
@@ -538,6 +540,7 @@ export default function ProfileScreen() {
 
   const [showHelpModal,     setShowHelpModal]     = useState(false);
   const [showInquiryModal,  setShowInquiryModal]  = useState(false);
+  const [showMyRequests,    setShowMyRequests]    = useState(false);
   const [showManagerManual, setShowManagerManual] = useState(false);
   const [resetLoading,      setResetLoading]      = useState<'app' | 'workout' | null>(null);
   const [showFeedbackSheet, setShowFeedbackSheet] = useState(false);
@@ -1074,6 +1077,7 @@ export default function ProfileScreen() {
                   : s.label === '단위 (kg / lbs)' ? () => handleSettingPress(s.label)
                   : s.label === '도움말 및 피드백' ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowHelpModal(true); }
                   : s.inquiry ? () => setShowInquiryModal(true)
+                  : s.myRequests ? () => setShowMyRequests(true)
                   : undefined
                 }
               />
@@ -1379,6 +1383,9 @@ export default function ProfileScreen() {
 
       {/* ── 관리자에게 문의하기 모달 ── */}
       <InquiryModal visible={showInquiryModal} onClose={() => setShowInquiryModal(false)} userId={user?.id} />
+
+      {/* ── 내 요청 내역 모달 ── */}
+      <MyRequestsModal visible={showMyRequests} onClose={() => setShowMyRequests(false)} userId={user?.id} />
 
       {/* ── 닉네임 수정 모달 ── */}
       <Modal

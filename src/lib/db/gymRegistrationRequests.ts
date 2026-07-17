@@ -65,6 +65,30 @@ export async function fetchGymRegistrationRequests(): Promise<GymRegistrationReq
   }));
 }
 
+/** 내가 제출한 헬스장 등록 제안 내역 (최신순) */
+export async function fetchMyGymRegistrationRequests(userId: string): Promise<GymRegistrationRequest[]> {
+  const { data, error } = await supabase
+    .from('gym_registration_requests')
+    .select('id, gym_name, location, address_detail, notes, hours, status, user_id, requester_role, admin_comment, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error || !data) return [];
+  return data.map((r: any) => ({
+    id:            r.id,
+    userId:        r.user_id,
+    gymName:       r.gym_name,
+    location:      r.location,
+    addressDetail: r.address_detail ?? null,
+    notes:         r.notes ?? '',
+    hours:         r.hours ?? null,
+    status:        r.status,
+    requesterRole: r.requester_role ?? 'user',
+    adminComment:  r.admin_comment ?? null,
+    createdAt:     r.created_at,
+  }));
+}
+
 export async function updateGymRequestStatus(
   id: string,
   status: 'reviewed' | 'resolved',

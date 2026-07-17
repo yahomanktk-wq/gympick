@@ -40,6 +40,22 @@ export async function fetchGymInfoReports(): Promise<GymInfoReport[]> {
   }
 }
 
+/** 내가 제출한 정보 제보 내역 (최신순) — 익명 제출(reporter_user_id 없음)은 제외 */
+export async function fetchMyGymInfoReports(userId: string): Promise<GymInfoReport[]> {
+  try {
+    const { data, error } = await supabase
+      .from('gym_info_reports')
+      .select('*')
+      .eq('reporter_user_id', userId)
+      .order('created_at', { ascending: false });
+    if (error || !data) return [];
+    return data.map(rowTo);
+  } catch (e: any) {
+    if (__DEV__) console.warn('[gymInfoReports] fetchMy:', e?.message);
+    return [];
+  }
+}
+
 export async function submitGymInfoReport(input: {
   gymId:            string;
   gymName:          string;
