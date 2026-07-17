@@ -335,7 +335,7 @@ export default function ManagerRequestModal({ visible, userId, onClose }: Props)
                 <Ionicons name="information-circle-outline" size={14} color={C.textDim} />
                 <Text style={s.noteText}>
                   본인 확인을 위해 사업자등록증 또는 재직증명서 사진 첨부가 필요해요.{'\n'}
-                  신청 내용은 GymPick 관리팀이 검토하며, 승인 시 이메일로 안내드립니다.
+                  신청 내용은 GymPick 관리팀이 검토하며, 승인 시 앱 내 알림으로 안내드립니다.
                 </Text>
               </View>
 
