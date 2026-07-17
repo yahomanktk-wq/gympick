@@ -33,6 +33,7 @@ import { MachineWithGyms, GymWithMachines } from '../data/types';
 import { fetchRankingTabData, type RankingTabData } from '../lib/db/rankingQueries';
 import { fetchOlympicRankings, type OlympicRankingEntry } from '../lib/db/olympicRankings';
 import { RankingTab } from './FindGymRankingTab';
+import ManagerRequestModal from './flow/ManagerRequestModal';
 import { getGymFavorites } from '../data/gymFavoriteStore';
 import { getAllAdminGyms } from '../data/adminGymStore';
 import GymDetailModal     from './flow/GymDetailModal';
@@ -293,6 +294,7 @@ export default function FindGymScreen() {
   }, [user?.id]);
 
   const [showGymRequestModal, setShowGymRequestModal] = useState(false);
+  const [showManagerReqModal, setShowManagerReqModal] = useState(false);
   const [reqGymName,   setReqGymName]   = useState('');
   const [reqLocation,  setReqLocation]  = useState('');
   const [reqNotes,     setReqNotes]     = useState('');
@@ -512,6 +514,16 @@ export default function FindGymScreen() {
     setReqGymName('');
     setReqLocation('');
     setReqNotes('');
+  }
+
+  function handleOpenManagerRequestFromGymPopup() {
+    if (!user) {
+      setShowGymRequestModal(false);
+      Alert.alert('로그인 필요', '로그인 후 이용해주세요.');
+      return;
+    }
+    setShowGymRequestModal(false);
+    setShowManagerReqModal(true);
   }
 
   // --- Filtered machines
@@ -1045,11 +1057,24 @@ export default function FindGymScreen() {
                 <Text style={{ color: C.bg, fontWeight: '800' }}>{reqLoading ? '신청 중...' : '신청하기'}</Text>
               </TouchableOpacity>
             </View>
+
+            <TouchableOpacity style={s.gymReqManagerLink} activeOpacity={0.7} onPress={handleOpenManagerRequestFromGymPopup}>
+              <Text style={s.gymReqManagerLinkText}>
+                혹시 헬스장을 운영하고 계실까요?{' '}
+                <Text style={s.gymReqManagerLinkAccent}>매니저로 신청하기</Text>
+              </Text>
+            </TouchableOpacity>
               </View>
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <ManagerRequestModal
+        visible={showManagerReqModal}
+        userId={user?.id ?? ''}
+        onClose={() => setShowManagerReqModal(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -1284,4 +1309,8 @@ const s = StyleSheet.create({
     fontWeight: '700',
     color:      C.accent,
   },
+
+  gymReqManagerLink:       { alignItems: 'center', marginTop: 4 },
+  gymReqManagerLinkText:   { fontSize: 13, color: C.textSub, textAlign: 'center' },
+  gymReqManagerLinkAccent: { color: C.accent, fontWeight: '700' },
 });
