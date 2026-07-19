@@ -19,7 +19,8 @@ import { C, R } from '../theme';
 import { WorkoutFeedPost, WorkoutLog } from '../data/types';
 const MOCK_FEED_POSTS: WorkoutFeedPost[] = [];
 import { filterActivePosts, filterByGym, filterByDistance, toggleReaction, convertSessionToFeedPost } from '../lib/feedUtils';
-import { fetchActiveFeedPosts, fetchMyLatestGymId, fetchFeedPostsByGym, fetchWorkoutSessionById, fetchWorkoutSessionByUserAndDate } from '../lib/db/feedPosts';
+import { fetchMyLatestGymId, fetchFeedPostsByGym, fetchWorkoutSessionById, fetchWorkoutSessionByUserAndDate } from '../lib/db/feedPosts';
+import { getActiveFeedPostsCached } from '../data/feedPostsCache';
 import { fetchSplitConfig } from '../lib/db/splitRoutine';
 import { getTodayTarget, toEnMuscle } from '../lib/splitUtils';
 import { fetchWorkoutLogs } from '../lib/db/workouts';
@@ -477,7 +478,7 @@ export default function WorkoutFeedScreen() {
 
       async function loadPosts() {
         if (!user?.id) {
-          const serverPosts = await fetchActiveFeedPosts().catch(() => []);
+          const serverPosts = await getActiveFeedPostsCached().catch(() => []);
           const previewPosts = serverPosts.slice(0, 4);
           if (active) setPosts(previewPosts);
           return;
@@ -507,7 +508,7 @@ export default function WorkoutFeedScreen() {
           if (recent?.gymName && active) setMyGymName(recent.gymName);
         }
 
-        const [serverPosts] = await Promise.all([fetchActiveFeedPosts()]);
+        const [serverPosts] = await Promise.all([getActiveFeedPostsCached()]);
 
         // 내 게시물: serverPosts에서 가져옴 (routineCardUri 포함)
         // serverPosts가 없으면 로컬 세션으로 fallback

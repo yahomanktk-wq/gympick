@@ -20,7 +20,7 @@ import { useAuth } from '../context/AuthContext';
 
 import { WorkoutLog, WorkoutFeedPost, UserSplitConfig, WeekdaySplit } from '../data/types';
 import { fetchWorkoutLogs } from '../lib/db';
-import { fetchActiveFeedPosts } from '../lib/db/feedPosts';
+import { getActiveFeedPostsCached } from '../data/feedPostsCache';
 import { fetchSplitConfig } from '../lib/db/splitRoutine';
 import { getTodayTarget, getTodayTargets, toEnMuscle, toKoMuscle } from '../lib/splitUtils';
 import * as Haptics from 'expo-haptics';
@@ -316,6 +316,9 @@ export default function HomeScreen() {
       async function load() {
         let target: string | null = null;
         let todayTargetsArr: string[] = [];
+        // 오운완 피드를 필터링할 부위 목록 — 분기에 따라 채워지며, 실제 조회는 아래에서 한 번만 한다
+        let feedMuscleFilter: string[] = [];
+        let hasFeedMuscleFilter = false;
 
         if (user) {
           const [logs, config] = await Promise.all([
@@ -342,39 +345,33 @@ export default function HomeScreen() {
               ? getTodayTarget(config.splitType, config.workoutSplit, config.splitCurrentIndex)
               : null;
 
-            const posts = await fetchActiveFeedPosts().catch(() => [] as WorkoutFeedPost[]);
-            if (!active) return;
-
-            if (todayMuscles.length > 0) {
-              const filtered = posts.filter(p => p.muscles.some(m => todayMuscles.includes(m)));
-              setOunwanPosts(filtered.length > 0 ? filtered : posts);
-            } else {
-              setOunwanPosts(posts);
-            }
+            feedMuscleFilter = todayMuscles;
+            hasFeedMuscleFilter = todayMuscles.length > 0;
 
             setTodayTarget(target);
             setOunwanDisplayTarget(todayMuscles.length > 0 ? todayMuscles.map(toKoMuscle).join(', ') : (todayTargetsArr.join(', ') || null));
             const weekDates = getThisWeekDates();
             setWeekTargetMap(getWeekTargetMap(config, weekDates));
-            return;
+          } else {
+            target = config
+              ? getTodayTarget(config.splitType, config.workoutSplit, config.splitCurrentIndex)
+              : null;
+            setTodayTarget(target);
+            setOunwanDisplayTarget(todayTargetsArr.join(', ') || null);
+
+            const weekDates = getThisWeekDates();
+            setWeekTargetMap(getWeekTargetMap(config, weekDates));
+
+            feedMuscleFilter = todayTargetsArr.map(toEnMuscle);
+            hasFeedMuscleFilter = todayTargetsArr.length > 0;
           }
-
-          target = config
-            ? getTodayTarget(config.splitType, config.workoutSplit, config.splitCurrentIndex)
-            : null;
-          setTodayTarget(target);
-          setOunwanDisplayTarget(todayTargetsArr.join(', ') || null);
-
-          const weekDates = getThisWeekDates();
-          setWeekTargetMap(getWeekTargetMap(config, weekDates));
         }
 
-        const posts = await fetchActiveFeedPosts().catch(() => [] as WorkoutFeedPost[]);
+        const posts = await getActiveFeedPostsCached().catch(() => [] as WorkoutFeedPost[]);
         if (!active) return;
 
-        if (todayTargetsArr.length > 0) {
-          const targetsEn = todayTargetsArr.map(toEnMuscle);
-          const filtered = posts.filter(p => p.muscles.some(m => targetsEn.includes(m)));
+        if (hasFeedMuscleFilter) {
+          const filtered = posts.filter(p => p.muscles.some(m => feedMuscleFilter.includes(m)));
           setOunwanPosts(filtered.length > 0 ? filtered : posts);
         } else {
           setOunwanPosts(posts);
