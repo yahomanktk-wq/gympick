@@ -2103,8 +2103,8 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
             color: tc,
             textAlign: 'center',
             letterSpacing: -2,
-            marginBottom: 20,
-            fontSize: photoW - 20,
+            marginBottom: 10,
+            fontSize: photoW * 0.5,
             width: photoW - 20,
           }}
           numberOfLines={1}
