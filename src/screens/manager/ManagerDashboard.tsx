@@ -519,6 +519,146 @@ function HomeView({ gyms, weeklyVisitors, gymFavCount, machineCount, onOpenEdit,
   );
 }
 
+function DuplicateGymModal({
+  visible, gymName, onCancel, onConfirm,
+}: {
+  visible:   boolean;
+  gymName:   string;
+  onCancel:  () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      <View style={dupStyles.overlay}>
+        <View style={dupStyles.card}>
+          <View style={dupStyles.iconCircle}>
+            <Ionicons name="business-outline" size={26} color={C.accent} />
+          </View>
+
+          <Text style={dupStyles.title}>이미 등록된 헬스장이 있어요</Text>
+
+          <Text style={dupStyles.mainText}>
+            "<Text style={dupStyles.gymNameHighlight}>{gymName}</Text>"와 이름/위치가 비슷한 헬스장이 이미 등록되어 있어요. 연결해드릴까요?
+          </Text>
+
+          <Text style={dupStyles.subText}>연결 후 정보 및 보유 머신을 수정할 수 있어요.</Text>
+
+          <View style={dupStyles.divider} />
+
+          <Text style={dupStyles.footerText}>동일한 헬스장이 없다면 운영자에게 문의해주세요.</Text>
+
+          <View style={dupStyles.btnRow}>
+            <TouchableOpacity style={dupStyles.cancelBtn} onPress={onCancel} activeOpacity={0.8}>
+              <Text style={dupStyles.cancelBtnText}>취소</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={dupStyles.confirmBtn} onPress={onConfirm} activeOpacity={0.85}>
+              <Text style={dupStyles.confirmBtnText}>연결해주세요</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const dupStyles = StyleSheet.create({
+  overlay: {
+    flex:            1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent:  'center',
+    alignItems:      'center',
+    padding:         24,
+  },
+  card: {
+    width:            '100%',
+    maxWidth:         340,
+    backgroundColor:  C.surface,
+    borderRadius:     R.card,
+    borderWidth:      1,
+    borderColor:      C.border,
+    padding:          20,
+    alignItems:       'center',
+  },
+  iconCircle: {
+    width:            52,
+    height:           52,
+    borderRadius:     26,
+    backgroundColor:  C.accentBg,
+    alignItems:       'center',
+    justifyContent:   'center',
+    marginBottom:     14,
+  },
+  title: {
+    ...T.section,
+    color:      C.text,
+    textAlign:  'center',
+    marginBottom: 12,
+  },
+  mainText: {
+    fontSize:   14,
+    color:      C.text,
+    lineHeight: 21,
+    textAlign:  'center',
+  },
+  gymNameHighlight: {
+    fontWeight: '800',
+    color:      C.accent,
+  },
+  subText: {
+    fontSize:   12,
+    color:      C.textDim,
+    lineHeight: 18,
+    textAlign:  'center',
+    marginTop:  8,
+  },
+  divider: {
+    height:           1,
+    backgroundColor:  C.border,
+    alignSelf:        'stretch',
+    marginVertical:   14,
+  },
+  footerText: {
+    fontSize:   12,
+    color:      C.textSub,
+    lineHeight: 18,
+    textAlign:  'center',
+  },
+  btnRow: {
+    flexDirection: 'row',
+    gap:           10,
+    marginTop:     18,
+    alignSelf:     'stretch',
+  },
+  cancelBtn: {
+    paddingVertical:   14,
+    paddingHorizontal: 20,
+    borderRadius:      R.btn,
+    borderWidth:       1,
+    borderColor:       C.border,
+    alignItems:        'center',
+  },
+  cancelBtnText: {
+    fontSize:   15,
+    fontWeight: '700',
+    color:      C.textSub,
+  },
+  confirmBtn: {
+    flex:            1,
+    flexDirection:   'row',
+    alignItems:      'center',
+    justifyContent:  'center',
+    gap:             8,
+    backgroundColor: C.accent,
+    paddingVertical: 15,
+    borderRadius:    R.btn,
+  },
+  confirmBtnText: {
+    fontSize:   15,
+    fontWeight: '800',
+    color:      C.bg,
+  },
+});
+
 function RegisterView({
   step, setStep, regForm, onChangeField, regHours, updateRegDay,
   regNotices, toggleRegNotice, submitting, serializeHours, onSubmit, onNextStep, onBack, resultMode,
@@ -1219,6 +1359,8 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
   const [regNotices, setRegNotices]   = useState<string[]>([]);
   const [submitting, setSubmitting]   = useState(false);
   const [registerResultMode, setRegisterResultMode] = useState<'registered' | 'link-requested'>('registered');
+  const [duplicateModalVisible, setDuplicateModalVisible] = useState(false);
+  const [pendingDuplicateGym, setPendingDuplicateGym] = useState<{ id: string; name: string } | null>(null);
 
   const onChangeRegField = useCallback((key: keyof GymForm, value: string) => {
     setRegForm(f => ({ ...f, [key]: value }));
@@ -1524,27 +1666,8 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
       isSameGymName(g.name, regForm.name) || isSimilarGymLocation(g.location, regForm.location)
     );
     if (similarGym) {
-      const wantsLink = await new Promise<boolean>(resolve => {
-        Alert.alert(
-          '이미 등록된 헬스장이 있어요',
-          '이미 등록하시려는 헬스장이 등록되어 있어요. 연결해드릴까요?\n(연결 후 정보 및 보유 머신을 수정할 수 있어요)\n\n동일한 헬스장이 없다면 운영자에게 문의해주세요.',
-          [
-            { text: '취소',       style: 'cancel', onPress: () => resolve(false) },
-            { text: '연결해주세요', onPress: () => resolve(true) },
-          ],
-        );
-      });
-      if (!wantsLink) return;
-
-      setSubmitting(true);
-      const linkResult = await submitGymManagerLinkRequest(user?.id ?? '', similarGym.id, similarGym.name);
-      setSubmitting(false);
-      if (!linkResult.success) {
-        Alert.alert('요청 실패', linkResult.error ?? '잠시 후 다시 시도해주세요.');
-        return;
-      }
-      setRegisterResultMode('link-requested');
-      setStep(4);
+      setPendingDuplicateGym({ id: similarGym.id, name: similarGym.name });
+      setDuplicateModalVisible(true);
       return;
     }
 
@@ -1587,6 +1710,27 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
     setSubmitting(false);
     setStep(4);
   }, [submitting, regForm, gyms, serializeHours, regHours, user]);
+
+  const handleCancelDuplicateGym = useCallback(() => {
+    setDuplicateModalVisible(false);
+    setPendingDuplicateGym(null);
+  }, []);
+
+  const handleConfirmDuplicateGym = useCallback(async () => {
+    const gym = pendingDuplicateGym;
+    setDuplicateModalVisible(false);
+    if (!gym) return;
+
+    setSubmitting(true);
+    const linkResult = await submitGymManagerLinkRequest(user?.id ?? '', gym.id, gym.name);
+    setSubmitting(false);
+    if (!linkResult.success) {
+      Alert.alert('요청 실패', linkResult.error ?? '잠시 후 다시 시도해주세요.');
+      return;
+    }
+    setRegisterResultMode('link-requested');
+    setStep(4);
+  }, [pendingDuplicateGym, user]);
 
   // ─── Routine tab helpers ──────────────────────────────────────────────────
 
@@ -1901,6 +2045,12 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
           resultMode={registerResultMode}
         />
       )}
+      <DuplicateGymModal
+        visible={duplicateModalVisible}
+        gymName={pendingDuplicateGym?.name ?? ''}
+        onCancel={handleCancelDuplicateGym}
+        onConfirm={handleConfirmDuplicateGym}
+      />
       {currentView === 'edit' && (
         <EditView
           editForm={editForm}
