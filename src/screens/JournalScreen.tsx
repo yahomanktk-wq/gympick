@@ -8,7 +8,6 @@ import {
   StatusBar,
   Modal,
   Dimensions,
-  Image,
   ActivityIndicator,
   Alert,
   Linking,
@@ -46,7 +45,7 @@ const { width: SCREEN_W } = Dimensions.get('window');
 
 // Session detail photo dimensions
 const DET_PHOTO_W = SCREEN_W - 32;
-const DET_PHOTO_H_DEFAULT = Math.round(DET_PHOTO_W * 16 / 9);
+const DET_PHOTO_H = Math.round(DET_PHOTO_W * (4 / 3));
 
 // Retro grid cell dimensions — 3.5 visible per row, 4:3 ratio
 const RETRO_CELL_W = Math.floor((SCREEN_W - 32) / 3.5);
@@ -402,7 +401,6 @@ function SessionDetailModal({
   const ROUTINE_CARD_H_J  = Math.round(PHOTO_W_J * 4 / 3);
   const RC_ITEMS_PER_PAGE = Math.max(1, Math.floor((ROUTINE_CARD_H_J - 70 - 36) / 90));
   const routinePageRefs   = useRef<Record<string, (View | null)[]>>({});
-  const [photoHeights, setPhotoHeights] = useState<Record<string, number>>({});
   const [publicStatusMap, setPublicStatusMap] = useState<
     Record<string, { postId: string; isPublic: boolean } | null>
   >({});
@@ -418,31 +416,6 @@ function SessionDetailModal({
       setPublicStatusMap(prev => ({ ...prev, [session.id]: status }));
     });
   }, [sessions.map(s => s.id).join(','), userId]);
-
-  useEffect(() => {
-    sessions.forEach(session => {
-      const uri = session.compositeUri ?? session.photoUri;
-      if (!uri) {
-        setPhotoHeights(prev => ({ ...prev, [session.id]: DET_PHOTO_H_DEFAULT }));
-        return;
-      }
-      try {
-        Image.getSize(
-          uri,
-          (w, h) => {
-            if (w > 0 && h > 0) {
-              setPhotoHeights(prev => ({ ...prev, [session.id]: Math.round(DET_PHOTO_W * (h / w)) }));
-            } else {
-              setPhotoHeights(prev => ({ ...prev, [session.id]: DET_PHOTO_H_DEFAULT }));
-            }
-          },
-          () => setPhotoHeights(prev => ({ ...prev, [session.id]: DET_PHOTO_H_DEFAULT })),
-        );
-      } catch {
-        setPhotoHeights(prev => ({ ...prev, [session.id]: DET_PHOTO_H_DEFAULT }));
-      }
-    });
-  }, [sessions]);
 
   if (sessions.length === 0) return null;
 
@@ -656,7 +629,6 @@ function SessionDetailModal({
               ? session.targetMuscles
               : [...new Set(machines.map(m => m.targetMuscle))];
             const photoUri   = session.compositeUri ?? session.photoUri;
-            const photoHeight = photoHeights[session.id] ?? DET_PHOTO_H_DEFAULT;
 
             const muscleTitle = muscles.length > 1
               ? muscles.map(m => m.toUpperCase()).join(' + ')
@@ -669,13 +641,14 @@ function SessionDetailModal({
                 {/* 오운완 사진 */}
                 <View
                   ref={(ref) => { photoRefs.current[session.id] = ref as View | null; }}
-                  style={[det.photoCard, { height: photoHeight }]}
+                  style={[det.photoCard, { height: DET_PHOTO_H }]}
                 >
                   {photoUri ? (
                     <ExpoImage
                       source={{ uri: localPhotoUriMap[session.id] ?? photoUri }}
                       style={StyleSheet.absoluteFill}
                       contentFit="contain"
+                      cachePolicy="memory-disk"
                       onError={() => {}}
                     />
                   ) : (
@@ -702,7 +675,7 @@ function SessionDetailModal({
                           </View>
                           <ScrollView
                             showsVerticalScrollIndicator={false}
-                            style={{ maxHeight: DET_PHOTO_H_DEFAULT * 0.45 }}
+                            style={{ maxHeight: DET_PHOTO_H * 0.45 }}
                             nestedScrollEnabled
                           >
                             {machines.map(m => {

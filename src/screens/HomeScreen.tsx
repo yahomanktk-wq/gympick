@@ -100,6 +100,7 @@ const { width: SCREEN_W } = Dimensions.get('window');
 const HOME_THUMB_W   = Math.floor((SCREEN_W - 32) / 3.5);
 const HOME_THUMB_H   = Math.round(HOME_THUMB_W * (4 / 3));
 const OUNWAN_CARD_W  = 160;
+const OUNWAN_CARD_H  = Math.round(OUNWAN_CARD_W * (4 / 3));
 const OUNWAN_CARD_GAP = 10;
 
 function greeting() {
@@ -154,20 +155,10 @@ const OunwanCard = React.memo(({ post, onPress }: {
   onPress: () => void;
 }) => {
   const displayUri = post.photoUri ?? post.compositeUri;
-  const [cardH, setCardH] = useState(Math.round(OUNWAN_CARD_W * 3 / 4));
-
-  useEffect(() => {
-    if (!displayUri) return;
-    Image.getSize(
-      displayUri,
-      (w, h) => { if (w > 0 && h > 0) setCardH(Math.round(OUNWAN_CARD_W * (h / w))); },
-      () => {}
-    );
-  }, [displayUri]);
 
   return (
     <TouchableOpacity
-      style={[st.ounwanCardOuter, { height: cardH }]}
+      style={[st.ounwanCardOuter, { height: OUNWAN_CARD_H }]}
       activeOpacity={0.85}
       onPress={onPress}
     >
@@ -177,6 +168,7 @@ const OunwanCard = React.memo(({ post, onPress }: {
             source={{ uri: displayUri }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
+            cachePolicy="memory-disk"
           />
         ) : (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: C.surfaceHigh }]} />
