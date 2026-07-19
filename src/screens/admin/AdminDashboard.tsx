@@ -50,6 +50,11 @@ import {
   updateGymRequestStatus,
   type GymRegistrationRequest,
 } from '../../lib/db/gymRegistrationRequests';
+import {
+  fetchGymManagerLinkRequests,
+  updateGymManagerLinkRequestStatus,
+  type GymManagerLinkRequest,
+} from '../../lib/db/gymManagerLinkRequests';
 import { geocodeAddress } from '../../lib/geocoding';
 import {
   OperatingHoursEditor,
@@ -87,7 +92,7 @@ const CAT_CARD_W   = Math.floor((SCREEN_W - 40 - 12) / 2);
 
 // --- Types
 
-export type AdminView = 'home' | 'pending-gyms' | 'gym-detail' | 'machine-catalog' | 'brand-copyright' | 'gym-reports' | 'manager-requests' | 'register-gym' | 'gym-registration-requests' | 'gym-official-brands' | 'all-gyms-official' | 'machine-requests' | 'user-inquiries' | 'gym-manager-link' | 'user-overview';
+export type AdminView = 'home' | 'pending-gyms' | 'gym-detail' | 'machine-catalog' | 'brand-copyright' | 'gym-reports' | 'manager-requests' | 'register-gym' | 'gym-registration-requests' | 'gym-official-brands' | 'all-gyms-official' | 'machine-requests' | 'user-inquiries' | 'gym-manager-link' | 'gym-manager-link-requests' | 'user-overview';
 
 // --- Shared components
 
@@ -151,6 +156,7 @@ interface HomeViewProps {
   gymRequestCount: number;
   machineRequestCount: number;
   userInquiryCount: number;
+  linkRequestCount: number;
   onPush: (v: AdminView) => void;
 }
 
@@ -259,6 +265,58 @@ function GymRequestsView({
   );
 }
 
+function GymManagerLinkRequestsView({
+  requests,
+  onApprove,
+  onReject,
+  onBack,
+}: {
+  requests:  GymManagerLinkRequest[];
+  onApprove: (request: GymManagerLinkRequest) => void;
+  onReject:  (request: GymManagerLinkRequest) => void;
+  onBack:    () => void;
+}) {
+  const pending  = requests.filter(r => r.status === 'pending');
+  const reviewed = requests.filter(r => r.status !== 'pending');
+
+  return (
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+      <TouchableOpacity onPress={onBack} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <Ionicons name="chevron-back" size={20} color={C.text} />
+        <Text style={{ fontSize: 16, fontWeight: '800', color: C.text }}>헬스장 매니저 연결 요청</Text>
+      </TouchableOpacity>
+
+      <Text style={{ fontSize: 12, fontWeight: '700', color: C.textDim, letterSpacing: 1 }}>검토 대기 ({pending.length})</Text>
+      {pending.length === 0 && (
+        <Text style={{ fontSize: 13, color: C.textDim, paddingVertical: 12 }}>검토 대기 중인 요청이 없어요.</Text>
+      )}
+      {pending.map(req => (
+        <View key={req.id} style={{ backgroundColor: C.surface, borderRadius: R.card, padding: 16, gap: 8 }}>
+          <Text style={{ fontSize: 15, fontWeight: '800', color: C.text }}>{req.gymName}</Text>
+          <Text style={{ fontSize: 13, color: C.textSub }}>신청자: {req.requesterId}</Text>
+          <Text style={{ fontSize: 11, color: C.textDim }}>{new Date(req.createdAt).toLocaleDateString('ko-KR')}</Text>
+          <ReviewButtons onApprove={() => onApprove(req)} onReject={() => onReject(req)} />
+        </View>
+      ))}
+
+      {reviewed.length > 0 && (
+        <>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: C.textDim, letterSpacing: 1, marginTop: 8 }}>처리된 요청 ({reviewed.length})</Text>
+          {reviewed.map(req => (
+            <View key={req.id} style={{ backgroundColor: C.surface, borderRadius: R.card, padding: 16, gap: 4, opacity: 0.6 }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: C.text }}>{req.gymName}</Text>
+              <Text style={{ fontSize: 12, color: C.textSub }}>신청자: {req.requesterId}</Text>
+              <Text style={{ fontSize: 11, color: req.status === 'approved' ? C.accent : C.danger, fontWeight: '600' }}>
+                {req.status === 'approved' ? '승인됨' : '거절됨'}
+              </Text>
+            </View>
+          ))}
+        </>
+      )}
+    </ScrollView>
+  );
+}
+
 function MachineRequestsView({
   requests,
   onUpdateStatus,
@@ -335,7 +393,7 @@ function MachineRequestsView({
   );
 }
 
-function HomeView({ machines, pendingGymCount, gymReportCount, managerRequestCount, registeredGymCount, gymRequestCount, machineRequestCount, userInquiryCount, onPush }: HomeViewProps) {
+function HomeView({ machines, pendingGymCount, gymReportCount, managerRequestCount, registeredGymCount, gymRequestCount, machineRequestCount, userInquiryCount, linkRequestCount, onPush }: HomeViewProps) {
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
       {/* Stats */}
@@ -420,6 +478,14 @@ function HomeView({ machines, pendingGymCount, gymReportCount, managerRequestCou
           sub: machineRequestCount > 0 ? `${machineRequestCount}개 검토 대기` : '접수된 신청 없음',
           onPress: () => onPush('machine-requests'),
           color: '#22d3ee',
+        },
+        {
+          icon: 'link-outline' as const,
+          title: '헬스장 매니저 연결 요청',
+          count: linkRequestCount,
+          sub: linkRequestCount > 0 ? `${linkRequestCount}개 검토 대기` : '접수된 요청 없음',
+          onPress: () => onPush('gym-manager-link-requests'),
+          color: '#818cf8',
         },
         {
           icon: 'shield-checkmark-outline' as const,
@@ -1868,16 +1934,18 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
   const [machineRequests, setMachineRequests] = useState<MachineRequest[]>([]);
   const [machines, setMachines] = useState<MachineWithGyms[]>(() => getMachinesCacheSync());
   const [userInquiries, setUserInquiries] = useState<UserInquiry[]>([]);
+  const [linkRequests, setLinkRequests] = useState<GymManagerLinkRequest[]>([]);
 
   const refreshQueues = useCallback(async () => {
     try {
-      const [requests, reports, apps, gyms, mReqs, inquiries] = await Promise.all([
+      const [requests, reports, apps, gyms, mReqs, inquiries, linkReqs] = await Promise.all([
         fetchGymRegistrationRequests(),
         fetchGymInfoReports(),
         fetchManagerRequests(),
         fetchAdminGyms(),
         fetchMachineRequests(),
         fetchAllUserInquiries(),
+        fetchGymManagerLinkRequests(),
       ]);
       setGymRequests(requests);
       setGymReports(reports);
@@ -1885,6 +1953,7 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
       setRegisteredGyms(gyms);
       setMachineRequests(mReqs);
       setUserInquiries(inquiries);
+      setLinkRequests(linkReqs);
     } catch (e: any) {
       if (__DEV__) console.warn('[AdminDashboard] 큐 새로고침 오류:', e);
     }
@@ -2014,6 +2083,7 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
   const gymRequestCount     = gymRequests.filter(r => r.status === 'pending' && (r.requesterRole ?? 'user') === 'user').length;
   const machineRequestCount = machineRequests.filter(r => r.status === 'pending').length;
   const userInquiryCount    = userInquiries.filter(i => i.status === 'pending').length;
+  const linkRequestCount    = linkRequests.filter(r => r.status === 'pending').length;
 
   // --- Actions
 
@@ -2297,6 +2367,30 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
     await loadRegisteredGyms();
   }, [loadRegisteredGyms]);
 
+  const handleApproveLinkRequest = useCallback(async (request: GymManagerLinkRequest) => {
+    const { error } = await setGymManager(request.gymId, request.requesterId);
+    if (error) {
+      Alert.alert('연결 오류', '매니저 연결에 실패했습니다. ' + error);
+      return;
+    }
+    const { success, error: statusError } = await updateGymManagerLinkRequestStatus(request.id, 'approved');
+    if (!success) {
+      Alert.alert('상태 업데이트 실패', statusError ?? '신청 상태를 저장하지 못했어요.');
+      return;
+    }
+    setLinkRequests(prev => prev.map(r => r.id === request.id ? { ...r, status: 'approved' } : r));
+    await loadRegisteredGyms();
+  }, [loadRegisteredGyms]);
+
+  const handleRejectLinkRequest = useCallback(async (request: GymManagerLinkRequest) => {
+    const { success, error } = await updateGymManagerLinkRequestStatus(request.id, 'rejected');
+    if (!success) {
+      Alert.alert('처리 실패', error ?? '신청 상태를 저장하지 못했어요.');
+      return;
+    }
+    setLinkRequests(prev => prev.map(r => r.id === request.id ? { ...r, status: 'rejected' } : r));
+  }, []);
+
   const handleDeleteGym = useCallback((gymId: string, gymName: string) => {
     Alert.alert(
       '헬스장 삭제',
@@ -2339,6 +2433,7 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
     'all-gyms-official':          '헬스장 오피셜 관리',
     'user-inquiries':             '유저 문의 관리',
     'gym-manager-link':           `${linkGymName} 매니저 연결`,
+    'gym-manager-link-requests':  '헬스장 매니저 연결 요청',
     'user-overview':              '유저 현황',
   };
 
@@ -2371,6 +2466,7 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
           gymRequestCount={gymRequestCount}
           machineRequestCount={machineRequestCount}
           userInquiryCount={userInquiryCount}
+          linkRequestCount={linkRequestCount}
           onPush={push}
         />
       )}
@@ -2517,6 +2613,14 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
             const updated = await fetchGymRegistrationRequests();
             setGymRequests(updated);
           }}
+          onBack={pop}
+        />
+      )}
+      {currentView === 'gym-manager-link-requests' && (
+        <GymManagerLinkRequestsView
+          requests={linkRequests}
+          onApprove={handleApproveLinkRequest}
+          onReject={handleRejectLinkRequest}
           onBack={pop}
         />
       )}
