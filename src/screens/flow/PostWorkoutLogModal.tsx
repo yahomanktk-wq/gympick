@@ -2103,8 +2103,8 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
             color: tc,
             textAlign: 'center',
             letterSpacing: -2,
-            marginBottom: 10,
-            fontSize: photoW * 0.5,
+            marginBottom: 4,
+            fontSize: photoW * 0.32,
             width: photoW - 20,
           }}
           numberOfLines={1}
@@ -2125,7 +2125,7 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
           {exercises.slice(0, 9).map(ex => {
             const sets = logs[ex.id] ?? [];
             return (
-              <View key={ex.id} style={{ width: COL_W, alignItems: 'center', marginBottom: 12 }}>
+              <View key={ex.id} style={{ width: COL_W, alignItems: 'center', marginBottom: 10 }}>
                 <Text style={{
                   fontSize: 8,
                   fontWeight: '700',
@@ -2155,7 +2155,7 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
                     fontWeight: '600',
                     color: tc,
                     opacity: 0.85,
-                    lineHeight: 13,
+                    lineHeight: 11,
                     textAlign: 'center',
                     fontFamily: fontSet.routine,
                   }}>
