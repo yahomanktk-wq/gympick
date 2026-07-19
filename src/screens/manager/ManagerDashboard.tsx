@@ -595,9 +595,9 @@ function RegisterView({
               ))}
             </SectionCard>
             <View style={styles.reviewNote}>
-              <Ionicons name="shield-checkmark-outline" size={14} color={C.textSub} />
+              <Ionicons name="information-circle-outline" size={14} color={C.textSub} />
               <Text style={styles.reviewNoteText}>
-                관리자가 1~2 영업일 내에 검토할 예정입니다. 승인 후 머신을 등록할 수 있습니다.
+                제출하시면 바로 등록돼요. 등록 후 보유 머신을 추가할 수 있어요.
               </Text>
             </View>
           </View>
@@ -615,7 +615,7 @@ function RegisterView({
             disabled={submitting && step === 3}
           >
             <Text style={styles.stepNextText}>
-              {step < 3 ? '다음' : (submitting ? '요청 중...' : '등록 신청')}
+              {step < 3 ? '다음' : (submitting ? '요청 중...' : '등록하기')}
             </Text>
             {step < 3 && <Ionicons name="arrow-forward" size={15} color={C.bg} />}
           </TouchableOpacity>

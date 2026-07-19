@@ -380,7 +380,7 @@ const s = StyleSheet.create({
   },
 
   fieldLabel: {
-    fontSize: 12, fontWeight: '700', color: C.textDim,
+    fontSize: 12, fontWeight: '700', color: C.textSub,
     letterSpacing: 0.8, textTransform: 'uppercase',
     marginBottom: 8, marginTop: 4,
   },
