@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
-  Image,
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -507,10 +506,11 @@ export default function HomeScreen() {
                       isToday && !photoSrc && st.weekThumbBoxToday,
                     ]}>
                       {photoSrc ? (
-                        <Image
+                        <ExpoImage
                           source={{ uri: photoSrc }}
                           style={st.weekThumbImg}
-                          resizeMode="cover"
+                          contentFit="cover"
+                          cachePolicy="memory-disk"
                         />
                       ) : session ? (
                         <View style={st.weekThumbEmptyInner}>
