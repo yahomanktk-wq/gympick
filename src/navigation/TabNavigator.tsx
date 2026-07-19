@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C } from '../theme';
+import { useAuth } from '../context/AuthContext';
+import ManagerOnboardingModal from '../screens/manager/ManagerOnboardingModal';
 
 import HomeScreen       from '../screens/HomeScreen';
 import FindGymScreen    from '../screens/FindGymScreen';
@@ -65,28 +68,49 @@ const Tab = createBottomTabNavigator<TabParamList>();
 
 export default function TabNavigator() {
   const insets = useSafeAreaInsets();
+  const { user, markManagerOnboarded } = useAuth();
+  const nav = useNavigation<any>();
+  const [showManagerOnboarding, setShowManagerOnboarding] = useState(false);
+
+  // 매니저 첫 로그인 온보딩: role === 'manager' && managerOnboarded === false 일 때 1회 표시
+  useEffect(() => {
+    if (user?.role === 'manager' && user?.managerOnboarded === false) {
+      setShowManagerOnboarding(true);
+    }
+  }, [user?.id, user?.role, user?.managerOnboarded]);
 
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown:     false,
-        tabBarShowLabel: false,
-        tabBarStyle: {
-          ...tabSt.bar,
-          height:        Platform.OS === 'ios' ? 49 + insets.bottom : 56 + insets.bottom,
-          paddingBottom: Platform.OS === 'ios' ? insets.bottom : insets.bottom > 0 ? insets.bottom : 8,
-        },
-        tabBarIcon:      ({ focused }) => (
-          <TabItem name={route.name as keyof TabParamList} focused={focused} />
-        ),
-      })}
-    >
-      <Tab.Screen name="Home"       component={HomeScreen}       />
-      <Tab.Screen name="FindGym"    component={FindGymScreen}    />
-      <Tab.Screen name="LogWorkout" component={LogWorkoutScreen} />
-      <Tab.Screen name="Journal"    component={JournalScreen}    />
-      <Tab.Screen name="Profile"    component={ProfileScreen}    />
-    </Tab.Navigator>
+    <>
+      <Tab.Navigator
+        screenOptions={({ route }) => ({
+          headerShown:     false,
+          tabBarShowLabel: false,
+          tabBarStyle: {
+            ...tabSt.bar,
+            height:        Platform.OS === 'ios' ? 49 + insets.bottom : 56 + insets.bottom,
+            paddingBottom: Platform.OS === 'ios' ? insets.bottom : insets.bottom > 0 ? insets.bottom : 8,
+          },
+          tabBarIcon:      ({ focused }) => (
+            <TabItem name={route.name as keyof TabParamList} focused={focused} />
+          ),
+        })}
+      >
+        <Tab.Screen name="Home"       component={HomeScreen}       />
+        <Tab.Screen name="FindGym"    component={FindGymScreen}    />
+        <Tab.Screen name="LogWorkout" component={LogWorkoutScreen} />
+        <Tab.Screen name="Journal"    component={JournalScreen}    />
+        <Tab.Screen name="Profile"    component={ProfileScreen}    />
+      </Tab.Navigator>
+
+      <ManagerOnboardingModal
+        visible={showManagerOnboarding}
+        onComplete={() => {
+          setShowManagerOnboarding(false);
+          markManagerOnboarded();
+        }}
+        onFinish={() => nav.navigate('Profile', { openManagerRegister: true })}
+      />
+    </>
   );
 }
 

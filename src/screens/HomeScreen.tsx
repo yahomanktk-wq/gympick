@@ -15,7 +15,6 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { C, R, T } from '../theme';
 import { btnHeight, cardPadH, cardPadV, iconSize, screenPad } from '../theme/responsive';
 import GymDetailModal from './flow/GymDetailModal';
-import ManagerOnboardingModal from './manager/ManagerOnboardingModal';
 import { useAuth } from '../context/AuthContext';
 
 import { WorkoutLog, WorkoutFeedPost, UserSplitConfig, WeekdaySplit } from '../data/types';
@@ -290,7 +289,7 @@ const OunwanHeader = React.memo(({
 // --- Screen
 
 export default function HomeScreen() {
-  const { user, markManagerOnboarded, refreshUser } = useAuth();
+  const { user, refreshUser } = useAuth();
   const nav = useNavigation<any>();
   const [gymDetailVisible, setGymDetailVisible] = useState(false);
   const [gymDetailId,      setGymDetailId]      = useState<string | null>(null);
@@ -300,15 +299,6 @@ export default function HomeScreen() {
   const [ounwanPosts,        setOunwanPosts]         = useState<WorkoutFeedPost[]>([]);
   const [weekTargetMap,      setWeekTargetMap]       = useState<Record<string, string | null>>({});
   const [ounwanDisplayTarget, setOunwanDisplayTarget] = useState<string | null>(null);
-
-  const [showManagerOnboarding, setShowManagerOnboarding] = useState(false);
-
-  // 매니저 첫 로그인 온보딩: role === 'manager' && managerOnboarded === false 일 때 1회 표시
-  useEffect(() => {
-    if (user?.role === 'manager' && user?.managerOnboarded === false) {
-      setShowManagerOnboarding(true);
-    }
-  }, [user?.id, user?.role, user?.managerOnboarded]);
 
   // 홈 화면 focus마다 최신 role/managerOnboarded를 확인 — 매니저 승인 알림을
   // 직접 탭하지 않아도 홈에 들어올 때마다 승인 여부가 반영되도록 한다.
@@ -595,15 +585,6 @@ export default function HomeScreen() {
         visible={gymDetailVisible}
         gymId={gymDetailId}
         onClose={() => setGymDetailVisible(false)}
-      />
-
-      <ManagerOnboardingModal
-        visible={showManagerOnboarding}
-        onComplete={() => {
-          setShowManagerOnboarding(false);
-          markManagerOnboarded();
-        }}
-        onFinish={() => nav.navigate('Profile', { openManagerRegister: true })}
       />
     </SafeAreaView>
   );
