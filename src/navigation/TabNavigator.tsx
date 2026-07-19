@@ -108,7 +108,7 @@ export default function TabNavigator() {
           setShowManagerOnboarding(false);
           markManagerOnboarded();
         }}
-        onFinish={() => nav.navigate('Profile', { openManagerRegister: true })}
+        onFinish={() => nav.navigate('Main', { screen: 'Profile', params: { openManagerRegister: true } })}
       />
     </>
   );
