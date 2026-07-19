@@ -34,9 +34,10 @@ import { getRequestsByGymId, markRequestAsRead } from '../../data/gymRequestStor
 import type { GymRequest } from '../../data/gymRequestStore';
 import { getGymMachineIds, updateGymMachines } from '../../data/managedGymStore';
 import { FREE_WEIGHTS } from '../../data/freeWeights';
-import { submitGymRegistrationRequest } from '../../lib/db/gymRegistrationRequests';
+import { registerGymImmediately } from '../../lib/db/gymRegistrationRequests';
 import { fetchGymMachineIds, saveGymMachineIds } from '../../lib/db/gymMachines';
-import { invalidateGymsCache } from '../../lib/db/gyms';
+import { invalidateGymsCache, fetchGyms } from '../../lib/db/gyms';
+import { getManagerRequests } from '../../lib/db/managerRequests';
 import { geocodeAddress } from '../../lib/geocoding';
 import { containsBannedWord } from '../../lib/bannedWords';
 import GymStatsView from './GymStatsView';
@@ -57,6 +58,22 @@ interface GymForm {
   phone: string; website: string; hoursNote: string;
 }
 const EMPTY_GYM_FORM: GymForm = { name: '', location: '', addressDetail: '', description: '', phone: '', website: '', hoursNote: '' };
+
+// 즉시 등록 전 최소한의 중복 방지 체크 — 이름/위치 문자열 비교 수준
+function normalizeStr(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, '');
+}
+function isSameGymName(a: string, b: string): boolean {
+  const na = normalizeStr(a);
+  const nb = normalizeStr(b);
+  return !!na && !!nb && na === nb;
+}
+function isSimilarGymLocation(a: string, b: string): boolean {
+  const na = normalizeStr(a);
+  const nb = normalizeStr(b);
+  if (!na || !nb) return false;
+  return na === nb || na.includes(nb) || nb.includes(na);
+}
 
 type DayHours = { enabled: boolean; open: string; close: string };
 type OperatingHours = {
@@ -493,7 +510,7 @@ function HomeView({ gyms, weeklyVisitors, gymFavCount, machineCount, onOpenEdit,
       <View style={styles.infoNote}>
         <Ionicons name="information-circle-outline" size={15} color={C.textSub} style={{ marginTop: 1 }} />
         <Text style={styles.infoNoteText}>
-          새 헬스장 등록 및 정보 수정은 관리자 검토 후 적용됩니다. 보통 1~2 영업일이 소요됩니다.
+          새 헬스장 등록은 승인된 매니저에게 즉시 반영돼요. 등록 후에도 정보는 언제든 수정할 수 있어요.
         </Text>
       </View>
     </ScrollView>
@@ -510,9 +527,9 @@ function RegisterView({
         <View style={styles.completionIconWrap}>
           <Ionicons name="checkmark-circle" size={64} color={C.accent} />
         </View>
-        <Text style={styles.completionTitle}>등록 요청이 완료되었습니다!</Text>
-        <Text style={styles.completionMsg}>1~2 영업일 내 검토 후 안내드리겠습니다.</Text>
-        <Text style={styles.completionSub}>승인 후 머신 등록이 가능합니다.</Text>
+        <Text style={styles.completionTitle}>헬스장이 바로 등록되었어요!</Text>
+        <Text style={styles.completionMsg}>승인 절차 없이 즉시 등록이 완료됐어요.</Text>
+        <Text style={styles.completionSub}>이제 머신 등록을 진행할 수 있어요.</Text>
         <TouchableOpacity
           style={[styles.registerBtn, { marginTop: 32, width: '100%' }]}
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setStep(1); onBack(); }}
@@ -1413,7 +1430,23 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
     }
     setStep(1); setRegForm(EMPTY_GYM_FORM); setRegHours(DEFAULT_HOURS); setRegNotices([]);
     push('register');
-  }, [gyms, push]);
+
+    // 이전에 제출했던 매니저 신청 정보(gymName/location)가 있으면 폼에 미리 채워준다 —
+    // 조회 실패/결과 없음이면 빈 폼 그대로 유지, 채워져도 그대로 수정 가능
+    if (user?.id) {
+      getManagerRequests(user.id)
+        .then(reqs => {
+          const latest = reqs[0];
+          if (!latest) return;
+          setRegForm(f => ({
+            ...f,
+            name:     f.name || latest.gymName,
+            location: f.location || latest.location,
+          }));
+        })
+        .catch(() => {});
+    }
+  }, [gyms, push, user?.id]);
 
   // ─── Register helpers ─────────────────────────────────────────────────────
 
@@ -1455,6 +1488,26 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
       Alert.alert('이미 등록 요청 중', '현재 검토 중인 헬스장 등록 요청이 있습니다.');
       return;
     }
+
+    // 최소한의 중복 방지 안전장치 — 이름/위치가 비슷한 헬스장이 있으면 확인 후 진행
+    const existingGyms = await fetchGyms().catch(() => []);
+    const similarGym = existingGyms.find(g =>
+      isSameGymName(g.name, regForm.name) || isSimilarGymLocation(g.location, regForm.location)
+    );
+    if (similarGym) {
+      const proceed = await new Promise<boolean>(resolve => {
+        Alert.alert(
+          '비슷한 헬스장이 이미 있어요',
+          `"${similarGym.name}"(${similarGym.location})와 이름/위치가 비슷해요. 그래도 등록하시겠어요?`,
+          [
+            { text: '취소',     style: 'cancel',      onPress: () => resolve(false) },
+            { text: '그래도 등록', style: 'destructive', onPress: () => resolve(true) },
+          ],
+        );
+      });
+      if (!proceed) return;
+    }
+
     setSubmitting(true);
 
     const notes = [
@@ -1462,21 +1515,22 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
       regForm.description ? regForm.description      : '',
     ].filter(Boolean).join('\n');
 
-    const { error } = await submitGymRegistrationRequest(
+    const { success, error } = await registerGymImmediately(
       user?.id ?? '',
       regForm.name.trim(),
       regForm.location.trim(),
       regForm.addressDetail.trim(),
       notes,
-      'manager',
       serializeHours(regHours),
     );
 
-    if (error) {
-      Alert.alert('오류', '등록 신청 중 오류가 발생했습니다.\n' + error);
+    if (!success) {
+      Alert.alert('오류', '헬스장 등록 중 오류가 발생했습니다.\n' + (error ?? ''));
       setSubmitting(false);
       return;
     }
+
+    invalidateGymsCache();
 
     const fullLocation = regForm.location.trim() +
       (regForm.addressDetail.trim() ? ' ' + regForm.addressDetail.trim() : '');
@@ -1485,7 +1539,7 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
       id: uid(), ...regForm, location: fullLocation,
       hours: serializeHours(regHours),
       machineIds: [], managerId: user?.id ?? 'u2',
-      status: 'pending',
+      status: 'approved',
       submittedAt: new Date().toISOString().split('T')[0],
       photoCount: 0,
     };

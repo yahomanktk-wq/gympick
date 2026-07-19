@@ -1,4 +1,5 @@
 import { supabase } from '../supabase';
+import { geocodeAddress } from '../geocoding';
 
 export interface GymRegistrationRequest {
   id:            string;
@@ -40,6 +41,59 @@ export async function submitGymRegistrationRequest(
     return { error: null };
   } catch (e: any) {
     return { error: e.message ?? '요청 중 오류가 발생했습니다.' };
+  }
+}
+
+/**
+ * 승인된 매니저 전용 — 어드민 심사 없이 gyms 테이블에 즉시 등록한다.
+ * AdminDashboard.tsx의 handleApproveGym이 하는 gyms insert와 동일한 형태로 넣고,
+ * gym_registration_requests에도 감사/이력 추적용 레코드를 남기되 상태를 처음부터
+ * 'reviewed'로 저장해 어드민 승인 큐(status === 'pending')에 뜨지 않도록 한다.
+ * 이미 매니저 권한이 있는 유저만 호출 가능한 화면에서 쓰이므로 profiles.role 동기화는 하지 않는다.
+ */
+export async function registerGymImmediately(
+  managerId:     string,
+  name:          string,
+  location:      string,
+  addressDetail: string,
+  notes:         string,
+  hours:         string,
+): Promise<{ success: boolean; gymId?: string; error?: string }> {
+  try {
+    const coords  = await geocodeAddress(location);
+    const newGymId = `g_${Date.now()}`;
+
+    const { error } = await supabase.from('gyms').insert({
+      id:             newGymId,
+      name,
+      location,
+      address_detail: addressDetail || null,
+      description:    notes || '',
+      hours:          hours || null,
+      manager_id:     managerId,
+      latitude:       coords?.latitude  ?? null,
+      longitude:      coords?.longitude ?? null,
+    });
+
+    if (error) return { success: false, error: error.message };
+
+    const { error: reqError } = await supabase.from('gym_registration_requests').insert({
+      user_id:        managerId,
+      gym_name:       name,
+      location,
+      address_detail: addressDetail || null,
+      notes:          notes || null,
+      hours:          hours || null,
+      status:         'reviewed',
+      requester_role: 'manager',
+    });
+    if (reqError && __DEV__) {
+      console.warn('[gymRegistrationRequests] registerGymImmediately 이력 저장 실패:', reqError.message);
+    }
+
+    return { success: true, gymId: newGymId };
+  } catch (e: any) {
+    return { success: false, error: e.message ?? '헬스장 등록 중 오류가 발생했습니다.' };
   }
 }
 
