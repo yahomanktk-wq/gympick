@@ -1377,6 +1377,9 @@ const TEXT_COLORS = [
   { label: 'Pink',   hex: '#FF2D78' },
   { label: 'Cyan',   hex: '#00E5FF' },
   { label: 'Purple', hex: '#AA00FF' },
+  { label: 'Brown',    hex: '#8B5A2B' },
+  { label: 'Dusty Red',  hex: '#A85751' },
+  { label: 'Dusty Blue', hex: '#5C7A8C' },
 ];
 
 // --- Overlay layout components (module-level, exported for WorkoutCameraOverlay)
