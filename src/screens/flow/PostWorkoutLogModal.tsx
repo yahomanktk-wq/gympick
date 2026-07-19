@@ -44,6 +44,7 @@ import { insertWorkoutSession, insertWorkoutEntry, insertWorkoutSet, insertWorko
 import { uploadWorkoutPhoto } from '../../lib/photoStorage';
 import { containsBannedWord } from '../../lib/bannedWords';
 import { insertFeedPost } from '../../lib/db/feedPosts';
+import { invalidateActiveFeedPostsCache } from '../../data/feedPostsCache';
 import GymPickLogo from '../../components/GymPickLogo';
 import OnboardingTooltip from '../../components/OnboardingTooltip';
 import { useOnboarding } from '../../hooks/useOnboarding';
@@ -4116,6 +4117,8 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
           sessionId:      dbSessionId ?? sessionId,
           muscles:        Array.from(selectedMuscles).map(toCanonMuscle),
           isPublic:       true,
+        }).then(() => {
+          invalidateActiveFeedPostsCache();
         }).catch(err => {
           if (__DEV__) console.warn('[feed] insertFeedPost failed:', err);
         });
