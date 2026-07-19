@@ -83,10 +83,11 @@ export default function MachineCard({ machine, width, variant = 'detail' }: Prop
       {/* ── Background image ─────── */}
       <View style={s.imageBg}>
         <View style={{ width: '100%', height: '100%', backgroundColor: '#FFFFFF' }}>
-          <RNImage
+          <Image
             source={{ uri: resolvedImageUrl }}
             style={{ width: '100%', height: '100%' }}
-            resizeMode="contain"
+            contentFit="contain"
+            cachePolicy="memory-disk"
           />
         </View>
       </View>
@@ -135,6 +136,7 @@ export default function MachineCard({ machine, width, variant = 'detail' }: Prop
             <Image
               source={brandLogo}
               style={[s.brandLogo, isGrid && { maxWidth: 54, maxHeight: 18, width: 54, height: 18 }]}
+              cachePolicy="memory-disk"
             />
           </View>
         ) : (
