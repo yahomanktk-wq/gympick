@@ -35,6 +35,7 @@ import type { GymRequest } from '../../data/gymRequestStore';
 import { getGymMachineIds, updateGymMachines } from '../../data/managedGymStore';
 import { FREE_WEIGHTS } from '../../data/freeWeights';
 import { registerGymImmediately } from '../../lib/db/gymRegistrationRequests';
+import { submitGymManagerLinkRequest } from '../../lib/db/gymManagerLinkRequests';
 import { fetchGymMachineIds, saveGymMachineIds } from '../../lib/db/gymMachines';
 import { invalidateGymsCache, fetchGyms } from '../../lib/db/gyms';
 import { getManagerRequests } from '../../lib/db/managerRequests';
@@ -364,6 +365,7 @@ interface RegisterViewProps {
   onSubmit: () => void;
   onNextStep: () => void;
   onBack: () => void;
+  resultMode: 'registered' | 'link-requested';
 }
 
 interface EditViewProps {
@@ -519,17 +521,28 @@ function HomeView({ gyms, weeklyVisitors, gymFavCount, machineCount, onOpenEdit,
 
 function RegisterView({
   step, setStep, regForm, onChangeField, regHours, updateRegDay,
-  regNotices, toggleRegNotice, submitting, serializeHours, onSubmit, onNextStep, onBack,
+  regNotices, toggleRegNotice, submitting, serializeHours, onSubmit, onNextStep, onBack, resultMode,
 }: RegisterViewProps) {
   if (step === 4) {
+    const isLinkRequested = resultMode === 'link-requested';
     return (
       <View style={styles.completionScreen}>
         <View style={styles.completionIconWrap}>
           <Ionicons name="checkmark-circle" size={64} color={C.accent} />
         </View>
-        <Text style={styles.completionTitle}>헬스장이 바로 등록되었어요!</Text>
-        <Text style={styles.completionMsg}>승인 절차 없이 즉시 등록이 완료됐어요.</Text>
-        <Text style={styles.completionSub}>이제 머신 등록을 진행할 수 있어요.</Text>
+        {isLinkRequested ? (
+          <>
+            <Text style={styles.completionTitle}>연결 요청이 접수됐어요!</Text>
+            <Text style={styles.completionMsg}>운영자 승인 후 이 헬스장의 매니저로 연결돼요.</Text>
+            <Text style={styles.completionSub}>승인 결과는 알림으로 안내드릴게요.</Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.completionTitle}>헬스장이 바로 등록되었어요!</Text>
+            <Text style={styles.completionMsg}>승인 절차 없이 즉시 등록이 완료됐어요.</Text>
+            <Text style={styles.completionSub}>이제 머신 등록을 진행할 수 있어요.</Text>
+          </>
+        )}
         <TouchableOpacity
           style={[styles.registerBtn, { marginTop: 32, width: '100%' }]}
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setStep(1); onBack(); }}
@@ -1205,6 +1218,7 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
   const [regHours, setRegHours]       = useState<OperatingHours>(DEFAULT_HOURS);
   const [regNotices, setRegNotices]   = useState<string[]>([]);
   const [submitting, setSubmitting]   = useState(false);
+  const [registerResultMode, setRegisterResultMode] = useState<'registered' | 'link-requested'>('registered');
 
   const onChangeRegField = useCallback((key: keyof GymForm, value: string) => {
     setRegForm(f => ({ ...f, [key]: value }));
@@ -1423,6 +1437,7 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
   // 등록 폼 초기화 + 이전 매니저 신청 정보 자동 승계 — onRegister와 initialView 진입 경로에서 공유
   const resetRegisterForm = useCallback(() => {
     setStep(1); setRegForm(EMPTY_GYM_FORM); setRegHours(DEFAULT_HOURS); setRegNotices([]);
+    setRegisterResultMode('registered');
 
     // 이전에 제출했던 매니저 신청 정보(gymName/location)가 있으면 폼에 미리 채워준다 —
     // 조회 실패/결과 없음이면 빈 폼 그대로 유지, 채워져도 그대로 수정 가능
@@ -1509,17 +1524,28 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
       isSameGymName(g.name, regForm.name) || isSimilarGymLocation(g.location, regForm.location)
     );
     if (similarGym) {
-      const proceed = await new Promise<boolean>(resolve => {
+      const wantsLink = await new Promise<boolean>(resolve => {
         Alert.alert(
-          '비슷한 헬스장이 이미 있어요',
-          `"${similarGym.name}"(${similarGym.location})와 이름/위치가 비슷해요. 그래도 등록하시겠어요?`,
+          '이미 등록된 헬스장이 있어요',
+          '이미 등록하시려는 헬스장이 등록되어 있어요. 연결해드릴까요?\n(연결 후 정보 및 보유 머신을 수정할 수 있어요)\n\n동일한 헬스장이 없다면 운영자에게 문의해주세요.',
           [
-            { text: '취소',     style: 'cancel',      onPress: () => resolve(false) },
-            { text: '그래도 등록', style: 'destructive', onPress: () => resolve(true) },
+            { text: '취소',       style: 'cancel', onPress: () => resolve(false) },
+            { text: '연결해주세요', onPress: () => resolve(true) },
           ],
         );
       });
-      if (!proceed) return;
+      if (!wantsLink) return;
+
+      setSubmitting(true);
+      const linkResult = await submitGymManagerLinkRequest(user?.id ?? '', similarGym.id, similarGym.name);
+      setSubmitting(false);
+      if (!linkResult.success) {
+        Alert.alert('요청 실패', linkResult.error ?? '잠시 후 다시 시도해주세요.');
+        return;
+      }
+      setRegisterResultMode('link-requested');
+      setStep(4);
+      return;
     }
 
     setSubmitting(true);
@@ -1872,6 +1898,7 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
           onSubmit={submitRegistration}
           onNextStep={handleNextStep}
           onBack={pop}
+          resultMode={registerResultMode}
         />
       )}
       {currentView === 'edit' && (
