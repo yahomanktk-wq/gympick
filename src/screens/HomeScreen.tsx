@@ -603,7 +603,7 @@ export default function HomeScreen() {
           setShowManagerOnboarding(false);
           markManagerOnboarded();
         }}
-        onFinish={() => nav.navigate('Profile')}
+        onFinish={() => nav.navigate('Profile', { openManagerRegister: true })}
       />
     </SafeAreaView>
   );

@@ -19,7 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
 import { pickAndUploadProfileImage, saveProfileImageUrl, loadProfileImageUrl } from '../lib/profileImageStorage';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { C, R, T } from '../theme';
 import { screenPad, cardPadH, cardPadV } from '../theme/responsive';
 import { UserRole, ManagedGym } from '../data/types';
@@ -507,6 +507,7 @@ function InquiryModal({ visible, onClose, userId }: { visible: boolean; onClose:
 
 export default function ProfileScreen() {
   const nav = useNavigation<any>();
+  const route = useRoute<any>();
   const { user, signOut, updateNickname, updateProfileImage, updateWeightUnit, signInGoogle, signInApple } = useAuth();
 
   function handleSettingPress(label: string) {
@@ -547,6 +548,7 @@ export default function ProfileScreen() {
   const [feedbackText,      setFeedbackText]      = useState('');
   const [feedbackLoading,   setFeedbackLoading]   = useState(false);
   const [showManager,       setShowManager]       = useState(false);
+  const [managerInitialView, setManagerInitialView] = useState<'register' | undefined>(undefined);
   const [showAdmin,         setShowAdmin]         = useState(false);
   const [showFavorites,     setShowFavorites]     = useState(false);
   const [showPrivacy,       setShowPrivacy]       = useState(false);
@@ -569,6 +571,16 @@ export default function ProfileScreen() {
   const [adminManagerReqCount, setAdminManagerReqCount] = useState(0);
   const [adminUserGymRequestCount, setAdminUserGymRequestCount] = useState(0);
   const [adminInitialView, setAdminInitialView] = useState<AdminView | undefined>(undefined);
+
+  // 매니저 온보딩 완료 직후 헬스장 등록 화면으로 자동 진입
+  // (HomeScreen → nav.navigate('Profile', { openManagerRegister: true }))
+  useEffect(() => {
+    if (route.params?.openManagerRegister && user?.role === 'manager') {
+      setManagerInitialView('register');
+      setShowManager(true);
+      nav.setParams({ openManagerRegister: undefined });
+    }
+  }, [route.params?.openManagerRegister, user?.role]);
 
   // 매니저 헬스장 목록 로딩 (Supabase + Mock 합치기)
   useEffect(() => {
@@ -1126,8 +1138,11 @@ export default function ProfileScreen() {
       <Modal visible={showFavorites} animationType="slide" onRequestClose={() => setShowFavorites(false)}>
         <FavoritesScreen onClose={() => setShowFavorites(false)} />
       </Modal>
-      <Modal visible={showManager} animationType="slide" onRequestClose={() => setShowManager(false)}>
-        <ManagerDashboard onClose={() => setShowManager(false)} />
+      <Modal visible={showManager} animationType="slide" onRequestClose={() => { setShowManager(false); setManagerInitialView(undefined); }}>
+        <ManagerDashboard
+          onClose={() => { setShowManager(false); setManagerInitialView(undefined); }}
+          initialView={managerInitialView}
+        />
       </Modal>
       <Modal visible={showAdmin} animationType="slide" onRequestClose={() => setShowAdmin(false)}>
         <AdminDashboard

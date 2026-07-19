@@ -1099,11 +1099,11 @@ function ManageView({
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
-export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
+export default function ManagerDashboard({ onClose, initialView }: { onClose: () => void; initialView?: ManagerView }) {
   const { user } = useAuth();
 
   // Navigation
-  const [viewStack, setViewStack] = useState<ManagerView[]>(['home']);
+  const [viewStack, setViewStack] = useState<ManagerView[]>(initialView ? ['home', initialView] : ['home']);
   const currentView = viewStack[viewStack.length - 1];
   const push = useCallback((v: ManagerView) => setViewStack(p => [...p, v]), []);
   const pop  = useCallback(() => {
@@ -1420,16 +1420,9 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
     setShowSaveConfirm(true);
   }, [gymMachineIds, pop, viewStack.length, onClose]);
 
-  const onRegister = useCallback(() => {
-    if (gyms.length > 0) {
-      Alert.alert(
-        '이미 헬스장을 관리 중이에요',
-        '매니저는 하나의 헬스장만 관리할 수 있어요.',
-      );
-      return;
-    }
+  // 등록 폼 초기화 + 이전 매니저 신청 정보 자동 승계 — onRegister와 initialView 진입 경로에서 공유
+  const resetRegisterForm = useCallback(() => {
     setStep(1); setRegForm(EMPTY_GYM_FORM); setRegHours(DEFAULT_HOURS); setRegNotices([]);
-    push('register');
 
     // 이전에 제출했던 매니저 신청 정보(gymName/location)가 있으면 폼에 미리 채워준다 —
     // 조회 실패/결과 없음이면 빈 폼 그대로 유지, 채워져도 그대로 수정 가능
@@ -1446,7 +1439,28 @@ export default function ManagerDashboard({ onClose }: { onClose: () => void }) {
         })
         .catch(() => {});
     }
-  }, [gyms, push, user?.id]);
+  }, [user?.id]);
+
+  const onRegister = useCallback(() => {
+    if (gyms.length > 0) {
+      Alert.alert(
+        '이미 헬스장을 관리 중이에요',
+        '매니저는 하나의 헬스장만 관리할 수 있어요.',
+      );
+      return;
+    }
+    resetRegisterForm();
+    push('register');
+  }, [gyms, push, resetRegisterForm]);
+
+  // initialView='register'로 시작된 경우 — viewStack 초기값에 이미 'register'가 쌓여 있으므로
+  // push는 다시 하지 않고, onRegister와 동일한 폼 초기화/자동승계만 1회 실행한다.
+  useEffect(() => {
+    if (initialView === 'register') {
+      resetRegisterForm();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ─── Register helpers ─────────────────────────────────────────────────────
 
