@@ -158,7 +158,10 @@ export function getLayoutType(style: OverlayStyle): 'a' | 'b' | 'c' | 'd' | 'arc
 }
 
 // Fixed presets as specified
-const WEIGHT_PRESETS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 140, 160, 180, 200];
+const WEIGHT_PRESETS = [
+  10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 140, 160, 180, 200,
+  220, 240, 260, 280, 300, 320, 340, 360, 380, 400, 420, 440, 460, 480, 500,
+];
 const REPS_PRESETS   = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20];
 
 // Global machine lookup map for resolving routine machines not in current gym
@@ -259,7 +262,7 @@ function Stepper({ value, onChange, step = 1, min = 0 }: {
       >
         <Ionicons name="remove" size={22} color={C.text} />
       </TouchableOpacity>
-      <Text style={s.stepperVal}>{display}</Text>
+      <Text style={s.stepperVal} numberOfLines={1}>{display}</Text>
       <TouchableOpacity
         style={s.stepperBtn}
         onPress={() => onChange(parseFloat((value + step).toFixed(1)))}
@@ -1180,7 +1183,7 @@ function SetCard({ ex, sets, realPR, prefill, onChange, onAdd, onCopyPrev, onRem
           </View>
           <View style={s.stepperRow}>
             <Text style={s.stepperUnit}>kg</Text>
-            <Stepper value={set.weight} onChange={v => onChange(idx, 'weight', v)} step={set.weight <= 10 ? 1 : 2.5} />
+            <Stepper value={set.weight} onChange={v => onChange(idx, 'weight', v)} step={2.5} />
           </View>
 
           {/* Reps */}
@@ -4563,7 +4566,7 @@ const s = StyleSheet.create({
   stepperUnit: { fontSize: 10, fontWeight: '700', color: C.textDim, width: 44, letterSpacing: 0.5, textTransform: 'uppercase' },
   stepper:     { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderRadius: R.inner, overflow: 'hidden' },
   stepperBtn:  { width: 56, height: 56, alignItems: 'center', justifyContent: 'center' },
-  stepperVal:  { minWidth: 64, textAlign: 'center', fontSize: 28, fontWeight: '900', color: C.text, fontVariant: ['tabular-nums'] },
+  stepperVal:  { width: 84, textAlign: 'center', fontSize: 28, fontWeight: '900', color: C.text, fontVariant: ['tabular-nums'] },
 
   setActions:   { flexDirection: 'row', gap: 10, marginTop: 4 },
   addSetBtn:    { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: R.inner },
