@@ -290,7 +290,7 @@ const OunwanHeader = React.memo(({
 // --- Screen
 
 export default function HomeScreen() {
-  const { user, markManagerOnboarded } = useAuth();
+  const { user, markManagerOnboarded, refreshUser } = useAuth();
   const nav = useNavigation<any>();
   const [gymDetailVisible, setGymDetailVisible] = useState(false);
   const [gymDetailId,      setGymDetailId]      = useState<string | null>(null);
@@ -309,6 +309,15 @@ export default function HomeScreen() {
       setShowManagerOnboarding(true);
     }
   }, [user?.id, user?.role, user?.managerOnboarded]);
+
+  // 홈 화면 focus마다 최신 role/managerOnboarded를 확인 — 매니저 승인 알림을
+  // 직접 탭하지 않아도 홈에 들어올 때마다 승인 여부가 반영되도록 한다.
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      refreshUser().catch(() => {});
+    }, [user?.id])
+  );
 
   useFocusEffect(
     useCallback(() => {
