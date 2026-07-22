@@ -26,6 +26,7 @@ export const brandLogos: Record<string, number> = {
   HOIST:             require('../assets/brand-logos/HOIST.png'),
   ICARIAN:           require('../assets/brand-logos/ICARIAN.png'),
   IMAGINE_STRENGTH:  require('../assets/brand-logos/Imagine_strength.png'),
+  INTENZA:           require('../assets/brand-logos/INTENZA.png'),
   IRON_CORE:         require('../assets/brand-logos/IRON_CORE.png'),
   KING_STRENGTH:     require('../assets/brand-logos/KING_STRENGTH.png'),
   LEGEND_FITNESS:    require('../assets/brand-logos/LEGEND_FITNESS.png'),
