@@ -256,6 +256,38 @@ const SplitBenefitCard = React.memo(({
   </View>
 ));
 
+// ── SplitOrderSummaryBar (Step 2a — sticky order summary) ──────────────────────
+
+const SplitOrderSummaryBar = React.memo(({ seqList }: { seqList: string[][] }) => {
+  if (seqList.length === 0) return null;
+  return (
+    <View style={s.summaryBar}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={s.summaryRow}
+      >
+        {seqList.map((muscles, idx) => {
+          const work  = muscles.filter(m => m !== '휴식');
+          const label = work.length > 0
+            ? work.join('·')
+            : muscles.includes('휴식')
+            ? '휴식'
+            : '선택 필요';
+          return (
+            <React.Fragment key={idx}>
+              {idx > 0 && <Text style={s.summaryArrow}>→</Text>}
+              <View style={s.summaryChip}>
+                <Text style={s.summaryChipText}>{label}</Text>
+              </View>
+            </React.Fragment>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+});
+
 // ── StartPositionItem (Step 3) ────────────────────────────────────────────────
 
 const StartPositionItem = React.memo(({
@@ -443,41 +475,46 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
     <SafeAreaView style={s.safe}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
 
+      {/* ── Header (Step -1 에서는 숨김) — ScrollView 밖에 고정 ── */}
+      {step !== -1 && (
+        <View style={s.header}>
+          {step === 2 && (
+            <TouchableOpacity onPress={() => setStep(1)} style={s.backBtn} activeOpacity={0.7}>
+              <Ionicons name="chevron-back" size={20} color={C.textSub} />
+            </TouchableOpacity>
+          )}
+          <View style={{ flex: 1 }}>
+            <Text style={s.title}>운동 분할 설정</Text>
+            <Text style={s.subtitle}>
+              {step === 0
+                ? '현재 설정된 분할법이에요'
+                : step === 3
+                ? '오늘 어디서 시작할까요?'
+                : '나중에 프로필에서 변경할 수 있어요'}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* Step dots (Step 1, 2만 표시) — ScrollView 밖에 고정 */}
+      {(step === 1 || step === 2) && (
+        <View style={s.stepRow}>
+          {[1, 2].map(n => (
+            <View key={n} style={[s.stepDot, step >= n && s.stepDotActive]} />
+          ))}
+        </View>
+      )}
+
+      {/* 운동 순서 요약 바 — 슬롯 리스트가 스크롤되어도 상단에 고정 */}
+      {step === 2 && type === 'sequential' && (
+        <SplitOrderSummaryBar seqList={seqList} />
+      )}
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={s.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        {/* ── Header (Step -1 에서는 숨김) ── */}
-        {step !== -1 && (
-          <View style={s.header}>
-            {step === 2 && (
-              <TouchableOpacity onPress={() => setStep(1)} style={s.backBtn} activeOpacity={0.7}>
-                <Ionicons name="chevron-back" size={20} color={C.textSub} />
-              </TouchableOpacity>
-            )}
-            <View style={{ flex: 1 }}>
-              <Text style={s.title}>운동 분할 설정</Text>
-              <Text style={s.subtitle}>
-                {step === 0
-                  ? '현재 설정된 분할법이에요'
-                  : step === 3
-                  ? '오늘 어디서 시작할까요?'
-                  : '나중에 프로필에서 변경할 수 있어요'}
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* Step dots (Step 1, 2만 표시) */}
-        {(step === 1 || step === 2) && (
-          <View style={s.stepRow}>
-            {[1, 2].map(n => (
-              <View key={n} style={[s.stepDot, step >= n && s.stepDotActive]} />
-            ))}
-          </View>
-        )}
-
         {/* ── Step -1: 온보딩 안내 ── */}
         {step === -1 && (
           <View style={s.introWrap}>
@@ -751,11 +788,12 @@ const s = StyleSheet.create({
   scroll: { paddingHorizontal: 20, paddingBottom: 32 },
 
   header: {
-    flexDirection:  'row',
-    alignItems:     'flex-start',
-    paddingTop:     32,
-    paddingBottom:  8,
-    gap:            8,
+    flexDirection:     'row',
+    alignItems:        'flex-start',
+    paddingHorizontal: 20,
+    paddingTop:        32,
+    paddingBottom:     8,
+    gap:               8,
   },
   backBtn: {
     width:           36,
@@ -768,9 +806,10 @@ const s = StyleSheet.create({
   subtitle: { fontSize: 13, color: C.textSub },
 
   stepRow: {
-    flexDirection: 'row',
-    gap:           6,
-    marginBottom:  28,
+    flexDirection:     'row',
+    gap:               6,
+    paddingHorizontal: 20,
+    marginBottom:      28,
   },
   stepDot: {
     width:           20,
@@ -779,6 +818,33 @@ const s = StyleSheet.create({
     backgroundColor: C.surfaceHigh,
   },
   stepDotActive: { backgroundColor: C.accent },
+
+  // Split order summary bar (Step 2a — sticky, outside ScrollView)
+  summaryBar: {
+    marginHorizontal:  20,
+    marginBottom:       16,
+    backgroundColor:    C.surface,
+    borderRadius:       R.inner,
+    borderWidth:        1,
+    borderColor:        C.border,
+    paddingVertical:    10,
+    paddingHorizontal:  12,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           6,
+  },
+  summaryChip: {
+    paddingHorizontal: 10,
+    paddingVertical:   5,
+    borderRadius:      R.pill,
+    backgroundColor:   C.surfaceHigh,
+    borderWidth:       1,
+    borderColor:       C.border,
+  },
+  summaryChipText: { fontSize: 12, fontWeight: '700', color: C.textSub },
+  summaryArrow:    { fontSize: 11, color: C.textDim },
 
   section:      { gap: 12 },
   sectionLabel: {
