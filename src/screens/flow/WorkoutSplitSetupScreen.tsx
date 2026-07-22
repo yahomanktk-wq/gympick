@@ -17,7 +17,7 @@ import { fetchSplitConfig, saveSplitConfig, updateSplitIndex } from '../../lib/d
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const SPLIT_MUSCLES = ['가슴', '등', '하체', '엉덩이', '어깨', '팔', '휴식'];
+const SPLIT_MUSCLES = ['가슴', '등', '하체', '어깨', '팔', '엉덩이', '휴식'];
 
 const DAY_LABELS: { key: keyof WeekdaySplit; label: string }[] = [
   { key: 'mon', label: '월' },
@@ -607,7 +607,7 @@ export default function WorkoutSplitSetupScreen({ userId, onComplete }: WorkoutS
             )}
             <TouchableOpacity style={s.addSlotBtn} onPress={addSeqSlot} activeOpacity={0.8}>
               <Ionicons name="add" size={16} color={C.accent} />
-              <Text style={s.addSlotText}>슬롯 추가</Text>
+              <Text style={s.addSlotText}>부위 추가</Text>
             </TouchableOpacity>
           </View>
         )}
