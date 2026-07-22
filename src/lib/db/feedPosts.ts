@@ -10,6 +10,7 @@ function rowToPost(r: any): WorkoutFeedPost {
     gymName:        r.gym_name,
     photoUri:       r.photo_uri,
     compositeUri:   r.composite_uri ?? undefined,
+    thumbnailUri:   r.thumbnail_uri ?? undefined,
     routineCardUri: r.routine_card_uri ?? undefined,
     sessionId:      r.session_id ?? undefined,
     muscles:        r.muscles ?? [],
@@ -41,7 +42,7 @@ export async function fetchActiveFeedPosts(): Promise<WorkoutFeedPost[]> {
 export async function insertFeedPost(
   post: Pick<WorkoutFeedPost,
     'id' | 'userId' | 'nickname' | 'gymId' | 'gymName' |
-    'photoUri' | 'compositeUri' | 'routineCardUri' | 'sessionId' | 'muscles' | 'isPublic'
+    'photoUri' | 'compositeUri' | 'thumbnailUri' | 'routineCardUri' | 'sessionId' | 'muscles' | 'isPublic'
   >,
 ): Promise<void> {
   const { error } = await supabase
@@ -54,6 +55,7 @@ export async function insertFeedPost(
       gym_name:         post.gymName,
       photo_uri:        post.photoUri,
       composite_uri:    post.compositeUri ?? null,
+      thumbnail_uri:    post.thumbnailUri ?? null,
       routine_card_uri: post.routineCardUri ?? null,
       session_id:       post.sessionId ?? null,
       muscles:          post.muscles,

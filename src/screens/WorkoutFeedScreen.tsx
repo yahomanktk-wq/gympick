@@ -113,7 +113,7 @@ function FeedGridCard({
   width:   number;
   onPress: () => void;
 }) {
-  const displayUri = post.compositeUri ?? post.photoUri;
+  const displayUri = post.thumbnailUri ?? post.compositeUri ?? post.photoUri;
   const CARD_H     = Math.round(width * 4 / 3);
 
   return (
@@ -618,6 +618,10 @@ export default function WorkoutFeedScreen() {
           columnWrapperStyle={{ gap: GRID_GAP, paddingHorizontal: GRID_PAD }}
           contentContainerStyle={{ paddingTop: 8, paddingBottom: 32, gap: GRID_GAP }}
           showsVerticalScrollIndicator={false}
+          initialNumToRender={12}
+          maxToRenderPerBatch={12}
+          windowSize={5}
+          removeClippedSubviews={true}
           renderItem={({ item }) => (
             <FeedGridCard
               post={item}

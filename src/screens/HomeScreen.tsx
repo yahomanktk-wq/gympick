@@ -152,7 +152,7 @@ const OunwanCard = React.memo(({ post, onPress }: {
   post:    WorkoutFeedPost;
   onPress: () => void;
 }) => {
-  const displayUri = post.photoUri ?? post.compositeUri;
+  const displayUri = post.thumbnailUri ?? post.photoUri ?? post.compositeUri;
 
   return (
     <TouchableOpacity
