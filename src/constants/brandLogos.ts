@@ -56,5 +56,6 @@ export const brandLogos: Record<string, number> = {
   TECHNOGYM:         require('../assets/brand-logos/TECHNOGYM.png'),
   TELJU:             require('../assets/brand-logos/TELJU.png'),
   TRUE:              require('../assets/brand-logos/TRUE.png'),
+  USP:               require('../assets/brand-logos/USP.png'),
   WATSON:            require('../assets/brand-logos/WATSON.png'),
 };
