@@ -55,6 +55,7 @@ import RoutineReferenceScreen, { MachineExtraInfo } from './RoutineReferenceScre
 import TodayWorkoutListScreen from './TodayWorkoutListScreen';
 import MachineCard from '../../components/MachineCard';
 import MachineCardBorder from '../../components/MachineCardBorder';
+import RoutineCardMachineThumb from '../../components/RoutineCardMachineThumb';
 import { FREE_WEIGHTS } from '../../data/freeWeights';
 import { fetchFreeWeights, fetchWorkoutLogs } from '../../lib/db';
 import * as Location from 'expo-location';
@@ -3006,13 +3007,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
                   <View style={{ flexDirection: 'row', alignItems: 'flex-start', padding: 12, gap: 10 }}>
 
                     {/* 머신 이미지 */}
-                    <View style={{ width: 64, height: 64, borderRadius: 10, overflow: 'hidden', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E5E5' }}>
-                      <Image
-                        source={{ uri: imageUrl }}
-                        style={{ width: '100%', height: '100%' }}
-                        resizeMode="contain"
-                      />
-                    </View>
+                    <RoutineCardMachineThumb uri={imageUrl} />
 
                     {/* 머신명 + 제조사 로고 */}
                     <View style={{ flex: 1 }}>
@@ -3051,13 +3046,13 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
           </View>
         </View>
 
-        {/* 머신 행 실제 높이 측정용 (화면 밖에 숨김) */}
+        {/* 머신 행 실제 높이 측정용 (화면 밖에 숨김) — 행 높이는 이미지 로드 여부와
+            무관(고정 64×64 박스)하므로 실제 네트워크 요청 없이 빈 박스로만 측정한다 */}
         <View style={{ position: 'absolute', top: -9999, left: -9999, width: PHOTO_W, backgroundColor: 'transparent' }} pointerEvents="none">
           {exercises.map((ex, i) => {
             const exSets    = logs[ex.id] ?? [];
             const brandKey  = ex.brand.toUpperCase().replace(/\s+/g, '_');
             const brandLogo = brandLogos[brandKey];
-            const imageUrl  = `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${machineIdFromKey(ex.id)}.webp`;
             return (
               <View
                 key={`measure-${ex.id}`}
@@ -3072,9 +3067,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
                 }}
                 style={{ flexDirection: 'row', alignItems: 'flex-start', padding: 12, gap: 10 }}
               >
-                <View style={{ width: 64, height: 64, borderRadius: 10, overflow: 'hidden', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E5E5' }}>
-                  <Image source={{ uri: imageUrl }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
-                </View>
+                <View style={{ width: 64, height: 64, borderRadius: 10, overflow: 'hidden', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E5E5' }} />
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 12, fontWeight: '700', color: '#000000', lineHeight: 16, marginBottom: 4 }} numberOfLines={2}>
                     {ex.name.toUpperCase()}
@@ -3147,9 +3140,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
                       <React.Fragment key={ex.id}>
                         {i > 0 && <View style={{ height: 1, backgroundColor: '#E5E5E5' }} />}
                         <View style={{ flexDirection: 'row', alignItems: 'flex-start', padding: 12, gap: 10 }}>
-                          <View style={{ width: 64, height: 64, borderRadius: 10, overflow: 'hidden', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E5E5' }}>
-                            <Image source={{ uri: imageUrl }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
-                          </View>
+                          <RoutineCardMachineThumb uri={imageUrl} />
                           <View style={{ flex: 1 }}>
                             <Text style={{ fontSize: 12, fontWeight: '700', color: '#000000', lineHeight: 16, marginBottom: 4 }} numberOfLines={2}>
                               {ex.name.toUpperCase()}
