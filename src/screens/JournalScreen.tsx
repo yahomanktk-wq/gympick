@@ -24,6 +24,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { Image as ExpoImage } from 'expo-image';
 import { brandLogos } from '../constants/brandLogos';
+import { getMachineImageUrl } from '../lib/machineImageUrl';
 import { C, R, T } from '../theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WorkoutLog, Machine, UserSplitConfig, SequentialSplit, WeekdaySplit } from '../data/types';
@@ -424,10 +425,6 @@ function SessionDetailModal({
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
   });
 
-  function getMachineImageUrl(machineId: string): string {
-    return `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${machineId}.webp`;
-  }
-
   async function downloadToLocal(remoteUri: string, filename: string): Promise<string> {
     if (!remoteUri.startsWith('http')) return remoteUri;
     const localPath = `${FileSystem.cacheDirectory ?? ''}gympick_${filename}`;
@@ -452,7 +449,7 @@ function SessionDetailModal({
     const machines = session.machines ?? [];
     const newMap: Record<string, string> = {};
     for (const m of machines) {
-      const remoteUrl = getMachineImageUrl(m.machineId);
+      const remoteUrl = getMachineImageUrl(m.machineId, { width: 128 });
       const localUri = await downloadToLocal(remoteUrl, `machine_${m.machineId}.webp`);
       if (localUri !== remoteUrl) newMap[m.machineId] = localUri;
     }
@@ -868,7 +865,7 @@ function SessionDetailModal({
                   {machines.map((m, i) => {
                     const brandKey  = m.machineBrand.toUpperCase().replace(/\s+/g, '_');
                     const brandLogo = brandLogos[brandKey];
-                    const imageUrl  = getMachineImageUrl(m.machineId);
+                    const imageUrl  = getMachineImageUrl(m.machineId, { width: 128 });
                     return (
                       <React.Fragment key={m.machineId}>
                         {i > 0 && <View style={det.routineDivider} />}
@@ -973,7 +970,7 @@ function SessionDetailModal({
                             {pageMachines.map((m, i) => {
                               const brandKey  = m.machineBrand.toUpperCase().replace(/\s+/g, '_');
                               const brandLogo = brandLogos[brandKey];
-                              const imageUrl  = getMachineImageUrl(m.machineId);
+                              const imageUrl  = getMachineImageUrl(m.machineId, { width: 128 });
                               return (
                                 <React.Fragment key={m.machineId}>
                                   {i > 0 && <View style={{ height: 1, backgroundColor: '#E5E5E5' }} />}

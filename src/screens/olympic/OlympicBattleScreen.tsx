@@ -12,6 +12,7 @@ import { saveVote, OlympicVote } from '../../data/olympicStore';
 import OlympicTradingCard from './OlympicTradingCard';
 import { saveVoteToSupabase } from '../../lib/db/olympicRankings';
 import { useAuth } from '../../context/AuthContext';
+import { getMachineImageUrl } from '../../lib/machineImageUrl';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -211,7 +212,7 @@ export default function OlympicBattleScreen({ bodyPart, category, gymId, tournam
       <View style={s.battleArea}>
         {/* Machine A */}
         <OlympicTradingCard
-          machine={machineA}
+          machine={{ ...machineA, imageUrl: getMachineImageUrl(machineA.id, { width: CARD_W * 2 }) }}
           width={CARD_W}
           selected={selectedId === machineA.id}
           selectedColor={accentColor}
@@ -227,7 +228,7 @@ export default function OlympicBattleScreen({ bodyPart, category, gymId, tournam
 
         {/* Machine B */}
         <OlympicTradingCard
-          machine={machineB}
+          machine={{ ...machineB, imageUrl: getMachineImageUrl(machineB.id, { width: CARD_W * 2 }) }}
           width={CARD_W}
           selected={selectedId === machineB.id}
           selectedColor={accentColor}

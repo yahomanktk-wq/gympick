@@ -44,6 +44,7 @@ import { insertWorkoutSession, insertWorkoutEntry, insertWorkoutSet, insertWorko
 import { uploadWorkoutPhoto } from '../../lib/photoStorage';
 import { containsBannedWord } from '../../lib/bannedWords';
 import { insertFeedPost } from '../../lib/db/feedPosts';
+import { getMachineImageUrl } from '../../lib/machineImageUrl';
 import { invalidateActiveFeedPostsCache } from '../../data/feedPostsCache';
 import GymPickLogo from '../../components/GymPickLogo';
 import OnboardingTooltip from '../../components/OnboardingTooltip';
@@ -2999,7 +3000,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
               const exSets    = logs[ex.id] ?? [];
               const brandKey  = ex.brand.toUpperCase().replace(/\s+/g, '_');
               const brandLogo = brandLogos[brandKey];
-              const imageUrl  = `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${machineIdFromKey(ex.id)}.webp`;
+              const imageUrl  = getMachineImageUrl(machineIdFromKey(ex.id), { width: 128 });
 
               return (
                 <React.Fragment key={ex.id}>
@@ -3135,7 +3136,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
                     const exSets    = logs[ex.id] ?? [];
                     const brandKey  = ex.brand.toUpperCase().replace(/\s+/g, '_');
                     const brandLogo = brandLogos[brandKey];
-                    const imageUrl  = `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${machineIdFromKey(ex.id)}.webp`;
+                    const imageUrl  = getMachineImageUrl(machineIdFromKey(ex.id), { width: 128 });
                     return (
                       <React.Fragment key={ex.id}>
                         {i > 0 && <View style={{ height: 1, backgroundColor: '#E5E5E5' }} />}

@@ -40,6 +40,7 @@ import GymDetailModal     from './flow/GymDetailModal';
 import MachineDetailModal from './flow/MachineDetailModal';
 import MachineCard        from '../components/MachineCard';
 import MachineCardBorder  from '../components/MachineCardBorder';
+import { getMachineImageUrl } from '../lib/machineImageUrl';
 
 import * as Location from 'expo-location';
 import { calcDistanceKm, formatDistance } from '../lib/geocoding';
@@ -253,7 +254,11 @@ const MachineItem = React.memo(({
     activeOpacity={0.8}
   >
     <MachineCardBorder>
-      <MachineCard machine={machine} variant="grid" width={cardWidth} />
+      <MachineCard
+        machine={{ ...machine, imageUrl: getMachineImageUrl(machine.id, { width: cardWidth * 2 }) }}
+        variant="grid"
+        width={cardWidth}
+      />
     </MachineCardBorder>
     {isFavorite && (
       <View style={s.favOverlay}>

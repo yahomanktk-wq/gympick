@@ -19,13 +19,13 @@ import {
   MachineAvgStats,
   PeriodType,
 } from '../../lib/db/gymStats';
+import { getMachineImageUrl } from '../../lib/machineImageUrl';
 
 const SCREEN_W = Dimensions.get('window').width;
 const CHART_W  = SCREEN_W - 32;
 const CHART_H  = 160;
 
-const MACHINE_IMG_URL = (id: string) =>
-  `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${id}.webp`;
+const MACHINE_IMG_URL = (id: string) => getMachineImageUrl(id, { width: 96 });
 
 function getPeriodDates(period: PeriodType): { start: string; end: string } {
   const now   = new Date();

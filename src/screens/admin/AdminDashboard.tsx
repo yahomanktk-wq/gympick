@@ -45,6 +45,7 @@ import {
   type ProfileSearchResult,
 } from '../../lib/db/adminGyms';
 import MachineCard from '../../components/MachineCard';
+import { getMachineImageUrl } from '../../lib/machineImageUrl';
 import {
   fetchGymRegistrationRequests,
   updateGymRequestStatus,
@@ -1144,7 +1145,11 @@ const AdminMachineItem = React.memo(({ machine, isSelected, onToggle, cardWidth 
       activeOpacity={0.8}
       onPress={() => onToggle(machine.id)}
     >
-      <MachineCard machine={machine} variant="grid" width={cardWidth} />
+      <MachineCard
+        machine={{ ...machine, imageUrl: getMachineImageUrl(machine.id, { width: cardWidth * 2 }) }}
+        variant="grid"
+        width={cardWidth}
+      />
     </TouchableOpacity>
     {isSelected && (
       <View style={styles.catCheckWrap}>

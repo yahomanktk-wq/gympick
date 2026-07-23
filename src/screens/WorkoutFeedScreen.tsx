@@ -29,6 +29,7 @@ import GymDetailModal from './flow/GymDetailModal';
 import MachineDetailModal from './flow/MachineDetailModal';
 import { MACHINES } from '../data';
 import { brandLogos } from '../constants/brandLogos';
+import { getMachineImageUrl } from '../lib/machineImageUrl';
 import GymPickLogo from '../components/GymPickLogo';
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
@@ -334,7 +335,7 @@ function FeedDetailModal({
 
                 {/* 머신 목록 */}
                 {sessionData.machines.map((m: any, idx: number) => {
-                  const imageUrl   = `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${m.machineId}.webp`;
+                  const imageUrl   = getMachineImageUrl(m.machineId, { width: 112 });
                   const allSets    = m.allSets ?? [];
                   const brandKey   = (m.machineBrand ?? '').toUpperCase().replace(/\s+/g, '_');
                   const brandLogo  = brandLogos[brandKey];

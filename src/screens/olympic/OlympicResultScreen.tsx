@@ -8,6 +8,7 @@ import { C, R, T } from '../../theme';
 import { Machine } from '../../data/types';
 import { OlympicVote, getMachineRecord } from '../../data/olympicStore';
 import OlympicTradingCard from './OlympicTradingCard';
+import { getMachineImageUrl } from '../../lib/machineImageUrl';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const WINNER_CARD_W = Math.min(SCREEN_W - 64, 280);
@@ -62,7 +63,7 @@ export default function OlympicResultScreen({
         {/* Winner trading card — centered, read-only */}
         <View style={s.winnerCardWrap}>
           <OlympicTradingCard
-            machine={winner}
+            machine={{ ...winner, imageUrl: getMachineImageUrl(winner.id, { width: WINNER_CARD_W * 2 }) }}
             width={WINNER_CARD_W}
             selected
             selectedColor={accentColor}

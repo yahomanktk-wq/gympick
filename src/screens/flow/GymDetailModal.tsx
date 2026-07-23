@@ -36,6 +36,7 @@ import { addGymFavoriteDB, removeGymFavoriteDB } from '../../lib/db/gymFavorites
 import GymCommunityTab from './community/GymCommunityTab';
 import MachineCard from '../../components/MachineCard';
 import MachineCardBorder from '../../components/MachineCardBorder';
+import { getMachineImageUrl } from '../../lib/machineImageUrl';
 import { containsBannedWord } from '../../lib/bannedWords';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -210,7 +211,11 @@ const GymMachineItem = React.memo(({
     activeOpacity={0.85}
   >
     <MachineCardBorder width={cardWidth}>
-      <MachineCard machine={machine} variant="grid" width={cardWidth} />
+      <MachineCard
+        machine={{ ...machine, imageUrl: getMachineImageUrl(machine.id, { width: cardWidth * 2 }) }}
+        variant="grid"
+        width={cardWidth}
+      />
     </MachineCardBorder>
   </TouchableOpacity>
 ));
