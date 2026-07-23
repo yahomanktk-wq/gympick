@@ -9,10 +9,11 @@ const DEFAULT_QUALITY = 75;
  * URL을 반환한다 — render 엔드포인트 자체를 호출하지 않으므로, 사전 조건이
  * 아직 갖춰지지 않은 상태에서도 기존과 동일하게 안전하게 동작한다.
  */
-const IMAGE_TRANSFORM_ENABLED = false;
+const IMAGE_TRANSFORM_ENABLED = true;
 
 export interface MachineImageUrlOptions {
   width?:   number;
+  height?:  number;
   quality?: number;
 }
 
@@ -22,8 +23,16 @@ export interface MachineImageUrlOptions {
  *   public URL을 반환한다.
  * - width를 주고 변환이 활성화된 경우에만 Supabase Storage의 Image
  *   Transformation render 엔드포인트로 리사이즈된 URL을 반환한다.
- * - 같은 machineId + 같은 width/quality 조합이면 항상 같은 문자열을 반환하므로
- *   (랜덤/타임스탬프 쿼리 없음) 클라이언트 이미지 캐시가 정상적으로 재사용된다.
+ * - height를 명시하지 않으면 width와 같은 값으로 채워 항상 정사각형으로
+ *   요청한다 — Supabase render 엔드포인트는 생략된 축을 원본 픽셀 크기
+ *   그대로 남겨두므로(예: width만 주면 800×800 원본이 실제로는 width×800로
+ *   찌그러진 채 반환됨), height를 반드시 함께 보내야 정상적인 정사각형
+ *   축소본이 나온다. 원본이 1:1 정사각형이고 MachineCard.tsx가 이미
+ *   contentFit="contain"으로 9:16 박스 안에 정사각형 이미지를 letterbox하는
+ *   구조이므로, 정사각형 요청이 기존 표시 결과를 그대로 유지한다.
+ * - 같은 machineId + 같은 width/height/quality 조합이면 항상 같은 문자열을
+ *   반환하므로(랜덤/타임스탬프 쿼리 없음) 클라이언트 이미지 캐시가 정상적으로
+ *   재사용된다.
  */
 export function getMachineImageUrl(
   machineId: string,
@@ -37,7 +46,8 @@ export function getMachineImageUrl(
   }
 
   const width   = Math.round(options.width);
+  const height  = Math.round(options.height ?? options.width);
   const quality = options.quality ?? DEFAULT_QUALITY;
 
-  return `${SUPABASE_URL}/storage/v1/render/image/public/${path}?width=${width}&quality=${quality}`;
+  return `${SUPABASE_URL}/storage/v1/render/image/public/${path}?width=${width}&height=${height}&quality=${quality}`;
 }
