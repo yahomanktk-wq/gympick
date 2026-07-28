@@ -33,10 +33,11 @@ const GRID_GAP    = 8;
 const GRID_W      = (SCREEN_W - 32 - GRID_GAP) / 2;
 
 const BAND_H        = 62;
-// brandLogo(46) + gap(3) + line-text lineHeight(~12) = 61 stacked content,
-// + the same ~16px top/bottom slack BAND_H already gives the 46px logo alone
-// (62 - 46 = 16), + 1px conservative rounding buffer.
-const BAND_H_WITH_LINE = 78;
+// brandLogo(46) + gap(3) + line-badge height (paddingVertical 2*2 + ~11px
+// text line-height ≈ 15) = 64 stacked content, + the same ~16px top/bottom
+// slack BAND_H already gives the 46px logo alone (62 - 46 = 16), + 1px
+// conservative rounding buffer.
+const BAND_H_WITH_LINE = 81;
 const FOOTER_H      = 64;
 const FOOTER_H_GRID = 36;
 const LOGO_SIZE     = 88;
@@ -145,7 +146,9 @@ export default function MachineCard({ machine, width, variant = 'detail' }: Prop
                 style={s.brandLogo}
                 cachePolicy="memory-disk"
               />
-              <Text style={s.lineText} numberOfLines={1} ellipsizeMode="tail">{machine.line}</Text>
+              <View style={s.lineBadge}>
+                <Text style={s.lineBadgeText} numberOfLines={1} ellipsizeMode="tail">{machine.line}</Text>
+              </View>
             </View>
           ) : (
             <View style={[s.brandBox, isGrid && { width: 64, height: 24 }]}>
@@ -160,7 +163,9 @@ export default function MachineCard({ machine, width, variant = 'detail' }: Prop
           hasLine ? (
             <View style={s.brandBoxStacked}>
               <Text style={s.bandValue} numberOfLines={1}>{machine.brand}</Text>
-              <Text style={s.lineText} numberOfLines={1} ellipsizeMode="tail">{machine.line}</Text>
+              <View style={s.lineBadge}>
+                <Text style={s.lineBadgeText} numberOfLines={1} ellipsizeMode="tail">{machine.line}</Text>
+              </View>
             </View>
           ) : (
             <Text style={[s.bandValue, isGrid && { fontSize: 10 }]} numberOfLines={1}>{machine.brand}</Text>
@@ -375,11 +380,19 @@ const s = StyleSheet.create({
     width:          150,
     justifyContent: 'center',
   },
-  lineText: {
-    fontSize:   10,
-    fontWeight: '600',
-    color:      'rgba(255,255,255,0.75)',
-    marginTop:  3,
+  lineBadge: {
+    alignSelf:         'flex-start',
+    backgroundColor:   'rgba(0,0,0,0.62)',
+    borderRadius:      R.pill,
+    paddingHorizontal: 6,
+    paddingVertical:   2,
+    marginTop:         3,
+  },
+  lineBadgeText: {
+    fontSize:      8,
+    fontWeight:    '700',
+    color:         '#FFFFFF',
+    letterSpacing: 0.2,
   },
   gridLineBadge: {
     position:          'absolute',
