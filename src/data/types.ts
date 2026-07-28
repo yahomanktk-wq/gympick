@@ -54,6 +54,7 @@ export interface Machine {
   exerciseKind: ExerciseKind;
   copyright?:   string;
   imageUrl?:    string;
+  line?:        string;      // 제품 라인명 (optional, filled in gradually by project owner)
 }
 
 // --- gym_machines (join table)

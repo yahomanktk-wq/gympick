@@ -26,6 +26,7 @@ type MachineRow = {
   category:      string;
   exercise_kind: string;
   image_url:     string | null;
+  line:          string | null;
 };
 
 function rowToMachine(row: MachineRow): Machine {
@@ -37,6 +38,7 @@ function rowToMachine(row: MachineRow): Machine {
     category:     row.category,
     exerciseKind: row.exercise_kind as ExerciseKind,
     imageUrl:     row.image_url ?? undefined,
+    line:         row.line ?? undefined,
   };
 }
 
@@ -54,7 +56,7 @@ export async function fetchMachines(): Promise<MachineWithGyms[]> {
   const [machinesResult, gymMachinesResult] = await Promise.all([
     supabase
       .from('machines')
-      .select('id, name, brand, target_muscle, category, exercise_kind, image_url')
+      .select('id, name, brand, target_muscle, category, exercise_kind, image_url, line')
       .order('name')
       .range(0, 2999),
     supabase
@@ -89,7 +91,7 @@ export async function fetchMachines(): Promise<MachineWithGyms[]> {
 export async function fetchFreeWeights(): Promise<MachineWithGyms[]> {
   const { data, error } = await supabase
     .from('machines')
-    .select('id, name, brand, target_muscle, category, exercise_kind, image_url')
+    .select('id, name, brand, target_muscle, category, exercise_kind, image_url, line')
     .eq('exercise_kind', 'freeweight')
     .order('target_muscle');
 
@@ -117,7 +119,7 @@ export async function fetchFreeWeights(): Promise<MachineWithGyms[]> {
 export async function fetchMachine(id: string): Promise<MachineWithGyms | undefined> {
   const { data, error } = await supabase
     .from('machines')
-    .select('id, name, brand, target_muscle, category, exercise_kind, image_url')
+    .select('id, name, brand, target_muscle, category, exercise_kind, image_url, line')
     .eq('id', id)
     .single();
 

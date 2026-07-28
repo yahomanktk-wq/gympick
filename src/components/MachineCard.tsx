@@ -18,6 +18,7 @@ export interface MachineCardMachine {
   category:     string;
   copyright?:   string;
   imageUrl?:    string;
+  line?:        string;
 }
 
 interface Props {
@@ -32,6 +33,10 @@ const GRID_GAP    = 8;
 const GRID_W      = (SCREEN_W - 32 - GRID_GAP) / 2;
 
 const BAND_H        = 62;
+// brandLogo(46) + gap(3) + line-text lineHeight(~12) = 61 stacked content,
+// + the same ~16px top/bottom slack BAND_H already gives the 46px logo alone
+// (62 - 46 = 16), + 1px conservative rounding buffer.
+const BAND_H_WITH_LINE = 78;
 const FOOTER_H      = 64;
 const FOOTER_H_GRID = 36;
 const LOGO_SIZE     = 88;
@@ -65,7 +70,8 @@ export default function MachineCard({ machine, width, variant = 'detail' }: Prop
   const padH    = isGrid ? GRID_PAD_H     : INNER_PAD_H;
   const padV    = isGrid ? GRID_PAD_V     : INNER_PAD_V;
   const padBot  = isGrid ? GRID_PAD_V + 2 : INNER_PAD_BOT;
-  const bandH   = isGrid ? 38             : BAND_H;
+  const hasLine = !isGrid && !!machine.line;
+  const bandH   = isGrid ? 38             : (hasLine ? BAND_H_WITH_LINE : BAND_H);
   const footerH = isGrid ? FOOTER_H_GRID  : FOOTER_H;
 
   // infoBand는 footer 바로 위에 위치
@@ -132,15 +138,33 @@ export default function MachineCard({ machine, width, variant = 'detail' }: Prop
         paddingHorizontal: isGrid ? 8 : 12,
       }]}>
         {brandLogo ? (
-          <View style={[s.brandBox, isGrid && { width: 64, height: 24 }]}>
-            <Image
-              source={brandLogo}
-              style={[s.brandLogo, isGrid && { maxWidth: 54, maxHeight: 18, width: 54, height: 18 }]}
-              cachePolicy="memory-disk"
-            />
-          </View>
+          hasLine ? (
+            <View style={s.brandBoxStacked}>
+              <Image
+                source={brandLogo}
+                style={s.brandLogo}
+                cachePolicy="memory-disk"
+              />
+              <Text style={s.lineText} numberOfLines={1} ellipsizeMode="tail">{machine.line}</Text>
+            </View>
+          ) : (
+            <View style={[s.brandBox, isGrid && { width: 64, height: 24 }]}>
+              <Image
+                source={brandLogo}
+                style={[s.brandLogo, isGrid && { maxWidth: 54, maxHeight: 18, width: 54, height: 18 }]}
+                cachePolicy="memory-disk"
+              />
+            </View>
+          )
         ) : (
-          <Text style={[s.bandValue, isGrid && { fontSize: 10 }]} numberOfLines={1}>{machine.brand}</Text>
+          hasLine ? (
+            <View style={s.brandBoxStacked}>
+              <Text style={s.bandValue} numberOfLines={1}>{machine.brand}</Text>
+              <Text style={s.lineText} numberOfLines={1} ellipsizeMode="tail">{machine.line}</Text>
+            </View>
+          ) : (
+            <Text style={[s.bandValue, isGrid && { fontSize: 10 }]} numberOfLines={1}>{machine.brand}</Text>
+          )
         )}
         <View style={s.muscleColumn}>
           {parseMuscles(machine.targetMuscle).slice(0, 2).map((mus, i) => (
@@ -334,6 +358,16 @@ const s = StyleSheet.create({
     width:      130,
     height:     46,
     resizeMode: 'contain',
+  },
+  brandBoxStacked: {
+    width:          150,
+    justifyContent: 'center',
+  },
+  lineText: {
+    fontSize:   10,
+    fontWeight: '600',
+    color:      'rgba(255,255,255,0.75)',
+    marginTop:  3,
   },
   muscleColumn: {
     alignItems:     'flex-end',
