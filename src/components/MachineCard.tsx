@@ -233,6 +233,18 @@ export default function MachineCard({ machine, width, variant = 'detail' }: Prop
         <GymPickLogo color="#000000" width={logoW} />
       </View>
 
+      {/* ── Grid variant: line-name badge (top-right, image area) ── */}
+      {isGrid && !!machine.line && (
+        <View
+          style={[s.gridLineBadge, { top: LOGO_MARGIN, right: LOGO_MARGIN, maxWidth: cardW * 0.5 }]}
+          pointerEvents="none"
+        >
+          <Text style={s.gridLineBadgeText} numberOfLines={1} ellipsizeMode="tail">
+            {machine.line}
+          </Text>
+        </View>
+      )}
+
       {/* ── SVG 테두리: 상하좌우 8px 안쪽 ── */}
       <Svg
         style={{ position: 'absolute', top: 0, left: 0 }}
@@ -368,6 +380,20 @@ const s = StyleSheet.create({
     fontWeight: '600',
     color:      'rgba(255,255,255,0.75)',
     marginTop:  3,
+  },
+  gridLineBadge: {
+    position:          'absolute',
+    backgroundColor:   'rgba(0,0,0,0.62)',
+    borderRadius:      R.pill,
+    paddingHorizontal: 6,
+    paddingVertical:   2,
+    zIndex:            10,
+  },
+  gridLineBadgeText: {
+    fontSize:      8,
+    fontWeight:    '700',
+    color:         '#FFFFFF',
+    letterSpacing: 0.2,
   },
   muscleColumn: {
     alignItems:     'flex-end',
