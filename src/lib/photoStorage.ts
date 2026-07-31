@@ -4,7 +4,8 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 const BUCKET = 'workout-photos';
 
 // 썸네일 — 홈/피드 그리드 카드(가장 큰 컨텍스트가 WorkoutFeedScreen의 절반 화면 폭
-// 그리드 카드)보다 여유 있게 크리스프하도록 세로변 기준 480px, JPEG 0.8 품질로 생성.
+// 그리드 카드)보다 여유 있게 크리스프하도록 세로변 기준 480px, WebP 0.8 품질로 생성.
+// WebP는 JPEG와 달리 알파 채널을 지원해 합성 이미지의 둥근 모서리 투명도를 보존한다.
 // 원본은 그대로 유지되고 별도 파일로만 업로드된다.
 const THUMB_LONG_EDGE = 480;
 const THUMB_QUALITY   = 0.8;
@@ -50,10 +51,12 @@ async function uploadThumbnail(
   try {
     const context  = ImageManipulator.manipulate(localUri);
     const rendered = await context.resize({ height: THUMB_LONG_EDGE }).renderAsync();
-    const result   = await rendered.saveAsync({ compress: THUMB_QUALITY, format: SaveFormat.JPEG });
+    // WebP — JPEG와 달리 알파 채널을 보존해 합성 이미지의 둥근 모서리 투명도가 깨지지 않는다
+    // (JPEG는 알파를 지원하지 않아 저장 시 모서리가 불투명 색상으로 채워짐 — iOS는 흰색으로 채움)
+    const result   = await rendered.saveAsync({ compress: THUMB_QUALITY, format: SaveFormat.WEBP });
 
-    const thumbFileName = `${userId}/${sessionId}_${Date.now()}_thumb.jpg`;
-    const url = await uploadToBucket(result.uri, thumbFileName, 'image/jpeg');
+    const thumbFileName = `${userId}/${sessionId}_${Date.now()}_thumb.webp`;
+    const url = await uploadToBucket(result.uri, thumbFileName, 'image/webp');
     return url ?? undefined;
   } catch (err) {
     console.warn('[photoStorage] thumbnail generation failed:', err);
