@@ -468,9 +468,13 @@ function SessionDetailModal({
       const photoNode = photoRefs.current[session.id];
       if (photoNode) {
         await new Promise(resolve => requestAnimationFrame(resolve));
+        const photoRatio = Math.max(PixelRatio.get(), 3);
         const uri = await captureRef(photoNode, {
           format: 'png', quality: 1, result: 'tmpfile',
-          pixelRatio: Math.max(PixelRatio.get(), 3),
+          pixelRatio: photoRatio,
+          ...(Platform.OS === 'android'
+            ? { width: Math.round(DET_PHOTO_W * photoRatio), height: Math.round(DET_PHOTO_H * photoRatio) }
+            : {}),
         });
         await MediaLibrary.saveToLibraryAsync(uri);
       } else if (session.compositeUri) {
@@ -513,9 +517,13 @@ function SessionDetailModal({
       const photoNode = photoRefs.current[session.id];
       if (photoNode) {
         await new Promise(resolve => requestAnimationFrame(resolve));
+        const photoRatio = Math.max(PixelRatio.get(), 3);
         const uri = await captureRef(photoNode, {
           format: 'png', quality: 1, result: 'tmpfile',
-          pixelRatio: Math.max(PixelRatio.get(), 3),
+          pixelRatio: photoRatio,
+          ...(Platform.OS === 'android'
+            ? { width: Math.round(DET_PHOTO_W * photoRatio), height: Math.round(DET_PHOTO_H * photoRatio) }
+            : {}),
         });
         capturedPhotoUri = uri;
         const asset = await MediaLibrary.createAssetAsync(uri);
