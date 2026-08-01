@@ -57,7 +57,7 @@ import TodayWorkoutListScreen from './TodayWorkoutListScreen';
 import MachineCard from '../../components/MachineCard';
 import MachineCardBorder from '../../components/MachineCardBorder';
 import RoutineCardMachineThumb from '../../components/RoutineCardMachineThumb';
-import { FREE_WEIGHTS } from '../../data/freeWeights';
+import { FREE_WEIGHTS, FreeWeightExercise } from '../../data/freeWeights';
 import { fetchFreeWeights, fetchWorkoutLogs } from '../../lib/db';
 import * as Location from 'expo-location';
 import { calcDistanceKm, formatDistance } from '../../lib/geocoding';
@@ -184,6 +184,12 @@ function toCanonMuscle(m: string): string {
 function machineIdFromKey(key: string): string {
   const i = key.lastIndexOf('#');
   return i === -1 ? key : key.slice(0, i);
+}
+
+// mid가 프리웨이트인지 실제 목록 멤버십으로 판별한다 (id가 'fw' 접두사를 따른다는
+// 가정은 일반 머신-등록 파이프라인으로 들어온 프리웨이트 행에서 깨지므로 사용 금지).
+function isFreeWeightId(mid: string, freeWeights: FreeWeightExercise[]): boolean {
+  return freeWeights.some(f => f.id === mid);
 }
 
 // --- Muscle palette
@@ -1073,11 +1079,12 @@ function SetProgressBanner({
 
 // --- Step 4: Log Sets (single exercise)
 
-function SetCard({ ex, sets, realPR, prefill, onChange, onAdd, onCopyPrev, onRemove, onSetLayout, onRegisterRect, onboardingActive, onboardingKey }: {
+function SetCard({ ex, sets, realPR, prefill, freeWeights, onChange, onAdd, onCopyPrev, onRemove, onSetLayout, onRegisterRect, onboardingActive, onboardingKey }: {
   ex: ExerciseInfo;
   sets: SetEntry[];
   realPR?: { weight: number; reps: number };
   prefill?: { date: string } | null;
+  freeWeights: FreeWeightExercise[];
   onChange: (idx: number, field: keyof SetEntry, val: number) => void;
   onAdd: () => void;
   onCopyPrev: () => void;
@@ -1088,7 +1095,7 @@ function SetCard({ ex, sets, realPR, prefill, onChange, onAdd, onCopyPrev, onRem
   onboardingKey?: OnboardingPointKey | null;
 }) {
   const col    = mp(ex.targetMuscle);
-  const isFW   = ex.id.startsWith('fw');
+  const isFW   = isFreeWeightId(machineIdFromKey(ex.id), freeWeights);
   const curMax  = sets.length ? Math.max(...sets.map(s => s.weight)) : 0;
   const histPR  = realPR; // 실제 유저 기록 기반 PR (없으면 undefined → 배지 미표시)
   const isNewPR = curMax > 0 && (histPR === undefined || curMax > histPR.weight);
@@ -1238,10 +1245,11 @@ function SetCard({ ex, sets, realPR, prefill, onChange, onAdd, onCopyPrev, onRem
   );
 }
 
-function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onRemove, onNoteChange, onSave, onFinish, onBack, onClose, onRegisterRect, onboardingActive, onboardingKey, realPR, prefill }: {
+function SetLoggingStep({ exercise, sets, note, freeWeights, onChange, onAdd, onCopyPrev, onRemove, onNoteChange, onSave, onFinish, onBack, onClose, onRegisterRect, onboardingActive, onboardingKey, realPR, prefill }: {
   exercise: ExerciseInfo;
   sets: SetEntry[];
   note: string;
+  freeWeights: FreeWeightExercise[];
   onChange: (idx: number, field: keyof SetEntry, val: number) => void;
   onAdd: () => void;
   onCopyPrev: () => void;
@@ -1311,6 +1319,7 @@ function SetLoggingStep({ exercise, sets, note, onChange, onAdd, onCopyPrev, onR
           sets={sets}
           realPR={realPR}
           prefill={prefill}
+          freeWeights={freeWeights}
           onChange={onChange}
           onAdd={handleAdd}
           onCopyPrev={handleCopyPrev}
@@ -3450,12 +3459,13 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
 
 // --- Step 6: Done
 
-function WorkoutDoneStep({ gym, exercises, logs, detectedPRs, selectedMuscles, onClose }: {
+function WorkoutDoneStep({ gym, exercises, logs, detectedPRs, selectedMuscles, freeWeights, onClose }: {
   gym: GymWithMachines;
   exercises: ExerciseInfo[];
   logs: Record<string, SetEntry[]>;
   detectedPRs: { name: string; weight: number; reps: number }[];
   selectedMuscles: Set<string>;
+  freeWeights: FreeWeightExercise[];
   onClose: () => void;
 }) {
   const [tplName,    setTplName]    = useState('');
@@ -3533,7 +3543,7 @@ function WorkoutDoneStep({ gym, exercises, logs, detectedPRs, selectedMuscles, o
                 {i > 0 && <View style={s.divider} />}
                 <View style={s.summaryRow}>
                   <View style={[s.summaryIcon, { backgroundColor: col.bg }]}>
-                    <Ionicons name={ex.id.startsWith('fw') ? 'fitness-outline' : 'barbell-outline'} size={14} color={col.fg} />
+                    <Ionicons name={isFreeWeightId(machineIdFromKey(ex.id), freeWeights) ? 'fitness-outline' : 'barbell-outline'} size={14} color={col.fg} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={s.summaryName}>{ex.name}</Text>
@@ -3931,7 +3941,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     const result: ExerciseInfo[] = [];
     for (const key of loggedIds) {
       const mid = machineIdFromKey(key);
-      if (mid.startsWith('fw')) {
+      if (isFreeWeightId(mid, dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS)) {
         const fw = (dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS).find(f => f.id === mid);
         if (fw) result.push({ id: key, name: fw.name, brand: fw.brand, targetMuscle: fw.targetMuscle });
       } else {
@@ -3946,7 +3956,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   const currentExercise: ExerciseInfo | null = useMemo(() => {
     if (!currentExerciseId || !gym) return null;
     const mid = machineIdFromKey(currentExerciseId);
-    if (mid.startsWith('fw')) {
+    if (isFreeWeightId(mid, dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS)) {
       const fw = (dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS).find(f => f.id === mid);
       if (fw) return { id: currentExerciseId, name: fw.name, brand: fw.brand, targetMuscle: fw.targetMuscle };
     } else {
@@ -4061,7 +4071,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             machineName:  ex.name,
             machineBrand: ex.brand,
             targetMuscle: ex.targetMuscle,
-            exerciseKind: mid.startsWith('fw') ? 'freeweight' : 'machine',
+            exerciseKind: isFreeWeightId(mid, dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS) ? 'freeweight' : 'machine',
             order:        i,
           });
 
@@ -4291,6 +4301,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             realPR={realPRs[machineIdFromKey(currentExercise.id)]}
             prefill={prefillInfo[currentExercise.id] ?? null}
             note={notes[currentExercise.id] ?? ''}
+            freeWeights={dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS}
             onChange={handleChangeSet}
             onAdd={handleAddSet}
             onCopyPrev={handleCopyPrev}
@@ -4344,6 +4355,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             logs={logs}
             detectedPRs={detectedPRs}
             selectedMuscles={selectedMuscles}
+            freeWeights={dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS}
             onClose={() => onClose(true)}
           />
         );
