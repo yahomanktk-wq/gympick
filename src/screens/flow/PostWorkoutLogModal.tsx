@@ -2814,7 +2814,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
         {photoTaken && !showCamera && (
           <View
             ref={overlayRef}
-            style={[s.photoFrame, s.photoFrameActive, { height: photoH, backgroundColor: 'transparent', borderWidth: 0, borderRadius: 20, overflow: 'hidden' }]}
+            style={[s.photoFrame, s.photoFrameActive, { height: photoH, backgroundColor: C.bg, borderWidth: 0, borderRadius: 20, overflow: 'hidden' }]}
             collapsable={false}
             onLayout={() => {
               if (!onboardingActive) return;
