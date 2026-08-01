@@ -17,12 +17,18 @@ import MachineRankingScreen   from './src/screens/MachineRankingScreen';
 import MachineHistoryScreen   from './src/screens/MachineHistoryScreen';
 import ResetPasswordScreen from './src/screens/auth/ResetPasswordScreen';
 import OnboardingScreen from './src/screens/onboarding/OnboardingScreen';
+import { initAnalytics, track } from './src/lib/analytics';
 
 const Stack = createNativeStackNavigator();
+initAnalytics();
 
 SplashScreen.preventAutoHideAsync();
 
 export default function App() {
+  React.useEffect(() => {
+    track('app_open');
+  }, []);
+
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [appReady, setAppReady] = useState(false);
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
