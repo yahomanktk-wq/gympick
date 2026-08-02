@@ -477,7 +477,7 @@ export default function HomeScreen() {
                 const isToday  = isSameDay(day, today);
                 const isPast   = !isToday && day < today;
                 const isFuture = !isToday && !isPast;
-                const photoSrc = session?.compositeUri ?? session?.photoUri;
+                const photoSrc = session?.thumbnailUri ?? session?.compositeUri ?? session?.photoUri;
                 const targetForDay = weekTargetMap[day.toDateString()];
                 return (
                   <TouchableOpacity

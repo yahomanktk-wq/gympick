@@ -1,4 +1,5 @@
 import { supabase } from '../supabase';
+import { track } from '../analytics';
 import type {
   WorkoutSession,
   WorkoutEntry,
@@ -63,6 +64,7 @@ type PhotoRow = {
   aspect_ratio?:  string | null;
   composite_uri?: string | null;
   photo_uri?:     string | null;
+  thumbnail_uri?: string | null;
 };
 
 // --- Row converters
@@ -114,6 +116,7 @@ function rowToPhoto(r: PhotoRow): WorkoutPhoto {
     aspectRatio:  (r.aspect_ratio as PhotoAspectRatio) ?? undefined,
     compositeUri: r.composite_uri ?? undefined,
     photoUri:     r.photo_uri ?? undefined,
+    thumbnailUri: r.thumbnail_uri ?? undefined,
   };
 }
 
@@ -244,7 +247,7 @@ export async function fetchPhotosForSessions(
 
   const { data, error } = await supabase
     .from('workout_photos')
-    .select('id, session_id, user_id, captured_at, text_color, aspect_ratio, composite_uri, photo_uri')
+    .select('id, session_id, user_id, captured_at, text_color, aspect_ratio, composite_uri, photo_uri, thumbnail_uri')
     .in('session_id', sessionIds);
 
   if (error || !data?.length) {
@@ -265,7 +268,7 @@ export async function fetchPhotosForSessions(
 export async function fetchWorkoutPhotos(sessionId: string): Promise<WorkoutPhoto[]> {
   const { data, error } = await supabase
     .from('workout_photos')
-    .select('id, session_id, user_id, captured_at, text_color, aspect_ratio')
+    .select('id, session_id, user_id, captured_at, text_color, aspect_ratio, thumbnail_uri')
     .eq('session_id', sessionId);
 
   if (error || !data?.length) {
@@ -279,7 +282,7 @@ export async function fetchWorkoutPhotos(sessionId: string): Promise<WorkoutPhot
 export async function fetchUserPhotos(userId: string): Promise<WorkoutPhoto[]> {
   const { data, error } = await supabase
     .from('workout_photos')
-    .select('id, session_id, user_id, captured_at, text_color, aspect_ratio')
+    .select('id, session_id, user_id, captured_at, text_color, aspect_ratio, thumbnail_uri')
     .eq('user_id', userId)
     .order('captured_at', { ascending: false });
 
@@ -385,6 +388,7 @@ export async function fetchWorkoutLogs(userId: string): Promise<WorkoutLog[]> {
         hasPhoto:         photoMap.has(session.id),
         compositeUri:     photoMap.get(session.id)?.compositeUri,
         photoUri:         photoMap.get(session.id)?.photoUri,
+        thumbnailUri:     photoMap.get(session.id)?.thumbnailUri,
         overlayTextColor: session.overlayTextColor ?? '#ffffff',
         targetMuscles:    sessionMuscles,
       };
@@ -463,21 +467,23 @@ export async function insertWorkoutSet(
     .single();
 
   if (error || !data) throw new Error(error?.message ?? 'insertWorkoutSet failed');
+  track('log_set', { entry_id: set.entryId, weight: set.weight, reps: set.reps });
   return rowToSet(data);
 }
 
 /** Insert a new workout photo. Returns the inserted row or throws. */
 export async function insertWorkoutPhoto(
-  photo: Pick<WorkoutPhoto, 'sessionId' | 'userId' | 'capturedAt' | 'textColor' | 'aspectRatio'>,
+  photo: Pick<WorkoutPhoto, 'sessionId' | 'userId' | 'capturedAt' | 'textColor' | 'aspectRatio' | 'thumbnailUri'>,
 ): Promise<WorkoutPhoto> {
   const { data, error } = await supabase
     .from('workout_photos')
     .insert({
-      session_id:   photo.sessionId,
-      user_id:      photo.userId,
-      captured_at:  photo.capturedAt,
-      text_color:   photo.textColor,
-      aspect_ratio: photo.aspectRatio ?? null,
+      session_id:    photo.sessionId,
+      user_id:       photo.userId,
+      captured_at:   photo.capturedAt,
+      text_color:    photo.textColor,
+      aspect_ratio:  photo.aspectRatio ?? null,
+      thumbnail_uri: photo.thumbnailUri ?? null,
     })
     .select()
     .single();

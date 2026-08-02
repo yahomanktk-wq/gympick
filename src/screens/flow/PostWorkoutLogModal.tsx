@@ -4043,6 +4043,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
       hasPhoto: photoTaken,
       ...(photoUri ? { photoUri: finalPhotoUrl ?? photoUri } : {}),
       ...(effectiveCompositeUri ? { compositeUri: finalPhotoUrl ?? effectiveCompositeUri } : {}),
+      ...(finalThumbnailUrl ? { thumbnailUri: finalThumbnailUrl } : {}),
     };
     addNewSession(user?.id ?? 'guest', workoutLog);
 
@@ -4094,11 +4095,12 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
       if (finalPhotoUrl && user) {
         try {
           await insertWorkoutPhoto({
-            sessionId:   sessionId,
-            userId:      user.id,
-            capturedAt:  new Date().toISOString(),
-            textColor:   '#ffffff',
-            aspectRatio: '9:16',
+            sessionId:    sessionId,
+            userId:       user.id,
+            capturedAt:   new Date().toISOString(),
+            textColor:    '#ffffff',
+            aspectRatio:  '9:16',
+            thumbnailUri: finalThumbnailUrl,
           });
 
           // composite_uri 업데이트 (insertWorkoutPhoto는 기본 컬럼만 저장하므로 별도 update)
@@ -4108,6 +4110,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             .update({
               composite_uri: finalPhotoUrl,
               photo_uri:     photoUri ?? null,
+              thumbnail_uri: finalThumbnailUrl ?? null,
             })
             .eq('session_id', sessionId)
             .eq('user_id', user.id);

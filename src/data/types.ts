@@ -119,6 +119,7 @@ export interface WorkoutPhoto {
   overlayImageUrl?: string;          // rendered version with stats/text overlay
   compositeUri?:    string;          // Supabase Storage URL of overlay composite image
   photoUri?:        string;          // Supabase Storage URL of raw camera photo
+  thumbnailUri?:    string;          // Supabase Storage URL of 480px WebP thumbnail
 }
 
 // --- machine_reviews
@@ -194,6 +195,7 @@ export interface WorkoutLog {
   hasPhoto:          boolean;
   photoUri?:         string;   // local URI of the raw camera photo
   compositeUri?:     string;   // local URI of the overlay composite image (captureRef result)
+  thumbnailUri?:     string;   // 480px WebP 축소본 (주간 썸네일 등 작은 영역용)
   overlayTextColor?: string;
   targetMuscles?:    string[]; // 세션 타겟 부위 (없으면 machines에서 역산)
 }
