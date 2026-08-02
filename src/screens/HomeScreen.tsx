@@ -148,11 +148,15 @@ function computeStreak(logs: WorkoutLog[]): number {
 
 // ── OunwanCard ────────────────────────────────────────────────────────────────
 
+function getOunwanDisplayUri(post: WorkoutFeedPost): string | undefined {
+  return post.thumbnailUri ?? post.photoUri ?? post.compositeUri;
+}
+
 const OunwanCard = React.memo(({ post, onPress }: {
   post:    WorkoutFeedPost;
   onPress: () => void;
 }) => {
-  const displayUri = post.thumbnailUri ?? post.photoUri ?? post.compositeUri;
+  const displayUri = getOunwanDisplayUri(post);
 
   return (
     <TouchableOpacity
@@ -188,22 +192,40 @@ const AutoScrollOunwan = React.memo(({ posts, onPressPost }: {
   // Keep a ref so setInterval callback always reads the latest length without being a dep
   const postsLenRef = useRef(posts.length);
   postsLenRef.current = posts.length;
+  // Always-latest posts array for prefetching (posts prop may change identity on re-render)
+  const postsRef = useRef(posts);
+  postsRef.current = posts;
+
+  // Prefetch the next 1~2 cards' display images so scrolling doesn't stall on load
+  const prefetchAround = useCallback((idx: number) => {
+    const list = postsRef.current;
+    if (list.length === 0) return;
+    for (let offset = 1; offset <= 2; offset++) {
+      const target = list[(idx + offset) % list.length];
+      const uri = target ? getOunwanDisplayUri(target) : undefined;
+      if (uri) {
+        ExpoImage.prefetch(uri).catch(() => {});
+      }
+    }
+  }, []);
 
   // Only depends on posts.length — no useCallback chain
   useEffect(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
     intervalRef.current = null;
     if (posts.length <= 1) return;
+    prefetchAround(currentIdx.current);
     const STEP = OUNWAN_CARD_W + OUNWAN_CARD_GAP;
     intervalRef.current = setInterval(() => {
       currentIdx.current = (currentIdx.current + 1) % postsLenRef.current;
       scrollRef.current?.scrollTo({ x: currentIdx.current * STEP, animated: true });
+      prefetchAround(currentIdx.current);
     }, 2500);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       intervalRef.current = null;
     };
-  }, [posts.length]);
+  }, [posts.length, prefetchAround]);
 
   // Stable handlers — only read/write refs, no state involved
   const handleScrollBegin = useCallback(() => {
@@ -219,8 +241,9 @@ const AutoScrollOunwan = React.memo(({ posts, onPressPost }: {
     intervalRef.current = setInterval(() => {
       currentIdx.current = (currentIdx.current + 1) % postsLenRef.current;
       scrollRef.current?.scrollTo({ x: currentIdx.current * STEP, animated: true });
+      prefetchAround(currentIdx.current);
     }, 2500);
-  }, []);
+  }, [prefetchAround]);
 
   if (posts.length === 0) {
     return (
