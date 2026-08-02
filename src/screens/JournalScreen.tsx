@@ -25,6 +25,7 @@ import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/nativ
 import { Image as ExpoImage } from 'expo-image';
 import { brandLogos } from '../constants/brandLogos';
 import { getMachineImageUrl } from '../lib/machineImageUrl';
+import { getTransformedImageUrl } from '../lib/photoImageUrl';
 import { C, R, T } from '../theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WorkoutLog, Machine, UserSplitConfig, SequentialSplit, WeekdaySplit } from '../data/types';
@@ -51,6 +52,8 @@ const DET_PHOTO_H = Math.round(DET_PHOTO_W * (4 / 3));
 // Retro grid cell dimensions — 3.5 visible per row, 4:3 ratio
 const RETRO_CELL_W = Math.floor((SCREEN_W - 32) / 3.5);
 const RETRO_CELL_H = Math.round(RETRO_CELL_W * 4 / 3);
+
+const IMAGE_PIXEL_RATIO = PixelRatio.get();
 
 // --- Helpers
 
@@ -325,7 +328,11 @@ function RetroWeeklyGrid({
                 const session  = sessions.find(s => isSameDay(new Date(s.date), day));
                 const isToday  = isSameDay(day, today);
                 const isFuture = day > today;
-                const photoSrc = session?.compositeUri ?? session?.photoUri ?? null;
+                const rawPhotoSrc = session?.thumbnailUri ?? session?.compositeUri ?? session?.photoUri;
+                const photoSrc = getTransformedImageUrl(rawPhotoSrc, {
+                  width:  Math.round(RETRO_CELL_W * IMAGE_PIXEL_RATIO),
+                  height: Math.round(RETRO_CELL_H * IMAGE_PIXEL_RATIO),
+                });
 
                 return (
                   <TouchableOpacity
@@ -347,6 +354,7 @@ function RetroWeeklyGrid({
                         source={{ uri: photoSrc }}
                         style={StyleSheet.absoluteFill}
                         contentFit="cover"
+                        cachePolicy="memory-disk"
                         onError={() => {}}
                       />
                     ) : (
