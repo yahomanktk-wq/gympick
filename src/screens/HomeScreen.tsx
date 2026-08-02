@@ -22,6 +22,7 @@ import { fetchWorkoutLogs } from '../lib/db';
 import { getActiveFeedPostsCached } from '../data/feedPostsCache';
 import { fetchSplitConfig } from '../lib/db/splitRoutine';
 import { getTodayTarget, getTodayTargets, toEnMuscle, toKoMuscle } from '../lib/splitUtils';
+import { getTransformedImageUrl } from '../lib/photoImageUrl';
 import * as Haptics from 'expo-haptics';
 
 // --- Helpers
@@ -149,7 +150,8 @@ function computeStreak(logs: WorkoutLog[]): number {
 // ── OunwanCard ────────────────────────────────────────────────────────────────
 
 function getOunwanDisplayUri(post: WorkoutFeedPost): string | undefined {
-  return post.thumbnailUri ?? post.photoUri ?? post.compositeUri;
+  const raw = post.thumbnailUri ?? post.photoUri ?? post.compositeUri;
+  return getTransformedImageUrl(raw, { width: OUNWAN_CARD_W });
 }
 
 const OunwanCard = React.memo(({ post, onPress }: {
@@ -500,7 +502,10 @@ export default function HomeScreen() {
                 const isToday  = isSameDay(day, today);
                 const isPast   = !isToday && day < today;
                 const isFuture = !isToday && !isPast;
-                const photoSrc = session?.thumbnailUri ?? session?.compositeUri ?? session?.photoUri;
+                const photoSrc = getTransformedImageUrl(
+                  session?.thumbnailUri ?? session?.compositeUri ?? session?.photoUri,
+                  { width: HOME_THUMB_W, height: HOME_THUMB_H },
+                );
                 const targetForDay = weekTargetMap[day.toDateString()];
                 return (
                   <TouchableOpacity

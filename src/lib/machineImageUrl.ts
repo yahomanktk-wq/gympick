@@ -9,7 +9,7 @@ const DEFAULT_QUALITY = 75;
  * URL을 반환한다 — render 엔드포인트 자체를 호출하지 않으므로, 사전 조건이
  * 아직 갖춰지지 않은 상태에서도 기존과 동일하게 안전하게 동작한다.
  */
-const IMAGE_TRANSFORM_ENABLED = true;
+export const IMAGE_TRANSFORM_ENABLED = true;
 
 export interface MachineImageUrlOptions {
   width?:   number;
