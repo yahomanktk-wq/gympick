@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StatusBar,
   Dimensions,
+  PixelRatio,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
@@ -101,6 +102,7 @@ const HOME_THUMB_H   = Math.round(HOME_THUMB_W * (4 / 3));
 const OUNWAN_CARD_W  = 160;
 const OUNWAN_CARD_H  = Math.round(OUNWAN_CARD_W * (4 / 3));
 const OUNWAN_CARD_GAP = 10;
+const IMAGE_PIXEL_RATIO = PixelRatio.get();
 
 function greeting() {
   const h = new Date().getHours();
@@ -151,7 +153,10 @@ function computeStreak(logs: WorkoutLog[]): number {
 
 function getOunwanDisplayUri(post: WorkoutFeedPost): string | undefined {
   const raw = post.thumbnailUri ?? post.photoUri ?? post.compositeUri;
-  return getTransformedImageUrl(raw, { width: OUNWAN_CARD_W });
+  return getTransformedImageUrl(raw, {
+    width:  Math.round(OUNWAN_CARD_W * IMAGE_PIXEL_RATIO),
+    height: Math.round(OUNWAN_CARD_H * IMAGE_PIXEL_RATIO),
+  });
 }
 
 const OunwanCard = React.memo(({ post, onPress }: {
@@ -504,7 +509,10 @@ export default function HomeScreen() {
                 const isFuture = !isToday && !isPast;
                 const photoSrc = getTransformedImageUrl(
                   session?.thumbnailUri ?? session?.compositeUri ?? session?.photoUri,
-                  { width: HOME_THUMB_W, height: HOME_THUMB_H },
+                  {
+                    width:  Math.round(HOME_THUMB_W * IMAGE_PIXEL_RATIO),
+                    height: Math.round(HOME_THUMB_H * IMAGE_PIXEL_RATIO),
+                  },
                 );
                 const targetForDay = weekTargetMap[day.toDateString()];
                 return (
