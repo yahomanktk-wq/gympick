@@ -119,9 +119,8 @@ export default function MachineCard({ machine, width, variant = 'detail' }: Prop
         <View style={[s.machineNameZone, isGrid && s.machineNameZoneGrid]}>
           <Text
             style={[s.machineName, isGrid && s.machineNameGrid]}
-            numberOfLines={2}
-            adjustsFontSizeToFit
-            minimumFontScale={isGrid ? 0.6 : 0.5}
+            numberOfLines={3}
+            ellipsizeMode="tail"
             textBreakStrategy="balanced"
           >
             {machine.displayName ?? machine.name}
@@ -330,11 +329,11 @@ const s = StyleSheet.create({
     alignSelf:         'stretch',
     alignItems:        'center',
     justifyContent:    'center',
-    height:            80,
+    height:            108,
     paddingHorizontal: 4,
   },
   machineNameZoneGrid: {
-    height:            52,
+    height:            70,
     paddingHorizontal: 2,
   },
   machineName: {
