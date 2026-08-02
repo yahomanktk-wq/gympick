@@ -11,6 +11,7 @@ import {
   Modal,
   Dimensions,
   ActivityIndicator,
+  PixelRatio,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -30,6 +31,7 @@ import MachineDetailModal from './flow/MachineDetailModal';
 import { MACHINES } from '../data';
 import { brandLogos } from '../constants/brandLogos';
 import { getMachineImageUrl } from '../lib/machineImageUrl';
+import { getTransformedImageUrl } from '../lib/photoImageUrl';
 import GymPickLogo from '../components/GymPickLogo';
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
@@ -38,6 +40,7 @@ const SCREEN_W    = Dimensions.get('window').width;
 const GRID_GAP    = 8;
 const GRID_PAD    = 16;
 const GRID_CARD_W = Math.floor((SCREEN_W - GRID_PAD * 2 - GRID_GAP) / 2);
+const IMAGE_PIXEL_RATIO = PixelRatio.get();
 
 const MUSCLE_FILTERS = ['전체', '가슴', '등', '하체', '어깨', '팔'] as const;
 type MuscleFilter = (typeof MUSCLE_FILTERS)[number];
@@ -114,8 +117,12 @@ function FeedGridCard({
   width:   number;
   onPress: () => void;
 }) {
-  const displayUri = post.thumbnailUri ?? post.compositeUri ?? post.photoUri;
-  const CARD_H     = Math.round(width * 4 / 3);
+  const CARD_H = Math.round(width * 4 / 3);
+  const rawUri = post.thumbnailUri ?? post.compositeUri ?? post.photoUri;
+  const displayUri = getTransformedImageUrl(rawUri, {
+    width:  Math.round(width * IMAGE_PIXEL_RATIO),
+    height: Math.round(CARD_H * IMAGE_PIXEL_RATIO),
+  });
 
   return (
     <TouchableOpacity
@@ -127,6 +134,7 @@ function FeedGridCard({
         source={{ uri: displayUri }}
         style={{ width, height: CARD_H }}
         contentFit="cover"
+        cachePolicy="memory-disk"
       />
       {post.isMyPost && (
         <View style={{
