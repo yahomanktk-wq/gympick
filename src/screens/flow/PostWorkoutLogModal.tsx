@@ -731,6 +731,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
   const [localSelectedId, setLocalSelectedId] = useState<string | null>(null);
   const [showTplList,     setShowTplList]     = useState(false);
   const [dbFreeWeights,   setDbFreeWeights]   = useState<typeof FREE_WEIGHTS>([]);
+  const [viewMode,        setViewMode]        = useState<'routine' | 'all'>('routine');
 
   const exerciseGridRef = useRef<View>(null);
 
@@ -805,6 +806,17 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
     ? []
     : (dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS)
         .filter(fw => parseMuscles(fw.targetMuscle).some(t => matchesMuscle(t)));
+
+  // "다른 머신도 보기" 모드: 루틴 머신(순번 유지) + 부위 매칭되는 헬스장 전체 머신/프리웨이트(루틴에 없는 것) 통합
+  const allModeOrderedList: Machine[] = (hasPreloaded && viewMode === 'all')
+    ? [
+        ...routineOrderedAll,
+        ...gym.machines.filter(m => !preloadedIds.has(m.id) && parseMuscles(m.targetMuscle).some(t => matchesMuscle(t))),
+        ...(dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS)
+            .filter(fw => !preloadedIds.has(fw.id) && parseMuscles(fw.targetMuscle).some(t => matchesMuscle(t)))
+            .map(fw => ({ id: fw.id, name: fw.name, brand: fw.brand, targetMuscle: fw.targetMuscle, category: 'Free Weight', exerciseKind: 'freeweight' as const } as Machine)),
+      ]
+    : [];
   const MACHINE_CARD_W2 = (SCREEN_W - 40) / 2;
 
   function handleCardPress(id: string) {
@@ -844,8 +856,25 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
           </View>
         )}
 
+        {/* 다른 머신도 보기 토글 (루틴 모드에서만 노출) */}
+        {hasPreloaded && (
+          <TouchableOpacity
+            style={s.viewModeToggle}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setViewMode(prev => prev === 'routine' ? 'all' : 'routine');
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name={viewMode === 'all' ? 'list' : 'grid-outline'} size={13} color={C.accent} />
+            <Text style={s.viewModeToggleTxt}>
+              {viewMode === 'all' ? '루틴 머신만 보기' : '다른 머신도 보기'}
+            </Text>
+          </TouchableOpacity>
+        )}
+
         {/* 루틴 선택 모드: 머신+프리웨이트 순서 통합 */}
-        {hasPreloaded && routineOrderedAll.length > 0 && (
+        {hasPreloaded && viewMode === 'routine' && routineOrderedAll.length > 0 && (
           <>
             <Text style={s.sectionTitle}>추천 루틴 머신</Text>
             <View
@@ -875,6 +904,61 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
                       <Text style={s.cardOrderText}>{idx + 1}</Text>
                     </View>
                   </View>
+                  {localSelectedId === m.id && (
+                    <View style={s.cardSelectedOverlay}>
+                      <View style={s.cardSelectedBadge}>
+                        <Ionicons name="checkmark" size={14} color={C.bg} />
+                      </View>
+                    </View>
+                  )}
+                  {[...loggedIds].some(k => machineIdFromKey(k) === m.id) && (
+                    <View style={s.cardCompletedOverlay}>
+                      <View style={s.cardCompletedBadge}>
+                        <Ionicons name="checkmark-circle" size={13} color={C.accent} />
+                        <Text style={s.cardCompletedTxt}>완료</Text>
+                      </View>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
+
+        {/* 다른 머신도 보기 모드: 루틴 머신(순번 유지) + 헬스장 전체 머신/프리웨이트 통합 */}
+        {hasPreloaded && viewMode === 'all' && allModeOrderedList.length > 0 && (
+          <>
+            <Text style={s.sectionTitle}>전체 머신</Text>
+            <View
+              ref={exerciseGridRef}
+              style={s.machineCardGrid}
+              onLayout={() => {
+                if (onboardingActive) {
+                  exerciseGridRef.current?.measureInWindow((x, y, width, height) => {
+                    onRegisterRect?.('exercise-grid', { x, y, width, height });
+                  });
+                }
+              }}
+            >
+              {allModeOrderedList.map(m => (
+                <TouchableOpacity
+                  key={m.id}
+                  activeOpacity={0.85}
+                  onPress={() => handleCardPress(m.id)}
+                  style={{ position: 'relative' }}
+                >
+                  <MachineCardBorder width={MACHINE_CARD_W2}>
+                    <MachineCard machine={m} variant="grid" width={MACHINE_CARD_W2} />
+                  </MachineCardBorder>
+                  {preloadedIds.has(m.id) && (
+                    <View style={s.cardOrderOverlay}>
+                      <View style={s.cardOrderBadge}>
+                        <Text style={s.cardOrderText}>
+                          {[...preloadedIds].indexOf(m.id) + 1}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
                   {localSelectedId === m.id && (
                     <View style={s.cardSelectedOverlay}>
                       <View style={s.cardSelectedBadge}>
@@ -4687,6 +4771,8 @@ const s = StyleSheet.create({
   tplLoadedBanner:{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.accentBg, borderRadius: R.inner, padding: 10, marginBottom: 14 },
   tplLoadedTxt:   { flex: 1, fontSize: 12, fontWeight: '600', color: C.accent },
   exCardPreloaded:{ borderWidth: 1, borderColor: C.accent + '60' },
+  viewModeToggle:   { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 5, backgroundColor: C.accentBg, borderRadius: R.pill, paddingHorizontal: 10, paddingVertical: 6, marginBottom: 16 },
+  viewModeToggleTxt:{ fontSize: 12, fontWeight: '700', color: C.accent },
 
   // --- Save as Template (WorkoutDoneStep)
   tplCard:      { backgroundColor: C.surface, borderRadius: R.card, padding: 16, marginBottom: 16 },
