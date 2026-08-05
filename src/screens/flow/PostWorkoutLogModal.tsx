@@ -777,6 +777,23 @@ function ExerciseCard({ name, brand, targetMuscle, logged, preloaded, onPress, i
   );
 }
 
+// --- View mode toggle button (섹션 타이틀과 같은 줄, 우측 정렬로 재사용)
+
+function ViewModeToggleButton({
+  viewMode, hasPreloaded, onPress,
+}: { viewMode: 'routine' | 'all'; hasPreloaded: boolean; onPress: () => void }) {
+  return (
+    <TouchableOpacity style={s.viewModeToggle} onPress={onPress} activeOpacity={0.8}>
+      <Ionicons name="grid-outline" size={13} color={C.accent} />
+      <Text style={s.viewModeToggleTxt}>
+        {viewMode === 'all'
+          ? (hasPreloaded ? '루틴 머신만 보기' : '타겟부위만 보기')
+          : '다른 머신도 보기'}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
 function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, routineExtraInfo, templates, onSelectExercise, onLoadTemplate, onDeleteTemplate, onFinish, onBack, onClose, onRegisterRect, onboardingActive, onboardingKey }: {
   gym: GymWithMachines;
   selectedMuscles: Set<string>;
@@ -927,27 +944,20 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
           </View>
         )}
 
-        {/* 다른 머신도 보기 토글 (루틴 모드/Start Fresh 모드 공통 노출) */}
-        <TouchableOpacity
-          style={s.viewModeToggle}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setViewMode(prev => prev === 'routine' ? 'all' : 'routine');
-          }}
-          activeOpacity={0.8}
-        >
-          <Ionicons name={viewMode === 'all' ? 'list' : 'grid-outline'} size={13} color={C.accent} />
-          <Text style={s.viewModeToggleTxt}>
-            {viewMode === 'all'
-              ? (hasPreloaded ? '루틴 머신만 보기' : '타겟부위만 보기')
-              : '다른 머신도 보기'}
-          </Text>
-        </TouchableOpacity>
-
         {/* 루틴 선택 모드: 머신+프리웨이트 순서 통합 */}
         {hasPreloaded && viewMode === 'routine' && routineOrderedAll.length > 0 && (
           <>
-            <Text style={s.sectionTitle}>추천 루틴 머신</Text>
+            <View style={s.sectionTitleRow}>
+              <Text style={[s.sectionTitle, { marginBottom: 0 }]}>추천 루틴 머신</Text>
+              <ViewModeToggleButton
+                viewMode={viewMode}
+                hasPreloaded={hasPreloaded}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setViewMode(prev => prev === 'routine' ? 'all' : 'routine');
+                }}
+              />
+            </View>
             <View
               ref={exerciseGridRef}
               style={s.machineCardGrid}
@@ -999,7 +1009,17 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
         {/* 다른 머신도 보기 모드: 루틴 머신(순번 유지) + 헬스장 전체 머신/프리웨이트 통합 */}
         {hasPreloaded && viewMode === 'all' && allModeOrderedList.length > 0 && (
           <>
-            <Text style={s.sectionTitle}>전체 머신</Text>
+            <View style={s.sectionTitleRow}>
+              <Text style={[s.sectionTitle, { marginBottom: 0 }]}>전체 머신</Text>
+              <ViewModeToggleButton
+                viewMode={viewMode}
+                hasPreloaded={hasPreloaded}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setViewMode(prev => prev === 'routine' ? 'all' : 'routine');
+                }}
+              />
+            </View>
             <View
               ref={exerciseGridRef}
               style={s.machineCardGrid}
@@ -1054,7 +1074,17 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
         {/* Start Fresh 모드: 머신 섹션 */}
         {machines.length > 0 && (
           <>
-            <Text style={s.sectionTitle}>머신</Text>
+            <View style={s.sectionTitleRow}>
+              <Text style={[s.sectionTitle, { marginBottom: 0 }]}>머신</Text>
+              <ViewModeToggleButton
+                viewMode={viewMode}
+                hasPreloaded={hasPreloaded}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setViewMode(prev => prev === 'routine' ? 'all' : 'routine');
+                }}
+              />
+            </View>
             <View
               ref={exerciseGridRef}
               style={s.machineCardGrid}
@@ -4606,6 +4636,12 @@ const s = StyleSheet.create({
   listPad: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24 },
   hint:    { fontSize: 13, color: C.textSub, marginBottom: 20, lineHeight: 18 },
   sectionTitle: { ...T.section, color: C.text, marginBottom: 12 },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
 
   // Machine card 2-column grid for exercise select
   machineCardGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
@@ -4848,7 +4884,7 @@ const s = StyleSheet.create({
   tplLoadedBanner:{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.accentBg, borderRadius: R.inner, padding: 10, marginBottom: 14 },
   tplLoadedTxt:   { flex: 1, fontSize: 12, fontWeight: '600', color: C.accent },
   exCardPreloaded:{ borderWidth: 1, borderColor: C.accent + '60' },
-  viewModeToggle:   { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 5, backgroundColor: C.accentBg, borderRadius: R.pill, paddingHorizontal: 10, paddingVertical: 6, marginBottom: 16 },
+  viewModeToggle:   { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: C.accentBg, borderRadius: R.pill, paddingHorizontal: 10, paddingVertical: 6 },
   viewModeToggleTxt:{ fontSize: 12, fontWeight: '700', color: C.accent },
 
   // --- Save as Template (WorkoutDoneStep)
