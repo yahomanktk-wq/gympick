@@ -17,6 +17,7 @@ import {
   PixelRatio,
   ActionSheetIOS,
   KeyboardAvoidingView,
+  Keyboard,
 } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
@@ -279,6 +280,62 @@ function Stepper({ value, onChange, step = 1, min = 0 }: {
         <Ionicons name="add" size={22} color={C.text} />
       </TouchableOpacity>
     </View>
+  );
+}
+
+// --- Weight direct input (프리셋/스테퍼와 동시 노출, 세트별 독립)
+
+const WEIGHT_DIRECT_INPUT_MAX = 999;
+const WEIGHT_DIRECT_INPUT_MIN = 0;
+
+function formatWeightText(value: number): string {
+  return value % 1 === 0 ? String(value) : value.toFixed(1);
+}
+
+function WeightDirectInput({ value, onCommit }: {
+  value: number; onCommit: (v: number) => void;
+}) {
+  const [text, setText]   = useState(() => formatWeightText(value));
+  const focusedRef        = useRef(false);
+
+  // 프리셋/스테퍼로 값이 바뀌면 입력칸 텍스트 동기화 (단, 사용자가 타이핑 중이면 덮어쓰지 않음)
+  useEffect(() => {
+    if (!focusedRef.current) {
+      setText(formatWeightText(value));
+    }
+  }, [value]);
+
+  function handleChangeText(t: string) {
+    if (/^\d{0,3}(\.\d{0,1})?$/.test(t)) {
+      setText(t);
+    }
+  }
+
+  function commit() {
+    const parsed = parseFloat(text);
+    if (text === '' || isNaN(parsed)) {
+      setText(formatWeightText(value));
+      return;
+    }
+    const clamped = Math.min(WEIGHT_DIRECT_INPUT_MAX, Math.max(WEIGHT_DIRECT_INPUT_MIN, parsed));
+    setText(formatWeightText(clamped));
+    if (clamped !== value) onCommit(clamped);
+  }
+
+  return (
+    <TextInput
+      value={text}
+      onChangeText={handleChangeText}
+      onFocus={() => { focusedRef.current = true; }}
+      onBlur={() => { focusedRef.current = false; commit(); }}
+      onSubmitEditing={() => { commit(); Keyboard.dismiss(); }}
+      keyboardType="decimal-pad"
+      returnKeyType="done"
+      placeholder="직접입력"
+      placeholderTextColor={C.textDim}
+      style={s.weightDirectInput}
+      maxLength={6}
+    />
   );
 }
 
@@ -1277,6 +1334,10 @@ function SetCard({ ex, sets, realPR, prefill, freeWeights, onChange, onAdd, onCo
           <View style={s.stepperRow}>
             <Text style={s.stepperUnit}>kg</Text>
             <Stepper value={set.weight} onChange={v => onChange(idx, 'weight', v)} step={2.5} />
+          </View>
+          <View style={s.stepperRow}>
+            <Text style={s.stepperUnit}>직접</Text>
+            <WeightDirectInput value={set.weight} onCommit={v => onChange(idx, 'weight', v)} />
           </View>
 
           {/* Reps */}
@@ -4667,6 +4728,12 @@ const s = StyleSheet.create({
   stepper:     { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderRadius: R.inner, overflow: 'hidden' },
   stepperBtn:  { width: 56, height: 56, alignItems: 'center', justifyContent: 'center' },
   stepperVal:  { width: 84, textAlign: 'center', fontSize: 28, fontWeight: '900', color: C.text, fontVariant: ['tabular-nums'] },
+  weightDirectInput: {
+    width: 84, height: 40, borderRadius: R.inner,
+    backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
+    paddingHorizontal: 10, textAlign: 'center',
+    fontSize: 15, fontWeight: '700', color: C.text,
+  },
 
   setActions:   { flexDirection: 'row', gap: 10, marginTop: 4 },
   addSetBtn:    { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: R.inner },
