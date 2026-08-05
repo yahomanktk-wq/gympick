@@ -258,33 +258,6 @@ function StepBar({ total, current }: { total: number; current: number }) {
 
 // --- Stepper
 
-function Stepper({ value, onChange, step = 1, min = 0 }: {
-  value: number; onChange: (v: number) => void; step?: number; min?: number;
-}) {
-  const display = value % 1 === 0 ? String(value) : value.toFixed(1);
-  return (
-    <View style={s.stepper}>
-      <TouchableOpacity
-        style={s.stepperBtn}
-        onPress={() => onChange(Math.max(min, parseFloat((value - step).toFixed(1))))}
-        activeOpacity={0.7}
-      >
-        <Ionicons name="remove" size={22} color={C.text} />
-      </TouchableOpacity>
-      <Text style={s.stepperVal} numberOfLines={1}>{display}</Text>
-      <TouchableOpacity
-        style={s.stepperBtn}
-        onPress={() => onChange(parseFloat((value + step).toFixed(1)))}
-        activeOpacity={0.7}
-      >
-        <Ionicons name="add" size={22} color={C.text} />
-      </TouchableOpacity>
-    </View>
-  );
-}
-
-// --- Weight direct input (프리셋/스테퍼와 동시 노출, 세트별 독립)
-
 const WEIGHT_DIRECT_INPUT_MAX = 999;
 const WEIGHT_DIRECT_INPUT_MIN = 0;
 
@@ -292,18 +265,22 @@ function formatWeightText(value: number): string {
   return value % 1 === 0 ? String(value) : value.toFixed(1);
 }
 
-function WeightDirectInput({ value, onCommit }: {
-  value: number; onCommit: (v: number) => void;
+function Stepper({ value, onChange, step = 1, min = 0, directInput = false }: {
+  value: number; onChange: (v: number) => void; step?: number; min?: number;
+  directInput?: boolean;
 }) {
-  const [text, setText]   = useState(() => formatWeightText(value));
-  const focusedRef        = useRef(false);
+  const display = value % 1 === 0 ? String(value) : value.toFixed(1);
+
+  const [editing, setEditing] = useState(false);
+  const [text,    setText]    = useState(() => formatWeightText(value));
+  const focusedRef            = useRef(false);
 
   // 프리셋/스테퍼로 값이 바뀌면 입력칸 텍스트 동기화 (단, 사용자가 타이핑 중이면 덮어쓰지 않음)
   useEffect(() => {
-    if (!focusedRef.current) {
+    if (directInput && !focusedRef.current) {
       setText(formatWeightText(value));
     }
-  }, [value]);
+  }, [value, directInput]);
 
   function handleChangeText(t: string) {
     if (/^\d{0,3}(\.\d{0,1})?$/.test(t)) {
@@ -315,27 +292,59 @@ function WeightDirectInput({ value, onCommit }: {
     const parsed = parseFloat(text);
     if (text === '' || isNaN(parsed)) {
       setText(formatWeightText(value));
+      setEditing(false);
       return;
     }
     const clamped = Math.min(WEIGHT_DIRECT_INPUT_MAX, Math.max(WEIGHT_DIRECT_INPUT_MIN, parsed));
     setText(formatWeightText(clamped));
-    if (clamped !== value) onCommit(clamped);
+    if (clamped !== value) onChange(clamped);
+    setEditing(false);
   }
 
   return (
-    <TextInput
-      value={text}
-      onChangeText={handleChangeText}
-      onFocus={() => { focusedRef.current = true; }}
-      onBlur={() => { focusedRef.current = false; commit(); }}
-      onSubmitEditing={() => { commit(); Keyboard.dismiss(); }}
-      keyboardType="decimal-pad"
-      returnKeyType="done"
-      placeholder="직접입력"
-      placeholderTextColor={C.textDim}
-      style={s.weightDirectInput}
-      maxLength={6}
-    />
+    <View style={s.stepper}>
+      {!editing && (
+        <TouchableOpacity
+          style={s.stepperBtn}
+          onPress={() => onChange(Math.max(min, parseFloat((value - step).toFixed(1))))}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="remove" size={22} color={C.text} />
+        </TouchableOpacity>
+      )}
+      {directInput && editing ? (
+        <TextInput
+          value={text}
+          onChangeText={handleChangeText}
+          onFocus={() => { focusedRef.current = true; }}
+          onBlur={() => { focusedRef.current = false; commit(); }}
+          onSubmitEditing={() => { commit(); Keyboard.dismiss(); }}
+          keyboardType="decimal-pad"
+          returnKeyType="done"
+          style={s.stepperValEditing}
+          autoFocus
+          maxLength={6}
+        />
+      ) : directInput ? (
+        <TouchableOpacity
+          onPress={() => { focusedRef.current = true; setText(formatWeightText(value)); setEditing(true); }}
+          activeOpacity={0.7}
+        >
+          <Text style={s.stepperVal} numberOfLines={1}>{display}</Text>
+        </TouchableOpacity>
+      ) : (
+        <Text style={s.stepperVal} numberOfLines={1}>{display}</Text>
+      )}
+      {!editing && (
+        <TouchableOpacity
+          style={s.stepperBtn}
+          onPress={() => onChange(parseFloat((value + step).toFixed(1)))}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="add" size={22} color={C.text} />
+        </TouchableOpacity>
+      )}
+    </View>
   );
 }
 
@@ -1333,11 +1342,7 @@ function SetCard({ ex, sets, realPR, prefill, freeWeights, onChange, onAdd, onCo
           </View>
           <View style={s.stepperRow}>
             <Text style={s.stepperUnit}>kg</Text>
-            <Stepper value={set.weight} onChange={v => onChange(idx, 'weight', v)} step={2.5} />
-          </View>
-          <View style={s.stepperRow}>
-            <Text style={s.stepperUnit}>직접</Text>
-            <WeightDirectInput value={set.weight} onCommit={v => onChange(idx, 'weight', v)} />
+            <Stepper value={set.weight} onChange={v => onChange(idx, 'weight', v)} step={2.5} directInput />
           </View>
 
           {/* Reps */}
@@ -4715,7 +4720,7 @@ const s = StyleSheet.create({
   setBlockLabel:  { fontSize: 11, fontWeight: '800', color: C.textSub, letterSpacing: 0.5, textTransform: 'uppercase' },
 
   inputRow:    { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  inputLabel:  { fontSize: 10, fontWeight: '700', color: C.textDim, width: 44, letterSpacing: 0.5, textTransform: 'uppercase' },
+  inputLabel:  { fontSize: 10, fontWeight: '700', color: C.textSub, width: 44, letterSpacing: 0.5, textTransform: 'uppercase' },
 
   presetRow:           { flexDirection: 'row', gap: 6 },
   presetChip:          { minWidth: 40, paddingHorizontal: 12, paddingVertical: 8, borderRadius: R.pill, backgroundColor: C.surfaceHigh, alignItems: 'center' },
@@ -4724,15 +4729,13 @@ const s = StyleSheet.create({
   presetChipTextActive:{ color: C.bg },
 
   stepperRow:  { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
-  stepperUnit: { fontSize: 10, fontWeight: '700', color: C.textDim, width: 44, letterSpacing: 0.5, textTransform: 'uppercase' },
+  stepperUnit: { fontSize: 10, fontWeight: '700', color: C.textSub, width: 44, letterSpacing: 0.5, textTransform: 'uppercase' },
   stepper:     { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderRadius: R.inner, overflow: 'hidden' },
   stepperBtn:  { width: 56, height: 56, alignItems: 'center', justifyContent: 'center' },
   stepperVal:  { width: 84, textAlign: 'center', fontSize: 28, fontWeight: '900', color: C.text, fontVariant: ['tabular-nums'] },
-  weightDirectInput: {
-    width: 84, height: 40, borderRadius: R.inner,
-    backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
-    paddingHorizontal: 10, textAlign: 'center',
-    fontSize: 15, fontWeight: '700', color: C.text,
+  stepperValEditing: {
+    width: 84, height: 56, textAlign: 'center', fontSize: 28, fontWeight: '900', color: C.text,
+    fontVariant: ['tabular-nums'], padding: 0, margin: 0,
   },
 
   setActions:   { flexDirection: 'row', gap: 10, marginTop: 4 },
