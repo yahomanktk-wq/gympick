@@ -856,6 +856,9 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
       })
       .filter(Boolean) as Machine[];
     machines = []; // 루틴 모드에서는 분리된 machines 섹션 사용 안 함
+  } else if (viewMode === 'all') {
+    // Start Fresh - 다른 머신도 보기: 부위 필터 없이 헬스장 전체 머신 (정렬 없음)
+    machines = gym.machines;
   } else {
     // Start Fresh: 헬스장 머신만 표시 (선택 부위 머신 먼저, Other는 뒤로)
     machines = gym.machines
@@ -870,8 +873,10 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
   // 프리웨이트: 루틴 모드가 아닐 때만 별도 섹션 표시
   const freeWeights = hasPreloaded
     ? []
-    : (dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS)
-        .filter(fw => parseMuscles(fw.targetMuscle).some(t => matchesMuscle(t)));
+    : viewMode === 'all'
+      ? (dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS) // Start Fresh - 다른 머신도 보기: 부위 필터 없음
+      : (dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS)
+          .filter(fw => parseMuscles(fw.targetMuscle).some(t => matchesMuscle(t)));
 
   // "다른 머신도 보기" 모드: 루틴 머신(순번 유지) + 부위 매칭되는 헬스장 전체 머신/프리웨이트(루틴에 없는 것) 통합
   const allModeOrderedList: Machine[] = (hasPreloaded && viewMode === 'all')
@@ -922,22 +927,22 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
           </View>
         )}
 
-        {/* 다른 머신도 보기 토글 (루틴 모드에서만 노출) */}
-        {hasPreloaded && (
-          <TouchableOpacity
-            style={s.viewModeToggle}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setViewMode(prev => prev === 'routine' ? 'all' : 'routine');
-            }}
-            activeOpacity={0.8}
-          >
-            <Ionicons name={viewMode === 'all' ? 'list' : 'grid-outline'} size={13} color={C.accent} />
-            <Text style={s.viewModeToggleTxt}>
-              {viewMode === 'all' ? '루틴 머신만 보기' : '다른 머신도 보기'}
-            </Text>
-          </TouchableOpacity>
-        )}
+        {/* 다른 머신도 보기 토글 (루틴 모드/Start Fresh 모드 공통 노출) */}
+        <TouchableOpacity
+          style={s.viewModeToggle}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setViewMode(prev => prev === 'routine' ? 'all' : 'routine');
+          }}
+          activeOpacity={0.8}
+        >
+          <Ionicons name={viewMode === 'all' ? 'list' : 'grid-outline'} size={13} color={C.accent} />
+          <Text style={s.viewModeToggleTxt}>
+            {viewMode === 'all'
+              ? (hasPreloaded ? '루틴 머신만 보기' : '타겟부위만 보기')
+              : '다른 머신도 보기'}
+          </Text>
+        </TouchableOpacity>
 
         {/* 루틴 선택 모드: 머신+프리웨이트 순서 통합 */}
         {hasPreloaded && viewMode === 'routine' && routineOrderedAll.length > 0 && (
@@ -1071,6 +1076,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
                   <MachineCardBorder width={MACHINE_CARD_W2}>
                     <MachineCard machine={m} variant="grid" width={MACHINE_CARD_W2} />
                   </MachineCardBorder>
+                  {/* Start Fresh(hasPreloaded=false)에서는 preloadedIds가 항상 비어있어 이 배지는 렌더되지 않음 */}
                   {preloadedIds.has(m.id) && (
                     <View style={s.cardOrderOverlay}>
                       <View style={s.cardOrderBadge}>
@@ -1119,6 +1125,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
                       width={MACHINE_CARD_W2}
                     />
                   </MachineCardBorder>
+                  {/* Start Fresh(hasPreloaded=false)에서는 preloadedIds가 항상 비어있어 이 배지는 렌더되지 않음 */}
                   {preloadedIds.has(fw.id) && (
                     <View style={s.cardOrderOverlay}>
                       <View style={s.cardOrderBadge}>
