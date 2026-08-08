@@ -7,7 +7,7 @@ import {
   SafeAreaView,
   StatusBar,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T } from '../theme';
 import * as Haptics from 'expo-haptics';
@@ -17,6 +17,7 @@ import AuthFlow from './auth/AuthFlow';
 
 export default function LogWorkoutScreen() {
   const { user } = useAuth();
+  const navigation = useNavigation<any>();
   const [visible, setVisible] = useState(false);
 
   // Open the modal every time this tab is focused — only for logged-in users.
@@ -71,7 +72,12 @@ export default function LogWorkoutScreen() {
 
       <PostWorkoutLogModal
         visible={visible}
-        onClose={(_saved) => setVisible(false)}
+        onClose={(saved) => {
+          setVisible(false);
+          if (saved) {
+            navigation.navigate('Journal');
+          }
+        }}
       />
     </SafeAreaView>
   );
