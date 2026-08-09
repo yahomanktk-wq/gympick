@@ -331,7 +331,7 @@ const s = StyleSheet.create({
   machineNameZone: {
     alignSelf:         'stretch',
     alignItems:        'center',
-    justifyContent:    'center',
+    justifyContent:    'flex-start',
     height:            108,
     paddingHorizontal: 4,
   },
