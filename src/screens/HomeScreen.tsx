@@ -21,6 +21,7 @@ import { useAuth } from '../context/AuthContext';
 import { WorkoutLog, WorkoutFeedPost, UserSplitConfig, WeekdaySplit } from '../data/types';
 import { fetchWorkoutLogs } from '../lib/db';
 import { getActiveFeedPostsCached } from '../data/feedPostsCache';
+import { fetchActiveFeedPosts } from '../lib/db/feedPosts';
 import { fetchSplitConfig } from '../lib/db/splitRoutine';
 import { getTodayTarget, getTodayTargets, toEnMuscle, toKoMuscle } from '../lib/splitUtils';
 import { getTransformedImageUrl } from '../lib/photoImageUrl';
@@ -396,8 +397,18 @@ export default function HomeScreen() {
           }
         }
 
-        const posts = await getActiveFeedPostsCached().catch(() => [] as WorkoutFeedPost[]);
+        let posts = await getActiveFeedPostsCached().catch(() => [] as WorkoutFeedPost[]);
         if (!active) return;
+
+        // 최근 24시간 게시물이 너무 적으면(3개 미만) 기간 제한 없이 재조회
+        // (60초 공유 캐시는 24시간 조회 전용이므로 이 폴백은 캐시를 거치지 않고 직접 호출한다)
+        if (posts.length < 3) {
+          const widened = await fetchActiveFeedPosts(null).catch(() => [] as WorkoutFeedPost[]);
+          if (!active) return;
+          if (widened.length > posts.length) {
+            posts = widened;
+          }
+        }
 
         if (hasFeedMuscleFilter) {
           const filtered = posts.filter(p => p.muscles.some(m => feedMuscleFilter.includes(m)));
