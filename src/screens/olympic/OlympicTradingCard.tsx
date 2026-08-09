@@ -8,7 +8,7 @@
 import React, { useRef, useState } from 'react';
 import {
   TouchableOpacity, Animated, View, Text,
-  StyleSheet, Dimensions,
+  StyleSheet, Dimensions, PixelRatio,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,9 +16,9 @@ import GymPickLogo from '../../components/GymPickLogo';
 import { brandLogos } from '../../constants/brandLogos';
 import { getBrandCopyrightStatus } from '../../data/brandCopyrightStore';
 import { Machine } from '../../data/types';
+import { getMachineImageUrl } from '../../lib/machineImageUrl';
 
 const SCREEN_W = Dimensions.get('window').width;
-const SUPABASE_STORAGE_URL = 'https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images';
 
 interface Props {
   machine: Machine;
@@ -80,7 +80,7 @@ export default function OlympicTradingCard({
       {/* Background: machine image with Supabase fallback */}
       {!imgError ? (
         <Image
-          source={{ uri: machine.imageUrl ?? `${SUPABASE_STORAGE_URL}/${machine.id}.webp` }}
+          source={{ uri: getMachineImageUrl(machine.id, { width: Math.round(cardW * PixelRatio.get()) }) }}
           style={cs.machineImage}
           contentFit="contain"
           onError={() => setImgError(true)}
