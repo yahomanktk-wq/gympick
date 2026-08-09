@@ -330,6 +330,7 @@ export default function HomeScreen() {
   const [ounwanPosts,        setOunwanPosts]         = useState<WorkoutFeedPost[]>([]);
   const [weekTargetMap,      setWeekTargetMap]       = useState<Record<string, string | null>>({});
   const [ounwanDisplayTarget, setOunwanDisplayTarget] = useState<string | null>(null);
+  const [ounwanIsFallback, setOunwanIsFallback] = useState(false);
 
   // 홈 화면 focus마다 최신 role/managerOnboarded를 확인 — 매니저 승인 알림을
   // 직접 탭하지 않아도 홈에 들어올 때마다 승인 여부가 반영되도록 한다.
@@ -344,6 +345,7 @@ export default function HomeScreen() {
     useCallback(() => {
       let active = true;
       async function load() {
+        setOunwanIsFallback(false);
         let target: string | null = null;
         let todayTargetsArr: string[] = [];
         // 오운완 피드를 필터링할 부위 목록 — 분기에 따라 채워지며, 실제 조회는 아래에서 한 번만 한다
@@ -407,6 +409,7 @@ export default function HomeScreen() {
           if (!active) return;
           if (widened.length > posts.length) {
             posts = widened;
+            setOunwanIsFallback(true);
           }
         }
 
@@ -617,9 +620,13 @@ export default function HomeScreen() {
         {/* ── 오늘의 오운완 피드 ── */}
         <OunwanHeader
           message={
-            ounwanDisplayTarget && ounwanDisplayTarget !== '휴식'
-              ? `오늘 ${ounwanDisplayTarget} 운동한 사람들이에요! 💪`
-              : '오늘 운동한 사람들이에요! 💪'
+            ounwanIsFallback
+              ? (ounwanDisplayTarget && ounwanDisplayTarget !== '휴식'
+                  ? `최근 ${ounwanDisplayTarget} 운동한 사람들이에요! 💪`
+                  : '최근 운동한 사람들이에요! 💪')
+              : (ounwanDisplayTarget && ounwanDisplayTarget !== '휴식'
+                  ? `오늘 ${ounwanDisplayTarget} 운동한 사람들이에요! 💪`
+                  : '오늘 운동한 사람들이에요! 💪')
           }
           onMorePress={handleFeedPress}
         />
