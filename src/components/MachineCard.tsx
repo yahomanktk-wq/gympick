@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions, Image as RNImage } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, PixelRatio, Image as RNImage } from 'react-native';
 import { Image } from 'expo-image';
 import Svg, { Rect } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import GymPickLogo from './GymPickLogo';
 import { brandLogos } from '../constants/brandLogos';
 import { getBrandCopyrightStatus } from '../data/brandCopyrightStore';
 import { parseMuscles } from '../lib/splitUtils';
+import { getMachineImageUrl } from '../lib/machineImageUrl';
 
 export interface MachineCardMachine {
   id:           string;
@@ -66,7 +67,9 @@ export default function MachineCard({ machine, width, variant = 'detail' }: Prop
   const brandKey     = machine.brand.toUpperCase().replace(/\s+/g, '_');
   const brandLogo    = brandLogos[brandKey];
   const imageApproved = getBrandCopyrightStatus(machine.brand);
-  const resolvedImageUrl = machine.imageUrl ?? `https://okrouzqqvfioodfieljv.supabase.co/storage/v1/object/public/machine-images/${machine.id}.webp`;
+  const resolvedImageUrl = getMachineImageUrl(machine.id, {
+    width: Math.round(cardW * PixelRatio.get()),
+  });
 
   const padH    = isGrid ? GRID_PAD_H     : INNER_PAD_H;
   const padV    = isGrid ? GRID_PAD_V     : INNER_PAD_V;
