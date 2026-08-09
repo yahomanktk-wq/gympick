@@ -780,15 +780,15 @@ function ExerciseCard({ name, brand, targetMuscle, logged, preloaded, onPress, i
 // --- View mode toggle button (섹션 타이틀과 같은 줄, 우측 정렬로 재사용)
 
 function ViewModeToggleButton({
-  viewMode, hasPreloaded, onPress,
-}: { viewMode: 'routine' | 'all'; hasPreloaded: boolean; onPress: () => void }) {
+  viewMode, hasPreloaded, viewCategory, onPress,
+}: { viewMode: 'routine' | 'all'; hasPreloaded: boolean; viewCategory?: 'machine' | 'freeweight'; onPress: () => void }) {
   return (
     <TouchableOpacity style={s.viewModeToggle} onPress={onPress} activeOpacity={0.8}>
       <Ionicons name="grid-outline" size={13} color={C.accent} />
       <Text style={s.viewModeToggleTxt}>
         {viewMode === 'all'
           ? (hasPreloaded ? '루틴 머신만 보기' : '타겟부위만 보기')
-          : '다른 머신도 보기'}
+          : (!hasPreloaded && viewCategory === 'freeweight' ? '다른 부위도 보기' : '다른 머신도 보기')}
       </Text>
     </TouchableOpacity>
   );
@@ -815,6 +815,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
   const [showTplList,     setShowTplList]     = useState(false);
   const [dbFreeWeights,   setDbFreeWeights]   = useState<typeof FREE_WEIGHTS>([]);
   const [viewMode,        setViewMode]        = useState<'routine' | 'all'>('routine');
+  const [viewCategory,    setViewCategory]    = useState<'machine' | 'freeweight'>('machine');
 
   const exerciseGridRef = useRef<View>(null);
 
@@ -1071,20 +1072,47 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
           </>
         )}
 
-        {/* Start Fresh 모드: 머신 섹션 */}
-        {machines.length > 0 && (
-          <>
-            <View style={s.sectionTitleRow}>
-              <Text style={[s.sectionTitle, { marginBottom: 0 }]}>머신</Text>
-              <ViewModeToggleButton
-                viewMode={viewMode}
-                hasPreloaded={hasPreloaded}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setViewMode(prev => prev === 'routine' ? 'all' : 'routine');
-                }}
-              />
+        {/* Start Fresh 모드: 머신/프리웨이트 카테고리 헤더 (viewCategory와 무관하게 항상 노출되어야 토글이 막히지 않음) */}
+        {!hasPreloaded && (machines.length > 0 || freeWeights.length > 0) && (
+          <View style={s.sectionTitleRow}>
+            <Text style={[s.sectionTitle, { marginBottom: 0 }]}>
+              {viewCategory === 'freeweight' ? '프리 웨이트' : '머신'}
+            </Text>
+            <ViewModeToggleButton
+              viewMode={viewMode}
+              hasPreloaded={hasPreloaded}
+              viewCategory={viewCategory}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setViewMode(prev => prev === 'routine' ? 'all' : 'routine');
+              }}
+            />
+            <View style={s.categoryToggleRow}>
+              <TouchableOpacity
+                style={[s.categoryToggleChip, viewCategory === 'machine' && s.categoryToggleChipActive]}
+                onPress={() => setViewCategory('machine')}
+                activeOpacity={0.8}
+              >
+                <Text style={[s.categoryToggleChipText, viewCategory === 'machine' && s.categoryToggleChipTextActive]}>
+                  머신
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.categoryToggleChip, viewCategory === 'freeweight' && s.categoryToggleChipActive]}
+                onPress={() => setViewCategory('freeweight')}
+                activeOpacity={0.8}
+              >
+                <Text style={[s.categoryToggleChipText, viewCategory === 'freeweight' && s.categoryToggleChipTextActive]}>
+                  프리웨이트
+                </Text>
+              </TouchableOpacity>
             </View>
+          </View>
+        )}
+
+        {/* Start Fresh 모드: 머신 섹션 */}
+        {viewCategory === 'machine' && machines.length > 0 && (
+          <>
             <View
               ref={exerciseGridRef}
               style={s.machineCardGrid}
@@ -1137,9 +1165,8 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
           </>
         )}
 
-        {freeWeights.length > 0 && (
+        {viewCategory === 'freeweight' && freeWeights.length > 0 && (
           <>
-            <Text style={[s.sectionTitle, { marginTop: 22 }]}>프리 웨이트</Text>
             <View style={s.machineCardGrid}>
               {freeWeights.map(fw => (
                 <TouchableOpacity
@@ -4886,6 +4913,18 @@ const s = StyleSheet.create({
   exCardPreloaded:{ borderWidth: 1, borderColor: C.accent + '60' },
   viewModeToggle:   { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: C.accentBg, borderRadius: R.pill, paddingHorizontal: 10, paddingVertical: 6 },
   viewModeToggleTxt:{ fontSize: 12, fontWeight: '700', color: C.accent },
+  categoryToggleRow: { flexDirection: 'row', gap: 6 },
+  categoryToggleChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: R.pill,
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  categoryToggleChipActive: { backgroundColor: C.accent, borderColor: C.accent },
+  categoryToggleChipText:       { fontSize: 12, fontWeight: '600', color: C.textSub },
+  categoryToggleChipTextActive: { color: C.bg, fontWeight: '700' },
 
   // --- Save as Template (WorkoutDoneStep)
   tplCard:      { backgroundColor: C.surface, borderRadius: R.card, padding: 16, marginBottom: 16 },
