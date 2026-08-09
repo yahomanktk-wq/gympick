@@ -21,15 +21,24 @@ function rowToPost(r: any): WorkoutFeedPost {
   };
 }
 
-/** 24시간 이내 공개 피드 조회 */
-export async function fetchActiveFeedPosts(): Promise<WorkoutFeedPost[]> {
-  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { data, error } = await supabase
+/**
+ * 공개 피드 조회.
+ * hoursWindow를 생략하면 기존과 동일하게 24시간 이내만 조회한다.
+ * hoursWindow에 null을 넘기면 시간 제한 없이 전체 공개 게시물을 조회한다
+ * (HomeScreen의 "오늘의 오운완" 폴백 전용 — 다른 호출부는 이 옵션을 쓰지 않는다).
+ */
+export async function fetchActiveFeedPosts(hoursWindow: number | null = 24): Promise<WorkoutFeedPost[]> {
+  let query = supabase
     .from('workout_feed_posts')
     .select('*')
-    .eq('is_public', true)
-    .gte('created_at', cutoff)
-    .order('created_at', { ascending: false });
+    .eq('is_public', true);
+
+  if (hoursWindow !== null) {
+    const cutoff = new Date(Date.now() - hoursWindow * 60 * 60 * 1000).toISOString();
+    query = query.gte('created_at', cutoff);
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false });
 
   if (error || !data?.length) {
     if (__DEV__ && error) console.warn('[feedPosts] fetch error:', error.message);
