@@ -22,6 +22,7 @@ const MOCK_FEED_POSTS: WorkoutFeedPost[] = [];
 import { filterActivePosts, filterByGym, filterByDistance, toggleReaction, convertSessionToFeedPost } from '../lib/feedUtils';
 import { fetchMyLatestGymId, fetchFeedPostsByGym, fetchWorkoutSessionById, fetchWorkoutSessionByUserAndDate } from '../lib/db/feedPosts';
 import { getActiveFeedPostsCached } from '../data/feedPostsCache';
+import { fetchActiveFeedPosts } from '../lib/db/feedPosts';
 import { fetchSplitConfig } from '../lib/db/splitRoutine';
 import { getTodayTarget, toEnMuscle } from '../lib/splitUtils';
 import { fetchWorkoutLogs } from '../lib/db/workouts';
@@ -93,10 +94,11 @@ function TabSegment({
   );
 }
 
-function EmptyState({ tab }: { tab: FeedTab }) {
+function EmptyState({ tab, isFallback }: { tab: FeedTab; isFallback?: boolean }) {
   const msg =
     tab === '내 헬스장' ? '최근 방문한 헬스장의 오운완이 없어요' :
     tab === '주변 5km'  ? '주변 5km 내 오운완이 없어요' :
+    isFallback          ? '최근 등록된 오운완이 없어요' :
                           '오늘 등록된 오운완이 없어요';
   return (
     <View style={s.empty}>
@@ -158,7 +160,8 @@ function FeedGridCard({
             if (diffMin < 1)  return '방금 전';
             if (diffH < 1)    return `${diffMin}분 후 사라져요`;
             if (diffH < 24)   return `${24 - diffH}시간 후 사라져요`;
-            return '곧 사라져요';
+            const diffDays = Math.floor(diffH / 24);
+            return `${diffDays}일 전`;
           })()}
         </Text>
       </View>
@@ -438,6 +441,7 @@ export default function WorkoutFeedScreen() {
   const [myGymId,      setMyGymId]      = useState<string | null>(null);
   const [myGymName,    setMyGymName]    = useState<string>('내 헬스장');
   const [muscleFilter, setMuscleFilter] = useState<MuscleFilter>('전체');
+  const [isFeedFallback, setIsFeedFallback] = useState(false);
   const [detailPost,       setDetailPost]       = useState<WorkoutFeedPost | null>(null);
   const [gymDetailId,      setGymDetailId]      = useState<string | null>(null);
   const [machineDetailItem, setMachineDetailItem] = useState<any>(null);
@@ -486,8 +490,16 @@ export default function WorkoutFeedScreen() {
       let active = true;
 
       async function loadPosts() {
+        if (active) setIsFeedFallback(false);
         if (!user?.id) {
-          const serverPosts = await getActiveFeedPostsCached().catch(() => []);
+          let serverPosts = await getActiveFeedPostsCached().catch(() => [] as WorkoutFeedPost[]);
+          if (serverPosts.length < 3) {
+            const widened = await fetchActiveFeedPosts(null).catch(() => [] as WorkoutFeedPost[]);
+            if (widened.length > serverPosts.length) {
+              serverPosts = widened;
+              if (active) setIsFeedFallback(true);
+            }
+          }
           const previewPosts = serverPosts.slice(0, 4);
           if (active) setPosts(previewPosts);
           return;
@@ -517,7 +529,14 @@ export default function WorkoutFeedScreen() {
           if (recent?.gymName && active) setMyGymName(recent.gymName);
         }
 
-        const [serverPosts] = await Promise.all([getActiveFeedPostsCached()]);
+        let serverPosts = await getActiveFeedPostsCached().catch(() => [] as WorkoutFeedPost[]);
+        if (serverPosts.length < 3) {
+          const widened = await fetchActiveFeedPosts(null).catch(() => [] as WorkoutFeedPost[]);
+          if (widened.length > serverPosts.length) {
+            serverPosts = widened;
+            if (active) setIsFeedFallback(true);
+          }
+        }
 
         // 내 게시물: serverPosts에서 가져옴 (routineCardUri 포함)
         // serverPosts가 없으면 로컬 세션으로 fallback
@@ -584,7 +603,7 @@ export default function WorkoutFeedScreen() {
         <TouchableOpacity onPress={() => nav.goBack()} style={s.backBtn} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={22} color={C.text} />
         </TouchableOpacity>
-        <Text style={s.title}>오늘의 오운완</Text>
+        <Text style={s.title}>{isFeedFallback ? '최근 오운완' : '오늘의 오운완'}</Text>
         <View style={{ width: 38 }} />
       </View>
 
@@ -618,7 +637,7 @@ export default function WorkoutFeedScreen() {
       </ScrollView>
 
       {filtered.length === 0 ? (
-        <EmptyState tab={activeTab} />
+        <EmptyState tab={activeTab} isFallback={isFeedFallback} />
       ) : (
         <FlatList
           data={filtered}
