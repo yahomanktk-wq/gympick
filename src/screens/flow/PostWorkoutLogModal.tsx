@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Modal,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   TextInput,
   Dimensions,
@@ -86,6 +87,9 @@ interface ExerciseInfo {
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W        = Math.floor((SCREEN_W - 48) / 3);
 const MUSCLE_CARD_W = Math.floor((SCREEN_W - 44) / 2);
+
+// 프리웨이트 "다른 부위도 보기" 필터칩 순서 (freeWeightsGymVisual.ts의 targetMuscle 값과 일치)
+const FW_MUSCLE_FILTERS = ['Chest', 'Back', 'Shoulder', 'Arms', 'Leg'] as const;
 
 // Historical PR map - machineId → { weight, reps } of best set ever logged
 const HIST_PRS = getMachinePRsFull(MOCK_SESSIONS);
@@ -816,6 +820,9 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
   const [dbFreeWeights,   setDbFreeWeights]   = useState<typeof FREE_WEIGHTS>([]);
   const [viewMode,        setViewMode]        = useState<'routine' | 'all'>('routine');
   const [viewCategory,    setViewCategory]    = useState<'machine' | 'freeweight'>('machine');
+  // "다른 부위도 보기"(viewMode==='all') 상태의 프리웨이트 목록은 부위 필터가 없어
+  // 129개가 뒤섞여 나온다 — 이때만 부위 필터칩으로 좁혀볼 수 있게 한다. null이면 전체.
+  const [fwMuscleFilter,  setFwMuscleFilter]  = useState<string | null>(null);
 
   const exerciseGridRef = useRef<View>(null);
 
@@ -896,6 +903,13 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
       : (dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS)
           .filter(fw => parseMuscles(fw.targetMuscle).some(t => matchesMuscle(t)));
 
+  // "다른 부위도 보기"(viewMode==='all') 상태에서만 부위 필터칩 적용 — 타겟부위 모드는
+  // 이미 matchesMuscle로 좁혀져 있어 추가 필터가 필요 없다. FlatList에는 이 필터링된
+  // 목록을 넘기고, freeWeights(필터 전) 자체는 헤더 노출 여부 판단에 그대로 쓴다.
+  const freeWeightsFiltered = (viewMode === 'all' && fwMuscleFilter)
+    ? freeWeights.filter(fw => fw.targetMuscle === fwMuscleFilter)
+    : freeWeights;
+
   // "다른 머신도 보기" 모드: 루틴 머신(순번 유지) + 부위 매칭되는 헬스장 전체 머신/프리웨이트(루틴에 없는 것) 통합
   const allModeOrderedList: Machine[] = (hasPreloaded && viewMode === 'all')
     ? [
@@ -912,12 +926,19 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
     setLocalSelectedId(prev => prev === id ? null : id);
   }
 
+  // Start Fresh 모드에서 "프리웨이트 보기"가 활성화된 상태 — 이때는 아래 스크롤
+  // 영역 전체가 머신 그리드(ScrollView) 대신 프리웨이트 FlatList로 바뀐다.
+  const showFreeWeightList = !hasPreloaded && viewCategory === 'freeweight';
+
   return (
     <SafeAreaView style={s.safe} edges={["top", "bottom"]}>
       <NavHeader title="머신 선택" onBack={onBack} onClose={onClose} />
       <StepBar total={5} current={2} />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
-        {/* Template row */}
+
+      {/* 템플릿 행 + 머신/프리웨이트 토글 헤더는 스크롤 영역 밖의 고정 헤더다 —
+          토글해도 이 부분은 그대로 있고, 아래 컨텐츠 영역만 ScrollView<->FlatList로
+          바뀐다 (기존처럼 별도 화면으로 이동하지 않고 같은 화면 안에서 카드만 교체). */}
+      <View style={s.listPad}>
         <View style={s.tplRow}>
           <Text style={s.hint}>운동할 머신을 하나 선택하세요</Text>
           {templates.length > 0 && (
@@ -928,7 +949,6 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
           )}
         </View>
 
-        {/* Inline template list */}
         {showTplList && (
           <View style={s.tplList}>
             {templates.map(t => (
@@ -945,6 +965,145 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
           </View>
         )}
 
+        {/* Start Fresh 모드: 머신/프리웨이트 카테고리 헤더 (viewCategory와 무관하게 항상 노출되어야 토글이 막히지 않음) */}
+        {!hasPreloaded && (machines.length > 0 || freeWeights.length > 0) && (
+          <View style={[s.sectionTitleRow, { marginBottom: 0 }]}>
+            <Text style={[s.sectionTitle, { marginBottom: 0 }]}>
+              {viewCategory === 'freeweight' ? '프리 웨이트' : '머신'}
+            </Text>
+            <ViewModeToggleButton
+              viewMode={viewMode}
+              hasPreloaded={hasPreloaded}
+              viewCategory={viewCategory}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setViewMode(prev => prev === 'routine' ? 'all' : 'routine');
+              }}
+            />
+            <View style={s.categoryToggleRow}>
+              <TouchableOpacity
+                style={[s.categoryToggleChip, viewCategory === 'machine' && s.categoryToggleChipActive]}
+                onPress={() => setViewCategory('machine')}
+                activeOpacity={0.8}
+              >
+                <Text style={[s.categoryToggleChipText, viewCategory === 'machine' && s.categoryToggleChipTextActive]}>
+                  머신
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.categoryToggleChip, viewCategory === 'freeweight' && s.categoryToggleChipActive]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setViewCategory('freeweight');
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={[s.categoryToggleChipText, viewCategory === 'freeweight' && s.categoryToggleChipTextActive]}>
+                  프리웨이트 보기
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* "다른 부위도 보기" 상태의 프리웨이트 목록(부위 필터 없이 129개)만 부위 필터칩 노출 —
+            타겟부위 모드는 이미 좁혀져 있어 칩이 필요 없다. */}
+        {showFreeWeightList && viewMode === 'all' && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={s.fwFilterScroll}
+            contentContainerStyle={s.fwFilterRow}
+          >
+            <TouchableOpacity
+              style={[s.categoryToggleChip, fwMuscleFilter === null && s.categoryToggleChipActive]}
+              onPress={() => setFwMuscleFilter(null)}
+              activeOpacity={0.8}
+            >
+              <Text style={[s.categoryToggleChipText, fwMuscleFilter === null && s.categoryToggleChipTextActive]}>
+                전체
+              </Text>
+            </TouchableOpacity>
+            {FW_MUSCLE_FILTERS.map(muscle => (
+              <TouchableOpacity
+                key={muscle}
+                style={[s.categoryToggleChip, fwMuscleFilter === muscle && s.categoryToggleChipActive]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setFwMuscleFilter(muscle);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={[s.categoryToggleChipText, fwMuscleFilter === muscle && s.categoryToggleChipTextActive]}>
+                  {muscle}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+      </View>
+
+      {showFreeWeightList ? (
+        <FlatList
+          data={freeWeightsFiltered}
+          keyExtractor={fw => fw.id}
+          numColumns={2}
+          columnWrapperStyle={s.freeWeightRow}
+          contentContainerStyle={s.listPad}
+          showsVerticalScrollIndicator={false}
+          removeClippedSubviews
+          initialNumToRender={8}
+          maxToRenderPerBatch={6}
+          updateCellsBatchingPeriod={50}
+          windowSize={7}
+          renderItem={({ item: fw }) => (
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => handleCardPress(fw.id)}
+              style={{ position: 'relative' }}
+            >
+              <MachineCardBorder width={MACHINE_CARD_W2}>
+                <MachineCard
+                  machine={{ id: fw.id, name: fw.name, brand: fw.brand, targetMuscle: fw.targetMuscle, category: 'Free Weight' }}
+                  variant="grid"
+                  width={MACHINE_CARD_W2}
+                />
+              </MachineCardBorder>
+              {/* Start Fresh(hasPreloaded=false)에서는 preloadedIds가 항상 비어있어 이 배지는 렌더되지 않음 */}
+              {preloadedIds.has(fw.id) && (
+                <View style={s.cardOrderOverlay}>
+                  <View style={s.cardOrderBadge}>
+                    <Text style={s.cardOrderText}>
+                      {[...preloadedIds].indexOf(fw.id) + 1}
+                    </Text>
+                  </View>
+                </View>
+              )}
+              {!preloadedIds.has(fw.id) && localSelectedId === fw.id && (
+                <View style={s.cardSelectedOverlay}>
+                  <View style={s.cardSelectedBadge}>
+                    <Ionicons name="checkmark" size={14} color={C.bg} />
+                  </View>
+                </View>
+              )}
+              {[...loggedIds].some(k => machineIdFromKey(k) === fw.id) && (
+                <View style={s.cardCompletedOverlay}>
+                  <View style={s.cardCompletedBadge}>
+                    <Ionicons name="checkmark-circle" size={13} color={C.accent} />
+                    <Text style={s.cardCompletedTxt}>완료</Text>
+                  </View>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
+          ListEmptyComponent={
+            <Text style={s.hint}>
+              {fwMuscleFilter ? `${fwMuscleFilter} 부위 프리웨이트가 없습니다.` : '표시할 프리웨이트가 없습니다.'}
+            </Text>
+          }
+        />
+      ) : (
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
         {/* 루틴 선택 모드: 머신+프리웨이트 순서 통합 */}
         {hasPreloaded && viewMode === 'routine' && routineOrderedAll.length > 0 && (
           <>
@@ -1072,45 +1231,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
           </>
         )}
 
-        {/* Start Fresh 모드: 머신/프리웨이트 카테고리 헤더 (viewCategory와 무관하게 항상 노출되어야 토글이 막히지 않음) */}
-        {!hasPreloaded && (machines.length > 0 || freeWeights.length > 0) && (
-          <View style={s.sectionTitleRow}>
-            <Text style={[s.sectionTitle, { marginBottom: 0 }]}>
-              {viewCategory === 'freeweight' ? '프리 웨이트' : '머신'}
-            </Text>
-            <ViewModeToggleButton
-              viewMode={viewMode}
-              hasPreloaded={hasPreloaded}
-              viewCategory={viewCategory}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setViewMode(prev => prev === 'routine' ? 'all' : 'routine');
-              }}
-            />
-            <View style={s.categoryToggleRow}>
-              <TouchableOpacity
-                style={[s.categoryToggleChip, viewCategory === 'machine' && s.categoryToggleChipActive]}
-                onPress={() => setViewCategory('machine')}
-                activeOpacity={0.8}
-              >
-                <Text style={[s.categoryToggleChipText, viewCategory === 'machine' && s.categoryToggleChipTextActive]}>
-                  머신
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.categoryToggleChip, viewCategory === 'freeweight' && s.categoryToggleChipActive]}
-                onPress={() => setViewCategory('freeweight')}
-                activeOpacity={0.8}
-              >
-                <Text style={[s.categoryToggleChipText, viewCategory === 'freeweight' && s.categoryToggleChipTextActive]}>
-                  프리웨이트
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* Start Fresh 모드: 머신 섹션 */}
+        {/* Start Fresh 모드: 머신 섹션 (머신/프리웨이트 토글 헤더는 위 고정 영역으로 이동함) */}
         {viewCategory === 'machine' && machines.length > 0 && (
           <>
             <View
@@ -1165,55 +1286,9 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
           </>
         )}
 
-        {viewCategory === 'freeweight' && freeWeights.length > 0 && (
-          <>
-            <View style={s.machineCardGrid}>
-              {freeWeights.map(fw => (
-                <TouchableOpacity
-                  key={fw.id}
-                  activeOpacity={0.85}
-                  onPress={() => handleCardPress(fw.id)}
-                  style={{ position: 'relative' }}
-                >
-                  <MachineCardBorder width={MACHINE_CARD_W2}>
-                    <MachineCard
-                      machine={{ id: fw.id, name: fw.name, brand: fw.brand, targetMuscle: fw.targetMuscle, category: 'Free Weight' }}
-                      variant="grid"
-                      width={MACHINE_CARD_W2}
-                    />
-                  </MachineCardBorder>
-                  {/* Start Fresh(hasPreloaded=false)에서는 preloadedIds가 항상 비어있어 이 배지는 렌더되지 않음 */}
-                  {preloadedIds.has(fw.id) && (
-                    <View style={s.cardOrderOverlay}>
-                      <View style={s.cardOrderBadge}>
-                        <Text style={s.cardOrderText}>
-                          {[...preloadedIds].indexOf(fw.id) + 1}
-                        </Text>
-                      </View>
-                    </View>
-                  )}
-                  {!preloadedIds.has(fw.id) && localSelectedId === fw.id && (
-                    <View style={s.cardSelectedOverlay}>
-                      <View style={s.cardSelectedBadge}>
-                        <Ionicons name="checkmark" size={14} color={C.bg} />
-                      </View>
-                    </View>
-                  )}
-                  {[...loggedIds].some(k => machineIdFromKey(k) === fw.id) && (
-                    <View style={s.cardCompletedOverlay}>
-                      <View style={s.cardCompletedBadge}>
-                        <Ionicons name="checkmark-circle" size={13} color={C.accent} />
-                        <Text style={s.cardCompletedTxt}>완료</Text>
-                      </View>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </>
-        )}
         <View style={{ height: 100 }} />
       </ScrollView>
+      )}
       <View style={s.ctaBar}>
         <View style={{ gap: 8 }}>
           <TouchableOpacity
@@ -1223,7 +1298,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
             disabled={!localSelectedId}
           >
             <Ionicons name="play" size={18} color={C.bg} />
-            <Text style={s.ctaTxt}>이 머신으로 운동 시작</Text>
+            <Text style={s.ctaTxt}>{showFreeWeightList ? '이 프리웨이트로 운동 시작' : '이 머신으로 운동 시작'}</Text>
           </TouchableOpacity>
           {loggedIds.size > 0 && (
             <TouchableOpacity
@@ -4672,6 +4747,9 @@ const s = StyleSheet.create({
 
   // Machine card 2-column grid for exercise select
   machineCardGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  freeWeightRow: { gap: 8, marginBottom: 8 },
+  fwFilterScroll: { marginTop: 10 },
+  fwFilterRow: { flexDirection: 'row', gap: 6, paddingRight: 16 },
   cardOrderOverlay: { position: 'absolute', top: 8, left: 8 },
   cardOrderBadge: {
     width: 28, height: 28, borderRadius: 14,

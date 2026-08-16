@@ -1033,58 +1033,81 @@ function RoutineTab({
             <View style={{ width: 40 }} />
           </View>
           <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-            <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-              <SectionCard title="루틴 정보">
-                <Field label="루틴 이름" value={routineName} onChangeText={t => setRoutineName(t)} placeholder="루틴 이름을 입력하세요" />
-                <Text style={styles.fieldLabel}>타겟 부위</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow} contentContainerStyle={styles.filterRowContent}>
-                  {BODY_PARTS.map(bp => (
-                    <TouchableOpacity key={bp} style={[styles.filterChip, routineBodyPart === bp && styles.filterChipActive]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setRoutineBodyPart(bp); }}>
-                      <Text style={[styles.filterChipText, routineBodyPart === bp && styles.filterChipTextActive]}>{bp}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </SectionCard>
+            {/* 프리웨이트 129개(GIF) + 헬스장 머신이 한 번에 그리드로 나올 수 있어, 일반
+                ScrollView+View.map 대신 운동일지 작성화면(PostWorkoutLogModal)과 동일하게
+                FlatList 가상화를 쓴다 — 화면 밖 카드는 마운트 해제돼 GIF가 한꺼번에
+                재생되며 버벅이거나 스크롤 후 멈추는 문제를 막는다. 루틴 이름/타겟부위
+                입력 폼은 ListHeaderComponent로 넣어 FlatList 하나로 스크롤을 통합한다
+                (중첩 VirtualizedList 경고 방지). "루틴 저장" 버튼은 리스트 안이 아니라
+                아래 고정 바(routineSaveBar)에 별도로 둬서 끝까지 스크롤하지 않아도 항상
+                화면 하단에 보이게 한다. */}
+            <FlatList
+              data={routineFilteredMachines}
+              keyExtractor={machine => machine.id}
+              numColumns={2}
+              columnWrapperStyle={styles.routineGridRow}
+              contentContainerStyle={styles.scroll}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              removeClippedSubviews
+              initialNumToRender={8}
+              maxToRenderPerBatch={6}
+              updateCellsBatchingPeriod={50}
+              windowSize={7}
+              ListHeaderComponent={
+                <>
+                  <SectionCard title="루틴 정보">
+                    <Field label="루틴 이름" value={routineName} onChangeText={t => setRoutineName(t)} placeholder="루틴 이름을 입력하세요" />
+                    <Text style={styles.fieldLabel}>타겟 부위</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow} contentContainerStyle={styles.filterRowContent}>
+                      {BODY_PARTS.map(bp => (
+                        <TouchableOpacity key={bp} style={[styles.filterChip, routineBodyPart === bp && styles.filterChipActive]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setRoutineBodyPart(bp); }}>
+                          <Text style={[styles.filterChipText, routineBodyPart === bp && styles.filterChipTextActive]}>{bp}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </SectionCard>
 
-              <View style={styles.tabSectionHeader}>
-                <Text style={styles.groupLabel}>머신 선택</Text>
-                <Text style={styles.countText}>{routineSelectedIds.size}개 선택됨</Text>
-              </View>
-              {routineFilteredMachines.length === 0 && (
+                  <View style={styles.tabSectionHeader}>
+                    <Text style={styles.groupLabel}>머신 선택</Text>
+                    <Text style={styles.countText}>{routineSelectedIds.size}개 선택됨</Text>
+                  </View>
+                </>
+              }
+              ListEmptyComponent={
                 <View style={styles.emptyState}>
                   <Ionicons name="barbell-outline" size={36} color={C.textDim} />
                   <Text style={styles.emptyStateText}>등록된 머신이 없습니다</Text>
                   <Text style={styles.emptyStateSub}>머신 관리에서 먼저 머신을 추가하세요</Text>
                 </View>
-              )}
-              <View style={styles.machineCardGrid}>
-                {routineFilteredMachines.map(machine => {
-                  const selected = routineSelectedIds.has(machine.id);
-                  return (
-                    <View key={machine.id} style={{ width: ROUTINE_CARD_W, position: 'relative' }}>
-                      <TouchableOpacity
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          setRoutineSelectedIds(prev => {
-                            const next = new Set(prev);
-                            next.has(machine.id) ? next.delete(machine.id) : next.add(machine.id);
-                            return next;
-                          });
-                        }}
-                        activeOpacity={0.8}
-                      >
-                        <MachineCard machine={machine} variant="grid" width={ROUTINE_CARD_W} />
-                      </TouchableOpacity>
-                      {selected && (
-                        <View style={styles.checkmarkOverlay}>
-                          <Ionicons name="checkmark" size={16} color="#000000" />
-                        </View>
-                      )}
-                    </View>
-                  );
-                })}
-              </View>
-
+              }
+              renderItem={({ item: machine }) => {
+                const selected = routineSelectedIds.has(machine.id);
+                return (
+                  <View style={{ width: ROUTINE_CARD_W, position: 'relative' }}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setRoutineSelectedIds(prev => {
+                          const next = new Set(prev);
+                          next.has(machine.id) ? next.delete(machine.id) : next.add(machine.id);
+                          return next;
+                        });
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <MachineCard machine={machine} variant="grid" width={ROUTINE_CARD_W} />
+                    </TouchableOpacity>
+                    {selected && (
+                      <View style={styles.checkmarkOverlay}>
+                        <Ionicons name="checkmark" size={16} color="#000000" />
+                      </View>
+                    )}
+                  </View>
+                );
+              }}
+            />
+            <View style={styles.routineSaveBar}>
               <TouchableOpacity
                 style={[styles.saveBtn, (!routineName.trim() || routineSelectedIds.size === 0) && { opacity: 0.5 }]}
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onSave(); }}
@@ -1093,10 +1116,11 @@ function RoutineTab({
               >
                 <Text style={styles.saveBtnText}>루틴 저장</Text>
               </TouchableOpacity>
-            </ScrollView>
+            </View>
           </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
+
     </ScrollView>
   );
 }
@@ -2219,6 +2243,9 @@ const styles = StyleSheet.create({
 
   saveBtn:     { backgroundColor: C.accent, paddingVertical: 15, borderRadius: R.btn, alignItems: 'center', marginTop: 8 },
   saveBtnText: { fontSize: 15, fontWeight: '800', color: C.bg },
+  // "루틴 저장" 버튼을 FlatList 안(ListFooterComponent)이 아니라 화면 하단에 고정된
+  // 별도 바로 뺀 컨테이너 — 끝까지 스크롤하지 않아도 항상 보이게 함
+  routineSaveBar: { padding: 16, paddingTop: 12, backgroundColor: C.bg, borderTopWidth: 1, borderTopColor: C.border },
 
   infoNote: { flexDirection: 'row', gap: 10, backgroundColor: C.surface, borderRadius: R.inner, padding: 13, borderWidth: 1, borderColor: C.border },
   infoNoteText: { flex: 1, fontSize: 12, color: C.textSub, lineHeight: 18 },
@@ -2314,7 +2341,7 @@ const styles = StyleSheet.create({
   countText: { fontSize: 12, color: C.textDim, fontWeight: '600', marginBottom: 12 },
 
   // Machine card grid + checkmark overlay
-  machineCardGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  routineGridRow: { gap: 8, marginBottom: 8 },
   checkmarkOverlay: {
     position: 'absolute', top: 8, right: 8,
     width: 28, height: 28, borderRadius: 14,

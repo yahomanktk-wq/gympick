@@ -1,3 +1,5 @@
+import { GYMVISUAL_GIF_IDS } from '../data/freeWeightsGymVisual';
+
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 const BUCKET       = 'machine-images';
 const DEFAULT_QUALITY = 75;
@@ -38,10 +40,17 @@ export function getMachineImageUrl(
   machineId: string,
   options?: MachineImageUrlOptions,
 ): string {
-  const path        = `${BUCKET}/${machineId}.webp`;
+  // Gym Visual에서 구매한 애니메이션 GIF 프리웨이트(fw45~fw173)는 항상 원본
+  // .gif object URL을 그대로 반환한다 — Supabase의 render/image 변환
+  // 엔드포인트는 정적 리사이즈용이라 애니메이션이 보존되지 않을 수 있으므로,
+  // GIF 항목은 width/height 옵션이 있어도 변환 엔드포인트를 타지 않는다.
+  const isGif = GYMVISUAL_GIF_IDS.has(machineId);
+  const ext   = isGif ? 'gif' : 'webp';
+
+  const path        = `${BUCKET}/${machineId}.${ext}`;
   const originalUrl = `${SUPABASE_URL}/storage/v1/object/public/${path}`;
 
-  if (!IMAGE_TRANSFORM_ENABLED || !options?.width) {
+  if (isGif || !IMAGE_TRANSFORM_ENABLED || !options?.width) {
     return originalUrl;
   }
 

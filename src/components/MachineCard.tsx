@@ -26,6 +26,13 @@ interface Props {
   machine: MachineCardMachine;
   width?: number;
   variant?: 'grid' | 'detail';
+  /**
+   * 애니메이션(GIF/animated WebP) 이미지의 재생 여부. expo-image의 autoplay prop으로
+   * 그대로 전달되며, 기본값 true — 기존 정적 이미지(webp)에는 영향이 없다.
+   * 화면에 보이는 카드만 재생시키고 싶은 화면(예: 프리웨이트 그리드)에서
+   * false를 넘겨 배터리/성능을 아낄 수 있다.
+   */
+  autoplay?: boolean;
 }
 
 const SCREEN_W    = Dimensions.get('window').width;
@@ -57,7 +64,7 @@ const INNER_PAD_BOT = BORDER_INSET + 8;
 const GRID_PAD_H    = BORDER_INSET + 4;
 const GRID_PAD_V    = BORDER_INSET + 2;
 
-export default function MachineCard({ machine, width, variant = 'detail' }: Props) {
+export default function MachineCard({ machine, width, variant = 'detail', autoplay = true }: Props) {
   const isGrid  = variant === 'grid';
   const cardW   = width ?? (isGrid ? GRID_W : DEFAULT_W);
   const cardH   = Math.round(cardW * (16 / 9));
@@ -98,6 +105,7 @@ export default function MachineCard({ machine, width, variant = 'detail' }: Prop
             style={{ width: '100%', height: '100%' }}
             contentFit="contain"
             cachePolicy="memory-disk"
+            autoplay={autoplay}
           />
         </View>
       </View>

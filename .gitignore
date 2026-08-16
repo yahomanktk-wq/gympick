@@ -49,4 +49,9 @@ machine_card_image/
 fix_*.txt
 haptic_*.txt
 add_*.txt
-archive_check/ 
+archive_check/
+
+# Gym Visual GIF 원본(zip)/추출본 — Supabase Storage에 이미 129/129 업로드 완료,
+# git에는 안 올림 (129개 x 여러 사이즈, 수백MB)
+gymvisual-gifs/
+
