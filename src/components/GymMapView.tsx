@@ -175,7 +175,7 @@ export default function GymMapView({
             )}
             {selectedGym.officialBrands && selectedGym.officialBrands.length > 0 && (
               <View style={styles.gymCardBrands}>
-                {selectedGym.officialBrands.slice(0, 3).map(brand => {
+                {selectedGym.officialBrands.map(brand => {
                   const key = brand.toUpperCase().replace(/\s+/g, '_');
                   const logo = brandLogos[key];
                   return logo ? (
