@@ -34,6 +34,7 @@ import { fetchRankingTabData, type RankingTabData } from '../lib/db/rankingQueri
 import { fetchOlympicRankings, type OlympicRankingEntry } from '../lib/db/olympicRankings';
 import { RankingTab } from './FindGymRankingTab';
 import ManagerRequestModal from './flow/ManagerRequestModal';
+import { isGymOpenNow } from '../lib/gymHours';
 import { getGymFavorites } from '../data/gymFavoriteStore';
 import { getAllAdminGyms } from '../data/adminGymStore';
 import GymDetailModal     from './flow/GymDetailModal';
@@ -166,6 +167,8 @@ function GymCard({
   distLabel:  string;
   onPress:    () => void;
 }) {
+  const openStatus = isGymOpenNow(gym.hours);
+
   return (
     <TouchableOpacity style={s.gymCard} activeOpacity={0.8} onPress={onPress}>
       <View style={{ flex: 1, paddingLeft: 0 }}>
@@ -178,9 +181,19 @@ function GymCard({
                 <Text style={s.managerBadgeText}>헬스장 직접 관리</Text>
               </View>
             )}
-            <View style={[s.openBadge, { backgroundColor: C.accentBg }]}>
-              <Text style={[s.openBadgeText, { color: C.accent }]}>영업 중</Text>
-            </View>
+            {openStatus !== null && (
+              <View style={[
+                s.openBadge,
+                { backgroundColor: openStatus ? C.accentBg : C.dangerBg },
+              ]}>
+                <Text style={[
+                  s.openBadgeText,
+                  { color: openStatus ? C.accent : C.danger },
+                ]}>
+                  {openStatus ? '영업 중' : '영업 종료'}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
         <View style={s.gymCardMeta}>
