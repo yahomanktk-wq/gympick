@@ -22,7 +22,7 @@ import { PendingGym, ReviewStatus } from '../../data/types';
 import type { Machine, MachineWithGyms } from '../../data/types';
 import { Switch } from 'react-native';
 import { fetchMachineRequests, updateMachineRequestStatus, type MachineRequest } from '../../lib/db/machineRequests';
-import { fetchMachines, getMachinesCacheSync } from '../../lib/db';
+import { fetchMachines, getMachinesCacheSync, invalidateGymsCache } from '../../lib/db';
 import { parseMuscles } from '../../lib/splitUtils';
 import {
   getBrandCopyrightList,
@@ -57,6 +57,7 @@ import {
   type GymManagerLinkRequest,
 } from '../../lib/db/gymManagerLinkRequests';
 import { geocodeAddress } from '../../lib/geocoding';
+import AdminAnalyticsView from './AdminAnalyticsView';
 import {
   OperatingHoursEditor,
   serializeHours,
@@ -93,7 +94,7 @@ const CAT_CARD_W   = Math.floor((SCREEN_W - 40 - 12) / 2);
 
 // --- Types
 
-export type AdminView = 'home' | 'pending-gyms' | 'gym-detail' | 'machine-catalog' | 'brand-copyright' | 'gym-reports' | 'manager-requests' | 'register-gym' | 'gym-registration-requests' | 'gym-official-brands' | 'all-gyms-official' | 'machine-requests' | 'user-inquiries' | 'gym-manager-link' | 'gym-manager-link-requests' | 'user-overview';
+export type AdminView = 'home' | 'pending-gyms' | 'gym-detail' | 'machine-catalog' | 'brand-copyright' | 'gym-reports' | 'manager-requests' | 'register-gym' | 'gym-registration-requests' | 'gym-official-brands' | 'all-gyms-official' | 'machine-requests' | 'user-inquiries' | 'gym-manager-link' | 'gym-manager-link-requests' | 'user-overview' | 'analytics';
 
 // --- Shared components
 
@@ -417,36 +418,20 @@ function HomeView({ machines, pendingGymCount, gymReportCount, managerRequestCou
       <Text style={[styles.sectionTitle, { marginTop: 8 }]}>검토 대기</Text>
       {[
         {
-          icon: 'business-outline' as const,
-          title: '헬스장 등록 심사 대기(매니저)',
-          count: pendingGymCount,
-          sub: `${pendingGymCount}개 검토 대기`,
-          onPress: () => onPush('pending-gyms'),
-          color: '#ffb547',
-        },
-        {
-          icon: 'barbell-outline' as const,
-          title: '머신 카탈로그',
-          count: 0,
-          sub: `${machines.length}개 머신 등록됨`,
-          onPress: () => onPush('machine-catalog'),
-          color: '#a78bfa',
-        },
-        {
-          icon: 'shield-outline' as const,
-          title: '브랜드 저작권',
-          count: 0,
-          sub: '브랜드별 이미지 사용 승인 관리',
-          onPress: () => onPush('brand-copyright'),
-          color: '#34d399',
-        },
-        {
           icon: 'flag-outline' as const,
           title: '정보 제보 관리',
           count: gymReportCount,
           sub: gymReportCount > 0 ? `${gymReportCount}개 처리 대기` : '접수된 제보 없음',
           onPress: () => onPush('gym-reports'),
           color: '#ff7eb3',
+        },
+        {
+          icon: 'chatbubble-outline' as const,
+          title: '유저 문의 관리',
+          count: userInquiryCount,
+          sub: userInquiryCount > 0 ? `${userInquiryCount}개 답변 대기` : '접수된 문의 없음',
+          onPress: () => onPush('user-inquiries'),
+          color: '#facc15',
         },
         {
           icon: 'person-add-outline' as const,
@@ -489,20 +474,12 @@ function HomeView({ machines, pendingGymCount, gymReportCount, managerRequestCou
           color: '#818cf8',
         },
         {
-          icon: 'shield-checkmark-outline' as const,
-          title: '헬스장 오피셜 관리',
+          icon: 'stats-chart-outline' as const,
+          title: '사용자 지표',
           count: 0,
-          sub: '헬스장별 오피셜 브랜드 설정',
-          onPress: () => onPush('all-gyms-official'),
-          color: '#5ba4ff',
-        },
-        {
-          icon: 'chatbubble-outline' as const,
-          title: '유저 문의 관리',
-          count: userInquiryCount,
-          sub: userInquiryCount > 0 ? `${userInquiryCount}개 답변 대기` : '접수된 문의 없음',
-          onPress: () => onPush('user-inquiries'),
-          color: '#facc15',
+          sub: 'DAU · 이벤트 · 리텐션',
+          onPress: () => onPush('analytics'),
+          color: '#c8ff57',
         },
         {
           icon: 'stats-chart-outline' as const,
@@ -511,6 +488,14 @@ function HomeView({ machines, pendingGymCount, gymReportCount, managerRequestCou
           sub: '가입자 수 · 역할별 분포 · 가입 추이',
           onPress: () => onPush('user-overview'),
           color: '#5ba4ff',
+        },
+        {
+          icon: 'shield-outline' as const,
+          title: '브랜드 저작권',
+          count: 0,
+          sub: '브랜드별 이미지 사용 승인 관리',
+          onPress: () => onPush('brand-copyright'),
+          color: '#34d399',
         },
       ].map(q => (
         <TouchableOpacity key={q.title} style={styles.queueCard} onPress={q.onPress} activeOpacity={0.85}>
@@ -2324,6 +2309,9 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
       await addGymOfficialBrand(officialGymId, brand);
       setOfficialBrands(prev => [...prev, brand]);
     }
+    // 헬스장 목록 캐시(FindGymScreen/지도 등에서 쓰는 officialBrands 포함 캐시)를
+    // 무효화 — 안 하면 최대 30분간 지도 정보 카드에 오피셜 마크가 반영되지 않음
+    invalidateGymsCache();
   }, [officialGymId, officialBrands]);
 
   const handleUpdateGym = useCallback(async (id: string, name: string, location: string, phone: string, hours: string, hoursNote: string, machineIds: string[]) => {
@@ -2433,6 +2421,7 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
     'manager-requests':  '매니저 신청 관리',
     'register-gym':               '헬스장 관리',
     'gym-registration-requests':  '헬스장 신규 등록 제안(유저)',
+    'analytics':         '사용자 지표',
     'machine-requests':           '머신 등록 신청(매니저)',
     'gym-official-brands':        `${officialGymName} 오피셜 브랜드`,
     'all-gyms-official':          '헬스장 오피셜 관리',
@@ -2475,6 +2464,7 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
           onPush={push}
         />
       )}
+      {currentView === 'analytics' && <AdminAnalyticsView />}
       {currentView === 'pending-gyms' && (
         <PendingGymsView
           pendingGyms={[...pendingGyms, ...managerGymRequests]}
