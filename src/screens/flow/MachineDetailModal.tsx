@@ -30,6 +30,7 @@ import { calcDistanceKm, formatDistance } from '../../lib/geocoding';
 import { fetchGymsWithMachines } from '../../lib/db/gyms';
 import { GymWithMachines } from '../../data/types';
 import { containsBannedWord } from '../../lib/bannedWords';
+import { track } from '../../lib/analytics';
 
 // --- Star rating
 
@@ -138,6 +139,12 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
   React.useEffect(() => {
     if (machine) setIsFav(isFavoriteMachine(machine.id));
   }, [machine?.id]);
+
+  React.useEffect(() => {
+    if (visible && machine) {
+      track('view_machine', { machine_id: machine.id, brand: machine.brand });
+    }
+  }, [visible, machine?.id]);
 
   React.useEffect(() => {
     if (!machine) return;
