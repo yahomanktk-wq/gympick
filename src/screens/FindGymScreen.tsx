@@ -381,7 +381,7 @@ export default function FindGymScreen() {
   }, []);
 
   const isLoading   = machinesLoading || gymsLoading;
-  const allMachines = machinesData ?? [];
+  const allMachines = (machinesData ?? []).filter(m => m.exerciseKind !== 'freeweight');
 
   const [shuffleTick, setShuffleTick] = useState(0);
 
