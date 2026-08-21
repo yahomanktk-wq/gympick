@@ -1366,6 +1366,65 @@ function SetProgressBanner({
   );
 }
 
+// --- 무게/횟수 프리셋 가로 스크롤 — 현재 값(또는 가장 가까운 프리셋)을 화면 중앙에 자동 배치
+function PresetScrollRow({ presets, value, onSelect }: {
+  presets: number[];
+  value: number;
+  onSelect: (v: number) => void;
+}) {
+  const scrollRef       = useRef<ScrollView>(null);
+  const chipLayouts     = useRef<Record<number, { x: number; width: number }>>({});
+  const containerWidth  = useRef(0);
+  const isMount          = useRef(true);
+
+  // 정확히 일치하는 프리셋이 있으면 그 값, 없으면 가장 가까운 값
+  const nearestPreset = presets.reduce((a, b) => (Math.abs(b - value) < Math.abs(a - value) ? b : a));
+
+  const centerOn = (target: number, animated: boolean) => {
+    const layout = chipLayouts.current[target];
+    if (!layout || !containerWidth.current) return;
+    const x = layout.x + layout.width / 2 - containerWidth.current / 2;
+    scrollRef.current?.scrollTo({ x: Math.max(0, x), animated });
+  };
+
+  useEffect(() => {
+    const animated = !isMount.current;
+    isMount.current = false;
+    const raf = requestAnimationFrame(() => centerOn(nearestPreset, animated));
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  return (
+    <ScrollView
+      ref={scrollRef}
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={{ flexShrink: 1 }}
+      onLayout={(e) => {
+        containerWidth.current = e.nativeEvent.layout.width;
+        centerOn(nearestPreset, false);
+      }}
+    >
+      <View style={s.presetRow}>
+        {presets.map(p => (
+          <TouchableOpacity
+            key={p}
+            style={[s.presetChip, value === p && s.presetChipActive]}
+            onPress={() => onSelect(p)}
+            onLayout={(e) => {
+              chipLayouts.current[p] = { x: e.nativeEvent.layout.x, width: e.nativeEvent.layout.width };
+              if (p === nearestPreset) centerOn(nearestPreset, false);
+            }}
+          >
+            <Text style={[s.presetChipText, value === p && s.presetChipTextActive]}>{p}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </ScrollView>
+  );
+}
+
 // --- Step 4: Log Sets (single exercise)
 
 function SetCard({ ex, sets, realPR, prefill, freeWeights, onChange, onAdd, onCopyPrev, onRemove, onSetLayout, onRegisterRect, onboardingActive, onboardingKey }: {
@@ -1465,19 +1524,7 @@ function SetCard({ ex, sets, realPR, prefill, freeWeights, onChange, onAdd, onCo
           {/* Weight */}
           <View style={s.inputRow}>
             <Text style={s.inputLabel}>무게</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexShrink: 1 }}>
-              <View style={s.presetRow}>
-                {WEIGHT_PRESETS.map(p => (
-                  <TouchableOpacity
-                    key={p}
-                    style={[s.presetChip, set.weight === p && s.presetChipActive]}
-                    onPress={() => onChange(idx, 'weight', p)}
-                  >
-                    <Text style={[s.presetChipText, set.weight === p && s.presetChipTextActive]}>{p}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
+            <PresetScrollRow presets={WEIGHT_PRESETS} value={set.weight} onSelect={v => onChange(idx, 'weight', v)} />
           </View>
           <View style={s.stepperRow}>
             <Text style={s.stepperUnit}>kg</Text>
@@ -1487,19 +1534,7 @@ function SetCard({ ex, sets, realPR, prefill, freeWeights, onChange, onAdd, onCo
           {/* Reps */}
           <View style={[s.inputRow, { marginTop: 10 }]}>
             <Text style={s.inputLabel}>횟수</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexShrink: 1 }}>
-              <View style={s.presetRow}>
-                {REPS_PRESETS.map(p => (
-                  <TouchableOpacity
-                    key={p}
-                    style={[s.presetChip, set.reps === p && s.presetChipActive]}
-                    onPress={() => onChange(idx, 'reps', p)}
-                  >
-                    <Text style={[s.presetChipText, set.reps === p && s.presetChipTextActive]}>{p}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
+            <PresetScrollRow presets={REPS_PRESETS} value={set.reps} onSelect={v => onChange(idx, 'reps', v)} />
           </View>
           <View style={s.stepperRow}>
             <Text style={s.stepperUnit}>reps</Text>
@@ -1714,8 +1749,8 @@ export function ClassicOverlay({ exercises, logs, nickname, timestamp, muscleLab
         <GymPickLogo color={tc} width={LOGO_STRIP_W_L} height={LOGO_STRIP_H_L} />
       </View>
       <View style={s.overlayTopRight}>
-        <Text style={[s.overlayUsername, { color: tc, fontFamily: fontSet.nickname }]}>{nickname}</Text>
-        <Text style={[s.overlayTimestamp, { color: tc, fontFamily: fontSet.nickname }]}>{timestamp}</Text>
+        <Text style={[s.overlayUsername, { color: tc, fontFamily: fontSet.nickname, fontWeight: Platform.OS === 'android' ? undefined : '900' }]}>{nickname}</Text>
+        <Text style={[s.overlayTimestamp, { color: tc, fontFamily: fontSet.nickname, fontWeight: Platform.OS === 'android' ? undefined : '500' }]}>{timestamp}</Text>
       </View>
       <View style={s.overlayBottomLeft}>
         <Text style={[s.overlayMuscleTitle, { color: tc, fontFamily: fontSet.muscle }]}>{muscleLabel}</Text>
@@ -1725,17 +1760,17 @@ export function ClassicOverlay({ exercises, logs, nickname, timestamp, muscleLab
             const setsLine = sets.map(st => `${st.weight} x ${st.reps}`).join(' / ');
             return (
               <View key={ex.id} style={s.overlayExBlock}>
-                <Text style={[s.overlayExName, { color: tc, fontFamily: fontSet.routine }]} numberOfLines={1}>
+                <Text style={[s.overlayExName, { color: tc, fontFamily: fontSet.routine, fontWeight: Platform.OS === 'android' ? undefined : '900' }]} numberOfLines={1}>
                   {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
                 </Text>
                 {setsLine ? (
-                  <Text style={[s.overlayExSet, { color: tc, fontFamily: fontSet.routine }]} numberOfLines={2}>{setsLine}</Text>
+                  <Text style={[s.overlayExSet, { color: tc, fontFamily: fontSet.routine, fontWeight: Platform.OS === 'android' ? undefined : '500' }]} numberOfLines={2}>{setsLine}</Text>
                 ) : null}
               </View>
             );
           })}
           {exercises.length > 7 && (
-            <Text style={[s.overlayExName, { color: tc, opacity: 0.6, marginTop: 2, fontFamily: fontSet.routine }]}>
+            <Text style={[s.overlayExName, { color: tc, opacity: 0.6, marginTop: 2, fontFamily: fontSet.routine, fontWeight: Platform.OS === 'android' ? undefined : '900' }]}>
               {`+${exercises.length - 7} more...`}
             </Text>
           )}
@@ -2268,7 +2303,7 @@ export function LeftColOverlayB({ exercises, logs, nickname, timestamp, muscleLa
       <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD }}>
         <Text style={{
           fontSize: 15,
-          fontWeight: '900',
+          fontWeight: Platform.OS === 'android' ? undefined : '900',
           color: tc,
           letterSpacing: 0.3,
           fontFamily: fontSet.nickname,
@@ -2292,7 +2327,7 @@ export function LeftColOverlayB({ exercises, logs, nickname, timestamp, muscleLa
         {/* 날짜 */}
         <Text style={{
           fontSize: 11,
-          fontWeight: '700',
+          fontWeight: Platform.OS === 'android' ? undefined : '700',
           color: tc,
           opacity: 0.75,
           marginBottom: 4,
@@ -2322,7 +2357,7 @@ export function LeftColOverlayB({ exercises, logs, nickname, timestamp, muscleLa
               <View key={ex.id} style={{ marginBottom: 10 }}>
                 <Text style={{
                   fontSize: 11,
-                  fontWeight: '900',
+                  fontWeight: Platform.OS === 'android' ? undefined : '900',
                   color: tc,
                   letterSpacing: 0.5,
                   fontFamily: fontSet.routine,
@@ -2332,7 +2367,7 @@ export function LeftColOverlayB({ exercises, logs, nickname, timestamp, muscleLa
                 {setsLine ? (
                   <Text style={{
                     fontSize: 11,
-                    fontWeight: '500',
+                    fontWeight: Platform.OS === 'android' ? undefined : '500',
                     color: tc,
                     opacity: 0.85,
                     marginTop: 2,
@@ -2367,7 +2402,7 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
       <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD }}>
         <Text style={{
           fontSize: 14,
-          fontWeight: '900',
+          fontWeight: Platform.OS === 'android' ? undefined : '900',
           color: tc,
           letterSpacing: 0.3,
           fontFamily: fontSet.nickname,
@@ -2380,7 +2415,7 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
       <View style={{ position: 'absolute', top: OVERLAY_PAD, right: OVERLAY_PAD }}>
         <Text style={{
           fontSize: 12,
-          fontWeight: '700',
+          fontWeight: Platform.OS === 'android' ? undefined : '700',
           color: tc,
           opacity: 0.85,
           fontFamily: fontSet.nickname,
@@ -2431,7 +2466,7 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
               <View key={ex.id} style={{ width: COL_W, alignItems: 'center', marginBottom: 10 }}>
                 <Text style={{
                   fontSize: 8,
-                  fontWeight: '700',
+                  fontWeight: Platform.OS === 'android' ? undefined : '700',
                   color: tc,
                   opacity: 0.7,
                   letterSpacing: 0.5,
@@ -2442,7 +2477,7 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
                 </Text>
                 <Text style={{
                   fontSize: 9,
-                  fontWeight: '900',
+                  fontWeight: Platform.OS === 'android' ? undefined : '900',
                   color: tc,
                   letterSpacing: 0.2,
                   marginBottom: 3,
@@ -2455,7 +2490,7 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
                 {sets.map((st, si) => (
                   <Text key={si} style={{
                     fontSize: 8,
-                    fontWeight: '600',
+                    fontWeight: Platform.OS === 'android' ? undefined : '600',
                     color: tc,
                     opacity: 0.85,
                     lineHeight: 11,
@@ -2500,7 +2535,7 @@ export function GridOverlayC({ exercises, logs, nickname, timestamp, muscleLabel
     <>
       {/* 상단: 닉네임 좌, 날짜 우 */}
       <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD, right: OVERLAY_PAD, flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text style={{ fontSize: 13, fontWeight: '900', color: tc, fontFamily: fontSet.nickname }}>{nickname}</Text>
+        <Text style={{ fontSize: 13, fontWeight: Platform.OS === 'android' ? undefined : '900', color: tc, fontFamily: fontSet.nickname }}>{nickname}</Text>
         <Text style={{ fontSize: 10, color: tc, opacity: 0.85, fontFamily: fontSet.nickname }}>{timestamp}</Text>
       </View>
       {/* 타겟부위 */}
@@ -2527,7 +2562,7 @@ export function GridOverlayC({ exercises, logs, nickname, timestamp, muscleLabel
               <Text style={{ fontSize: 8, color: tc, opacity: 0.7, fontFamily: fontSet.routine, letterSpacing: 0.5 }} numberOfLines={1}>
                 {`[${ex.brand.toUpperCase()}]`}
               </Text>
-              <Text style={{ fontSize: 9, fontWeight: '900', color: tc, fontFamily: fontSet.routine, marginBottom: 2 }} numberOfLines={2}>
+              <Text style={{ fontSize: 9, fontWeight: Platform.OS === 'android' ? undefined : '900', color: tc, fontFamily: fontSet.routine, marginBottom: 2 }} numberOfLines={2}>
                 {ex.name.toUpperCase()}
               </Text>
               {sets.map((st, si) => (
@@ -2682,7 +2717,7 @@ export function ArchDayOverlay({ exercises, logs, nickname, timestamp, muscleLab
 
 // --- Step 5: Photo
 
-function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, photoUri, nickname, onColorChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera, onRegisterRect, onboardingActive, onboardingKey, onOnboardingNext, onOnboardingJump }: {
+function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, photoUri, nickname, fontsLoaded, onColorChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera, onRegisterRect, onboardingActive, onboardingKey, onOnboardingNext, onOnboardingJump }: {
   gym: GymWithMachines;
   exercises: ExerciseInfo[];
   selectedMuscles: string[];
@@ -2690,6 +2725,9 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
   photoTaken: boolean;
   photoUri?: string;
   nickname?: string;
+  /** expo-font useFonts 로딩 완료 여부 — 인증샷 캡처가 폰트 로딩보다 먼저 실행되어
+   *  Android에서 시스템 폰트로 캡처되는 레이스 컨디션을 막기 위한 가드 */
+  fontsLoaded: boolean;
   onColorChange: (color: string) => void;
   onCapture: (aspect: [number, number]) => void;
   onCameraCapture: (uri: string) => void;
@@ -3684,7 +3722,11 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
           }
         }}
       >
-        <TouchableOpacity style={s.ctaBtn} activeOpacity={0.85} onPress={async () => {
+        <TouchableOpacity
+          style={[s.ctaBtn, !fontsLoaded && { opacity: 0.5 }]}
+          activeOpacity={0.85}
+          disabled={!fontsLoaded}
+          onPress={async () => {
           if (!photoTaken) {
             Alert.alert(
               '사진을 등록해주세요',
@@ -4629,6 +4671,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             onSetShowCamera={setShowCamera}
             onCompositeUri={(uri) => setCompositeUri(uri)}
             onRoutineCardUri={(uri) => setRoutineCardUri(uri)}
+            fontsLoaded={fontsLoaded}
             onSave={requestSaveWorkout}
             onBack={goBack}
             onClose={() => onClose(false)}

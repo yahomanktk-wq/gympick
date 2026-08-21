@@ -8,8 +8,11 @@ import { StatusBar } from 'expo-status-bar';
 import * as Linking from 'expo-linking';
 import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 import { AuthProvider } from './src/context/AuthContext';
 import { supabase } from './src/lib/supabase';
+import { fetchAppUpdateConfig, getUpdateStatus, type UpdateStatus } from './src/lib/db/appUpdate';
+import AppUpdateModal from './src/components/AppUpdateModal';
 import TabNavigator from './src/navigation/TabNavigator';
 import WorkoutFeedScreen from './src/screens/WorkoutFeedScreen';
 import WorkoutAnalyticsScreen from './src/screens/WorkoutAnalyticsScreen';
@@ -32,6 +35,21 @@ export default function App() {
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [appReady, setAppReady] = useState(false);
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
+
+  // --- 업데이트 안내 팝업 (강제/권장) ---
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>('none');
+  const [updateMessage, setUpdateMessage] = useState<string | undefined>(undefined);
+  const [updateDismissed, setUpdateDismissed] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const config = await fetchAppUpdateConfig();
+      if (!config) return; // 설정 없음/네트워크 오류 → 조용히 체크 스킵
+      const currentVersion = Constants.expoConfig?.version ?? '0.0.0';
+      setUpdateStatus(getUpdateStatus(currentVersion, config));
+      setUpdateMessage(config.message);
+    })();
+  }, []);
 
   const [fontsLoaded] = useFonts({
     'KCC-Ganpan':            require('./assets/fonts/kcc_ganpan.ttf'),
@@ -157,6 +175,13 @@ export default function App() {
             }}
           />
         </Modal>
+
+        <AppUpdateModal
+          visible={updateStatus === 'required' || (updateStatus === 'recommended' && !updateDismissed)}
+          required={updateStatus === 'required'}
+          message={updateMessage}
+          onDismiss={() => setUpdateDismissed(true)}
+        />
 
         <StatusBar style="light" />
       </SafeAreaProvider>

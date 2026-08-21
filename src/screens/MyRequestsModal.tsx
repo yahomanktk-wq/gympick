@@ -48,7 +48,7 @@ function statusLabel(item: MergedItem): string {
   const status = item.data.status;
   switch (item.kind) {
     case 'gym_registration':
-      return status === 'pending' ? '검토 대기' : status === 'reviewed' ? '검토 완료' : '처리 완료';
+      return status === 'pending' ? '검토 대기' : status === 'reviewed' ? '등록완료' : '등록불가';
     case 'gym_info_report':
       return status === 'pending' ? '검토 대기' : '검토 완료';
     case 'manager_request':

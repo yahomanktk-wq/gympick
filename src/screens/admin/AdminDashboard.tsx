@@ -236,13 +236,13 @@ function GymRequestsView({
               style={{ flex: 1, padding: 10, borderRadius: R.btn, backgroundColor: C.accent, alignItems: 'center' }}
               onPress={() => onUpdateStatus(req.id, 'reviewed', drafts[req.id])}
             >
-              <Text style={{ color: C.bg, fontWeight: '700', fontSize: 13 }}>검토 완료</Text>
+              <Text style={{ color: C.bg, fontWeight: '700', fontSize: 13 }}>등록완료</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={{ flex: 1, padding: 10, borderRadius: R.btn, backgroundColor: C.surface, alignItems: 'center', borderWidth: 1, borderColor: C.border }}
+              style={{ flex: 1, padding: 10, borderRadius: R.btn, backgroundColor: C.surface, alignItems: 'center', borderWidth: 1.5, borderColor: C.danger + '60' }}
               onPress={() => onUpdateStatus(req.id, 'resolved', drafts[req.id])}
             >
-              <Text style={{ color: C.text, fontWeight: '700', fontSize: 13 }}>처리 완료</Text>
+              <Text style={{ color: C.danger, fontWeight: '700', fontSize: 13 }}>등록불가</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -255,7 +255,7 @@ function GymRequestsView({
             <View key={req.id} style={{ backgroundColor: C.surface, borderRadius: R.card, padding: 16, gap: 4, opacity: 0.6 }}>
               <Text style={{ fontSize: 14, fontWeight: '700', color: C.text }}>{req.gymName}</Text>
               <Text style={{ fontSize: 12, color: C.textSub }}>{req.location}</Text>
-              <Text style={{ fontSize: 11, color: C.accent, fontWeight: '600' }}>{req.status === 'reviewed' ? '검토 완료' : '처리 완료'}</Text>
+              <Text style={{ fontSize: 11, color: req.status === 'reviewed' ? C.accent : C.danger, fontWeight: '600' }}>{req.status === 'reviewed' ? '등록완료' : '등록불가'}</Text>
               {req.adminComment ? (
                 <Text style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>코멘트: {req.adminComment}</Text>
               ) : null}
@@ -2600,8 +2600,10 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
               await sendNotification(
                 req.userId,
                 status === 'reviewed' ? 'gym_request_reviewed' : 'gym_request_resolved',
-                '헬스장 등록 제안 처리 안내',
-                `"${req.gymName}" 헬스장 등록 제안이 ${status === 'reviewed' ? '검토 완료' : '처리 완료'}됐어요.` + (comment?.trim() ? ` 관리자 코멘트: "${comment.trim()}"` : ''),
+                status === 'reviewed' ? '헬스장 등록 완료 안내' : '헬스장 등록 불가 안내',
+                status === 'reviewed'
+                  ? `"${req.gymName}" 헬스장이 등록 가능해서 등록완료됐어요!` + (comment?.trim() ? ` 관리자 코멘트: "${comment.trim()}"` : '')
+                  : `"${req.gymName}" 헬스장은 등록이 어려워 등록불가 처리됐어요.` + (comment?.trim() ? ` 관리자 코멘트: "${comment.trim()}"` : ''),
                 id,
               );
             }

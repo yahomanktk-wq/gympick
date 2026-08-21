@@ -1,6 +1,6 @@
 {
   "name": "gympick",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
@@ -22,6 +22,7 @@
     "expo-auth-session": "~7.0.10",
     "expo-build-properties": "~1.0.10",
     "expo-camera": "~17.0.10",
+    "expo-constants": "~18.0.14",
     "expo-crypto": "~15.0.8",
     "expo-dev-client": "~6.0.20",
     "expo-file-system": "~19.0.22",

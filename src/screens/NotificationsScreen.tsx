@@ -21,8 +21,8 @@ interface Props {
 const TYPE_META: Record<string, { icon: React.ComponentProps<typeof Ionicons>['name']; color: string }> = {
   manager_approved:     { icon: 'checkmark-circle',  color: '#3dd68c' },
   manager_rejected:     { icon: 'close-circle',       color: C.danger  },
-  gym_request_reviewed: { icon: 'business',           color: '#fb923c' },
-  gym_request_resolved: { icon: 'business',           color: '#fb923c' },
+  gym_request_reviewed: { icon: 'checkmark-circle',  color: '#3dd68c' },
+  gym_request_resolved: { icon: 'close-circle',       color: C.danger  },
   gym_report_reviewed:  { icon: 'flag',                color: '#ff7eb3' },
   announcement:         { icon: 'megaphone',           color: '#ffb547' },
   general:              { icon: 'notifications',       color: '#5ba4ff' },
