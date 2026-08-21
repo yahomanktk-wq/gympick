@@ -1,15 +1,16 @@
 // freeWeightsGymVisual.ts — Gym Visual(gymvisual.com)에서 구매한 129개
 // 애니메이션 GIF 프리웨이트 운동 목록 (일회성 라이선스, 주문번호 THYVBDTNW)
+// + 이후 개별 추가된 항목(fw174 Cable Seated Row 등, 번호대는 계속 이어서 채번)
 //
 // 원래는 기존 freeWeights.ts의 fw01~fw44(자체 제작, 이미지 없음)와 별도로
 // fw45부터 이어서 번호를 매겨 추가되었으나, 이후 fw01~44는 DB에서 삭제되어
-// 이 129개가 유일한 프리웨이트 목록이 되었다(freeWeights.ts 참고). id 번호대는
-// 과거 이력 그대로 fw45~fw173을 유지한다(재채번 안 함).
+// 이 목록이 유일한 프리웨이트 목록이 되었다(freeWeights.ts 참고). id 번호대는
+// 과거 이력 그대로 유지한다(재채번 안 함).
 //
 // targetMuscle 매핑은 Gym Visual의 부위 태그(Chest/Back/Shoulders/Upper-Arms/
 // Forearms/Hips/Thighs/Calves)를 GymPick 기존 카테고리(Chest/Back/Shoulder/
 // Arms/Leg)에 맞춰 변환했다 — Hips·Thighs·Calves는 기존 fw34(Barbell Deadlift)
-// 등과 동일한 관례대로 전부 'Leg'로 통합했다 (Glutes 단독 태그는 이 129개 중에는
+// 등과 동일한 관례대로 전부 'Leg'로 통합했다 (Glutes 단독 태그는 이 목록 중에는
 // 없음).
 //
 // imageId(=id)는 Supabase Storage machine-images 버킷의 `${id}.gif` 파일과 매칭된다.
@@ -29,6 +30,7 @@ export const GYMVISUAL_GIF_IDS: ReadonlySet<string> = new Set([
   'fw141', 'fw142', 'fw143', 'fw144', 'fw145', 'fw146', 'fw147', 'fw148', 'fw149', 'fw150', 'fw151', 'fw152',
   'fw153', 'fw154', 'fw155', 'fw156', 'fw157', 'fw158', 'fw159', 'fw160', 'fw161', 'fw162', 'fw163', 'fw164',
   'fw165', 'fw166', 'fw167', 'fw168', 'fw169', 'fw170', 'fw171', 'fw172', 'fw173',
+  'fw174',
 ]);
 
 export const FREE_WEIGHTS_GYMVISUAL: FreeWeightExercise[] = [
@@ -66,6 +68,7 @@ export const FREE_WEIGHTS_GYMVISUAL: FreeWeightExercise[] = [
   { id: 'fw74', name: 'Cable One Arm Bent over Row', targetMuscle: 'Back', brand: 'Free Weight' },
   { id: 'fw75', name: 'Cable Reverse grip Straight Back Seated High Row', targetMuscle: 'Back', brand: 'Free Weight' },
   { id: 'fw76', name: 'Cable Rope Extension Incline Bench Row', targetMuscle: 'Back', brand: 'Free Weight' },
+  { id: 'fw174', name: 'Cable Seated Row', targetMuscle: 'Back', brand: 'Free Weight' },
   { id: 'fw77', name: 'Cable Seated High Row (V bar)', targetMuscle: 'Back', brand: 'Free Weight' },
   { id: 'fw78', name: 'Cable Straight Arm Pulldown', targetMuscle: 'Back', brand: 'Free Weight' },
   { id: 'fw79', name: 'Cable Straight Arm Pulldown (with rope)', targetMuscle: 'Back', brand: 'Free Weight' },
