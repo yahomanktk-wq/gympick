@@ -320,21 +320,24 @@ export async function fetchWorkoutLogs(userId: string): Promise<WorkoutLog[]> {
     const sessionIds = sessions.map(s => s.id);
     const gymIds     = [...new Set(sessions.map(s => s.gymId))];
 
-    // 2. Entries - fetchWorkoutEntriesForSessions owns the mock fallback
-    const entries  = await fetchWorkoutEntriesForSessions(sessionIds);
-    const entryIds = entries.map(e => e.id);
-
-    // 3. Sets - fetchWorkoutSetsForEntries owns the mock fallback
-    const sets = await fetchWorkoutSetsForEntries(entryIds);
-
-    // 4. Photo data (URI included) - fetchPhotosForSessions owns the mock fallback
-    const photoMap = await fetchPhotosForSessions(sessionIds);
-
-    // 5. Gym display names - Supabase query with local GYMS mock as fallback
-    const { data: gymData } = await supabase
-      .from('gyms')
-      .select('id, name, location')
-      .in('id', gymIds);
+    // 2~5. Entries→Sets는 서로 의존하는 순차 체인이라 그대로 유지하되,
+    //      사진(4)과 헬스장 이름(5) 조회는 entries/sets와 독립적이므로
+    //      동시에 실행해 왕복 대기 시간을 줄인다. (데이터/에러 처리 방식은 동일)
+    const [{ entries, sets }, photoMap, gymResult] = await Promise.all([
+      (async () => {
+        // 2. Entries - fetchWorkoutEntriesForSessions owns the mock fallback
+        const entries  = await fetchWorkoutEntriesForSessions(sessionIds);
+        const entryIds = entries.map(e => e.id);
+        // 3. Sets - fetchWorkoutSetsForEntries owns the mock fallback
+        const sets = await fetchWorkoutSetsForEntries(entryIds);
+        return { entries, sets };
+      })(),
+      // 4. Photo data (URI included) - fetchPhotosForSessions owns the mock fallback
+      fetchPhotosForSessions(sessionIds),
+      // 5. Gym display names - Supabase query with local GYMS mock as fallback
+      supabase.from('gyms').select('id, name, location').in('id', gymIds),
+    ]);
+    const gymData = gymResult.data;
 
     const gymMap = new Map<string, { name: string; location: string }>();
     for (const gymId of gymIds) {

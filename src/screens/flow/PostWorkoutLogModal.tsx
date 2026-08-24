@@ -69,7 +69,6 @@ import { fetchSplitConfig } from '../../lib/db/splitRoutine';
 import { getTodayTargets, isRestToday, toEnMuscle, parseMuscles } from '../../lib/splitUtils';
 import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Path as SvgPath, Text as SvgText, TextPath, Defs } from 'react-native-svg';
 
 // --- Types
 
@@ -129,13 +128,9 @@ const OVERLAY_PAD = 20;
 
 // Overlay layout style variants
 type OverlayStyle =
-  | 's1a' | 's1b' | 's1c' | 's1d'
-  | 's2a' | 's2b' | 's2c' | 's2d'
-  | 's3a' | 's3b' | 's3c' | 's3d'
-  | 's4a' | 's4b' | 's4c' | 's4d'
-  | 's5a' | 's5b' | 's5c' | 's5d'
-  | 's6a' | 's6b' | 's6c' | 's6d'
-  | 'archday';
+  | 's1a' | 's1b' | 's1c' | 's1d' | 's1e'
+  | 's2a' | 's2b' | 's2c' | 's2d' | 's2e'
+  | 's6a' | 's6b' | 's6c' | 's6d' | 's6e';
 
 type FontSet = {
   muscle: string | undefined;
@@ -146,22 +141,32 @@ type FontSet = {
 const FONT_SETS: Record<number, FontSet> = {
   1: { muscle: 'Quicksilver-Italic',       routine: undefined,              nickname: undefined              },
   2: { muscle: 'Matcha Cih',               routine: 'Mat Saleh',            nickname: 'KCC-Ganpan'           },
-  3: { muscle: 'BasicFont',                routine: 'Abrakadaboom',         nickname: 'KERISKEDU_Line'       },
-  4: { muscle: 'BlackwoodCastleShadow',    routine: 'BlackwoodCastle',      nickname: 'HeirofLightRegular'   },
-  5: { muscle: 'Flamer',                   routine: 'HeavyHeapRg-Regular',  nickname: 'BMkkubulimTTF-Regular'},
   6: { muscle: 'biergartenlt',             routine: undefined,              nickname: undefined              },
 };
 
 export function getFontSet(style: OverlayStyle): FontSet {
-  if (style === 'archday') return { muscle: 'Stadium1956-Regular', routine: 'CollegeBoy', nickname: 'CollegeBoy' };
   const setNum = parseInt(style.charAt(1));
   return FONT_SETS[setNum] ?? FONT_SETS[1];
 }
 
-export function getLayoutType(style: OverlayStyle): 'a' | 'b' | 'c' | 'd' | 'archday' {
-  if (style === 'archday') return 'archday';
+export function getLayoutType(style: OverlayStyle): 'a' | 'b' | 'c' | 'd' | 'e' {
   const t = style.charAt(2);
-  return (t === 'a' || t === 'b' || t === 'c' || t === 'd') ? t : 'a';
+  return (t === 'a' || t === 'b' || t === 'c' || t === 'd' || t === 'e') ? t : 'a';
+}
+
+/**
+ * 배경색(hex)의 밝기를 계산해 대비되는 검정/흰색을 반환한다.
+ * 오운완 인증샷 레이아웃 E의 GYM PICK 로고 박스처럼, 사용자가 고른 색을
+ * 배경으로 쓰면서 그 위에 항상 읽히는 글자색이 필요한 경우에 사용한다.
+ */
+export function getContrastTextColor(hex: string): string {
+  const h = hex.replace('#', '');
+  if (h.length !== 6) return '#000000';
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.55 ? '#000000' : '#ffffff';
 }
 
 // Fixed presets as specified
@@ -2585,131 +2590,163 @@ export function GridOverlayC({ exercises, logs, nickname, timestamp, muscleLabel
   );
 }
 
-export function ArchDayOverlay({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH }: OverlayProps) {
-  const COL_COUNT = 3;
-  const COL_W = Math.floor((photoW - OVERLAY_PAD * 2 - 16) / COL_COUNT);
+export function GridOverlayE({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH, fontSet }: OverlayProps & { fontSet: FontSet }) {
+  const COL_COUNT = 4;
 
-  // 아치형 SVG 설정
-  const svgW = photoW;
-  const svgH = Math.round(photoW * 0.55);
-  const cx   = svgW / 2;
-  const cy   = svgH + svgH * 0.1;
-  const r    = svgH * 0.85;
+  // 구분선을 별도 요소로 두고 좌우 여백을 동일하게 줘서 루틴과 루틴 사이 정중앙에 오도록 한다.
+  const DIVIDER_W    = 2;   // 구분선 굵기
+  const DIVIDER_GAP  = 6;   // 구분선 좌우 여백(대칭 → 자동으로 중앙 위치)
+  const DIVIDER_SLOT = DIVIDER_W + DIVIDER_GAP * 2;
+  const COL_W  = Math.floor((photoW - OVERLAY_PAD * 2 - DIVIDER_SLOT * (COL_COUNT - 1)) / COL_COUNT);
+  const GRID_W = COL_W * COL_COUNT + DIVIDER_SLOT * (COL_COUNT - 1);
 
-  // 반원 호 path (위쪽 아치)
-  const startX = cx - r;
-  const startY = cy;
-  const endX   = cx + r;
-  const endY   = cy;
-  const archPath = `M ${startX} ${startY} A ${r} ${r} 0 0 1 ${endX} ${endY}`;
+  // 좌상단: "닉네임 | 타임스탬프"를 세로로 회전시켜 배치하기 위한 치수.
+  // SIDE_LEN(회전 후 세로 길이)은 고정값으로 두고 numberOfLines=1로 넘치는 글자는 잘라낸다.
+  const SIDE_THICK = 13;
+  const SIDE_LEN   = 260;
+  const SIDE_EDGE_GAP = 8; // 최상단/최좌측에 붙이되 아주 살짝만 여백
+
+  // 우상단: GYM PICK 로고 박스 (배경 = 사용자가 고른 색, 로고 = 그 색과 대비되는 색)
+  // 원본 예시 이미지 대비: 상단에서 더 아래로 내리고, 두께는 더 두껍게, 위/아래 여백 차이는
+  // 완만하게 줄였다. (회전 전 좌표를 직접 계산해서 로고가 박스 "안"에 정확히 들어가도록 한다.)
+  const BOX_SIDE_PAD   = 15;  // 박스 좌우(두께 방향) 여백 — 박스 두께 2px 축소(좌우 1px씩)
+  const BOX_TOP_GAP    = 12;  // 로고 위쪽 여백 — 완만하게 축소
+  const BOX_BOTTOM_GAP = 9;   // 로고 아래쪽 여백 — 위쪽과 차이를 완만하게
+  const BOX_TOP_OFFSET = 48;  // 사진 최상단에서 더 아래로 내림
+  const LOGO_H     = 9;
+  const LOGO_W     = Math.round(LOGO_H * (2805 / 279));
+  const LOGO_BOX_W = LOGO_H + BOX_SIDE_PAD * 2;                    // 박스 폭(두께)
+  const LOGO_BOX_H = LOGO_W + BOX_TOP_GAP + BOX_BOTTOM_GAP;        // 박스 높이(길이)
+  const logoColor  = getContrastTextColor(tc);
+
+  // rotate(90deg)는 요소 자기 중심을 기준으로 회전한다. "회전 후 보이길 원하는 위치"를
+  // 먼저 정하고(로고를 박스 가로 중앙에서 살짝 좌측 / 세로 하단 쪽에 배치), 그 중심이 유지되도록
+  // 회전 전(pre-rotation) left/top을 역산해야 로고가 박스 바깥으로 새지 않는다.
+  const LOGO_LEFT_SHIFT = 3; // 박스 안에서 로고만 살짝 좌측으로 (우측으로 1px 이동)
+  const logoVisualLeft = (LOGO_BOX_W - LOGO_H) / 2 - LOGO_LEFT_SHIFT;
+  const logoVisualTop  = LOGO_BOX_H - BOX_BOTTOM_GAP - LOGO_W;
+  const logoPreLeft = logoVisualLeft + LOGO_H / 2 - LOGO_W / 2;
+  const logoPreTop  = logoVisualTop  + LOGO_W / 2 - LOGO_H / 2;
+
+  // "가슴 Day" → "가슴" 처럼 뒤에 붙는 Day 표기만 제거 (실제 부위명은 그대로 노출)
+  const pureLabel = muscleLabel.replace(/_?day$/i, '').replace(/\s*day$/i, '').trim() || muscleLabel;
+
+  const shownExercises = exercises.slice(0, 9);
+  const routineRows: (typeof shownExercises)[] = [];
+  for (let i = 0; i < shownExercises.length; i += COL_COUNT) {
+    routineRows.push(shownExercises.slice(i, i + COL_COUNT));
+  }
 
   return (
     <>
-      {/* 상단 좌: 닉네임 */}
-      <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD }}>
-        <Text style={{ fontSize: 13, color: tc, fontFamily: 'CollegeBoy', letterSpacing: 0.3 }}>
-          {nickname}
-        </Text>
-      </View>
-      {/* 상단 우: 날짜 */}
-      <View style={{ position: 'absolute', top: OVERLAY_PAD, right: OVERLAY_PAD, alignItems: 'flex-end' }}>
-        <Text style={{ fontSize: 10, color: tc, opacity: 0.85, fontFamily: 'CollegeBoy' }}>
-          {timestamp}
-        </Text>
-      </View>
-
-      {/* 중앙 아치형 타겟부위 */}
-      <View style={{
-        position: 'absolute',
-        top: OVERLAY_PAD + 28,
-        left: 0,
-        width: photoW,
-        height: svgH,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}>
-        <Svg width={svgW} height={svgH}>
-          <Defs>
-            <SvgPath id="archPath" d={archPath} />
-          </Defs>
-          <SvgText
-            fill={tc}
-            fontSize={Math.round(photoW * 0.13)}
-            fontFamily="Oklahoma"
-            textAnchor="middle"
+      {/* 좌상단: 닉네임 | 타임스탬프 (세로 회전, 최상단·최좌측에 살짝만 여백을 두고 붙임) */}
+      <View style={{ position: 'absolute', left: SIDE_EDGE_GAP, top: SIDE_EDGE_GAP, width: SIDE_THICK, height: SIDE_LEN, overflow: 'hidden' }}>
+        <View
+          style={{
+            position: 'absolute',
+            width: SIDE_LEN,
+            height: SIDE_THICK,
+            left: (SIDE_THICK - SIDE_LEN) / 2,
+            top: (SIDE_LEN - SIDE_THICK) / 2,
+            transform: [{ rotate: '90deg' }],
+            flexDirection: 'row',
+            alignItems: 'center',
+          }}
+        >
+          <Text
+            style={{ fontSize: 10, fontWeight: Platform.OS === 'android' ? undefined : '900', color: tc, letterSpacing: 0.3, fontFamily: fontSet.nickname }}
+            numberOfLines={1}
           >
-            <TextPath href="#archPath" startOffset="50%">
-              {muscleLabel.toUpperCase()}
-            </TextPath>
-          </SvgText>
-        </Svg>
+            {nickname}
+          </Text>
+          <Text style={{ fontSize: 10, color: tc, opacity: 0.6, marginHorizontal: 5, fontFamily: fontSet.nickname }}>|</Text>
+          <Text
+            style={{ fontSize: 9, fontWeight: Platform.OS === 'android' ? undefined : '600', color: tc, opacity: 0.85, fontFamily: fontSet.nickname }}
+            numberOfLines={1}
+          >
+            {timestamp}
+          </Text>
+        </View>
       </View>
 
-      {/* 3열 운동 목록 - GridOverlay와 동일한 구조 */}
-      <View style={{
-        position: 'absolute',
-        top: OVERLAY_PAD + 28 + svgH - 80,
-        left: OVERLAY_PAD,
-        right: OVERLAY_PAD,
-        bottom: OVERLAY_PAD + 32,
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 8,
-        alignContent: 'flex-start',
-        justifyContent: 'center',
-      }}>
-        {exercises.slice(0, 9).map(ex => {
-          const sets = logs[ex.id] ?? [];
-          return (
-            <View key={ex.id} style={{ width: COL_W, marginBottom: 8, alignItems: 'center' }}>
-              <Text style={{
-                fontSize: 8,
-                fontFamily: 'CollegeBoy',
-                color: tc,
-                opacity: 0.7,
-                letterSpacing: 0.5,
-                textAlign: 'center',
-              }}>
-                {`[${ex.brand.toUpperCase()}]`}
-              </Text>
-              <Text style={{
-                fontSize: 9,
-                fontFamily: 'CollegeBoy',
-                color: tc,
-                letterSpacing: 0.2,
-                marginBottom: 2,
-                lineHeight: 9,
-                textAlign: 'center',
-              }} numberOfLines={2}>
-                {ex.name.toUpperCase()}
-              </Text>
-              {sets.map((st, si) => (
-                <Text key={si} style={{
-                  fontSize: 8,
-                  fontFamily: 'CollegeBoy',
-                  color: tc,
-                  opacity: 0.85,
-                  lineHeight: 9,
-                  textAlign: 'center',
-                }}>
-                  {`S${si + 1} ${st.weight}kg × ${st.reps}`}
-                </Text>
-              ))}
+      {/* 우상단: GYM PICK 로고 박스 — 우측에 붙이되 상단은 아래로 내리고, 로고는 박스 안쪽 아래에 치우치게 배치 */}
+      <View
+        style={{
+          position: 'absolute',
+          top: BOX_TOP_OFFSET,
+          right: 0,
+          width: LOGO_BOX_W,
+          height: LOGO_BOX_H,
+          backgroundColor: tc,
+          overflow: 'hidden',
+        }}
+      >
+        <View style={{ position: 'absolute', left: logoPreLeft, top: logoPreTop, transform: [{ rotate: '90deg' }] }}>
+          <GymPickLogo color={logoColor} width={LOGO_W} height={LOGO_H} />
+        </View>
+      </View>
+
+      {/* 하단 고정: 타겟부위 + 3열 루틴 그리드 — bottom anchor라 내용이 늘면 위로 밀려 올라간다. 둘 다 가운데 정렬 */}
+      <View style={{ position: 'absolute', left: OVERLAY_PAD, right: OVERLAY_PAD, bottom: OVERLAY_PAD }}>
+        <Text
+          style={{ fontSize: 32, color: tc, fontFamily: fontSet.muscle, letterSpacing: -1, marginBottom: 14, textAlign: 'center' }}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.5}
+        >
+          {pureLabel}
+        </Text>
+
+        <View style={{ width: GRID_W, alignSelf: 'center' }}>
+          {routineRows.map((row, ri) => (
+            <View key={ri} style={{ flexDirection: 'row', marginBottom: 10 }}>
+              {row.map((ex, ci) => {
+                const sets = logs[ex.id] ?? [];
+                return (
+                  <React.Fragment key={ex.id}>
+                    {ci > 0 && (
+                      <View
+                        style={{
+                          width: DIVIDER_W,
+                          alignSelf: 'stretch',
+                          backgroundColor: tc + '55',
+                          marginHorizontal: DIVIDER_GAP,
+                        }}
+                      />
+                    )}
+                    <View style={{ width: COL_W }}>
+                      <Text
+                        style={{ fontSize: 7, fontWeight: Platform.OS === 'android' ? undefined : '700', color: tc, opacity: 0.75, letterSpacing: 0.2, fontFamily: fontSet.routine, textAlign: 'center' }}
+                        numberOfLines={1}
+                      >
+                        {`[${ex.brand.toUpperCase()}]`}
+                      </Text>
+                      <Text
+                        style={{ fontSize: 8, fontWeight: Platform.OS === 'android' ? undefined : '900', color: tc, marginBottom: 2, fontFamily: fontSet.routine, textAlign: 'center' }}
+                        numberOfLines={2}
+                      >
+                        {ex.name.toUpperCase()}
+                      </Text>
+                      {sets.map((st, si) => (
+                        <Text
+                          key={si}
+                          style={{ fontSize: 7, fontWeight: Platform.OS === 'android' ? undefined : '600', color: tc, opacity: 0.85, fontFamily: fontSet.routine, textAlign: 'center' }}
+                        >
+                          {`S${si + 1} ${st.weight}kg × ${st.reps}`}
+                        </Text>
+                      ))}
+                    </View>
+                  </React.Fragment>
+                );
+              })}
             </View>
-          );
-        })}
-        {exercises.length > 9 && (
-          <View style={{ width: COL_W }}>
-            <Text style={{ fontSize: 8, fontFamily: 'CollegeBoy', color: tc, opacity: 0.6 }}>
+          ))}
+          {exercises.length > 9 && (
+            <Text style={{ fontSize: 9, fontWeight: '700', color: tc, opacity: 0.6, textAlign: 'center' }}>
               {`+${exercises.length - 9} more...`}
             </Text>
-          </View>
-        )}
-      </View>
-
-      {/* 하단 중앙 로고 */}
-      <View style={{ position: 'absolute', bottom: OVERLAY_PAD, left: 0, right: 0, alignItems: 'center' }}>
-        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
+          )}
+        </View>
       </View>
     </>
   );
@@ -3056,6 +3093,8 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
   }
 
   const tc = textColor;
+  // 레이아웃 E(각진 모서리 + 테두리선 없음)만 사진 프레임 스타일이 달라서 미리 계산해둔다.
+  const currentLayoutType = getLayoutType(overlayStyle);
 
   return (
     <SafeAreaView style={s.safe} edges={["top", "bottom"]}>
@@ -3141,7 +3180,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
         {photoTaken && !showCamera && (
           <View
             ref={overlayRef}
-            style={[s.photoFrame, s.photoFrameActive, { height: photoH, backgroundColor: 'transparent', borderWidth: 0, borderRadius: 20, overflow: 'hidden' }]}
+            style={[s.photoFrame, s.photoFrameActive, { height: photoH, backgroundColor: 'transparent', borderWidth: 0, borderRadius: currentLayoutType === 'e' ? 0 : 20, overflow: 'hidden' }]}
             collapsable={false}
             onLayout={() => {
               if (!onboardingActive) return;
@@ -3169,20 +3208,6 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
 
             {/* 스타일별 오버레이 */}
             {(() => {
-              if (overlayStyle === 'archday') {
-                return (
-                  <ArchDayOverlay
-                    exercises={exercises}
-                    logs={logs}
-                    nickname={displayName}
-                    timestamp={timestamp}
-                    muscleLabel={muscleLabel}
-                    tc={tc}
-                    photoW={PHOTO_W}
-                    photoH={photoH}
-                  />
-                );
-              }
               const fs = getFontSet(overlayStyle);
               const layout = getLayoutType(overlayStyle);
 
@@ -3258,23 +3283,42 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
                 );
               }
 
+              // 유형 E: GridOverlayE (모서리 각짐 + 테두리선 없음 — 아래 테두리 렌더링에서 별도 처리)
+              if (layout === 'e') {
+                return (
+                  <GridOverlayE
+                    exercises={exercises}
+                    logs={logs}
+                    nickname={displayName}
+                    timestamp={timestamp}
+                    muscleLabel={muscleLabel}
+                    tc={tc}
+                    photoW={PHOTO_W}
+                    photoH={photoH}
+                    fontSet={fs}
+                  />
+                );
+              }
+
               return null;
             })()}
 
-            {/* 테두리: overflow 클리핑 이후 absolute로 덮어 빈공간 방지 */}
-            <View
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                borderRadius: 20,
-                borderWidth: 2,
-                borderColor: tc,
-              }}
-              pointerEvents="none"
-            />
+            {/* 테두리: overflow 클리핑 이후 absolute로 덮어 빈공간 방지 (레이아웃 E는 각진 디자인이라 생략) */}
+            {currentLayoutType !== 'e' && (
+              <View
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  borderRadius: 20,
+                  borderWidth: 2,
+                  borderColor: tc,
+                }}
+                pointerEvents="none"
+              />
+            )}
           </View>
         )}
 
@@ -3559,30 +3603,19 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
                 { key: 's1b', set: 1, type: 'B', muscle: 'Quicksilver-Italic' },
                 { key: 's1c', set: 1, type: 'C', muscle: 'Quicksilver-Italic' },
                 { key: 's1d', set: 1, type: 'D', muscle: 'Quicksilver-Italic' },
+                { key: 's1e', set: 1, type: 'E', muscle: 'Quicksilver-Italic' },
                 { key: 's2a', set: 2, type: 'A', muscle: 'Matcha Cih' },
                 { key: 's2b', set: 2, type: 'B', muscle: 'Matcha Cih' },
                 { key: 's2c', set: 2, type: 'C', muscle: 'Matcha Cih' },
                 { key: 's2d', set: 2, type: 'D', muscle: 'Matcha Cih' },
-                { key: 's3a', set: 3, type: 'A', muscle: 'BasicFont' },
-                { key: 's3b', set: 3, type: 'B', muscle: 'BasicFont' },
-                { key: 's3c', set: 3, type: 'C', muscle: 'BasicFont' },
-                { key: 's3d', set: 3, type: 'D', muscle: 'BasicFont' },
-                { key: 's4a', set: 4, type: 'A', muscle: 'BlackwoodCastleShadow' },
-                { key: 's4b', set: 4, type: 'B', muscle: 'BlackwoodCastleShadow' },
-                { key: 's4c', set: 4, type: 'C', muscle: 'BlackwoodCastleShadow' },
-                { key: 's4d', set: 4, type: 'D', muscle: 'BlackwoodCastleShadow' },
-                { key: 's5a', set: 5, type: 'A', muscle: 'Flamer' },
-                { key: 's5b', set: 5, type: 'B', muscle: 'Flamer' },
-                { key: 's5c', set: 5, type: 'C', muscle: 'Flamer' },
-                { key: 's5d', set: 5, type: 'D', muscle: 'Flamer' },
+                { key: 's2e', set: 2, type: 'E', muscle: 'Matcha Cih' },
                 { key: 's6a', set: 6, type: 'A', muscle: 'biergartenlt' },
                 { key: 's6b', set: 6, type: 'B', muscle: 'biergartenlt' },
                 { key: 's6c', set: 6, type: 'C', muscle: 'biergartenlt' },
                 { key: 's6d', set: 6, type: 'D', muscle: 'biergartenlt' },
-                { key: 'archday', set: 0, type: '9', muscle: 'Stadium1956-Regular' },
+                { key: 's6e', set: 6, type: 'E', muscle: 'biergartenlt' },
               ] as { key: OverlayStyle; set: number; type: string; muscle: string }[]).map((opt, idx) => {
                 const isActive = overlayStyle === opt.key;
-                const isArchday = opt.key === 'archday';
                 const isTypeD   = opt.type === 'D';
                 return (
                   <TouchableOpacity
@@ -3594,12 +3627,12 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
                       paddingVertical: 10,
                       borderRadius: 10,
                       borderWidth: isActive ? 2 : 1.5,
-                      borderColor: isActive ? C.accent : isArchday ? '#fb923c50' : C.border,
+                      borderColor: isActive ? C.accent : C.border,
                       backgroundColor: isActive ? '#1a1a1a' : C.surface,
                       alignItems: 'center',
                       justifyContent: 'center',
                       minWidth: 48,
-                      marginLeft: (!isArchday && idx > 0 && idx % 4 === 0) ? 8 : 0,
+                      marginLeft: (idx > 0 && idx % 5 === 0) ? 8 : 0,
                     }}
                   >
                     <Text style={{
@@ -3615,7 +3648,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
                       color: isActive ? C.accent : C.textDim,
                       marginTop: 3,
                     }}>
-                      {isArchday ? '9' : `${opt.set}${opt.type}`}
+                      {`${opt.set}${opt.type}`}
                     </Text>
                   </TouchableOpacity>
                 );

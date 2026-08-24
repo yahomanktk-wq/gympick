@@ -14,7 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { C, R } from '../../theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import GymPickLogo from '../../components/GymPickLogo';
-import { ArchDayOverlay, LeftColOverlayB, ClassicOverlay, GridOverlayC, GridOverlayD, getFontSet, getLayoutType } from './PostWorkoutLogModal';
+import { LeftColOverlayB, ClassicOverlay, GridOverlayC, GridOverlayD, GridOverlayE, getFontSet, getLayoutType } from './PostWorkoutLogModal';
 import { useFonts } from 'expo-font';
 
 const LOGO_STRIP_H = 14;
@@ -34,7 +34,7 @@ interface Props {
   nickname?: string;
   textColor: string;
   muscleLabel: string;
-  overlayStyle?: 's1a' | 's1b' | 's1c' | 's1d' | 's2a' | 's2b' | 's2c' | 's2d' | 's3a' | 's3b' | 's3c' | 's3d' | 's4a' | 's4b' | 's4c' | 's4d' | 's5a' | 's5b' | 's5c' | 's5d' | 's6a' | 's6b' | 's6c' | 's6d' | 'archday';
+  overlayStyle?: 's1a' | 's1b' | 's1c' | 's1d' | 's1e' | 's2a' | 's2b' | 's2c' | 's2d' | 's2e' | 's6a' | 's6b' | 's6c' | 's6d' | 's6e';
   onCaptureDone: (uri: string) => void;
   onCancel: () => void;
 }
@@ -119,6 +119,8 @@ export default function WorkoutCameraOverlay({
   const displayName = nickname ?? 'gympick_user';
 
   const tc = textColor;
+  // 레이아웃 E(각진 모서리 + 테두리선 없음)만 프레임 스타일이 달라서 미리 계산해둔다.
+  const currentLayoutType = getLayoutType(overlayStyle ?? 's1a');
 
   const handleTap = useCallback(async () => {
     if (capturing || !cameraReady || !cameraRef.current) return;
@@ -199,7 +201,7 @@ export default function WorkoutCameraOverlay({
 
       {/* 카메라 뷰파인더 + 오버레이 미리보기 */}
       <View
-        style={[styles.cameraWrap, { height: PHOTO_H }]}
+        style={[styles.cameraWrap, { height: PHOTO_H, borderRadius: currentLayoutType === 'e' ? 0 : 20 }]}
         {...pinchResponder.panHandlers}
       >
         <TouchableOpacity
@@ -225,20 +227,6 @@ export default function WorkoutCameraOverlay({
           {/* 스타일별 오버레이 분기 */}
           {(() => {
             const style = overlayStyle ?? 's1a';
-            if (style === 'archday') {
-              return (
-                <ArchDayOverlay
-                  exercises={exercises}
-                  logs={logs}
-                  nickname={nickname ?? ''}
-                  timestamp={timestamp}
-                  muscleLabel={muscleLabel}
-                  tc={textColor}
-                  photoW={PHOTO_W}
-                  photoH={PHOTO_H}
-                />
-              );
-            }
             const fs = getFontSet(style);
             const layout = getLayoutType(style);
             const commonProps = { exercises, logs, nickname: displayName, timestamp, muscleLabel, tc, photoW: PHOTO_W, photoH: PHOTO_H };
@@ -289,11 +277,28 @@ export default function WorkoutCameraOverlay({
                 />
               );
             }
+            if (layout === 'e') {
+              return (
+                <GridOverlayE
+                  exercises={exercises}
+                  logs={logs}
+                  nickname={displayName}
+                  timestamp={timestamp}
+                  muscleLabel={muscleLabel}
+                  tc={tc}
+                  photoW={PHOTO_W}
+                  photoH={PHOTO_H}
+                  fontSet={fs}
+                />
+              );
+            }
             return null;
           })()}
 
-          {/* 테두리 */}
-          <View style={[styles.border, { borderColor: tc }]} />
+          {/* 테두리 — 레이아웃 E는 각진 디자인이라 생략 */}
+          {currentLayoutType !== 'e' && (
+            <View style={[styles.border, { borderColor: tc }]} />
+          )}
 
           {/* 카메라 준비 중 딤 */}
           {!cameraReady && (

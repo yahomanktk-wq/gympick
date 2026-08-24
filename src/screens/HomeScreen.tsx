@@ -352,6 +352,10 @@ export default function HomeScreen() {
         let feedMuscleFilter: string[] = [];
         let hasFeedMuscleFilter = false;
 
+        // 오운완 피드 조회는 아래 운동기록/분할 조회 결과와 무관하므로
+        // (필터링은 나중에 별도로 적용됨) 동시에 미리 시작해둔다.
+        const feedPostsPromise = getActiveFeedPostsCached().catch(() => [] as WorkoutFeedPost[]);
+
         if (user) {
           const [logs, config] = await Promise.all([
             fetchWorkoutLogs(user.id).catch(() => [] as WorkoutLog[]),
@@ -399,7 +403,7 @@ export default function HomeScreen() {
           }
         }
 
-        let posts = await getActiveFeedPostsCached().catch(() => [] as WorkoutFeedPost[]);
+        let posts = await feedPostsPromise;
         if (!active) return;
 
         // 최근 24시간 게시물이 너무 적으면(3개 미만) 기간 제한 없이 재조회

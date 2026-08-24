@@ -505,7 +505,14 @@ export default function WorkoutFeedScreen() {
           return;
         }
         const myUserId = user.id;
-        const mySessions: WorkoutLog[] = await fetchWorkoutLogs(user.id).catch(() => []);
+
+        // 운동기록 / 최근 헬스장 ID / 피드 게시물 조회는 서로 결과를 필요로 하지 않는
+        // 독립적인 조회이므로 동시에 시작한다 (순서대로 기다리던 것을 병렬화).
+        const [mySessions, fetchedGymId, initialServerPosts]: [WorkoutLog[], string | null, WorkoutFeedPost[]] = await Promise.all([
+          fetchWorkoutLogs(user.id).catch(() => [] as WorkoutLog[]),
+          fetchMyLatestGymId(user.id),
+          getActiveFeedPostsCached().catch(() => [] as WorkoutFeedPost[]),
+        ]);
 
         // 24시간 이내 세션만 필터링
         const cutoff = Date.now() - 24 * 60 * 60 * 1000;
@@ -513,9 +520,8 @@ export default function WorkoutFeedScreen() {
           s => new Date(s.date).getTime() >= cutoff
         );
 
-        // 가장 최근 운동한 헬스장 ID fetch
-        let latestGymId: string | null = null;
-        latestGymId = await fetchMyLatestGymId(user.id);
+        // 가장 최근 운동한 헬스장 ID
+        let latestGymId: string | null = fetchedGymId;
         if (!latestGymId && mySessions.length > 0) {
           const sorted = [...mySessions].sort(
             (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -529,7 +535,7 @@ export default function WorkoutFeedScreen() {
           if (recent?.gymName && active) setMyGymName(recent.gymName);
         }
 
-        let serverPosts = await getActiveFeedPostsCached().catch(() => [] as WorkoutFeedPost[]);
+        let serverPosts = initialServerPosts;
         if (serverPosts.length < 3) {
           const widened = await fetchActiveFeedPosts(null).catch(() => [] as WorkoutFeedPost[]);
           if (widened.length > serverPosts.length) {
