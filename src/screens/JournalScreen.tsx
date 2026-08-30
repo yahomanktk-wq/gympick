@@ -40,6 +40,7 @@ import { useFetch } from '../lib/useFetch';
 import { useAuth } from '../context/AuthContext';
 import PostWorkoutLogModal from './flow/PostWorkoutLogModal';
 import MachineDetailModal from './flow/MachineDetailModal';
+import WorkoutLogSummaryModal from './flow/WorkoutLogSummaryModal';
 import GymPickLogo from '../components/GymPickLogo';
 import * as Haptics from 'expo-haptics';
 
@@ -394,6 +395,7 @@ function SessionDetailModal({
   prMachines,
   onClose,
   onOpenMachine,
+  onOpenSummary,
   onDelete,
   userId,
 }: {
@@ -401,6 +403,7 @@ function SessionDetailModal({
   prMachines:    Set<string>;
   onClose:       () => void;
   onOpenMachine: (machineId: string, machineName: string, machineBrand: string, targetMuscle?: string) => void;
+  onOpenSummary: (session: WorkoutLog) => void;
   onDelete:      (sessionId: string) => Promise<void>;
   userId:        string | null;
 }) {
@@ -785,6 +788,16 @@ function SessionDetailModal({
                   </TouchableOpacity>
                 </View>
 
+                {/* 운동일지 요약 보기 */}
+                <TouchableOpacity
+                  style={det.summaryBtn}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpenSummary(session); }}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="stats-chart-outline" size={16} color={C.bg} />
+                  <Text style={det.summaryBtnTxt}>운동일지 요약 보기</Text>
+                </TouchableOpacity>
+
                 {/* 운동 노트 */}
                 {machines.some(m => m.note) && (
                   <View style={det.noteSection}>
@@ -1063,6 +1076,7 @@ export default function JournalScreen() {
   const [machineDetailVisible, setMachineDetailVisible] = useState(false);
   const [splitConfig,    setSplitConfig]    = useState<UserSplitConfig | null>(null);
   const [todaySessions,  setTodaySessions]  = useState<WorkoutLog[]>([]);
+  const [summarySession, setSummarySession] = useState<WorkoutLog | null>(null);
 
   const splitConfigRef = useRef<UserSplitConfig | null>(null);
 
@@ -1240,6 +1254,10 @@ export default function JournalScreen() {
               setDetailSessions([]);
               setTimeout(() => setMachineDetailVisible(true), 400);
             }}
+            onOpenSummary={(session) => {
+              setDetailSessions([]);
+              setTimeout(() => setSummarySession(session), 400);
+            }}
             onDelete={async (sessionId) => {
               const session = detailSessions.find(s => s.id === sessionId);
               await deleteWorkoutSession(sessionId);
@@ -1302,6 +1320,13 @@ export default function JournalScreen() {
             }}
             userId={user?.id ?? null}
           />
+          {summarySession && (
+            <WorkoutLogSummaryModal
+              session={summarySession}
+              allSessions={sessions}
+              onClose={() => setSummarySession(null)}
+            />
+          )}
           <MachineDetailModal
             visible={machineDetailVisible}
             machine={detailMachine}
@@ -1478,6 +1503,8 @@ const det = StyleSheet.create({
   photoActionRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
   photoActionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: C.surface, borderRadius: R.inner, paddingVertical: 12, borderWidth: 1, borderColor: C.border },
   photoActionTxt: { fontSize: 13, fontWeight: '700', color: C.text },
+  summaryBtn:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: C.accent, borderRadius: R.inner, paddingVertical: 12, marginBottom: 12 },
+  summaryBtnTxt:  { fontSize: 13, fontWeight: '800', color: C.bg },
   sessionDivider: { height: 8, backgroundColor: C.surfaceHigh, marginVertical: 8 },
 });
 

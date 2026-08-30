@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Modal,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   TextInput,
   Dimensions,
@@ -85,6 +86,9 @@ export interface ExerciseInfo {
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W        = Math.floor((SCREEN_W - 48) / 3);
 const MUSCLE_CARD_W = Math.floor((SCREEN_W - 44) / 2);
+
+// 프리웨이트 "다른 부위도 보기" 필터칩 순서 (freeWeightsGymVisual.ts의 targetMuscle 값과 일치)
+const FW_MUSCLE_FILTERS = ['Chest', 'Back', 'Shoulder', 'Arms', 'Leg'] as const;
 
 // Historical PR map - machineId → { weight, reps } of best set ever logged
 const HIST_PRS = getMachinePRsFull(MOCK_SESSIONS);
@@ -821,6 +825,9 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
   const [dbFreeWeights,   setDbFreeWeights]   = useState<typeof FREE_WEIGHTS>([]);
   const [viewMode,        setViewMode]        = useState<'routine' | 'all'>('routine');
   const [viewCategory,    setViewCategory]    = useState<'machine' | 'freeweight'>('machine');
+  // "다른 부위도 보기"(viewMode==='all') 상태의 프리웨이트 목록은 부위 필터가 없어
+  // 129개가 뒤섞여 나온다 — 이때만 부위 필터칩으로 좁혀볼 수 있게 한다. null이면 전체.
+  const [fwMuscleFilter,  setFwMuscleFilter]  = useState<string | null>(null);
 
   const exerciseGridRef = useRef<View>(null);
 
@@ -901,6 +908,13 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
       : (dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS)
           .filter(fw => parseMuscles(fw.targetMuscle).some(t => matchesMuscle(t)));
 
+  // "다른 부위도 보기"(viewMode==='all') 상태에서만 부위 필터칩 적용 — 타겟부위 모드는
+  // 이미 matchesMuscle로 좁혀져 있어 추가 필터가 필요 없다. FlatList에는 이 필터링된
+  // 목록을 넘기고, freeWeights(필터 전) 자체는 헤더 노출 여부 판단에 그대로 쓴다.
+  const freeWeightsFiltered = (viewMode === 'all' && fwMuscleFilter)
+    ? freeWeights.filter(fw => fw.targetMuscle === fwMuscleFilter)
+    : freeWeights;
+
   // "다른 머신도 보기" 모드: 루틴 머신(순번 유지) + 부위 매칭되는 헬스장 전체 머신/프리웨이트(루틴에 없는 것) 통합
   const allModeOrderedList: Machine[] = (hasPreloaded && viewMode === 'all')
     ? [
@@ -917,12 +931,19 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
     setLocalSelectedId(prev => prev === id ? null : id);
   }
 
+  // Start Fresh 모드에서 "프리웨이트 보기"가 활성화된 상태 — 이때는 아래 스크롤
+  // 영역 전체가 머신 그리드(ScrollView) 대신 프리웨이트 FlatList로 바뀐다.
+  const showFreeWeightList = !hasPreloaded && viewCategory === 'freeweight';
+
   return (
     <SafeAreaView style={s.safe} edges={["top", "bottom"]}>
       <NavHeader title="머신 선택" onBack={onBack} onClose={onClose} />
       <StepBar total={5} current={2} />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
-        {/* Template row */}
+
+      {/* 템플릿 행 + 머신/프리웨이트 토글 헤더는 스크롤 영역 밖의 고정 헤더다 —
+          토글해도 이 부분은 그대로 있고, 아래 컨텐츠 영역만 ScrollView<->FlatList로
+          바뀐다 (기존처럼 별도 화면으로 이동하지 않고 같은 화면 안에서 카드만 교체). */}
+      <View style={s.listPad}>
         <View style={s.tplRow}>
           <Text style={s.hint}>운동할 머신을 하나 선택하세요</Text>
           {templates.length > 0 && (
@@ -933,7 +954,6 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
           )}
         </View>
 
-        {/* Inline template list */}
         {showTplList && (
           <View style={s.tplList}>
             {templates.map(t => (
@@ -950,6 +970,145 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
           </View>
         )}
 
+        {/* Start Fresh 모드: 머신/프리웨이트 카테고리 헤더 (viewCategory와 무관하게 항상 노출되어야 토글이 막히지 않음) */}
+        {!hasPreloaded && (machines.length > 0 || freeWeights.length > 0) && (
+          <View style={[s.sectionTitleRow, { marginBottom: 0 }]}>
+            <Text style={[s.sectionTitle, { marginBottom: 0 }]}>
+              {viewCategory === 'freeweight' ? '프리 웨이트' : '머신'}
+            </Text>
+            <ViewModeToggleButton
+              viewMode={viewMode}
+              hasPreloaded={hasPreloaded}
+              viewCategory={viewCategory}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setViewMode(prev => prev === 'routine' ? 'all' : 'routine');
+              }}
+            />
+            <View style={s.categoryToggleRow}>
+              <TouchableOpacity
+                style={[s.categoryToggleChip, viewCategory === 'machine' && s.categoryToggleChipActive]}
+                onPress={() => setViewCategory('machine')}
+                activeOpacity={0.8}
+              >
+                <Text style={[s.categoryToggleChipText, viewCategory === 'machine' && s.categoryToggleChipTextActive]}>
+                  머신
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.categoryToggleChip, viewCategory === 'freeweight' && s.categoryToggleChipActive]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setViewCategory('freeweight');
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={[s.categoryToggleChipText, viewCategory === 'freeweight' && s.categoryToggleChipTextActive]}>
+                  프리웨이트 보기
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* "다른 부위도 보기" 상태의 프리웨이트 목록(부위 필터 없이 129개)만 부위 필터칩 노출 —
+            타겟부위 모드는 이미 좁혀져 있어 칩이 필요 없다. */}
+        {showFreeWeightList && viewMode === 'all' && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={s.fwFilterScroll}
+            contentContainerStyle={s.fwFilterRow}
+          >
+            <TouchableOpacity
+              style={[s.categoryToggleChip, fwMuscleFilter === null && s.categoryToggleChipActive]}
+              onPress={() => setFwMuscleFilter(null)}
+              activeOpacity={0.8}
+            >
+              <Text style={[s.categoryToggleChipText, fwMuscleFilter === null && s.categoryToggleChipTextActive]}>
+                전체
+              </Text>
+            </TouchableOpacity>
+            {FW_MUSCLE_FILTERS.map(muscle => (
+              <TouchableOpacity
+                key={muscle}
+                style={[s.categoryToggleChip, fwMuscleFilter === muscle && s.categoryToggleChipActive]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setFwMuscleFilter(muscle);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={[s.categoryToggleChipText, fwMuscleFilter === muscle && s.categoryToggleChipTextActive]}>
+                  {muscle}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+      </View>
+
+      {showFreeWeightList ? (
+        <FlatList
+          data={freeWeightsFiltered}
+          keyExtractor={fw => fw.id}
+          numColumns={2}
+          columnWrapperStyle={s.freeWeightRow}
+          contentContainerStyle={s.listPad}
+          showsVerticalScrollIndicator={false}
+          removeClippedSubviews
+          initialNumToRender={8}
+          maxToRenderPerBatch={6}
+          updateCellsBatchingPeriod={50}
+          windowSize={7}
+          renderItem={({ item: fw }) => (
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => handleCardPress(fw.id)}
+              style={{ position: 'relative' }}
+            >
+              <MachineCardBorder width={MACHINE_CARD_W2}>
+                <MachineCard
+                  machine={{ id: fw.id, name: fw.name, brand: fw.brand, targetMuscle: fw.targetMuscle, category: 'Free Weight' }}
+                  variant="grid"
+                  width={MACHINE_CARD_W2}
+                />
+              </MachineCardBorder>
+              {/* Start Fresh(hasPreloaded=false)에서는 preloadedIds가 항상 비어있어 이 배지는 렌더되지 않음 */}
+              {preloadedIds.has(fw.id) && (
+                <View style={s.cardOrderOverlay}>
+                  <View style={s.cardOrderBadge}>
+                    <Text style={s.cardOrderText}>
+                      {[...preloadedIds].indexOf(fw.id) + 1}
+                    </Text>
+                  </View>
+                </View>
+              )}
+              {!preloadedIds.has(fw.id) && localSelectedId === fw.id && (
+                <View style={s.cardSelectedOverlay}>
+                  <View style={s.cardSelectedBadge}>
+                    <Ionicons name="checkmark" size={14} color={C.bg} />
+                  </View>
+                </View>
+              )}
+              {[...loggedIds].some(k => machineIdFromKey(k) === fw.id) && (
+                <View style={s.cardCompletedOverlay}>
+                  <View style={s.cardCompletedBadge}>
+                    <Ionicons name="checkmark-circle" size={13} color={C.accent} />
+                    <Text style={s.cardCompletedTxt}>완료</Text>
+                  </View>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
+          ListEmptyComponent={
+            <Text style={s.hint}>
+              {fwMuscleFilter ? `${fwMuscleFilter} 부위 프리웨이트가 없습니다.` : '표시할 프리웨이트가 없습니다.'}
+            </Text>
+          }
+        />
+      ) : (
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
         {/* 루틴 선택 모드: 머신+프리웨이트 순서 통합 */}
         {hasPreloaded && viewMode === 'routine' && routineOrderedAll.length > 0 && (
           <>
@@ -1077,45 +1236,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
           </>
         )}
 
-        {/* Start Fresh 모드: 머신/프리웨이트 카테고리 헤더 (viewCategory와 무관하게 항상 노출되어야 토글이 막히지 않음) */}
-        {!hasPreloaded && (machines.length > 0 || freeWeights.length > 0) && (
-          <View style={s.sectionTitleRow}>
-            <Text style={[s.sectionTitle, { marginBottom: 0 }]}>
-              {viewCategory === 'freeweight' ? '프리 웨이트' : '머신'}
-            </Text>
-            <ViewModeToggleButton
-              viewMode={viewMode}
-              hasPreloaded={hasPreloaded}
-              viewCategory={viewCategory}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setViewMode(prev => prev === 'routine' ? 'all' : 'routine');
-              }}
-            />
-            <View style={s.categoryToggleRow}>
-              <TouchableOpacity
-                style={[s.categoryToggleChip, viewCategory === 'machine' && s.categoryToggleChipActive]}
-                onPress={() => setViewCategory('machine')}
-                activeOpacity={0.8}
-              >
-                <Text style={[s.categoryToggleChipText, viewCategory === 'machine' && s.categoryToggleChipTextActive]}>
-                  머신
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.categoryToggleChip, viewCategory === 'freeweight' && s.categoryToggleChipActive]}
-                onPress={() => setViewCategory('freeweight')}
-                activeOpacity={0.8}
-              >
-                <Text style={[s.categoryToggleChipText, viewCategory === 'freeweight' && s.categoryToggleChipTextActive]}>
-                  프리웨이트
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* Start Fresh 모드: 머신 섹션 */}
+        {/* Start Fresh 모드: 머신 섹션 (머신/프리웨이트 토글 헤더는 위 고정 영역으로 이동함) */}
         {viewCategory === 'machine' && machines.length > 0 && (
           <>
             <View
@@ -1170,55 +1291,9 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
           </>
         )}
 
-        {viewCategory === 'freeweight' && freeWeights.length > 0 && (
-          <>
-            <View style={s.machineCardGrid}>
-              {freeWeights.map(fw => (
-                <TouchableOpacity
-                  key={fw.id}
-                  activeOpacity={0.85}
-                  onPress={() => handleCardPress(fw.id)}
-                  style={{ position: 'relative' }}
-                >
-                  <MachineCardBorder width={MACHINE_CARD_W2}>
-                    <MachineCard
-                      machine={{ id: fw.id, name: fw.name, brand: fw.brand, targetMuscle: fw.targetMuscle, category: 'Free Weight' }}
-                      variant="grid"
-                      width={MACHINE_CARD_W2}
-                    />
-                  </MachineCardBorder>
-                  {/* Start Fresh(hasPreloaded=false)에서는 preloadedIds가 항상 비어있어 이 배지는 렌더되지 않음 */}
-                  {preloadedIds.has(fw.id) && (
-                    <View style={s.cardOrderOverlay}>
-                      <View style={s.cardOrderBadge}>
-                        <Text style={s.cardOrderText}>
-                          {[...preloadedIds].indexOf(fw.id) + 1}
-                        </Text>
-                      </View>
-                    </View>
-                  )}
-                  {!preloadedIds.has(fw.id) && localSelectedId === fw.id && (
-                    <View style={s.cardSelectedOverlay}>
-                      <View style={s.cardSelectedBadge}>
-                        <Ionicons name="checkmark" size={14} color={C.bg} />
-                      </View>
-                    </View>
-                  )}
-                  {[...loggedIds].some(k => machineIdFromKey(k) === fw.id) && (
-                    <View style={s.cardCompletedOverlay}>
-                      <View style={s.cardCompletedBadge}>
-                        <Ionicons name="checkmark-circle" size={13} color={C.accent} />
-                        <Text style={s.cardCompletedTxt}>완료</Text>
-                      </View>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </>
-        )}
         <View style={{ height: 100 }} />
       </ScrollView>
+      )}
       <View style={s.ctaBar}>
         <View style={{ gap: 8 }}>
           <TouchableOpacity
@@ -1228,7 +1303,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
             disabled={!localSelectedId}
           >
             <Ionicons name="play" size={18} color={C.bg} />
-            <Text style={s.ctaTxt}>이 머신으로 운동 시작</Text>
+            <Text style={s.ctaTxt}>{showFreeWeightList ? '이 프리웨이트로 운동 시작' : '이 머신으로 운동 시작'}</Text>
           </TouchableOpacity>
           {loggedIds.size > 0 && (
             <TouchableOpacity
@@ -1293,6 +1368,65 @@ function SetProgressBanner({
         ))}
       </View>
     </View>
+  );
+}
+
+// --- 무게/횟수 프리셋 가로 스크롤 — 현재 값(또는 가장 가까운 프리셋)을 화면 중앙에 자동 배치
+function PresetScrollRow({ presets, value, onSelect }: {
+  presets: number[];
+  value: number;
+  onSelect: (v: number) => void;
+}) {
+  const scrollRef       = useRef<ScrollView>(null);
+  const chipLayouts     = useRef<Record<number, { x: number; width: number }>>({});
+  const containerWidth  = useRef(0);
+  const isMount          = useRef(true);
+
+  // 정확히 일치하는 프리셋이 있으면 그 값, 없으면 가장 가까운 값
+  const nearestPreset = presets.reduce((a, b) => (Math.abs(b - value) < Math.abs(a - value) ? b : a));
+
+  const centerOn = (target: number, animated: boolean) => {
+    const layout = chipLayouts.current[target];
+    if (!layout || !containerWidth.current) return;
+    const x = layout.x + layout.width / 2 - containerWidth.current / 2;
+    scrollRef.current?.scrollTo({ x: Math.max(0, x), animated });
+  };
+
+  useEffect(() => {
+    const animated = !isMount.current;
+    isMount.current = false;
+    const raf = requestAnimationFrame(() => centerOn(nearestPreset, animated));
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  return (
+    <ScrollView
+      ref={scrollRef}
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={{ flexShrink: 1 }}
+      onLayout={(e) => {
+        containerWidth.current = e.nativeEvent.layout.width;
+        centerOn(nearestPreset, false);
+      }}
+    >
+      <View style={s.presetRow}>
+        {presets.map(p => (
+          <TouchableOpacity
+            key={p}
+            style={[s.presetChip, value === p && s.presetChipActive]}
+            onPress={() => onSelect(p)}
+            onLayout={(e) => {
+              chipLayouts.current[p] = { x: e.nativeEvent.layout.x, width: e.nativeEvent.layout.width };
+              if (p === nearestPreset) centerOn(nearestPreset, false);
+            }}
+          >
+            <Text style={[s.presetChipText, value === p && s.presetChipTextActive]}>{p}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </ScrollView>
   );
 }
 
@@ -1395,19 +1529,7 @@ function SetCard({ ex, sets, realPR, prefill, freeWeights, onChange, onAdd, onCo
           {/* Weight */}
           <View style={s.inputRow}>
             <Text style={s.inputLabel}>무게</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexShrink: 1 }}>
-              <View style={s.presetRow}>
-                {WEIGHT_PRESETS.map(p => (
-                  <TouchableOpacity
-                    key={p}
-                    style={[s.presetChip, set.weight === p && s.presetChipActive]}
-                    onPress={() => onChange(idx, 'weight', p)}
-                  >
-                    <Text style={[s.presetChipText, set.weight === p && s.presetChipTextActive]}>{p}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
+            <PresetScrollRow presets={WEIGHT_PRESETS} value={set.weight} onSelect={v => onChange(idx, 'weight', v)} />
           </View>
           <View style={s.stepperRow}>
             <Text style={s.stepperUnit}>kg</Text>
@@ -1417,19 +1539,7 @@ function SetCard({ ex, sets, realPR, prefill, freeWeights, onChange, onAdd, onCo
           {/* Reps */}
           <View style={[s.inputRow, { marginTop: 10 }]}>
             <Text style={s.inputLabel}>횟수</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexShrink: 1 }}>
-              <View style={s.presetRow}>
-                {REPS_PRESETS.map(p => (
-                  <TouchableOpacity
-                    key={p}
-                    style={[s.presetChip, set.reps === p && s.presetChipActive]}
-                    onPress={() => onChange(idx, 'reps', p)}
-                  >
-                    <Text style={[s.presetChipText, set.reps === p && s.presetChipTextActive]}>{p}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
+            <PresetScrollRow presets={REPS_PRESETS} value={set.reps} onSelect={v => onChange(idx, 'reps', v)} />
           </View>
           <View style={s.stepperRow}>
             <Text style={s.stepperUnit}>reps</Text>
@@ -1644,8 +1754,8 @@ export function ClassicOverlay({ exercises, logs, nickname, timestamp, muscleLab
         <GymPickLogo color={tc} width={LOGO_STRIP_W_L} height={LOGO_STRIP_H_L} />
       </View>
       <View style={s.overlayTopRight}>
-        <Text style={[s.overlayUsername, { color: tc, fontFamily: fontSet.nickname }]}>{nickname}</Text>
-        <Text style={[s.overlayTimestamp, { color: tc, fontFamily: fontSet.nickname }]}>{timestamp}</Text>
+        <Text style={[s.overlayUsername, { color: tc, fontFamily: fontSet.nickname, fontWeight: Platform.OS === 'android' ? undefined : '900' }]}>{nickname}</Text>
+        <Text style={[s.overlayTimestamp, { color: tc, fontFamily: fontSet.nickname, fontWeight: Platform.OS === 'android' ? undefined : '500' }]}>{timestamp}</Text>
       </View>
       <View style={s.overlayBottomLeft}>
         <Text style={[s.overlayMuscleTitle, { color: tc, fontFamily: fontSet.muscle }]}>{muscleLabel}</Text>
@@ -1655,17 +1765,17 @@ export function ClassicOverlay({ exercises, logs, nickname, timestamp, muscleLab
             const setsLine = sets.map(st => `${st.weight} x ${st.reps}`).join(' / ');
             return (
               <View key={ex.id} style={s.overlayExBlock}>
-                <Text style={[s.overlayExName, { color: tc, fontFamily: fontSet.routine }]} numberOfLines={1}>
+                <Text style={[s.overlayExName, { color: tc, fontFamily: fontSet.routine, fontWeight: Platform.OS === 'android' ? undefined : '900' }]} numberOfLines={1}>
                   {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
                 </Text>
                 {setsLine ? (
-                  <Text style={[s.overlayExSet, { color: tc, fontFamily: fontSet.routine }]} numberOfLines={2}>{setsLine}</Text>
+                  <Text style={[s.overlayExSet, { color: tc, fontFamily: fontSet.routine, fontWeight: Platform.OS === 'android' ? undefined : '500' }]} numberOfLines={2}>{setsLine}</Text>
                 ) : null}
               </View>
             );
           })}
           {exercises.length > 7 && (
-            <Text style={[s.overlayExName, { color: tc, opacity: 0.6, marginTop: 2, fontFamily: fontSet.routine }]}>
+            <Text style={[s.overlayExName, { color: tc, opacity: 0.6, marginTop: 2, fontFamily: fontSet.routine, fontWeight: Platform.OS === 'android' ? undefined : '900' }]}>
               {`+${exercises.length - 7} more...`}
             </Text>
           )}
@@ -2198,7 +2308,7 @@ export function LeftColOverlayB({ exercises, logs, nickname, timestamp, muscleLa
       <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD }}>
         <Text style={{
           fontSize: 15,
-          fontWeight: '900',
+          fontWeight: Platform.OS === 'android' ? undefined : '900',
           color: tc,
           letterSpacing: 0.3,
           fontFamily: fontSet.nickname,
@@ -2222,7 +2332,7 @@ export function LeftColOverlayB({ exercises, logs, nickname, timestamp, muscleLa
         {/* 날짜 */}
         <Text style={{
           fontSize: 11,
-          fontWeight: '700',
+          fontWeight: Platform.OS === 'android' ? undefined : '700',
           color: tc,
           opacity: 0.75,
           marginBottom: 4,
@@ -2252,7 +2362,7 @@ export function LeftColOverlayB({ exercises, logs, nickname, timestamp, muscleLa
               <View key={ex.id} style={{ marginBottom: 10 }}>
                 <Text style={{
                   fontSize: 11,
-                  fontWeight: '900',
+                  fontWeight: Platform.OS === 'android' ? undefined : '900',
                   color: tc,
                   letterSpacing: 0.5,
                   fontFamily: fontSet.routine,
@@ -2262,7 +2372,7 @@ export function LeftColOverlayB({ exercises, logs, nickname, timestamp, muscleLa
                 {setsLine ? (
                   <Text style={{
                     fontSize: 11,
-                    fontWeight: '500',
+                    fontWeight: Platform.OS === 'android' ? undefined : '500',
                     color: tc,
                     opacity: 0.85,
                     marginTop: 2,
@@ -2297,7 +2407,7 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
       <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD }}>
         <Text style={{
           fontSize: 14,
-          fontWeight: '900',
+          fontWeight: Platform.OS === 'android' ? undefined : '900',
           color: tc,
           letterSpacing: 0.3,
           fontFamily: fontSet.nickname,
@@ -2310,7 +2420,7 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
       <View style={{ position: 'absolute', top: OVERLAY_PAD, right: OVERLAY_PAD }}>
         <Text style={{
           fontSize: 12,
-          fontWeight: '700',
+          fontWeight: Platform.OS === 'android' ? undefined : '700',
           color: tc,
           opacity: 0.85,
           fontFamily: fontSet.nickname,
@@ -2361,7 +2471,7 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
               <View key={ex.id} style={{ width: COL_W, alignItems: 'center', marginBottom: 10 }}>
                 <Text style={{
                   fontSize: 8,
-                  fontWeight: '700',
+                  fontWeight: Platform.OS === 'android' ? undefined : '700',
                   color: tc,
                   opacity: 0.7,
                   letterSpacing: 0.5,
@@ -2372,7 +2482,7 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
                 </Text>
                 <Text style={{
                   fontSize: 9,
-                  fontWeight: '900',
+                  fontWeight: Platform.OS === 'android' ? undefined : '900',
                   color: tc,
                   letterSpacing: 0.2,
                   marginBottom: 3,
@@ -2385,7 +2495,7 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
                 {sets.map((st, si) => (
                   <Text key={si} style={{
                     fontSize: 8,
-                    fontWeight: '600',
+                    fontWeight: Platform.OS === 'android' ? undefined : '600',
                     color: tc,
                     opacity: 0.85,
                     lineHeight: 11,
@@ -2430,7 +2540,7 @@ export function GridOverlayC({ exercises, logs, nickname, timestamp, muscleLabel
     <>
       {/* 상단: 닉네임 좌, 날짜 우 */}
       <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD, right: OVERLAY_PAD, flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text style={{ fontSize: 13, fontWeight: '900', color: tc, fontFamily: fontSet.nickname }}>{nickname}</Text>
+        <Text style={{ fontSize: 13, fontWeight: Platform.OS === 'android' ? undefined : '900', color: tc, fontFamily: fontSet.nickname }}>{nickname}</Text>
         <Text style={{ fontSize: 10, color: tc, opacity: 0.85, fontFamily: fontSet.nickname }}>{timestamp}</Text>
       </View>
       {/* 타겟부위 */}
@@ -2457,7 +2567,7 @@ export function GridOverlayC({ exercises, logs, nickname, timestamp, muscleLabel
               <Text style={{ fontSize: 8, color: tc, opacity: 0.7, fontFamily: fontSet.routine, letterSpacing: 0.5 }} numberOfLines={1}>
                 {`[${ex.brand.toUpperCase()}]`}
               </Text>
-              <Text style={{ fontSize: 9, fontWeight: '900', color: tc, fontFamily: fontSet.routine, marginBottom: 2 }} numberOfLines={2}>
+              <Text style={{ fontSize: 9, fontWeight: Platform.OS === 'android' ? undefined : '900', color: tc, fontFamily: fontSet.routine, marginBottom: 2 }} numberOfLines={2}>
                 {ex.name.toUpperCase()}
               </Text>
               {sets.map((st, si) => (
@@ -2644,7 +2754,7 @@ export function GridOverlayE({ exercises, logs, nickname, timestamp, muscleLabel
 
 // --- Step 5: Photo
 
-function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, photoUri, nickname, onColorChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera, onRegisterRect, onboardingActive, onboardingKey, onOnboardingNext, onOnboardingJump }: {
+function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, photoUri, nickname, fontsLoaded, onColorChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera, onRegisterRect, onboardingActive, onboardingKey, onOnboardingNext, onOnboardingJump }: {
   gym: GymWithMachines;
   exercises: ExerciseInfo[];
   selectedMuscles: string[];
@@ -2652,6 +2762,9 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
   photoTaken: boolean;
   photoUri?: string;
   nickname?: string;
+  /** expo-font useFonts 로딩 완료 여부 — 인증샷 캡처가 폰트 로딩보다 먼저 실행되어
+   *  Android에서 시스템 폰트로 캡처되는 레이스 컨디션을 막기 위한 가드 */
+  fontsLoaded: boolean;
   onColorChange: (color: string) => void;
   onCapture: (aspect: [number, number]) => void;
   onCameraCapture: (uri: string) => void;
@@ -3642,7 +3755,11 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
           }
         }}
       >
-        <TouchableOpacity style={s.ctaBtn} activeOpacity={0.85} onPress={async () => {
+        <TouchableOpacity
+          style={[s.ctaBtn, !fontsLoaded && { opacity: 0.5 }]}
+          activeOpacity={0.85}
+          disabled={!fontsLoaded}
+          onPress={async () => {
           if (!photoTaken) {
             Alert.alert(
               '사진을 등록해주세요',
@@ -4854,6 +4971,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             onSetShowCamera={setShowCamera}
             onCompositeUri={(uri) => setCompositeUri(uri)}
             onRoutineCardUri={(uri) => setRoutineCardUri(uri)}
+            fontsLoaded={fontsLoaded}
             onSave={requestSaveWorkout}
             onBack={goBack}
             onClose={() => onClose(false)}
@@ -4977,6 +5095,9 @@ const s = StyleSheet.create({
 
   // Machine card 2-column grid for exercise select
   machineCardGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  freeWeightRow: { gap: 8, marginBottom: 8 },
+  fwFilterScroll: { marginTop: 10 },
+  fwFilterRow: { flexDirection: 'row', gap: 6, paddingRight: 16 },
   cardOrderOverlay: { position: 'absolute', top: 8, left: 8 },
   cardOrderBadge: {
     width: 28, height: 28, borderRadius: 14,
