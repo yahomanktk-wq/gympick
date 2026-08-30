@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Modal,
   ScrollView,
-  FlatList,
   TouchableOpacity,
   TextInput,
   Dimensions,
@@ -75,9 +74,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 type Step = 'muscle-select' | 'gym-select' | 'routine-reference' | 'today-list' | 'exercise-select' | 'log-sets' | 'photo' | 'done';
 
 
-interface SetEntry { weight: number; reps: number; }
+export interface SetEntry { weight: number; reps: number; }
 
-interface ExerciseInfo {
+export interface ExerciseInfo {
   id: string; name: string; brand: string; targetMuscle: string;
 }
 
@@ -86,9 +85,6 @@ interface ExerciseInfo {
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W        = Math.floor((SCREEN_W - 48) / 3);
 const MUSCLE_CARD_W = Math.floor((SCREEN_W - 44) / 2);
-
-// 프리웨이트 "다른 부위도 보기" 필터칩 순서 (freeWeightsGymVisual.ts의 targetMuscle 값과 일치)
-const FW_MUSCLE_FILTERS = ['Chest', 'Back', 'Shoulder', 'Arms', 'Leg'] as const;
 
 // Historical PR map - machineId → { weight, reps } of best set ever logged
 const HIST_PRS = getMachinePRsFull(MOCK_SESSIONS);
@@ -825,9 +821,6 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
   const [dbFreeWeights,   setDbFreeWeights]   = useState<typeof FREE_WEIGHTS>([]);
   const [viewMode,        setViewMode]        = useState<'routine' | 'all'>('routine');
   const [viewCategory,    setViewCategory]    = useState<'machine' | 'freeweight'>('machine');
-  // "다른 부위도 보기"(viewMode==='all') 상태의 프리웨이트 목록은 부위 필터가 없어
-  // 129개가 뒤섞여 나온다 — 이때만 부위 필터칩으로 좁혀볼 수 있게 한다. null이면 전체.
-  const [fwMuscleFilter,  setFwMuscleFilter]  = useState<string | null>(null);
 
   const exerciseGridRef = useRef<View>(null);
 
@@ -908,13 +901,6 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
       : (dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS)
           .filter(fw => parseMuscles(fw.targetMuscle).some(t => matchesMuscle(t)));
 
-  // "다른 부위도 보기"(viewMode==='all') 상태에서만 부위 필터칩 적용 — 타겟부위 모드는
-  // 이미 matchesMuscle로 좁혀져 있어 추가 필터가 필요 없다. FlatList에는 이 필터링된
-  // 목록을 넘기고, freeWeights(필터 전) 자체는 헤더 노출 여부 판단에 그대로 쓴다.
-  const freeWeightsFiltered = (viewMode === 'all' && fwMuscleFilter)
-    ? freeWeights.filter(fw => fw.targetMuscle === fwMuscleFilter)
-    : freeWeights;
-
   // "다른 머신도 보기" 모드: 루틴 머신(순번 유지) + 부위 매칭되는 헬스장 전체 머신/프리웨이트(루틴에 없는 것) 통합
   const allModeOrderedList: Machine[] = (hasPreloaded && viewMode === 'all')
     ? [
@@ -931,19 +917,12 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
     setLocalSelectedId(prev => prev === id ? null : id);
   }
 
-  // Start Fresh 모드에서 "프리웨이트 보기"가 활성화된 상태 — 이때는 아래 스크롤
-  // 영역 전체가 머신 그리드(ScrollView) 대신 프리웨이트 FlatList로 바뀐다.
-  const showFreeWeightList = !hasPreloaded && viewCategory === 'freeweight';
-
   return (
     <SafeAreaView style={s.safe} edges={["top", "bottom"]}>
       <NavHeader title="머신 선택" onBack={onBack} onClose={onClose} />
       <StepBar total={5} current={2} />
-
-      {/* 템플릿 행 + 머신/프리웨이트 토글 헤더는 스크롤 영역 밖의 고정 헤더다 —
-          토글해도 이 부분은 그대로 있고, 아래 컨텐츠 영역만 ScrollView<->FlatList로
-          바뀐다 (기존처럼 별도 화면으로 이동하지 않고 같은 화면 안에서 카드만 교체). */}
-      <View style={s.listPad}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
+        {/* Template row */}
         <View style={s.tplRow}>
           <Text style={s.hint}>운동할 머신을 하나 선택하세요</Text>
           {templates.length > 0 && (
@@ -954,6 +933,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
           )}
         </View>
 
+        {/* Inline template list */}
         {showTplList && (
           <View style={s.tplList}>
             {templates.map(t => (
@@ -970,145 +950,6 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
           </View>
         )}
 
-        {/* Start Fresh 모드: 머신/프리웨이트 카테고리 헤더 (viewCategory와 무관하게 항상 노출되어야 토글이 막히지 않음) */}
-        {!hasPreloaded && (machines.length > 0 || freeWeights.length > 0) && (
-          <View style={[s.sectionTitleRow, { marginBottom: 0 }]}>
-            <Text style={[s.sectionTitle, { marginBottom: 0 }]}>
-              {viewCategory === 'freeweight' ? '프리 웨이트' : '머신'}
-            </Text>
-            <ViewModeToggleButton
-              viewMode={viewMode}
-              hasPreloaded={hasPreloaded}
-              viewCategory={viewCategory}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setViewMode(prev => prev === 'routine' ? 'all' : 'routine');
-              }}
-            />
-            <View style={s.categoryToggleRow}>
-              <TouchableOpacity
-                style={[s.categoryToggleChip, viewCategory === 'machine' && s.categoryToggleChipActive]}
-                onPress={() => setViewCategory('machine')}
-                activeOpacity={0.8}
-              >
-                <Text style={[s.categoryToggleChipText, viewCategory === 'machine' && s.categoryToggleChipTextActive]}>
-                  머신
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.categoryToggleChip, viewCategory === 'freeweight' && s.categoryToggleChipActive]}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setViewCategory('freeweight');
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={[s.categoryToggleChipText, viewCategory === 'freeweight' && s.categoryToggleChipTextActive]}>
-                  프리웨이트 보기
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* "다른 부위도 보기" 상태의 프리웨이트 목록(부위 필터 없이 129개)만 부위 필터칩 노출 —
-            타겟부위 모드는 이미 좁혀져 있어 칩이 필요 없다. */}
-        {showFreeWeightList && viewMode === 'all' && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={s.fwFilterScroll}
-            contentContainerStyle={s.fwFilterRow}
-          >
-            <TouchableOpacity
-              style={[s.categoryToggleChip, fwMuscleFilter === null && s.categoryToggleChipActive]}
-              onPress={() => setFwMuscleFilter(null)}
-              activeOpacity={0.8}
-            >
-              <Text style={[s.categoryToggleChipText, fwMuscleFilter === null && s.categoryToggleChipTextActive]}>
-                전체
-              </Text>
-            </TouchableOpacity>
-            {FW_MUSCLE_FILTERS.map(muscle => (
-              <TouchableOpacity
-                key={muscle}
-                style={[s.categoryToggleChip, fwMuscleFilter === muscle && s.categoryToggleChipActive]}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setFwMuscleFilter(muscle);
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={[s.categoryToggleChipText, fwMuscleFilter === muscle && s.categoryToggleChipTextActive]}>
-                  {muscle}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        )}
-      </View>
-
-      {showFreeWeightList ? (
-        <FlatList
-          data={freeWeightsFiltered}
-          keyExtractor={fw => fw.id}
-          numColumns={2}
-          columnWrapperStyle={s.freeWeightRow}
-          contentContainerStyle={s.listPad}
-          showsVerticalScrollIndicator={false}
-          removeClippedSubviews
-          initialNumToRender={8}
-          maxToRenderPerBatch={6}
-          updateCellsBatchingPeriod={50}
-          windowSize={7}
-          renderItem={({ item: fw }) => (
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={() => handleCardPress(fw.id)}
-              style={{ position: 'relative' }}
-            >
-              <MachineCardBorder width={MACHINE_CARD_W2}>
-                <MachineCard
-                  machine={{ id: fw.id, name: fw.name, brand: fw.brand, targetMuscle: fw.targetMuscle, category: 'Free Weight' }}
-                  variant="grid"
-                  width={MACHINE_CARD_W2}
-                />
-              </MachineCardBorder>
-              {/* Start Fresh(hasPreloaded=false)에서는 preloadedIds가 항상 비어있어 이 배지는 렌더되지 않음 */}
-              {preloadedIds.has(fw.id) && (
-                <View style={s.cardOrderOverlay}>
-                  <View style={s.cardOrderBadge}>
-                    <Text style={s.cardOrderText}>
-                      {[...preloadedIds].indexOf(fw.id) + 1}
-                    </Text>
-                  </View>
-                </View>
-              )}
-              {!preloadedIds.has(fw.id) && localSelectedId === fw.id && (
-                <View style={s.cardSelectedOverlay}>
-                  <View style={s.cardSelectedBadge}>
-                    <Ionicons name="checkmark" size={14} color={C.bg} />
-                  </View>
-                </View>
-              )}
-              {[...loggedIds].some(k => machineIdFromKey(k) === fw.id) && (
-                <View style={s.cardCompletedOverlay}>
-                  <View style={s.cardCompletedBadge}>
-                    <Ionicons name="checkmark-circle" size={13} color={C.accent} />
-                    <Text style={s.cardCompletedTxt}>완료</Text>
-                  </View>
-                </View>
-              )}
-            </TouchableOpacity>
-          )}
-          ListEmptyComponent={
-            <Text style={s.hint}>
-              {fwMuscleFilter ? `${fwMuscleFilter} 부위 프리웨이트가 없습니다.` : '표시할 프리웨이트가 없습니다.'}
-            </Text>
-          }
-        />
-      ) : (
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
         {/* 루틴 선택 모드: 머신+프리웨이트 순서 통합 */}
         {hasPreloaded && viewMode === 'routine' && routineOrderedAll.length > 0 && (
           <>
@@ -1236,7 +1077,45 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
           </>
         )}
 
-        {/* Start Fresh 모드: 머신 섹션 (머신/프리웨이트 토글 헤더는 위 고정 영역으로 이동함) */}
+        {/* Start Fresh 모드: 머신/프리웨이트 카테고리 헤더 (viewCategory와 무관하게 항상 노출되어야 토글이 막히지 않음) */}
+        {!hasPreloaded && (machines.length > 0 || freeWeights.length > 0) && (
+          <View style={s.sectionTitleRow}>
+            <Text style={[s.sectionTitle, { marginBottom: 0 }]}>
+              {viewCategory === 'freeweight' ? '프리 웨이트' : '머신'}
+            </Text>
+            <ViewModeToggleButton
+              viewMode={viewMode}
+              hasPreloaded={hasPreloaded}
+              viewCategory={viewCategory}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setViewMode(prev => prev === 'routine' ? 'all' : 'routine');
+              }}
+            />
+            <View style={s.categoryToggleRow}>
+              <TouchableOpacity
+                style={[s.categoryToggleChip, viewCategory === 'machine' && s.categoryToggleChipActive]}
+                onPress={() => setViewCategory('machine')}
+                activeOpacity={0.8}
+              >
+                <Text style={[s.categoryToggleChipText, viewCategory === 'machine' && s.categoryToggleChipTextActive]}>
+                  머신
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.categoryToggleChip, viewCategory === 'freeweight' && s.categoryToggleChipActive]}
+                onPress={() => setViewCategory('freeweight')}
+                activeOpacity={0.8}
+              >
+                <Text style={[s.categoryToggleChipText, viewCategory === 'freeweight' && s.categoryToggleChipTextActive]}>
+                  프리웨이트
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Start Fresh 모드: 머신 섹션 */}
         {viewCategory === 'machine' && machines.length > 0 && (
           <>
             <View
@@ -1291,9 +1170,55 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
           </>
         )}
 
+        {viewCategory === 'freeweight' && freeWeights.length > 0 && (
+          <>
+            <View style={s.machineCardGrid}>
+              {freeWeights.map(fw => (
+                <TouchableOpacity
+                  key={fw.id}
+                  activeOpacity={0.85}
+                  onPress={() => handleCardPress(fw.id)}
+                  style={{ position: 'relative' }}
+                >
+                  <MachineCardBorder width={MACHINE_CARD_W2}>
+                    <MachineCard
+                      machine={{ id: fw.id, name: fw.name, brand: fw.brand, targetMuscle: fw.targetMuscle, category: 'Free Weight' }}
+                      variant="grid"
+                      width={MACHINE_CARD_W2}
+                    />
+                  </MachineCardBorder>
+                  {/* Start Fresh(hasPreloaded=false)에서는 preloadedIds가 항상 비어있어 이 배지는 렌더되지 않음 */}
+                  {preloadedIds.has(fw.id) && (
+                    <View style={s.cardOrderOverlay}>
+                      <View style={s.cardOrderBadge}>
+                        <Text style={s.cardOrderText}>
+                          {[...preloadedIds].indexOf(fw.id) + 1}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                  {!preloadedIds.has(fw.id) && localSelectedId === fw.id && (
+                    <View style={s.cardSelectedOverlay}>
+                      <View style={s.cardSelectedBadge}>
+                        <Ionicons name="checkmark" size={14} color={C.bg} />
+                      </View>
+                    </View>
+                  )}
+                  {[...loggedIds].some(k => machineIdFromKey(k) === fw.id) && (
+                    <View style={s.cardCompletedOverlay}>
+                      <View style={s.cardCompletedBadge}>
+                        <Ionicons name="checkmark-circle" size={13} color={C.accent} />
+                        <Text style={s.cardCompletedTxt}>완료</Text>
+                      </View>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
         <View style={{ height: 100 }} />
       </ScrollView>
-      )}
       <View style={s.ctaBar}>
         <View style={{ gap: 8 }}>
           <TouchableOpacity
@@ -1303,7 +1228,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
             disabled={!localSelectedId}
           >
             <Ionicons name="play" size={18} color={C.bg} />
-            <Text style={s.ctaTxt}>{showFreeWeightList ? '이 프리웨이트로 운동 시작' : '이 머신으로 운동 시작'}</Text>
+            <Text style={s.ctaTxt}>이 머신으로 운동 시작</Text>
           </TouchableOpacity>
           {loggedIds.size > 0 && (
             <TouchableOpacity
@@ -1368,65 +1293,6 @@ function SetProgressBanner({
         ))}
       </View>
     </View>
-  );
-}
-
-// --- 무게/횟수 프리셋 가로 스크롤 — 현재 값(또는 가장 가까운 프리셋)을 화면 중앙에 자동 배치
-function PresetScrollRow({ presets, value, onSelect }: {
-  presets: number[];
-  value: number;
-  onSelect: (v: number) => void;
-}) {
-  const scrollRef       = useRef<ScrollView>(null);
-  const chipLayouts     = useRef<Record<number, { x: number; width: number }>>({});
-  const containerWidth  = useRef(0);
-  const isMount          = useRef(true);
-
-  // 정확히 일치하는 프리셋이 있으면 그 값, 없으면 가장 가까운 값
-  const nearestPreset = presets.reduce((a, b) => (Math.abs(b - value) < Math.abs(a - value) ? b : a));
-
-  const centerOn = (target: number, animated: boolean) => {
-    const layout = chipLayouts.current[target];
-    if (!layout || !containerWidth.current) return;
-    const x = layout.x + layout.width / 2 - containerWidth.current / 2;
-    scrollRef.current?.scrollTo({ x: Math.max(0, x), animated });
-  };
-
-  useEffect(() => {
-    const animated = !isMount.current;
-    isMount.current = false;
-    const raf = requestAnimationFrame(() => centerOn(nearestPreset, animated));
-    return () => cancelAnimationFrame(raf);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
-
-  return (
-    <ScrollView
-      ref={scrollRef}
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      style={{ flexShrink: 1 }}
-      onLayout={(e) => {
-        containerWidth.current = e.nativeEvent.layout.width;
-        centerOn(nearestPreset, false);
-      }}
-    >
-      <View style={s.presetRow}>
-        {presets.map(p => (
-          <TouchableOpacity
-            key={p}
-            style={[s.presetChip, value === p && s.presetChipActive]}
-            onPress={() => onSelect(p)}
-            onLayout={(e) => {
-              chipLayouts.current[p] = { x: e.nativeEvent.layout.x, width: e.nativeEvent.layout.width };
-              if (p === nearestPreset) centerOn(nearestPreset, false);
-            }}
-          >
-            <Text style={[s.presetChipText, value === p && s.presetChipTextActive]}>{p}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </ScrollView>
   );
 }
 
@@ -1529,7 +1395,19 @@ function SetCard({ ex, sets, realPR, prefill, freeWeights, onChange, onAdd, onCo
           {/* Weight */}
           <View style={s.inputRow}>
             <Text style={s.inputLabel}>무게</Text>
-            <PresetScrollRow presets={WEIGHT_PRESETS} value={set.weight} onSelect={v => onChange(idx, 'weight', v)} />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexShrink: 1 }}>
+              <View style={s.presetRow}>
+                {WEIGHT_PRESETS.map(p => (
+                  <TouchableOpacity
+                    key={p}
+                    style={[s.presetChip, set.weight === p && s.presetChipActive]}
+                    onPress={() => onChange(idx, 'weight', p)}
+                  >
+                    <Text style={[s.presetChipText, set.weight === p && s.presetChipTextActive]}>{p}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
           </View>
           <View style={s.stepperRow}>
             <Text style={s.stepperUnit}>kg</Text>
@@ -1539,7 +1417,19 @@ function SetCard({ ex, sets, realPR, prefill, freeWeights, onChange, onAdd, onCo
           {/* Reps */}
           <View style={[s.inputRow, { marginTop: 10 }]}>
             <Text style={s.inputLabel}>횟수</Text>
-            <PresetScrollRow presets={REPS_PRESETS} value={set.reps} onSelect={v => onChange(idx, 'reps', v)} />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexShrink: 1 }}>
+              <View style={s.presetRow}>
+                {REPS_PRESETS.map(p => (
+                  <TouchableOpacity
+                    key={p}
+                    style={[s.presetChip, set.reps === p && s.presetChipActive]}
+                    onPress={() => onChange(idx, 'reps', p)}
+                  >
+                    <Text style={[s.presetChipText, set.reps === p && s.presetChipTextActive]}>{p}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
           </View>
           <View style={s.stepperRow}>
             <Text style={s.stepperUnit}>reps</Text>
@@ -1754,8 +1644,8 @@ export function ClassicOverlay({ exercises, logs, nickname, timestamp, muscleLab
         <GymPickLogo color={tc} width={LOGO_STRIP_W_L} height={LOGO_STRIP_H_L} />
       </View>
       <View style={s.overlayTopRight}>
-        <Text style={[s.overlayUsername, { color: tc, fontFamily: fontSet.nickname, fontWeight: Platform.OS === 'android' ? undefined : '900' }]}>{nickname}</Text>
-        <Text style={[s.overlayTimestamp, { color: tc, fontFamily: fontSet.nickname, fontWeight: Platform.OS === 'android' ? undefined : '500' }]}>{timestamp}</Text>
+        <Text style={[s.overlayUsername, { color: tc, fontFamily: fontSet.nickname }]}>{nickname}</Text>
+        <Text style={[s.overlayTimestamp, { color: tc, fontFamily: fontSet.nickname }]}>{timestamp}</Text>
       </View>
       <View style={s.overlayBottomLeft}>
         <Text style={[s.overlayMuscleTitle, { color: tc, fontFamily: fontSet.muscle }]}>{muscleLabel}</Text>
@@ -1765,17 +1655,17 @@ export function ClassicOverlay({ exercises, logs, nickname, timestamp, muscleLab
             const setsLine = sets.map(st => `${st.weight} x ${st.reps}`).join(' / ');
             return (
               <View key={ex.id} style={s.overlayExBlock}>
-                <Text style={[s.overlayExName, { color: tc, fontFamily: fontSet.routine, fontWeight: Platform.OS === 'android' ? undefined : '900' }]} numberOfLines={1}>
+                <Text style={[s.overlayExName, { color: tc, fontFamily: fontSet.routine }]} numberOfLines={1}>
                   {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
                 </Text>
                 {setsLine ? (
-                  <Text style={[s.overlayExSet, { color: tc, fontFamily: fontSet.routine, fontWeight: Platform.OS === 'android' ? undefined : '500' }]} numberOfLines={2}>{setsLine}</Text>
+                  <Text style={[s.overlayExSet, { color: tc, fontFamily: fontSet.routine }]} numberOfLines={2}>{setsLine}</Text>
                 ) : null}
               </View>
             );
           })}
           {exercises.length > 7 && (
-            <Text style={[s.overlayExName, { color: tc, opacity: 0.6, marginTop: 2, fontFamily: fontSet.routine, fontWeight: Platform.OS === 'android' ? undefined : '900' }]}>
+            <Text style={[s.overlayExName, { color: tc, opacity: 0.6, marginTop: 2, fontFamily: fontSet.routine }]}>
               {`+${exercises.length - 7} more...`}
             </Text>
           )}
@@ -2308,7 +2198,7 @@ export function LeftColOverlayB({ exercises, logs, nickname, timestamp, muscleLa
       <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD }}>
         <Text style={{
           fontSize: 15,
-          fontWeight: Platform.OS === 'android' ? undefined : '900',
+          fontWeight: '900',
           color: tc,
           letterSpacing: 0.3,
           fontFamily: fontSet.nickname,
@@ -2332,7 +2222,7 @@ export function LeftColOverlayB({ exercises, logs, nickname, timestamp, muscleLa
         {/* 날짜 */}
         <Text style={{
           fontSize: 11,
-          fontWeight: Platform.OS === 'android' ? undefined : '700',
+          fontWeight: '700',
           color: tc,
           opacity: 0.75,
           marginBottom: 4,
@@ -2362,7 +2252,7 @@ export function LeftColOverlayB({ exercises, logs, nickname, timestamp, muscleLa
               <View key={ex.id} style={{ marginBottom: 10 }}>
                 <Text style={{
                   fontSize: 11,
-                  fontWeight: Platform.OS === 'android' ? undefined : '900',
+                  fontWeight: '900',
                   color: tc,
                   letterSpacing: 0.5,
                   fontFamily: fontSet.routine,
@@ -2372,7 +2262,7 @@ export function LeftColOverlayB({ exercises, logs, nickname, timestamp, muscleLa
                 {setsLine ? (
                   <Text style={{
                     fontSize: 11,
-                    fontWeight: Platform.OS === 'android' ? undefined : '500',
+                    fontWeight: '500',
                     color: tc,
                     opacity: 0.85,
                     marginTop: 2,
@@ -2407,7 +2297,7 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
       <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD }}>
         <Text style={{
           fontSize: 14,
-          fontWeight: Platform.OS === 'android' ? undefined : '900',
+          fontWeight: '900',
           color: tc,
           letterSpacing: 0.3,
           fontFamily: fontSet.nickname,
@@ -2420,7 +2310,7 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
       <View style={{ position: 'absolute', top: OVERLAY_PAD, right: OVERLAY_PAD }}>
         <Text style={{
           fontSize: 12,
-          fontWeight: Platform.OS === 'android' ? undefined : '700',
+          fontWeight: '700',
           color: tc,
           opacity: 0.85,
           fontFamily: fontSet.nickname,
@@ -2471,7 +2361,7 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
               <View key={ex.id} style={{ width: COL_W, alignItems: 'center', marginBottom: 10 }}>
                 <Text style={{
                   fontSize: 8,
-                  fontWeight: Platform.OS === 'android' ? undefined : '700',
+                  fontWeight: '700',
                   color: tc,
                   opacity: 0.7,
                   letterSpacing: 0.5,
@@ -2482,7 +2372,7 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
                 </Text>
                 <Text style={{
                   fontSize: 9,
-                  fontWeight: Platform.OS === 'android' ? undefined : '900',
+                  fontWeight: '900',
                   color: tc,
                   letterSpacing: 0.2,
                   marginBottom: 3,
@@ -2495,7 +2385,7 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
                 {sets.map((st, si) => (
                   <Text key={si} style={{
                     fontSize: 8,
-                    fontWeight: Platform.OS === 'android' ? undefined : '600',
+                    fontWeight: '600',
                     color: tc,
                     opacity: 0.85,
                     lineHeight: 11,
@@ -2540,7 +2430,7 @@ export function GridOverlayC({ exercises, logs, nickname, timestamp, muscleLabel
     <>
       {/* 상단: 닉네임 좌, 날짜 우 */}
       <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD, right: OVERLAY_PAD, flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text style={{ fontSize: 13, fontWeight: Platform.OS === 'android' ? undefined : '900', color: tc, fontFamily: fontSet.nickname }}>{nickname}</Text>
+        <Text style={{ fontSize: 13, fontWeight: '900', color: tc, fontFamily: fontSet.nickname }}>{nickname}</Text>
         <Text style={{ fontSize: 10, color: tc, opacity: 0.85, fontFamily: fontSet.nickname }}>{timestamp}</Text>
       </View>
       {/* 타겟부위 */}
@@ -2567,7 +2457,7 @@ export function GridOverlayC({ exercises, logs, nickname, timestamp, muscleLabel
               <Text style={{ fontSize: 8, color: tc, opacity: 0.7, fontFamily: fontSet.routine, letterSpacing: 0.5 }} numberOfLines={1}>
                 {`[${ex.brand.toUpperCase()}]`}
               </Text>
-              <Text style={{ fontSize: 9, fontWeight: Platform.OS === 'android' ? undefined : '900', color: tc, fontFamily: fontSet.routine, marginBottom: 2 }} numberOfLines={2}>
+              <Text style={{ fontSize: 9, fontWeight: '900', color: tc, fontFamily: fontSet.routine, marginBottom: 2 }} numberOfLines={2}>
                 {ex.name.toUpperCase()}
               </Text>
               {sets.map((st, si) => (
@@ -2754,7 +2644,7 @@ export function GridOverlayE({ exercises, logs, nickname, timestamp, muscleLabel
 
 // --- Step 5: Photo
 
-function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, photoUri, nickname, fontsLoaded, onColorChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera, onRegisterRect, onboardingActive, onboardingKey, onOnboardingNext, onOnboardingJump }: {
+function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, photoUri, nickname, onColorChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera, onRegisterRect, onboardingActive, onboardingKey, onOnboardingNext, onOnboardingJump }: {
   gym: GymWithMachines;
   exercises: ExerciseInfo[];
   selectedMuscles: string[];
@@ -2762,9 +2652,6 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
   photoTaken: boolean;
   photoUri?: string;
   nickname?: string;
-  /** expo-font useFonts 로딩 완료 여부 — 인증샷 캡처가 폰트 로딩보다 먼저 실행되어
-   *  Android에서 시스템 폰트로 캡처되는 레이스 컨디션을 막기 위한 가드 */
-  fontsLoaded: boolean;
   onColorChange: (color: string) => void;
   onCapture: (aspect: [number, number]) => void;
   onCameraCapture: (uri: string) => void;
@@ -3755,11 +3642,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
           }
         }}
       >
-        <TouchableOpacity
-          style={[s.ctaBtn, !fontsLoaded && { opacity: 0.5 }]}
-          activeOpacity={0.85}
-          disabled={!fontsLoaded}
-          onPress={async () => {
+        <TouchableOpacity style={s.ctaBtn} activeOpacity={0.85} onPress={async () => {
           if (!photoTaken) {
             Alert.alert(
               '사진을 등록해주세요',
@@ -3823,21 +3706,224 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
 
 // --- Step 6: Done
 
-function WorkoutDoneStep({ gym, exercises, logs, detectedPRs, selectedMuscles, freeWeights, onClose }: {
-  gym: GymWithMachines;
+// --- 머신별 비교 카드 데이터 빌드 (점진적 과부하 비교)
+
+type CompBar  = { label: string; width: string; value: string; color: string; textColor: string };
+type CompRow  = { i: number; prev: string; now: string; delta: string; color: string };
+type CompCard = {
+  id: string; machineId: string; isFW: boolean;
+  name: string; brand: string;
+  headline: string; tone: string;
+  bars: CompBar[]; rows: CompRow[]; note: string;
+};
+
+export function buildComparisonCard({ ex, logs, pastEntries, pastSets, sessions, realPRs, freeWeights }: {
+  ex: ExerciseInfo;
+  logs: Record<string, SetEntry[]>;
+  pastEntries: WorkoutEntry[];
+  pastSets: WorkoutSet[];
+  sessions: WorkoutLog[];
+  realPRs: Record<string, { weight: number; reps: number }>;
+  freeWeights: FreeWeightExercise[];
+}): CompCard {
+  const mid   = machineIdFromKey(ex.id);
+  const isFW  = isFreeWeightId(mid, freeWeights);
+  const nowSets: [number, number][] = (logs[ex.id] ?? []).map(st => [st.weight, st.reps]);
+
+  const sessionDateById: Record<string, string> = {};
+  for (const sess of sessions) sessionDateById[sess.id] = sess.date;
+
+  const pastForMachine = pastEntries
+    .filter(e => e.machineId === mid)
+    .map(e => ({ entry: e, date: sessionDateById[e.sessionId] ?? '' }))
+    .filter(x => !!x.date)
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  const prevInfo     = pastForMachine[0] ?? null;
+  const prevPrevInfo = pastForMachine[1] ?? null;
+
+  const setsFor = (entryId: string): [number, number][] =>
+    pastSets.filter(st => st.entryId === entryId).sort((a, b) => a.setNumber - b.setNumber).map(st => [st.weight, st.reps]);
+
+  const prevSets     = prevInfo ? setsFor(prevInfo.entry.id) : [];
+  const prevPrevSets = prevPrevInfo ? setsFor(prevPrevInfo.entry.id) : null;
+  const isFirst = prevSets.length === 0;
+
+  const vol  = (arr: [number, number][]) => arr.reduce((a, [w, r]) => a + w * r, 0);
+  const reps = (arr: [number, number][]) => arr.reduce((a, [, r]) => a + r, 0);
+  const num  = (n: number) => Math.round(n).toLocaleString('en-US');
+
+  const vNow  = vol(nowSets);
+  const vPrev = vol(prevSets);
+  const pct   = (!isFirst && vPrev > 0) ? Math.round(((vNow - vPrev) / vPrev) * 100) : 0;
+
+  const maxNow = nowSets.length ? Math.max(...nowSets.map(x => x[0])) : 0;
+  const histPR = realPRs[mid];
+  const isPR   = !isFirst && maxNow > 0 && histPR !== undefined && maxNow > histPR.weight;
+
+  const startDelta = isFirst ? 0 : (nowSets[0]?.[0] ?? 0) - (prevSets[0]?.[0] ?? 0);
+  const repDelta   = isFirst ? 0 : reps(nowSets) - reps(prevSets);
+
+  // 정체: 직전이 2회 전보다 나아지지 못했고, 이번도 직전보다 나아지지 못했을 때 (연속 무변화/감소)
+  const prevImprovedOverPrevPrev = prevPrevSets
+    ? (vol(prevSets) > vol(prevPrevSets) || (prevSets[0]?.[0] ?? 0) > (prevPrevSets[0]?.[0] ?? 0))
+    : null;
+  const isStagnant = !isFirst && pct <= 0 && startDelta <= 0 && repDelta <= 0 && prevImprovedOverPrevPrev === false;
+
+  let headline: string, tone: string;
+  if (isFirst) { headline = '첫 기록이에요'; tone = C.tagMachine.fg; }
+  else if (isPR) { headline = 'PR을 달성했어요!'; tone = C.accent; }
+  else if (pct > 0) { headline = `총 볼륨이 ${pct}% 늘었어요!`; tone = C.accent; }
+  else if (startDelta > 0) { headline = `시작 무게가 ${startDelta}kg 늘었어요!`; tone = C.accent; }
+  else if (startDelta === 0 && repDelta > 0) { headline = '같은 무게로 반복 횟수가 늘었어요!'; tone = C.accent; }
+  else if (isStagnant) { headline = '정체 중이에요'; tone = C.textSub; }
+  else if (pct < 0) { headline = `총 볼륨이 ${Math.abs(pct)}% 줄었어요`; tone = C.textSub; }
+  else if (startDelta < 0) { headline = `시작 무게가 ${Math.abs(startDelta)}kg 줄었어요`; tone = C.textSub; }
+  else { headline = '지난번과 같았어요'; tone = C.textSub; }
+
+  let gapLabel: string;
+  if (!prevInfo) {
+    gapLabel = '첫 사용';
+  } else {
+    const then = new Date(prevInfo.date); then.setHours(0, 0, 0, 0);
+    const today = new Date();            today.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((today.getTime() - then.getTime()) / 86400000);
+    gapLabel = diffDays <= 0 ? '오늘' : `${diffDays}일 만`;
+  }
+
+  let bars: CompBar[];
+  if (prevPrevSets && prevPrevSets.length) {
+    const vals = [
+      { label: '2회 전', v: vol(prevPrevSets) },
+      { label: '직전',   v: vPrev },
+      { label: '이번',   v: vNow },
+    ];
+    const max = Math.max(...vals.map(x => x.v), 1);
+    bars = vals.map((x, i) => ({
+      label: x.label,
+      width: `${Math.round((x.v / max) * 100)}%`,
+      value: `${num(x.v)}kg`,
+      color: i === 2 ? tone : C.text + '20',
+      textColor: i === 2 ? C.text : C.textSub,
+    }));
+  } else if (!isFirst) {
+    const max = Math.max(vPrev, vNow, 1);
+    bars = [
+      { label: '직전', width: `${Math.round((vPrev / max) * 100)}%`, value: `${num(vPrev)}kg`, color: C.text + '20', textColor: C.textSub },
+      { label: '이번', width: `${Math.round((vNow  / max) * 100)}%`, value: `${num(vNow)}kg`,  color: tone,          textColor: C.text },
+    ];
+  } else {
+    bars = [{ label: '이번', width: '100%', value: `${num(vNow)}kg`, color: C.tagMachine.fg, textColor: C.text }];
+  }
+
+  const n = Math.max(nowSets.length, prevSets.length);
+  const rows: CompRow[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = prevSets[i], b = nowSets[i];
+    let delta = '', color: string = C.textDim;
+    if (a && b) {
+      const dw = b[0] - a[0], dr = b[1] - a[1];
+      if (dw !== 0) { delta = `${dw > 0 ? '+' : ''}${dw}kg`; color = dw > 0 ? C.accent : C.textSub; }
+      else if (dr !== 0) { delta = `${dr > 0 ? '+' : ''}${dr}회`; color = dr > 0 ? C.accent : C.textSub; }
+      else { delta = '='; }
+    } else if (b && !a) { delta = 'NEW'; color = C.accent; }
+    rows.push({
+      i: i + 1,
+      prev: a ? `${a[0]}kg × ${a[1]}` : '—',
+      now:  b ? `${b[0]}kg × ${b[1]}` : '—',
+      delta, color,
+    });
+  }
+
+  let note: string;
+  if (isFirst) note = '비교할 지난 기록이 없어요. 다음 방문 때부터 이 머신의 변화가 쌓입니다.';
+  else if (nowSets.length !== prevSets.length) note = `지난번은 ${prevSets.length}세트, 이번은 ${nowSets.length}세트예요. 세트 순서대로 비교하고 남는 세트는 총 볼륨에만 반영했어요.`;
+  else if (isStagnant) note = '최근 2회 동안 무게와 볼륨이 그대로예요. 다음엔 2.5kg 올리거나 반복을 1~2회 늘려보세요.';
+  else note = `직전 세션(${gapLabel}) 기록과 세트 단위로 비교했어요.`;
+
+  return {
+    id: ex.id, machineId: mid, isFW,
+    name: ex.name, brand: isFW ? '프리웨이트' : ex.brand,
+    headline, tone, bars, rows, note,
+  };
+}
+
+function ComparisonCard({ card, open, onToggle }: { card: CompCard; open: boolean; onToggle: () => void }) {
+  return (
+    <View style={s.compCard}>
+      <TouchableOpacity onPress={onToggle} activeOpacity={0.85} style={s.compCardHead}>
+        <View style={s.compThumb}>
+          <Image
+            source={{ uri: getMachineImageUrl(card.machineId, { width: 128, height: 128 }) }}
+            style={{ width: '100%', height: '100%' }}
+            resizeMode="cover"
+          />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={s.compName} numberOfLines={1}>{card.name}</Text>
+          <Text style={s.compBrand} numberOfLines={1}>{card.brand}</Text>
+          <Text style={[s.compHeadline, { color: card.tone }]} numberOfLines={2}>{card.headline}</Text>
+        </View>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={C.textDim} />
+      </TouchableOpacity>
+
+      {open && (
+        <View style={s.compBody}>
+          <View style={{ gap: 7, marginBottom: 14 }}>
+            {card.bars.map((bar, i) => (
+              <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
+                <Text style={s.barLabel}>{bar.label}</Text>
+                <View style={s.barTrack}>
+                  <View style={[s.barFill, { width: bar.width as any, backgroundColor: bar.color }]} />
+                </View>
+                <Text style={[s.barValue, { color: bar.textColor }]}>{bar.value}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={s.rowsHeader}>
+            <Text style={[s.rowsHeaderTxt, s.colIdx]}>세트</Text>
+            <Text style={[s.rowsHeaderTxt, s.colFlex]}>직전</Text>
+            <Text style={[s.rowsHeaderTxt, s.colFlex]}>이번</Text>
+            <Text style={[s.rowsHeaderTxt, s.colDelta]}>변화</Text>
+          </View>
+          {card.rows.map(r => (
+            <View key={r.i} style={s.compRow}>
+              <Text style={[s.compRowIdx, s.colIdx]}>{r.i}</Text>
+              <Text style={[s.compRowPrev, s.colFlex]}>{r.prev}</Text>
+              <Text style={[s.compRowNow, s.colFlex]}>{r.now}</Text>
+              <Text style={[s.compRowDelta, s.colDelta, { color: r.color }]}>{r.delta}</Text>
+            </View>
+          ))}
+
+          <Text style={s.compNote}>{card.note}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+export function WorkoutDoneStep({ gym, exercises, logs, detectedPRs, selectedMuscles, freeWeights, sessions, pastEntries, pastSets, realPRs, photoUri, onClose }: {
+  gym: { name: string };
   exercises: ExerciseInfo[];
   logs: Record<string, SetEntry[]>;
   detectedPRs: { name: string; weight: number; reps: number }[];
   selectedMuscles: Set<string>;
   freeWeights: FreeWeightExercise[];
+  sessions: WorkoutLog[];
+  pastEntries: WorkoutEntry[];
+  pastSets: WorkoutSet[];
+  realPRs: Record<string, { weight: number; reps: number }>;
+  photoUri?: string | null;
   onClose: () => void;
 }) {
-  const [tplName,    setTplName]    = useState('');
-  const [tplSaved,   setTplSaved]   = useState(false);
+  const [tplName,  setTplName]  = useState('');
+  const [tplSaved, setTplSaved] = useState(false);
+  const [openIds,  setOpenIds]  = useState<Set<string>>(new Set());
 
   const totalSets = exercises.reduce((a, e) => a + (logs[e.id]?.length ?? 0), 0);
   const totalVol  = exercises.reduce((a, e) =>
-    a + (logs[e.id] ?? []).reduce((sa, s) => sa + s.weight * s.reps, 0), 0,
+    a + (logs[e.id] ?? []).reduce((sa, st) => sa + st.weight * st.reps, 0), 0,
   );
 
   async function handleSaveTemplate() {
@@ -3855,77 +3941,141 @@ function WorkoutDoneStep({ gym, exercises, logs, detectedPRs, selectedMuscles, f
     setTplSaved(true);
   }
 
+  // 직전 동일 타겟부위 세션 대비 총 볼륨 비교
+  const canonTargets = useMemo(
+    () => new Set(Array.from(selectedMuscles).map(toCanonMuscle)),
+    [selectedMuscles],
+  );
+  const muscleBySession = useMemo(() => {
+    const map: Record<string, Set<string>> = {};
+    for (const e of pastEntries) {
+      (map[e.sessionId] ??= new Set()).add(toCanonMuscle(e.targetMuscle));
+    }
+    return map;
+  }, [pastEntries]);
+  const prevMuscleSession = useMemo(() => {
+    if (canonTargets.size === 0) return null;
+    const candidates = sessions
+      .filter(sess => {
+        const ms = muscleBySession[sess.id];
+        if (!ms) return false;
+        for (const m of ms) if (canonTargets.has(m)) return true;
+        return false;
+      })
+      .sort((a, b) => b.date.localeCompare(a.date));
+    return candidates[0] ?? null;
+  }, [sessions, muscleBySession, canonTargets]);
+  const prevMuscleSessionStats = useMemo(() => {
+    if (!prevMuscleSession) return null;
+    const entries  = pastEntries.filter(e => e.sessionId === prevMuscleSession.id);
+    const entryIds = new Set(entries.map(e => e.id));
+    const sets     = pastSets.filter(st => entryIds.has(st.entryId));
+    const vol      = sets.reduce((a, st) => a + st.weight * st.reps, 0);
+    return { count: entries.length, sets: sets.length, vol };
+  }, [prevMuscleSession, pastEntries, pastSets]);
+
+  const targetLabel = selectedMuscles.size > 0
+    ? Array.from(selectedMuscles).join(' · ')
+    : Array.from(new Set(exercises.map(e => e.targetMuscle))).join(' · ');
+
+  // 직전 동일 타겟부위 세션 대비 [머신·프리웨이트 개수 / 총 세트 / 총 볼륨] 한 줄 요약
+  const compareLine = useMemo(() => {
+    if (!prevMuscleSessionStats) return '비교할 이전 기록이 없어요.';
+    const dCount = exercises.length - prevMuscleSessionStats.count;
+    const dSets  = totalSets - prevMuscleSessionStats.sets;
+    const dVol   = Math.round(totalVol - prevMuscleSessionStats.vol);
+    const countTxt = dCount > 0 ? `${dCount}개 늘고`   : dCount < 0 ? `${Math.abs(dCount)}개 줄고`   : '그대로고';
+    const setsTxt  = dSets  > 0 ? `${dSets}세트 늘고`   : dSets  < 0 ? `${Math.abs(dSets)}세트 줄고`   : '그대로고';
+    const volTxt   = dVol   > 0 ? `${dVol}kg 늘었어요`  : dVol   < 0 ? `${Math.abs(dVol)}kg 줄었어요`  : '그대로였어요';
+    return `직전 ${targetLabel} 세션 대비 머신·프리웨이트 항목 수는 ${countTxt}, 총 세트 수는 ${setsTxt}, 총 볼륨은 ${volTxt}`;
+  }, [prevMuscleSessionStats, exercises.length, totalSets, totalVol, targetLabel]);
+
+  const dateLabel = formatWorkoutDate(new Date());
+
+  const cards = useMemo(
+    () => exercises.map(ex => buildComparisonCard({ ex, logs, pastEntries, pastSets, sessions, realPRs, freeWeights })),
+    [exercises, logs, pastEntries, pastSets, sessions, realPRs, freeWeights],
+  );
+
+  function toggleCard(id: string) {
+    setOpenIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
   return (
     <SafeAreaView style={s.safe} edges={["top", "bottom"]}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
-        <View style={s.doneHero}>
-          <View style={s.doneCheck}>
-            <Ionicons name="checkmark" size={44} color={C.bg} />
+
+        {/* 헤더: 인증샷 + 헬스장/타겟부위 뱃지 + 일시 */}
+        <View style={s.sumHeader}>
+          {photoUri ? (
+            <Image source={{ uri: photoUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          ) : null}
+          <LinearGradient
+            colors={['rgba(10,10,12,0.75)', 'rgba(10,10,12,0.05)', 'rgba(10,10,12,0.85)']}
+            locations={[0, 0.4, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={s.sumHeaderTopRow}>
+            <Text style={s.sumHeaderTag}>운동일지 저장 완료</Text>
           </View>
-          <Text style={s.doneTitle}>운동이 기록됐어요!</Text>
-          <Text style={s.doneSub}>{gym.name}에서 수고하셨어요</Text>
+          <View style={s.sumHeaderBottom}>
+            <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+              <View style={s.sumBadge}><Text style={s.sumBadgeTxt}>{gym.name}</Text></View>
+              <View style={s.sumBadgeAccent}><Text style={s.sumBadgeAccentTxt}>{targetLabel}</Text></View>
+            </View>
+            <Text style={s.sumHeaderDateTime}>{dateLabel}</Text>
+          </View>
         </View>
 
-        <View style={s.doneStats}>
-          <View style={s.doneStat}>
-            <Text style={s.doneStatVal}>{exercises.length}</Text>
-            <Text style={s.doneStatLab}>운동</Text>
+        {/* 통계: 머신·프리웨이트 / 총 세트 / 이번 총 볼륨 — 한 줄 */}
+        <View style={s.sumStatRow}>
+          <View style={s.sumStatCell}>
+            <Text style={s.sumStatVal}>{exercises.length}</Text>
+            <Text style={s.sumStatLab}>머신·프리웨이트</Text>
           </View>
-          <View style={s.doneStatDiv} />
-          <View style={s.doneStat}>
-            <Text style={s.doneStatVal}>{totalSets}</Text>
-            <Text style={s.doneStatLab}>총 세트</Text>
+          <View style={s.sumStatDiv} />
+          <View style={s.sumStatCell}>
+            <Text style={s.sumStatVal}>{totalSets}</Text>
+            <Text style={s.sumStatLab}>총 세트</Text>
           </View>
-          <View style={s.doneStatDiv} />
-          <View style={s.doneStat}>
-            <Text style={s.doneStatVal}>{totalVol > 0 ? totalVol.toFixed(0) : '—'}</Text>
-            <Text style={s.doneStatLab}>볼륨 (kg)</Text>
+          <View style={s.sumStatDiv} />
+          <View style={s.sumStatCell}>
+            <Text style={s.sumStatVal}>{totalVol > 0 ? totalVol.toFixed(0) : '0'}</Text>
+            <Text style={s.sumStatLab}>이번 총 볼륨(kg)</Text>
           </View>
         </View>
 
-        {/* PR celebration panel */}
+        <Text style={s.sumCompareLine}>{compareLine}</Text>
+
+        {/* PR 배너 */}
         {detectedPRs.length > 0 && (
-          <View style={s.prCelebCard}>
-            <Text style={s.prCelebTitle}>🎉 신기록 달성!</Text>
-            {detectedPRs.map((pr, i) => (
-              <View key={i} style={s.prCelebRow}>
-                <Ionicons name="trophy" size={14} color={C.accent} />
-                <Text style={s.prCelebName}>{pr.name}</Text>
-                <Text style={s.prCelebVal}>{pr.weight} kg</Text>
-              </View>
-            ))}
+          <View style={s.sumPrBanner}>
+            <Text style={s.sumPrCount}>{detectedPRs.length}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.sumPrTitle}>오늘 PR {detectedPRs.length}개 달성!</Text>
+              <Text style={s.sumPrSub} numberOfLines={1}>{detectedPRs.map(pr => pr.name).join(' · ')}에서 전체 기간 최고 기록</Text>
+            </View>
           </View>
         )}
 
-        <Text style={s.sectionTitle}>운동 요약</Text>
-        <View style={s.summaryCard}>
-          {exercises.map((ex, i) => {
-            const col  = mp(ex.targetMuscle);
-            const sets = logs[ex.id] ?? [];
-            return (
-              <React.Fragment key={ex.id}>
-                {i > 0 && <View style={s.divider} />}
-                <View style={s.summaryRow}>
-                  <View style={[s.summaryIcon, { backgroundColor: col.bg }]}>
-                    <Ionicons name={isFreeWeightId(machineIdFromKey(ex.id), freeWeights) ? 'fitness-outline' : 'barbell-outline'} size={14} color={col.fg} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.summaryName}>{ex.name}</Text>
-                    <Text style={s.summaryDetail}>
-                      {sets.length} set{sets.length !== 1 ? 's' : ''}
-                      {sets[0]?.weight ? ` · ${sets[0].weight} kg × ${sets[0].reps}` : ''}
-                    </Text>
-                  </View>
-                  <View style={[s.logMusclePill, { backgroundColor: col.bg }]}>
-                    <Text style={[s.logMusclePillText, { color: col.fg }]}>{ex.targetMuscle}</Text>
-                  </View>
-                </View>
-              </React.Fragment>
-            );
-          })}
+        {/* 머신별 비교 */}
+        <View style={{ marginTop: 8, marginBottom: 12 }}>
+          <Text style={s.sectionTitle}>머신별 비교</Text>
+          <Text style={s.sumSectionSub}>다른 헬스장의 같은 머신도 함께 비교돼요</Text>
         </View>
+        <View style={{ gap: 12 }}>
+          {cards.map(card => (
+            <ComparisonCard key={card.id} card={card} open={openIds.has(card.id)} onToggle={() => toggleCard(card.id)} />
+          ))}
+        </View>
+        <Text style={s.sumFootnote}>세트 수가 달라진 머신은 세트 순서대로 나란히 두고, 없는 세트는 비워 뒀어요. 비교는 늘 총 볼륨 기준으로도 함께 계산돼요.</Text>
+
         {/* Save as Template */}
-        <View style={s.tplCard}>
+        <View style={[s.tplCard, { marginTop: 28 }]}>
           <Text style={s.tplCardTitle}>템플릿으로 저장</Text>
           {tplSaved ? (
             <View style={s.tplSavedRow}>
@@ -4704,7 +4854,6 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             onSetShowCamera={setShowCamera}
             onCompositeUri={(uri) => setCompositeUri(uri)}
             onRoutineCardUri={(uri) => setRoutineCardUri(uri)}
-            fontsLoaded={fontsLoaded}
             onSave={requestSaveWorkout}
             onBack={goBack}
             onClose={() => onClose(false)}
@@ -4724,6 +4873,11 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             detectedPRs={detectedPRs}
             selectedMuscles={selectedMuscles}
             freeWeights={dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS}
+            sessions={sessions}
+            pastEntries={pastEntries}
+            pastSets={pastSets}
+            realPRs={realPRs}
+            photoUri={compositeUri ?? photoUri}
             onClose={() => onClose(true)}
           />
         );
@@ -4823,9 +4977,6 @@ const s = StyleSheet.create({
 
   // Machine card 2-column grid for exercise select
   machineCardGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
-  freeWeightRow: { gap: 8, marginBottom: 8 },
-  fwFilterScroll: { marginTop: 10 },
-  fwFilterRow: { flexDirection: 'row', gap: 6, paddingRight: 16 },
   cardOrderOverlay: { position: 'absolute', top: 8, left: 8 },
   cardOrderBadge: {
     width: 28, height: 28, borderRadius: 14,
@@ -5034,6 +5185,65 @@ const s = StyleSheet.create({
   summaryIcon:   { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   summaryName:   { fontSize: 13, fontWeight: '700', color: C.text },
   summaryDetail: { fontSize: 11, color: C.textSub, marginTop: 2 },
+
+  // --- Workout summary (완료 화면: 점진적 과부하 비교)
+  sumHeader:         { height: 260, borderRadius: R.card, overflow: 'hidden', backgroundColor: C.surface, marginBottom: 18, position: 'relative' },
+  sumHeaderTopRow:   { position: 'absolute', top: 16, left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  sumHeaderTag:      { fontSize: 11, fontWeight: '700', letterSpacing: 1, color: C.text + 'a0' },
+  sumHeaderBottom:   { position: 'absolute', left: 16, right: 16, bottom: 16, gap: 10 },
+  sumBadge:          { paddingHorizontal: 10, paddingVertical: 5, borderRadius: R.pill, backgroundColor: C.text + '18', borderWidth: 1, borderColor: C.text + '25' },
+  sumBadgeTxt:       { fontSize: 11, fontWeight: '700', color: C.text },
+  sumBadgeAccent:    { paddingHorizontal: 10, paddingVertical: 5, borderRadius: R.pill, backgroundColor: C.accentBg, borderWidth: 1, borderColor: C.accent + '50' },
+  sumBadgeAccentTxt: { fontSize: 11, fontWeight: '700', color: C.accent },
+  sumHeaderDateTime: { fontSize: 18, fontWeight: '800', color: C.text, letterSpacing: -0.3 },
+
+  sumStatRow:   { flexDirection: 'row', backgroundColor: C.surface, borderRadius: R.card, paddingVertical: 16, marginBottom: 10 },
+  sumStatCell:  { flex: 1, alignItems: 'center' },
+  sumStatVal:   { fontSize: 24, fontWeight: '900', color: C.text, fontVariant: ['tabular-nums'] },
+  sumStatLab:   { fontSize: 11, color: C.textSub, fontWeight: '600', marginTop: 4 },
+  sumStatDiv:   { width: 1, backgroundColor: C.border },
+  sumCompareLine: { fontSize: 12.5, lineHeight: 18, color: C.textSub, marginBottom: 20 },
+
+  sumVolBlock:    { marginBottom: 20 },
+  sumVolLabel:    { fontSize: 11, fontWeight: '700', letterSpacing: 1, color: C.textDim, marginBottom: 8, textTransform: 'uppercase' },
+  sumVolVal:      { fontSize: 48, fontWeight: '900', color: C.text, letterSpacing: -1, fontVariant: ['tabular-nums'] },
+  sumVolUnit:     { fontSize: 16, fontWeight: '700', color: C.textSub, marginBottom: 6 },
+  sumVolDelta:    { fontSize: 13, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  sumVolDeltaSub: { fontSize: 12, color: C.textSub },
+
+  sumPrBanner: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: C.accent, borderRadius: R.card, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 20 },
+  sumPrCount:  { fontSize: 32, fontWeight: '900', color: C.bg, fontVariant: ['tabular-nums'] },
+  sumPrTitle:  { fontSize: 14, fontWeight: '800', color: C.bg },
+  sumPrSub:    { fontSize: 11, color: C.bg + 'aa', fontWeight: '600', marginTop: 2 },
+
+  sumSectionSub: { fontSize: 11.5, color: C.textSub, marginTop: 4 },
+  sumFootnote:   { fontSize: 11, lineHeight: 16, color: C.textDim, marginTop: 18 },
+
+  compCard:          { backgroundColor: C.surface, borderRadius: R.card, borderWidth: 1, borderColor: C.border, overflow: 'hidden' },
+  compCardHead:      { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14 },
+  compThumb:         { width: 64, height: 64, borderRadius: R.inner, overflow: 'hidden', backgroundColor: C.surfaceHigh },
+  compThumbFallback: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  compName:          { fontSize: 13, fontWeight: '700', color: C.text },
+  compBrand:         { fontSize: 11, color: C.textDim, marginTop: 1, marginBottom: 5 },
+  compHeadline:      { fontSize: 19, fontWeight: '800', letterSpacing: -0.3, marginTop: 1 },
+
+  compBody:  { borderTopWidth: 1, borderTopColor: C.border, padding: 14, backgroundColor: C.surfaceHigh },
+  barLabel:  { fontSize: 10.5, color: C.textDim, width: 44 },
+  barTrack:  { flex: 1, height: 8, borderRadius: 4, backgroundColor: C.surfaceHigh, overflow: 'hidden' },
+  barFill:   { height: '100%', borderRadius: 4 },
+  barValue:  { fontSize: 11.5, width: 58, textAlign: 'right', fontVariant: ['tabular-nums'] },
+
+  rowsHeader:    { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 8, marginTop: 12 },
+  rowsHeaderTxt: { fontSize: 10.5, color: C.textDim },
+  compRow:       { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7, borderTopWidth: 1, borderTopColor: C.border },
+  compRowIdx:    { fontSize: 12, color: C.textDim, fontVariant: ['tabular-nums'] },
+  compRowPrev:   { fontSize: 12, color: C.textSub, fontVariant: ['tabular-nums'] },
+  compRowNow:    { fontSize: 13, fontWeight: '600', color: C.text, fontVariant: ['tabular-nums'] },
+  compRowDelta:  { fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  colIdx:        { width: 28 },
+  colFlex:       { flex: 1 },
+  colDelta:      { width: 54, textAlign: 'right' },
+  compNote:      { fontSize: 11.5, lineHeight: 16, color: C.textDim, marginTop: 12 },
 
   // --- Exercise note
   noteCard: {
