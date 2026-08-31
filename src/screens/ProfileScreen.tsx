@@ -1131,7 +1131,7 @@ export default function ProfileScreen() {
           </>
         )}
 
-        <Text style={styles.version}>GymPick v1.2.3</Text>
+        <Text style={styles.version}>GymPick v1.2.4</Text>
       </ScrollView>
 
       {/* ── Modals ── */}

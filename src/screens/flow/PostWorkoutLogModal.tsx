@@ -3888,7 +3888,7 @@ export function buildComparisonCard({ ex, logs, pastEntries, pastSets, sessions,
   const isStagnant = !isFirst && pct <= 0 && startDelta <= 0 && repDelta <= 0 && prevImprovedOverPrevPrev === false;
 
   let headline: string, tone: string;
-  if (isFirst) { headline = '첫 기록이에요'; tone = C.tagMachine.fg; }
+  if (isFirst) { headline = '첫 기록이에요!'; tone = C.tagMachine.fg; }
   else if (isPR) { headline = 'PR을 달성했어요!'; tone = C.accent; }
   else if (pct > 0) { headline = `총 볼륨이 ${pct}% 늘었어요!`; tone = C.accent; }
   else if (startDelta > 0) { headline = `시작 무게가 ${startDelta}kg 늘었어요!`; tone = C.accent; }
@@ -4095,17 +4095,23 @@ export function WorkoutDoneStep({ gym, exercises, logs, detectedPRs, selectedMus
     ? Array.from(selectedMuscles).join(' · ')
     : Array.from(new Set(exercises.map(e => e.targetMuscle))).join(' · ');
 
-  // 직전 동일 타겟부위 세션 대비 [머신·프리웨이트 개수 / 총 세트 / 총 볼륨] 한 줄 요약
-  const compareLine = useMemo(() => {
-    if (!prevMuscleSessionStats) return '비교할 이전 기록이 없어요.';
+  // 직전 동일 타겟부위 세션 대비 [머신·프리웨이트 개수 / 총 세트 / 총 볼륨] 비교
+  type CompareDelta = { dir: 'up' | 'down' | 'flat'; text: string };
+  const compareData = useMemo((): { count: CompareDelta; sets: CompareDelta; vol: CompareDelta } | null => {
+    if (!prevMuscleSessionStats) return null;
     const dCount = exercises.length - prevMuscleSessionStats.count;
     const dSets  = totalSets - prevMuscleSessionStats.sets;
     const dVol   = Math.round(totalVol - prevMuscleSessionStats.vol);
-    const countTxt = dCount > 0 ? `${dCount}개 늘고`   : dCount < 0 ? `${Math.abs(dCount)}개 줄고`   : '그대로고';
-    const setsTxt  = dSets  > 0 ? `${dSets}세트 늘고`   : dSets  < 0 ? `${Math.abs(dSets)}세트 줄고`   : '그대로고';
-    const volTxt   = dVol   > 0 ? `${dVol}kg 늘었어요`  : dVol   < 0 ? `${Math.abs(dVol)}kg 줄었어요`  : '그대로였어요';
-    return `직전 ${targetLabel} 세션 대비 머신·프리웨이트 항목 수는 ${countTxt}, 총 세트 수는 ${setsTxt}, 총 볼륨은 ${volTxt}`;
-  }, [prevMuscleSessionStats, exercises.length, totalSets, totalVol, targetLabel]);
+    const mk = (n: number, unit: string): CompareDelta => ({
+      dir:  n > 0 ? 'up' : n < 0 ? 'down' : 'flat',
+      text: n === 0 ? '지난번과 같아요' : `${Math.abs(n).toLocaleString('en-US')}${unit} ${n > 0 ? '늘었어요' : '줄었어요'}`,
+    });
+    return {
+      count: mk(dCount, '개'),
+      sets:  mk(dSets, '세트'),
+      vol:   mk(dVol, 'kg'),
+    };
+  }, [prevMuscleSessionStats, exercises.length, totalSets, totalVol]);
 
   const dateLabel = formatWorkoutDate(new Date());
 
@@ -4161,12 +4167,38 @@ export function WorkoutDoneStep({ gym, exercises, logs, detectedPRs, selectedMus
           </View>
           <View style={s.sumStatDiv} />
           <View style={s.sumStatCell}>
-            <Text style={s.sumStatVal}>{totalVol > 0 ? totalVol.toFixed(0) : '0'}</Text>
+            <Text style={s.sumStatVal}>{totalVol > 0 ? Math.round(totalVol).toLocaleString('en-US') : '0'}</Text>
             <Text style={s.sumStatLab}>이번 총 볼륨(kg)</Text>
           </View>
         </View>
 
-        <Text style={s.sumCompareLine}>{compareLine}</Text>
+        <View style={{ marginBottom: 20 }}>
+          <Text style={s.sumCompareLabel}>직전 {targetLabel} 세션 대비</Text>
+          {compareData ? (
+            <View style={{ gap: 6 }}>
+              {([
+                { label: '머신·프리웨이트', d: compareData.count },
+                { label: '총 세트',        d: compareData.sets },
+                { label: '총 볼륨',        d: compareData.vol },
+              ] as { label: string; d: CompareDelta }[]).map(row => {
+                const color = row.d.dir === 'up' ? C.accent : row.d.dir === 'down' ? C.textSub : C.textDim;
+                return (
+                  <View key={row.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Ionicons
+                      name={row.d.dir === 'up' ? 'caret-up' : row.d.dir === 'down' ? 'caret-down' : 'remove'}
+                      size={13}
+                      color={color}
+                    />
+                    <Text style={s.sumCompareRowLabel}>{row.label}</Text>
+                    <Text style={[s.sumCompareRowVal, { color }]}>{row.d.text}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          ) : (
+            <Text style={s.sumCompareEmpty}>비교할 이전 기록이 없어요.</Text>
+          )}
+        </View>
 
         {/* PR 배너 */}
         {detectedPRs.length > 0 && (
@@ -5323,7 +5355,10 @@ const s = StyleSheet.create({
   sumStatVal:   { fontSize: 24, fontWeight: '900', color: C.text, fontVariant: ['tabular-nums'] },
   sumStatLab:   { fontSize: 11, color: C.textSub, fontWeight: '600', marginTop: 4 },
   sumStatDiv:   { width: 1, backgroundColor: C.border },
-  sumCompareLine: { fontSize: 12.5, lineHeight: 18, color: C.textSub, marginBottom: 20 },
+  sumCompareLabel:    { fontSize: 11, fontWeight: '800', letterSpacing: 0.6, color: C.textDim, textTransform: 'uppercase', marginBottom: 10 },
+  sumCompareRowLabel: { fontSize: 13, fontWeight: '600', color: C.textSub, width: 100 },
+  sumCompareRowVal:   { fontSize: 15, fontWeight: '800', letterSpacing: -0.2, fontVariant: ['tabular-nums'] },
+  sumCompareEmpty:    { fontSize: 12.5, color: C.textDim },
 
   sumVolBlock:    { marginBottom: 20 },
   sumVolLabel:    { fontSize: 11, fontWeight: '700', letterSpacing: 1, color: C.textDim, marginBottom: 8, textTransform: 'uppercase' },
