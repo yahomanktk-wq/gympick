@@ -65,6 +65,7 @@ type PhotoRow = {
   composite_uri?: string | null;
   photo_uri?:     string | null;
   thumbnail_uri?: string | null;
+  overlay_style?: string | null;
 };
 
 // --- Row converters
@@ -117,6 +118,7 @@ function rowToPhoto(r: PhotoRow): WorkoutPhoto {
     compositeUri: r.composite_uri ?? undefined,
     photoUri:     r.photo_uri ?? undefined,
     thumbnailUri: r.thumbnail_uri ?? undefined,
+    overlayStyle: r.overlay_style ?? undefined,
   };
 }
 
@@ -247,7 +249,7 @@ export async function fetchPhotosForSessions(
 
   const { data, error } = await supabase
     .from('workout_photos')
-    .select('id, session_id, user_id, captured_at, text_color, aspect_ratio, composite_uri, photo_uri, thumbnail_uri')
+    .select('id, session_id, user_id, captured_at, text_color, aspect_ratio, composite_uri, photo_uri, thumbnail_uri, overlay_style')
     .in('session_id', sessionIds);
 
   if (error || !data?.length) {
@@ -393,6 +395,7 @@ export async function fetchWorkoutLogs(userId: string): Promise<WorkoutLog[]> {
         photoUri:         photoMap.get(session.id)?.photoUri,
         thumbnailUri:     photoMap.get(session.id)?.thumbnailUri,
         overlayTextColor: session.overlayTextColor ?? '#ffffff',
+        overlayStyle:     photoMap.get(session.id)?.overlayStyle,
         targetMuscles:    sessionMuscles,
       };
     });

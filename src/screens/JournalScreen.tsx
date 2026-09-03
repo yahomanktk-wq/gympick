@@ -38,7 +38,11 @@ import { removeSession } from '../data/sessionStore';
 import { deleteFeedPostBySession, fetchFeedPostPublicStatus, updateFeedPostPublic } from '../lib/db/feedPosts';
 import { useFetch } from '../lib/useFetch';
 import { useAuth } from '../context/AuthContext';
-import PostWorkoutLogModal from './flow/PostWorkoutLogModal';
+import PostWorkoutLogModal, {
+  ClassicOverlay, LeftColOverlayB, GridOverlayC, GridOverlayD, GridOverlayE,
+  getFontSet, getLayoutType,
+  type OverlayStyle, type SetEntry, type ExerciseInfo,
+} from './flow/PostWorkoutLogModal';
 import MachineDetailModal from './flow/MachineDetailModal';
 import WorkoutLogSummaryModal from './flow/WorkoutLogSummaryModal';
 import GymPickLogo from '../components/GymPickLogo';
@@ -398,6 +402,7 @@ function SessionDetailModal({
   onOpenSummary,
   onDelete,
   userId,
+  nickname,
 }: {
   sessions:      WorkoutLog[];
   prMachines:    Set<string>;
@@ -406,8 +411,10 @@ function SessionDetailModal({
   onOpenSummary: (session: WorkoutLog) => void;
   onDelete:      (sessionId: string) => Promise<void>;
   userId:        string | null;
+  nickname?:     string;
 }) {
   const photoRefs      = useRef<Record<string, View | null>>({});
+  const layoutOnlyRefs = useRef<Record<string, View | null>>({});
   const routineCardRefs = useRef<Record<string, View | null>>({});
   const PHOTO_W_J         = Dimensions.get('window').width - 32;
   const ROUTINE_CARD_H_J  = Math.round(PHOTO_W_J * 4 / 3);
@@ -587,6 +594,99 @@ function SessionDetailModal({
     }
   }
 
+  // 저장된 세션 데이터(머신/세트/부위/오버레이 색상/스타일)로 캡처 당시의 오버레이를
+  // 그대로 다시 그린다 — '오버레이만 저장'용 숨김 캡처 뷰에서 사용.
+  // session.overlayStyle이 없는(2026-09-03 이전에 저장된) 세션은 null을 반환한다.
+  function renderSessionOverlay(session: WorkoutLog) {
+    const style = session.overlayStyle as OverlayStyle | undefined;
+    if (!style) return null;
+
+    const fs     = getFontSet(style);
+    const layout = getLayoutType(style);
+    const machines = session.machines ?? [];
+
+    const exercises: ExerciseInfo[] = machines.map(m => ({
+      id:           m.machineId,
+      name:         m.machineName,
+      brand:        m.machineBrand,
+      targetMuscle: m.targetMuscle,
+    }));
+
+    // 세트별 개별 무게/횟수는 저장돼 있지 않고 최고 세트(weight/reps)와 세트 수만
+    // 남아있어서, 세트 수만큼 같은 값을 반복해 근사한다 — 상세화면의 기존 사진
+    // 오버레이(det.photoExSet)도 동일한 방식으로 표시하고 있어 표시 결과는 일관됨.
+    const logs: Record<string, SetEntry[]> = {};
+    machines.forEach(m => {
+      logs[m.machineId] = Array.from({ length: Math.max(m.sets, 1) }).map(() => ({
+        weight: m.weight,
+        reps:   m.reps,
+      }));
+    });
+
+    const muscles = (session.targetMuscles && session.targetMuscles.length > 0)
+      ? session.targetMuscles
+      : [...new Set(machines.map(m => m.targetMuscle))];
+    const muscleLabel = muscles.length > 1
+      ? muscles.join(' + ')
+      : `${muscles[0] ?? 'WORKOUT'} Day`;
+
+    const d = new Date(session.date);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const ENG_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dateLabel = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}(${ENG_DAYS[d.getDay()]})`;
+    const timestamp = `${dateLabel}_${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+    const commonProps = {
+      exercises,
+      logs,
+      nickname: nickname ?? 'gympick_user',
+      timestamp,
+      muscleLabel,
+      tc: session.overlayTextColor ?? '#ffffff',
+      photoW: DET_PHOTO_W,
+      photoH: DET_PHOTO_H,
+    };
+
+    if (layout === 'a') return <ClassicOverlay {...commonProps} fontSet={fs} />;
+    if (layout === 'b') return <LeftColOverlayB {...commonProps} fontSet={fs} />;
+    if (layout === 'd') return <GridOverlayD {...commonProps} fontSet={fs} />;
+    if (layout === 'c') return <GridOverlayC {...commonProps} fontSet={fs} />;
+    if (layout === 'e') return <GridOverlayE {...commonProps} fontSet={fs} />;
+    return null;
+  }
+
+  async function handleSaveLayoutOnly(session: WorkoutLog) {
+    if (!session.overlayStyle) {
+      Alert.alert(
+        '지원하지 않는 기록',
+        '이 운동일지는 오버레이 스타일 정보가 없는 예전 기록이라 오버레이만 저장하는 기능을 지원하지 않습니다.',
+      );
+      return;
+    }
+    const layoutNode = layoutOnlyRefs.current[session.id];
+    if (!layoutNode) {
+      Alert.alert('저장 실패', '다시 시도해 주세요.');
+      return;
+    }
+    try {
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      const ratio = Math.max(PixelRatio.get(), 4);
+      const uri = await captureRef(layoutNode, {
+        format: 'png', quality: 1, result: 'tmpfile',
+        pixelRatio: ratio,
+        ...(Platform.OS === 'android'
+          ? { width: Math.round(DET_PHOTO_W * ratio), height: Math.round(DET_PHOTO_H * ratio) }
+          : {}),
+      });
+      await MediaLibrary.saveToLibraryAsync(uri);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('저장 완료', '오버레이 이미지 저장되었습니다.\n앱에서 이미지를 영상 위에 올려서 사용하시면되요!');
+    } catch (e) {
+      if (__DEV__) console.warn('[JournalScreen] handleSaveLayoutOnly 오류:', e);
+      Alert.alert('저장에 실패했습니다', '다시 시도해 주세요.');
+    }
+  }
+
   async function handleDelete(session: WorkoutLog) {
     Alert.alert(
       '운동일지 삭제',
@@ -716,6 +816,19 @@ function SessionDetailModal({
                   )}
                 </View>
 
+                {/* '오버레이만 저장'용 숨김 캡처 뷰 — 화면 밖에 투명 배경으로 렌더링해서
+                    사진 없이 오버레이 레이아웃만 캡처한다. session.overlayStyle이 있을 때만
+                    내용이 그려지고, 없으면 renderSessionOverlay가 null을 반환해 빈 뷰로 남는다. */}
+                <View style={{ position: 'absolute', top: -9999, left: -9999, backgroundColor: 'transparent' }} pointerEvents="none">
+                  <View
+                    ref={(ref) => { layoutOnlyRefs.current[session.id] = ref as View | null; }}
+                    collapsable={false}
+                    style={{ width: DET_PHOTO_W, height: DET_PHOTO_H, backgroundColor: 'transparent' }}
+                  >
+                    {renderSessionOverlay(session)}
+                  </View>
+                </View>
+
                 {/* 이미지 저장 + 공개/비공개 + 삭제 버튼 */}
                 <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 12 }}>
                   <TouchableOpacity
@@ -725,13 +838,14 @@ function SessionDetailModal({
                       if (Platform.OS === 'ios') {
                         ActionSheetIOS.showActionSheetWithOptions(
                           {
-                            options: ['취소', '기기에 저장', '인스타그램에 업로드'],
+                            options: ['취소', '기기에 저장', '인스타그램에 업로드', '오버레이만 저장'],
                             cancelButtonIndex: 0,
                             title: '저장 방식 선택',
                           },
                           (buttonIndex) => {
                             if (buttonIndex === 1) handleSave(session);
                             if (buttonIndex === 2) handleInstagramShare(session);
+                            if (buttonIndex === 3) handleSaveLayoutOnly(session);
                           }
                         );
                       } else {
@@ -742,6 +856,7 @@ function SessionDetailModal({
                             { text: '취소', style: 'cancel' },
                             { text: '기기에 저장', onPress: () => handleSave(session) },
                             { text: '인스타그램에 업로드', onPress: () => handleInstagramShare(session) },
+                            { text: '오버레이만 저장', onPress: () => handleSaveLayoutOnly(session) },
                           ]
                         );
                       }
@@ -1240,6 +1355,7 @@ export default function JournalScreen() {
           <SessionDetailModal
             sessions={detailSessions}
             prMachines={detailSessions.length > 0 ? (sessionPRMap[detailSessions[0].id] ?? new Set()) : new Set()}
+            nickname={user?.nickname ?? user?.name}
             onClose={() => setDetailSessions([])}
             onOpenMachine={(machineId, machineName, machineBrand, targetMuscle) => {
               setDetailMachine({

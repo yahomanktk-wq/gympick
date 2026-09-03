@@ -11,6 +11,7 @@ import {
   Dimensions,
   Alert,
   Image,
+  ActivityIndicator,
   InteractionManager,
   Animated,
   Linking,
@@ -128,7 +129,7 @@ const LOGO_STRIP_W = Math.round(LOGO_STRIP_H * (2805 / 279)); // ≈ 141px
 const OVERLAY_PAD = 20;
 
 // Overlay layout style variants
-type OverlayStyle =
+export type OverlayStyle =
   | 's1a' | 's1b' | 's1c' | 's1d' | 's1e'
   | 's2a' | 's2b' | 's2c' | 's2d' | 's2e'
   | 's6a' | 's6b' | 's6c' | 's6d' | 's6e';
@@ -634,7 +635,8 @@ function GymSelectStep({ onSelect, onClose, onRegisterRect, onboardingActive, on
         )}
 
         {loading ? (
-          <View style={{ paddingVertical: 48, alignItems: 'center' }}>
+          <View style={{ paddingVertical: 48, alignItems: 'center', gap: 10 }}>
+            <ActivityIndicator size="small" color={C.accent} />
             <Text style={{ fontSize: 13, color: C.textDim }}>헬스장 목록 로딩 중...</Text>
           </View>
         ) : (
@@ -1588,9 +1590,15 @@ function SetCard({ ex, sets, realPR, prefill, freeWeights, onChange, onAdd, onCo
           }
         }}
       >
-        <TouchableOpacity style={s.addSetBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onAdd(); }} activeOpacity={0.75}>
-          <Ionicons name="add" size={14} color={C.accent} />
-          <Text style={s.addSetText}>세트 추가</Text>
+        {/* 2026-09-03: 세트가 하나도 없는 첫 화면에서는 유일한 액션이라 더 크게,
+            세트가 이미 있어서 '이전 세트 복사'와 나란히 있을 때는 기존 크기 그대로. */}
+        <TouchableOpacity
+          style={[s.addSetBtn, sets.length === 0 && s.addSetBtnEmpty]}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onAdd(); }}
+          activeOpacity={0.75}
+        >
+          <Ionicons name="add" size={sets.length === 0 ? 20 : 15} color={C.bg} />
+          <Text style={[s.addSetText, sets.length === 0 && s.addSetTextEmpty]}>세트 추가</Text>
         </TouchableOpacity>
         {sets.length > 0 && (
           <TouchableOpacity style={s.copySetBtn} onPress={onCopyPrev} activeOpacity={0.75}>
@@ -1694,29 +1702,34 @@ function SetLoggingStep({ exercise, sets, note, freeWeights, onChange, onAdd, on
           onboardingKey={onboardingKey}
         />
 
-        {/* Optional exercise note */}
-        <View
-          ref={noteCardRef}
-          style={s.noteCard}
-          onLayout={() => {
-            if (onboardingActive) {
-              noteCardRef.current?.measureInWindow((x, y, width, height) => {
-                onRegisterRect?.('set-note', { x, y, width, height });
-              });
-            }
-          }}
-        >
-          <Text style={s.noteLabel}>노트 (선택)</Text>
-          <TextInput
-            style={s.noteInput}
-            value={note}
-            onChangeText={onNoteChange}
-            placeholder="예: 팔꿈치 안으로, 시트 4번 조절…"
-            placeholderTextColor={C.textDim}
-            multiline
-            maxLength={200}
-          />
-        </View>
+        {/* Optional exercise note — 2026-09-03: 세트가 하나도 없는 첫 화면에서는
+            숨기고, '세트 추가'로 첫 세트가 생긴 뒤부터 보이게 함.
+            단, 온보딩 투어가 이 카드를 가리키는 'set-note' 단계일 때는 세트가
+            아직 없어도 보여줘야 스포트라이트가 정상 표시됨. */}
+        {(sets.length > 0 || (onboardingActive && onboardingKey === 'set-note')) && (
+          <View
+            ref={noteCardRef}
+            style={s.noteCard}
+            onLayout={() => {
+              if (onboardingActive) {
+                noteCardRef.current?.measureInWindow((x, y, width, height) => {
+                  onRegisterRect?.('set-note', { x, y, width, height });
+                });
+              }
+            }}
+          >
+            <Text style={s.noteLabel}>노트 (선택)</Text>
+            <TextInput
+              style={s.noteInput}
+              value={note}
+              onChangeText={onNoteChange}
+              placeholder="예: 팔꿈치 안으로, 시트 4번 조절…"
+              placeholderTextColor={C.textDim}
+              multiline
+              maxLength={200}
+            />
+          </View>
+        )}
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -2789,7 +2802,7 @@ export function GridOverlayE({ exercises, logs, nickname, timestamp, muscleLabel
 
 // --- Step 5: Photo
 
-function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, photoUri, nickname, fontsLoaded, onColorChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera, onRegisterRect, onboardingActive, onboardingKey, onOnboardingNext, onOnboardingJump }: {
+function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, photoUri, nickname, fontsLoaded, onColorChange, onStyleChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera, onRegisterRect, onboardingActive, onboardingKey, onOnboardingNext, onOnboardingJump }: {
   gym: GymWithMachines;
   exercises: ExerciseInfo[];
   selectedMuscles: string[];
@@ -2801,6 +2814,11 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
    *  Android에서 시스템 폰트로 캡처되는 레이스 컨디션을 막기 위한 가드 */
   fontsLoaded: boolean;
   onColorChange: (color: string) => void;
+  // 2026-09-03: 이 컴포넌트 로컬 state인 overlayStyle을 부모(PostWorkoutLogModal)의
+  // handleSaveWorkout에서도 DB 저장용으로 알아야 해서, onColorChange와 동일한
+  // 패턴으로 위로 끌어올린다 — 저장 시점엔 이 콜백으로 부모에 마지막으로 전달된
+  // 값을 쓴다 (부모가 직접 이 컴포넌트의 로컬 state를 참조할 수 없기 때문).
+  onStyleChange: (style: OverlayStyle) => void;
   onCapture: (aspect: [number, number]) => void;
   onCameraCapture: (uri: string) => void;
   onCompositeUri:    (uri: string) => void;
@@ -3056,7 +3074,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
       await MediaLibrary.saveToLibraryAsync(capturedUri);
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('저장 완료', '오버레이 이미지(투명 배경 PNG)가 사진첩에 저장되었습니다.\n영상 편집 앱에서 이 이미지를 영상 위에 올려서 사용하세요.');
+      Alert.alert('저장 완료', '오버레이 이미지 저장되었습니다.\n앱에서 이미지를 영상 위에 올려서 사용하시면되요!');
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2500);
     } catch (error) {
@@ -3731,7 +3749,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
                 return (
                   <TouchableOpacity
                     key={opt.key}
-                    onPress={() => setOverlayStyle(opt.key)}
+                    onPress={() => { setOverlayStyle(opt.key); onStyleChange(opt.key); }}
                     activeOpacity={0.8}
                     style={{
                       paddingHorizontal: 10,
@@ -4425,6 +4443,11 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   const [prCelebration,     setPrCelebration]     = useState<{ name: string; weight: number; reps: number } | null>(null);
   // Overlay
   const [selectedColor,      setSelectedColor]      = useState('#ffffff');
+  // WorkoutPhotoStep(자식)의 로컬 overlayStyle state를 onStyleChange로 그대로
+  // 미러링한 값 — handleSaveWorkout(이 컴포넌트 스코프)에서 DB 저장 시 사용한다.
+  // WorkoutPhotoStep의 기본값('s1a')과 동일하게 초기화해서, 사용자가 스타일을
+  // 한 번도 안 바꿔도 기본 스타일 값이 저장되게 한다.
+  const [overlayStyle,       setOverlayStyle]       = useState<OverlayStyle>('s1a');
   const [isSaving,           setIsSaving]           = useState(false);
   const [savingProgress,     setSavingProgress]     = useState(0);
   const savingAnim = useRef(new Animated.Value(0)).current;
@@ -4440,7 +4463,9 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   const [pastEntries, setPastEntries] = useState<WorkoutEntry[]>([]);
   const [pastSets,    setPastSets]    = useState<WorkoutSet[]>([]);
   const [realPRs,     setRealPRs]     = useState<Record<string, { weight: number; reps: number }>>({});
-  const [prefillInfo, setPrefillInfo] = useState<Record<string, { date: string } | null>>({});
+  // date 외 weight/reps도 같이 들고 있어야 handleAddSet에서 "첫 세트 추가 시"
+  // 프리필(마지막 사용 무게/횟수)을 적용할 수 있다 (2026-09-03: 빈 화면 시작으로 변경하며 추가).
+  const [prefillInfo, setPrefillInfo] = useState<Record<string, { date: string; weight: number; reps: number } | null>>({});
   const [dbFreeWeights,       setDbFreeWeights]       = useState<typeof FREE_WEIGHTS>([]);
 
   React.useEffect(() => {
@@ -4577,18 +4602,19 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   }
 
   // 새 슬롯을 만들어 세트 입력으로 진입 (프리필 적용 여부 isFirstSlot로 제어)
+  // 2026-09-03: 화면은 항상 빈 상태로 시작 — 세트는 "세트 추가" 버튼을 눌러야 생긴다.
+  // 대신 마지막 사용 무게/횟수는 prefillInfo에 담아뒀다가, handleAddSet에서 첫 세트를
+  // 추가하는 순간 그 값을 채워 넣어 기존의 "마지막 무게로 시작" 편의는 유지한다.
   function openNewSlot(machineId: string, slotKey: string, isFirstSlot: boolean) {
     const last = isFirstSlot ? findLastFirstSet(machineId) : null;
     setCurrentExerciseId(slotKey);
     setLogs(prev => ({
       ...prev,
-      [slotKey]: prev[slotKey]?.length
-        ? prev[slotKey]
-        : (last ? [{ weight: last.weight, reps: last.reps }] : [{ weight: 60, reps: 10 }]),
+      [slotKey]: prev[slotKey] ?? [],
     }));
     setPrefillInfo(prev => ({
       ...prev,
-      [slotKey]: prev[slotKey] !== undefined ? prev[slotKey] : (last ? { date: last.date } : null),
+      [slotKey]: prev[slotKey] !== undefined ? prev[slotKey] : (last ? { date: last.date, weight: last.weight, reps: last.reps } : null),
     }));
     setStep('log-sets');
   }
@@ -4681,10 +4707,17 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   function handleAddSet() {
     if (!currentExerciseId) return;
     const id = currentExerciseId;
-    setLogs(prev => ({
-      ...prev,
-      [id]: [...prev[id], { weight: 0, reps: 10 }],
-    }));
+    setLogs(prev => {
+      const existing = prev[id] ?? [];
+      if (existing.length === 0) {
+        // 화면에 세트가 하나도 없는 상태에서 처음 추가하는 세트 — 마지막 사용
+        // 무게/횟수가 있으면(prefillInfo) 그 값으로, 없으면 기존 기본값(60kg x 10회)으로 채운다.
+        const pf   = prefillInfo[id];
+        const seed = pf ? { weight: pf.weight, reps: pf.reps } : { weight: 60, reps: 10 };
+        return { ...prev, [id]: [seed] };
+      }
+      return { ...prev, [id]: [...existing, { weight: 0, reps: 10 }] };
+    });
   }
 
   function handleCopyPrev() {
@@ -4772,6 +4805,16 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light), 1000);
     setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light), 1500);
 
+    // 2026-09-03: 이 아래 저장 로직 전체를 try/catch/finally + 타임아웃으로 감쌈 —
+    // 예전엔 이 블록 안에서 뭔가 예상 못한 이유로 멈추거나(캐치 안 되는 에러,
+    // 또는 응답이 영영 안 오는 네트워크 요청) 실패하면 setIsSaving(false)가
+    // 함수 맨 끝(정상 종료 경로)에만 있어서 로딩화면이 영원히 안 꺼지는 문제가
+    // 있었음. Promise.race로 25초 타임아웃을 둬서, 실제 요청이 응답 없이 걸려
+    // 있어도(진짜 hang) UI는 반드시 풀리도록 하고, finally로 항상 로딩화면을
+    // 끄고, catch로 실패를 사용자에게 알려서 다시 시도할 수 있게 한다.
+    try {
+      await Promise.race([
+        (async () => {
     const effectiveCompositeUri = passedCompositeUri ?? compositeUri;
     const sessionId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const supabaseConfigured = !!(process.env.EXPO_PUBLIC_SUPABASE_URL);
@@ -4798,6 +4841,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
       gymLocation:      gym.location,
       date:             new Date().toISOString(),
       overlayTextColor: selectedColor,
+      overlayStyle:     overlayStyle,
       targetMuscles:    sessionMuscles,
       machines:         selectedExercises.map(ex => {
         const exSets = logs[ex.id] ?? [];
@@ -4887,6 +4931,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
               composite_uri: finalPhotoUrl,
               photo_uri:     photoUri ?? null,
               thumbnail_uri: finalThumbnailUrl ?? null,
+              overlay_style: overlayStyle,
             })
             .eq('session_id', sessionId)
             .eq('user_id', user.id);
@@ -4927,8 +4972,19 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     await new Promise(resolve => setTimeout(resolve, 300));
-    setIsSaving(false);
     setStep('done');
+        })(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('운동일지 저장 시간 초과 (25초)')), 25000)),
+      ]);
+    } catch (err) {
+      if (__DEV__) console.error('[PostWorkoutLog] handleSaveWorkout 실패:', err);
+      Alert.alert(
+        '저장 실패',
+        '운동일지를 저장하는 중 문제가 발생했습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.',
+      );
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   /** Called by WorkoutPhotoStep's "운동 저장" button */
@@ -5106,6 +5162,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             photoUri={photoUri ?? undefined}
             nickname={user?.nickname ?? user?.name ?? undefined}
             onColorChange={setSelectedColor}
+            onStyleChange={setOverlayStyle}
             onCapture={(aspect) => handleCapture(aspect)}
             onCameraCapture={(uri) => {
               setShowCamera(false);
@@ -5380,8 +5437,14 @@ const s = StyleSheet.create({
   },
 
   setActions:   { flexDirection: 'row', gap: 10, marginTop: 4 },
-  addSetBtn:    { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: R.inner },
-  addSetText:   { fontSize: 13, fontWeight: '700', color: C.accent },
+  // 2026-09-03: 세트가 하나도 없을 때 유일한 액션이라 눈에 잘 띄어야 해서
+  // 기존의 투명 텍스트 버튼 → CTA(ctaBtn)와 동일한 accent 채움 버튼으로 강조.
+  addSetBtn:    { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: R.inner, backgroundColor: C.accent },
+  addSetText:   { fontSize: 13, fontWeight: '800', color: C.bg },
+  // 세트가 0개인 첫 화면 전용 — 버튼/텍스트를 더 크게 (이후 추가되는 세트 옆의
+  // '세트 추가' 버튼에는 적용되지 않음, 기존 크기 그대로 유지).
+  addSetBtnEmpty:  { paddingVertical: 18, borderRadius: R.btn },
+  addSetTextEmpty: { fontSize: 16 },
   copySetBtn:   { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: R.inner, backgroundColor: C.surfaceHigh },
   copySetText:  { fontSize: 12, fontWeight: '700', color: C.textSub },
 

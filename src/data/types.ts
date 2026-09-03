@@ -121,6 +121,7 @@ export interface WorkoutPhoto {
   compositeUri?:    string;          // Supabase Storage URL of overlay composite image
   photoUri?:        string;          // Supabase Storage URL of raw camera photo
   thumbnailUri?:    string;          // Supabase Storage URL of 480px WebP thumbnail
+  overlayStyle?:    string;          // 캡처 당시 선택한 오버레이 스타일(예: 's1a') — '오버레이만 저장' 재현용
 }
 
 // --- machine_reviews
@@ -198,6 +199,7 @@ export interface WorkoutLog {
   compositeUri?:     string;   // local URI of the overlay composite image (captureRef result)
   thumbnailUri?:     string;   // 480px WebP 축소본 (주간 썸네일 등 작은 영역용)
   overlayTextColor?: string;
+  overlayStyle?:     string; // 캡처 당시 선택한 오버레이 스타일(예: 's1a') — '오버레이만 저장' 재현용. 이 필드 추가 이전 세션은 값 없음.
   targetMuscles?:    string[]; // 세션 타겟 부위 (없으면 machines에서 역산)
 }
 
