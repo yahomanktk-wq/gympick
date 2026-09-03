@@ -55,3 +55,8 @@ archive_check/
 # git에는 안 올림 (129개 x 여러 사이즈, 수백MB)
 gymvisual-gifs/
 
+# STANDARD(노브랜드) 카탈로그용 GIF 원본/리네임본 — Supabase Storage machine-images
+# 버킷에 업로드해서 원격 URL로만 쓰임(로컬 require() 없음), git에는 안 올림
+# (43개 x 2벌 = 약 80MB)
+standard-machine-gifs/
+
