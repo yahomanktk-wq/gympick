@@ -1,0 +1,219 @@
+TASK: Two independent fixes in FindGymScreen.tsx.
+
+  1. Exclude freeweight items from the 머신 tab's machine list (they should only
+     appear via the dedicated freeweight flow, not mixed into the general machine
+     catalog here).
+  2. Replace the hardcoded "영업 중" badge on gym cards with one that's actually
+     computed from the gym's real operating hours (`gym.hours`) vs the current
+     time.
+
+FILE(S): src/screens/FindGymScreen.tsx (primary), plus a new small shared utility
+file (see STEP 2).
+
+============================================================
+PART 1 — Exclude freeweight from the 머신 tab
+============================================================
+
+STEP 1.0 — VERIFY
+Confirm `const allMachines = machinesData ?? [];` exists (~line 368), and confirm
+the `Machine`/`MachineWithGyms` type includes an `exerciseKind` field (confirmed
+earlier via lib/db/machines.ts: `exerciseKind: row.exercise_kind as ExerciseKind`,
+with a known value `'freeweight'` used elsewhere via `fetchFreeWeights()`'s
+`.eq('exercise_kind', 'freeweight')` filter). Confirm what other possible values
+`ExerciseKind` can have (check data/types.ts) — this task only needs to exclude
+`'freeweight'`, not enumerate/allowlist the other values, so exact other values
+don't matter much, but confirm the type to make sure the comparison is valid
+TypeScript.
+
+STEP 1.1 — Filter freeweight out at the source
+Change:
+    const allMachines = machinesData ?? [];
+To:
+    const allMachines = (machinesData ?? []).filter(m => m.exerciseKind !== 'freeweight');
+
+This filters freeweight items out at the earliest point, so every downstream
+derivation in this file (muscleOptions, brands, categories, filteredMachines,
+shuffledMachines, favTabMachines) automatically excludes them too — no other
+changes needed in this file for Part 1.
+
+Do NOT modify lib/db/machines.ts, fetchMachines(), or fetchFreeWeights() — this
+is a display-scope filter local to this screen, not a change to what the shared
+cache/fetch returns (other screens may still rely on the unfiltered fetch).
+
+============================================================
+PART 2 — Real-time "영업 중" badge
+============================================================
+
+STEP 2.0 — VERIFY
+1. Confirm the hardcoded badge exists in `GymCard` (~line 179-181):
+    <View style={[s.openBadge, { backgroundColor: C.accentBg }]}>
+      <Text style={[s.openBadgeText, { color: C.accent }]}>영업 중</Text>
+    </View>
+2. Confirm `gym.hours` is a string field on `GymWithMachines`, formatted like
+   `"월 09:00~22:00, 화 09:00~22:00, ..."` (Korean single-char day label + space +
+   "HH:MM~HH:MM" time range, comma-separated per day; a day with no segment means
+   closed that day) — this exact format and parsing approach is already used by
+   `HoursTextAllDays` in src/screens/flow/GymDetailModal.tsx (read that function
+   for reference, but do NOT modify GymDetailModal.tsx in this task — it's out of
+   scope, this task only adds a new shared utility and uses it in FindGymScreen.tsx).
+
+STEP 2.1 — Create a new shared utility file
+Create src/lib/gymHours.ts:
+
+    // 헬스장 영업시간 문자열("월 09:00~22:00, 화 09:00~22:00, ...")을 파싱해서
+    // 현재 시각 기준으로 영업 중인지 판단하는 유틸.
+
+    const HANGUL_DAYS = ['월', '화', '수', '목', '금', '토', '일'] as const;
+
+    /** "월 09:00~22:00, 화 09:00~22:00, ..." → { '월': '09:00~22:00', ... } */
+    function parseHoursString(hours: string): Record<string, string> {
+      const map: Record<string, string> = {};
+      hours.split(',').map(s => s.trim()).filter(Boolean).forEach(seg => {
+        const sp = seg.indexOf(' ');
+        if (sp < 0) return;
+        const label = seg.slice(0, sp).trim();
+        const time  = seg.slice(sp + 1).trim();
+        if (label) map[label] = time;
+      });
+      return map;
+    }
+
+    function timeToMinutes(hhmm: string): number | null {
+      const m = hhmm.trim().match(/^(\d{1,2}):(\d{2})$/);
+      if (!m) return null;
+      const h = parseInt(m[1], 10);
+      const min = parseInt(m[2], 10);
+      if (h < 0 || h > 29 || min < 0 || min > 59) return null; // allow up to 29:xx for late-night overnight hours if ever used
+      return h * 60 + min;
+    }
+
+    /**
+     * Returns true if the gym is currently open, based on its `hours` string and
+     * the current time. Returns null if `hours` is missing/empty or unparseable
+     * for today (caller should treat null as "unknown — don't show a badge").
+     */
+    export function isGymOpenNow(hours: string | undefined | null, now: Date = new Date()): boolean | null {
+      if (!hours || !hours.trim()) return null;
+
+      const map = parseHoursString(hours);
+      const todayLabel = HANGUL_DAYS[(now.getDay() + 6) % 7]; // getDay(): 0=Sun..6=Sat → map to 월=0..일=6
+      const todayRange = map[todayLabel];
+      if (!todayRange) return false; // explicitly no hours listed for today = closed (휴무)
+
+      const [startStr, endStr] = todayRange.split('~').map(s => s.trim());
+      const start = timeToMinutes(startStr);
+      const end   = timeToMinutes(endStr);
+      if (start === null || end === null) return null; // unparseable — unknown
+
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+      if (end > start) {
+        // Normal same-day range, e.g. 09:00~22:00
+        return nowMinutes >= start && nowMinutes < end;
+      } else {
+        // Overnight range, e.g. 22:00~02:00 (end time is "past midnight")
+        return nowMinutes >= start || nowMinutes < end;
+      }
+    }
+
+Double-check the `(now.getDay() + 6) % 7` mapping is correct: JS `Date.getDay()`
+returns 0=Sunday..6=Saturday. `HANGUL_DAYS` here is ordered 월(Mon)..일(Sun), i.e.
+index 0=Monday..6=Sunday. So Sunday (getDay()=0) must map to index 6, Monday
+(getDay()=1) to index 0, etc. Verify `(now.getDay() + 6) % 7` produces that
+mapping for all 7 values before moving on (getDay()=0→(0+6)%7=6 ✓ index 6 = 일;
+getDay()=1→(1+6)%7=0 ✓ index 0 = 월; getDay()=6→(6+6)%7=5 ✓ index 5 = 토). If your
+own check disagrees with this, fix the formula rather than leaving it wrong.
+
+STEP 2.2 — Use it in FindGymScreen.tsx's GymCard
+1. Import `isGymOpenNow` from '../lib/gymHours' (adjust relative path to match
+   this file's actual location) at the top of FindGymScreen.tsx.
+
+2. Change the `GymCard` function to compute open status and conditionally render
+   the badge — only show it when the result is a real true/false (not null):
+
+    function GymCard({
+      gym,
+      matchCount,
+      distLabel,
+      onPress,
+    }: {
+      gym:        GymWithMachines;
+      matchCount: number;
+      distLabel:  string;
+      onPress:    () => void;
+    }) {
+      const openStatus = isGymOpenNow(gym.hours);
+
+      return (
+        <TouchableOpacity style={s.gymCard} activeOpacity={0.8} onPress={onPress}>
+          <View style={{ flex: 1, paddingLeft: 0 }}>
+            <View style={s.gymCardTop}>
+              <Text style={s.gymCardName}>{gym.name}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                {gym.managerId && (
+                  <View style={s.managerBadge}>
+                    <Ionicons name="shield-checkmark" size={11} color="#4A90E2" />
+                    <Text style={s.managerBadgeText}>헬스장 직접 관리</Text>
+                  </View>
+                )}
+                {openStatus !== null && (
+                  <View style={[
+                    s.openBadge,
+                    { backgroundColor: openStatus ? C.accentBg : C.dangerBg },
+                  ]}>
+                    <Text style={[
+                      s.openBadgeText,
+                      { color: openStatus ? C.accent : C.danger },
+                    ]}>
+                      {openStatus ? '영업 중' : '영업 종료'}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+            ...
+(keep everything else in this component exactly as it is — only the badge block
+and the new `openStatus` line change; "..." above means "rest of the component
+unchanged", don't literally insert that).
+
+Confirm `C.dangerBg` and `C.danger` exist in the theme (`C` import) — this project
+already uses `C.dangerBg`/`C.danger` elsewhere (e.g. AdminDashboard.tsx's reject
+button styling), so they should already exist; if the exact token names differ
+slightly, use whatever this project's theme actually calls its "danger/red"
+background and text color tokens instead.
+
+STEP 2.3 — Note on "real-time"-ness (no timer added, by design)
+This computes open/closed at RENDER time (every time GymCard re-renders — e.g. on
+mount, on filter change, on pull-to-refresh), not on a ticking interval. This
+means if someone leaves the screen open exactly across a gym's closing-time
+boundary without interacting, the badge won't flip until something causes a
+re-render. Do NOT add a `setInterval`/timer to force periodic re-renders for this
+— that's an explicit scope decision (battery/complexity tradeoff), not an
+oversight. If the user wants stricter live-ticking behavior later, that would be
+a separate follow-up task.
+
+============================================================
+STEP 3 — SANITY CHECK
+============================================================
+1. `npx tsc --noEmit` clean.
+2. Confirm no freeweight items (`exerciseKind === 'freeweight'`) appear anywhere
+   in the 머신 tab's grid, filters (muscle/brand/category chip options), or count
+   displays.
+3. Confirm the 즐겨찾기 tab (`favTabMachines`) also no longer includes freeweight
+   items (since it derives from the now-filtered `allMachines`) — if this is
+   undesirable (e.g. a user could have favorited a freeweight item before), note
+   it in your report rather than silently deciding either way.
+4. Confirm gyms with real `hours` data show "영업 중" or "영업 종료" correctly
+   based on actual current time vs their listed hours for today.
+5. Confirm gyms with NO `hours` data (empty/missing) show NO badge at all (per
+   the agreed default), not a fallback "영업 중".
+6. Do NOT touch GymDetailModal.tsx, MachineCard.tsx, or any admin/profile files
+   in this task.
+7. Report: the new file created, the exact import path used in FindGymScreen.tsx,
+   confirmation that the day-index mapping formula was verified correct, and
+   whether favTabMachines' freeweight exclusion (point 3) seems fine or worth
+   flagging.
+
+Complete this fully without stopping for confirmation, except where STEP 1.0 or
+STEP 2.0's verification reveals the file has drifted meaningfully from what's
+described above.

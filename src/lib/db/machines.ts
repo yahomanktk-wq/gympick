@@ -39,6 +39,9 @@ function rowToMachine(row: MachineRow): Machine {
     exerciseKind: row.exercise_kind as ExerciseKind,
     imageUrl:     row.image_url ?? undefined,
     line:         row.line ?? undefined,
+    // machines 테이블엔 별도 is_custom 컬럼이 없어서 brand로 판별한다 — 노브랜드
+    // 카탈로그는 항상 brand='NONE'으로 시딩되는 규칙(src/data/customMachines.ts).
+    isCustom:     row.brand === 'NONE',
   };
 }
 
@@ -77,6 +80,11 @@ export async function fetchMachines(): Promise<MachineWithGyms[]> {
     gymMap.set(row.machine_id, existing);
   }
 
+  // 노브랜드(NONE) 카탈로그도 다른 머신과 동일하게 Supabase machines
+  // 테이블이 유일한 원본이다 — 43개 로우가 실제로 DB에 있어야 여기 노출된다
+  // (src/data/customMachines.ts 내용과 동일하게 시딩되어 있어야 함, seed SQL
+  // 참고). Supabase 조회가 실패했을 때만 아래 catch 없는 에러 경로에서
+  // 로컬 MACHINES(=BASE_MACHINES + CUSTOM_MACHINES)로 폴백한다.
   const result = machinesResult.data.map(row => ({
     ...rowToMachine(row),
     gymIds: gymMap.get(row.id) ?? [],

@@ -1,0 +1,104 @@
+TASK: Two things in one pass.
+
+1. Sort the gym list shown in the "헬스장 관리" screen (RegisterGymAdminView)
+   alphabetically by name (가나다순 / Korean locale order), instead of whatever
+   order it currently renders in (likely createdAt-based or unsorted DB order).
+
+2. Clean up leftover debug logging from the previous manager-role-sync
+   diagnostic task. That task stopped after adding logs and was never formally
+   closed with a cleanup step in this conversation (the user confirmed things
+   work but never pasted the requested log output, so STEP 3/4 of that task —
+   removing the temporary logs and diagnostic `.select()` — never ran). Do that
+   cleanup now as part of this task.
+
+FILES: src/screens/admin/AdminDashboard.tsx (RegisterGymAdminView), src/lib/db/adminGyms.ts
+(setGymManager).
+
+============================================================
+STEP 0 — VERIFY CURRENT STATE
+============================================================
+1. In RegisterGymAdminView, find where the rendered list (`visibleGyms` or
+   equivalent — the array actually `.map()`'d into gym cards, which is
+   `registeredGyms` optionally filtered by the search query) is derived. Note
+   its current ordering (whatever `fetchAdminGyms()`/`registeredGyms` naturally
+   comes in as — likely `created_at` order based on this project's history).
+2. In src/lib/db/adminGyms.ts's `setGymManager`, confirm the following debug
+   logs (and the diagnostic `.select('id, role')`) are still present from the
+   prior task, exactly as described:
+   - `[DEBUG role] role-sync start for managerId:`
+   - `[DEBUG role] current profile role:`
+   - `[DEBUG role] attempting role update to manager for:`
+   - `[DEBUG role] role update result:`
+   - `[DEBUG role] skipping role update, reason:`
+   - `[DEBUG role] unlink role-sync start, previousManagerId:`
+   - `[DEBUG role] other gyms still managed:`
+   - `[DEBUG role] reverting role to user:`
+   - `[DEBUG role] caught error during role sync:`
+   Confirm via a project-wide search for `[DEBUG role]` to catch all instances
+   (they should all be in adminGyms.ts, but verify no stray copies exist
+   elsewhere, e.g. AdminDashboard.tsx).
+
+============================================================
+STEP 1 — Sort the gym list by name (가나다순)
+============================================================
+Add a `.sort()` step using Korean-locale-aware comparison, applied to the array
+BEFORE it's rendered (so search filtering, if any, still works correctly on top
+of the sorted base — order doesn't matter for correctness there, but keep sort
+applied to whichever array actually feeds the `.map()` that renders cards).
+
+Use `localeCompare` with the Korean locale for correct 가나다 ordering (plain
+`<`/`>` string comparison on Hangul does NOT reliably produce correct 가나다
+order due to Unicode composition, so use `localeCompare('ko')` specifically):
+
+    const sortedGyms = [...registeredGyms].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+
+Then use `sortedGyms` (filtered by search query if applicable) as the render
+source instead of the raw `registeredGyms` order. If there's already a
+`visibleGyms`-style derived/filtered array, apply the sort as part of that same
+derivation (e.g. inside the same `useMemo` if one exists, or immediately before
+the existing filter step) rather than creating a redundant separate variable —
+match this file's existing code style for how such derived lists are typically
+computed here.
+
+============================================================
+STEP 2 — Remove all [DEBUG role] logs and the diagnostic .select()
+============================================================
+1. Remove every `[DEBUG role]` console.log line found in STEP 0.2.
+2. The diagnostic `.select('id, role')` added purely to observe `updateData` in
+   the removed logs — check whether the return value is used anywhere else in
+   the function's logic (e.g. to confirm success beyond just checking `error`).
+   If it's only there for the now-removed debug log, remove `.select(...)` too
+   for a clean minimal update query. If the calling code actually relies on the
+   returned row data for something real, keep it — check before removing.
+3. Search the whole project for `[DEBUG role]` again after cleanup to confirm
+   zero remaining occurrences.
+
+============================================================
+STEP 3 — SANITY CHECK
+============================================================
+1. `npx tsc --noEmit` clean.
+2. Confirm the "헬스장 관리" gym list now renders in 가나다 (Korean alphabetical)
+   order by name.
+3. Confirm the search box still filters correctly on top of the sorted list.
+4. Confirm zero `[DEBUG role]` logs remain anywhere in the project.
+5. Confirm manager link/unlink and role-sync still work correctly after the
+   debug-log removal (the cleanup shouldn't change any actual behavior, only
+   remove logging).
+6. Do NOT touch MachineCard.tsx, FindGymScreen.tsx, or GymDetailModal.tsx in
+   this task.
+7. Report: confirm the sort is applied correctly and confirm the debug-log
+   cleanup is complete.
+
+============================================================
+STEP 4 — COMMIT
+============================================================
+Run `git status` to confirm only src/screens/admin/AdminDashboard.tsx and
+src/lib/db/adminGyms.ts are modified. If other unrelated files show as
+modified, stop and report instead of committing them.
+
+If only those two files are modified:
+    git add src/screens/admin/AdminDashboard.tsx src/lib/db/adminGyms.ts
+    git commit -m "feat(admin): 헬스장 관리 목록 가나다순 정렬 추가, role 동기화 디버그 로그 정리"
+
+Do NOT run git push — leave that for the user to do manually.
+Report `git log --oneline -3`.

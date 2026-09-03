@@ -1,0 +1,109 @@
+TASK: Add a new "유저 현황" (user overview) screen to the admin dashboard. Please
+read this file fully and complete the entire task without stopping or asking for
+confirmation midway ("확인이나 중단 없이 끝까지 완료해줘").
+
+SCOPE — Only add this new screen and its entry point in AdminDashboard.tsx. Do not
+modify unrelated views (pending-gyms, pending-edits, flagged, etc.) in this file.
+Do not touch ProfileScreen.tsx in this task (that's a separate task).
+
+---
+
+GOAL
+
+Add a new admin-only screen showing user statistics, reachable from a new queue
+card on the AdminDashboard home view (same pattern as existing cards like
+'머신 카탈로그' or '브랜드 저작권' — i.e. an info/analytics card, not a
+pending-review-count card).
+
+Required metrics on the new screen:
+1. 전체 가입자 수 (total registered user count)
+2. 역할별 분포 (role breakdown: 일반 유저 / 매니저 / 어드민 counts, e.g. from
+   profiles.role)
+3. 최근 N일 신규가입 추이 (recent signup trend — last 7 or 14 days, grouped by day)
+4. 활성 유저 (active users — based on most recent login/activity timestamp
+   available in the schema)
+
+---
+
+STEP 1 — Investigate before building anything
+
+1. Inspect the Supabase `profiles` table schema (and `auth.users` if accessible
+   from the client with current RLS/permissions — likely it is NOT directly
+   queryable from the client, so plan around using `profiles` only). Identify:
+   - The exact column for role (e.g. `role`), and its possible values.
+   - Whether there's a `created_at` (or similar) timestamp column usable for
+     signup trend.
+   - Whether there's any column that reflects "last active" or "last login"
+     (e.g. `last_sign_in_at`, `updated_at`, or similar). If nothing reflects
+     actual login recency, note that clearly — do not fabricate a proxy metric
+     without flagging it as an approximation (e.g. using `updated_at` on the
+     profile row is NOT the same as last login and should be labeled as such
+     in the UI if used, or the "활성 유저" metric should be omitted/marked as
+     unavailable if there's truly no usable signal).
+2. Check whether the client (anon/authenticated role, whatever the admin user's
+   Supabase session uses) actually has RLS permission to read all rows of
+   `profiles`, not just their own. If not, this feature cannot work client-side
+   as-is — report this back and stop before implementing, rather than writing a
+   query that will silently return incomplete/empty results for other admins.
+3. Check package.json for any already-installed charting library (e.g.
+   react-native-svg based chart libs, victory-native, etc.). Do NOT install any
+   new dependency for this. If nothing suitable exists, plan to render the
+   signup trend as a simple custom bar visualization using plain Views (bar
+   height proportional to count) rather than adding a chart library.
+
+Report findings from Step 1 before proceeding to Step 2. If RLS blocks reading
+all profiles, STOP here and report — do not implement a broken/partial feature.
+
+STEP 2 — Implement (only if Step 1 confirms feasibility)
+
+1. Add a new AdminView union member, e.g. 'user-overview', following the exact
+   same pattern as other views in AdminView type and VIEW_TITLES.
+2. Add a new queue card in HomeView's queue list (module-level, same array
+   pattern as existing cards) — icon, title '유저 현황', a short sub-label (e.g.
+   총 유저 수 or similar, not a pending-count badge since this isn't a review
+   queue), onPress → onPush('user-overview'). Follow existing color/icon
+   conventions used by other info-style cards.
+3. Create a new module-level view component (e.g. `UserOverviewView`) in the
+   same file, following the existing code style (ScrollView + styles.scroll,
+   Header pattern via the shared Header component already used for
+   navigation), containing:
+   - A stat summary section (total users, role breakdown) — reuse the existing
+     `statCard`-style layout already defined in styles for visual consistency,
+     or a similarly simple card grid.
+   - A signup trend section (last 7 or 14 days) rendered as a simple custom bar
+     chart (per Step 1 findings) with day labels.
+   - An active-users metric, clearly labeled with what "active" means based on
+     what's actually available in the schema (per Step 1 finding).
+4. Fetch the data via a new function in the appropriate lib/db file (follow
+   existing conventions — look at how other admin data fetchers like
+   getAllManagerApplications / fetchGymRegistrationRequests are structured and
+   match that style: async function, typed return, no mock fallback needed
+   since this is admin-only real data — but do handle fetch errors gracefully
+   with a try/catch and an empty/error state in the UI, not a crash).
+5. Wire the new view into AdminDashboard's main render (the `{currentView ===
+   '...' && (...)}` block pattern) same as all other views.
+6. Add necessary state (loading, data, error) using useState/useEffect
+   consistent with how gymRequests is fetched and loaded in this same file
+   (fetchGymRegistrationRequests().then(...) pattern).
+
+STEP 3 — Verify
+
+1. Confirm the new screen is reachable only from the admin home view's new
+   queue card, and that back navigation (Header's onBack / pop) works
+   correctly from it, same as other pushed views.
+2. If a TypeScript/lint check is available, run it for the modified/new
+   file(s) only and report any errors.
+3. Confirm no existing view/behavior in AdminDashboard.tsx was altered.
+
+STEP 4 — Git
+
+Stage and commit only the modified/new file(s) with a clear message, e.g.:
+  feat(admin): add user overview dashboard screen
+
+Do NOT run `git push` — that is handled manually by the project owner.
+
+---
+
+REPORT BACK: Step 1 findings (especially whether RLS permits reading all
+profiles, and what "active" ends up meaning), exact files touched, and a short
+description of what the final screen shows.

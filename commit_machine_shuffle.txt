@@ -1,0 +1,16 @@
+TASK: Commit the machine tab shuffle change.
+
+STEP 1 — Verify scope
+Run `git status`. Confirm ONLY src/screens/FindGymScreen.tsx is modified (the
+shuffle-on-focus change from the prior task). If other unrelated files show as
+modified, stop and report instead of committing them.
+
+STEP 2 — Commit
+If only that file is modified:
+    git add src/screens/FindGymScreen.tsx
+    git commit -m "feat(findgym): 머신 탭 카드 순서를 화면 진입 시마다 랜덤 셔플하도록 변경"
+
+Do NOT run git push — leave that for the user to do manually.
+
+STEP 3 — Report
+Report `git log --oneline -3`.

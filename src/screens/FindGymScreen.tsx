@@ -394,7 +394,10 @@ export default function FindGymScreen() {
   }, []);
 
   const isLoading   = machinesLoading || gymsLoading;
-  const allMachines = (machinesData ?? []).filter(m => m.exerciseKind !== 'freeweight');
+  // 노브랜드(CUSTOM) 카탈로그 항목은 특정 제품이 아니라 부위별 범용 유형이라
+  // "머신으로 찾기" 전역 탐색에는 노출하지 않는다 — 헬스장 상세(보유 머신
+  // 전체보기)에서는 그대로 보여준다.
+  const allMachines = (machinesData ?? []).filter(m => m.exerciseKind !== 'freeweight' && !m.isCustom);
 
   const [shuffleTick, setShuffleTick] = useState(0);
 

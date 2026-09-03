@@ -1,0 +1,122 @@
+TASK: Investigate first, then conditionally implement an admin comment/reply
+system for gym registration requests, manager applications, edit requests, and
+info reports — surfaced to the user through the app's existing notification
+feature. Please read this file fully and complete the entire task without
+stopping or asking for confirmation midway ("확인이나 중단 없이 끝까지
+완료해줘"), EXCEPT for the explicit STOP condition in Step 1 below, which
+must be respected.
+
+SCOPE — This task touches multiple tables/screens. Run this AFTER the other two
+admin dashboard tasks (user overview screen, expanded preview) have already
+been completed and committed, to reduce merge/conflict risk.
+
+---
+
+GOAL
+
+When an admin reviews/resolves any of the following request types, they should
+be able to attach a short text comment explaining their decision. The
+requesting user should then be able to see that comment via the app's existing
+notification feature.
+
+Request types in scope (per owner's decision — apply to ALL of these):
+1. 헬스장 신규 등록 제안 (gym_registration_requests) — both user-submitted and
+   manager-submitted
+2. 매니저 신청 (manager applications / managerApplicationStore)
+3. 정보 수정 요청 (edit requests — both editList/RegEditRequest and legacy
+   pendingEdits if both are still actively used — confirm which is actually
+   live in Step 1)
+4. 정보 제보 (gym info reports / gymReportStore)
+
+---
+
+STEP 1 — Mandatory investigation before any implementation. STOP if the
+condition below is met.
+
+1. Search the codebase thoroughly for any existing notification/inbox feature:
+   - Look for a `notifications` table or similar in Supabase usage.
+   - Look for any in-app inbox/notification screen, badge icon, bell icon,
+     or "내 알림"/"알림함" UI anywhere in the app (check navigation, tab bar,
+     ProfileScreen, and any screens folder for anything notification-related).
+   - Look for push notification setup (expo-notifications or similar) that
+     might already deliver messages to users.
+   - Check AuthContext and any user-facing screens for anything that already
+     shows "관리자가 답변했습니다" style messaging or unread indicators.
+
+2. IF a real, working, user-facing notification/inbox feature already exists:
+   - Report exactly what it is (file(s), how it's triggered, how it's
+     displayed to the user) and proceed to Step 2.
+
+3. IF NO such feature exists (this is the likely case — the owner selected
+   "기존 알림 기능에 통합" assuming one exists, but this must be verified, not
+   assumed):
+   - STOP. Do not build a new notification system as an implicit side-effect
+     of this task. A notification/inbox feature is a significant feature on
+     its own (data model, UI, possibly push delivery) and deserves its own
+     explicit design decision from the project owner rather than being
+     improvised here.
+   - Instead, produce a short written report (no code changes) covering:
+     a. Confirmation that no notification feature currently exists.
+     b. A minimal viable alternative for THIS task's purpose only: e.g. adding
+        a simple "내 요청 내역" list screen (reachable from ProfileScreen) that
+        shows the user's own submitted requests across all 4 types above, each
+        with its status and the admin's comment if any — without building a
+        general-purpose notification/badge system.
+     c. Do not implement even this alternative yet — just describe the
+        smallest reasonable version of it in the report, and stop.
+   - End the task here in this case. Do not proceed to Step 2 or beyond.
+
+---
+
+STEP 2 — Implement (ONLY if Step 1 confirmed a real existing notification
+feature to integrate with)
+
+1. Schema: Add a nullable comment/response column (e.g. `admin_comment` or
+   `response_message`, match existing naming conventions in each table) to
+   each of the 4 request-type tables/stores listed above, via Supabase SQL
+   (write the SQL, and note that the project owner will run it manually in
+   Supabase SQL Editor — do not attempt to run migrations yourself unless
+   there's already an established migration workflow in this repo; if unsure,
+   write the SQL to a .sql file and report it rather than guessing at how
+   migrations are applied here).
+
+2. Admin UI: In AdminDashboard.tsx, add an optional comment text input to the
+   review/approve/reject flow for each of the 4 request types (in their
+   respective view components — PendingGymsView/GymDetailView,
+   ManagerRequestsAdminView, PendingEditsView, GymReportsView). Follow existing
+   input styling (e.g. `styles.adminInput` already used elsewhere in this
+   file). The comment should be optional, saved alongside the status update in
+   the same action (approve/reject/reviewed/resolved), not a separate save
+   step.
+
+3. Notification delivery: Wire the comment into the existing notification
+   feature identified in Step 1, using whatever mechanism that feature already
+   uses to notify users (do not invent a new delivery mechanism — reuse the
+   existing one exactly as it already works for other notifications in the
+   app).
+
+4. User-facing display: Ensure the user can open the notification and see
+   which request it refers to, the resulting status, and the admin's comment
+   text.
+
+STEP 3 — Verify (if Step 2 was reached)
+
+1. Confirm a comment saved by an admin on each of the 4 request types
+   correctly appears to the requesting user via the existing notification
+   feature.
+2. Confirm leaving the comment blank still works (optional field, no crash,
+   no empty notification garbage).
+3. If a TypeScript/lint check is available, run it for modified files and
+   report any errors.
+
+STEP 4 — Git (if Step 2 was reached)
+
+Stage and commit only the modified/new file(s) with a clear message, e.g.:
+  feat(admin): add optional review comments surfaced via notifications
+
+Do NOT run `git push` — that is handled manually by the project owner.
+
+---
+
+REPORT BACK: Which branch was taken (Step 1 STOP report, or full Step 2-4
+implementation), and all relevant findings/files per whichever branch applied.

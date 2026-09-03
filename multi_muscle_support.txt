@@ -1,0 +1,321 @@
+================================================================================
+[기능추가] 머신 다중 타겟부위 지원 (콤마 방식) + 카드 배지 2줄 표시
+================================================================================
+※ 한 머신이 2개 부위를 가질 수 있게 지원 (예: target_muscle = "Chest, Shoulder").
+※ 저장 형식은 콤마구분 문자열(방식 A). category 필드가 이미 쓰는 검증된 패턴을 따름.
+※ 하위호환: 단일값("Chest")도 그대로 동작 (parseMuscles가 ['Chest']로 처리).
+※ MachineCard 배지 부분만 구조 변경 허용됨(사용자 승인). 그 외 MachineCard 구조/이미지/
+  푸터/뼈대는 절대 건드리지 말 것.
+
+■ 핵심 설계
+- parseMuscles(s) = s.split(',').map(x=>x.trim()).filter(Boolean)  ← 콤마 파싱 헬퍼(모듈화)
+  · 반드시 trim 포함 ("Chest, Shoulder"처럼 콤마 뒤 공백이 있으므로 필수)
+- 필터/검색: 단일 비교(===) → parseMuscles(...).some()/includes()
+- 부위 칩 목록: map → flatMap(parseMuscles)
+- 카드 배지: 부위 1개면 기존처럼 pill 1개, 2개면 pill 2개 세로 2줄 (grid는 더 작게)
+
+■ 변경/생성 파일
+  [생성] (없음 — parseMuscles는 기존 splitUtils.ts에 추가)
+  [수정] src/lib/splitUtils.ts               ← parseMuscles 헬퍼 추가
+  [수정] src/screens/flow/PostWorkoutLogModal.tsx  ← matchesMuscle, extractCompletedTargets 사용처
+  [수정] src/screens/FindGymScreen.tsx        ← 부위 칩/필터
+  [수정] src/components/MachineCard.tsx        ← 배지 2줄 (배지 부분만 구조 변경)
+  [수정] src/screens/admin/AdminDashboard.tsx  ← 부위 목록 flatMap
+  [수정] src/screens/manager/ManagerDashboard.tsx ← 부위 목록 flatMap
+  [수정] src/screens/flow/GymDetailModal.tsx   ← 머신 탭 부위 필터(있으면)
+
+⚠ Windows(CRLF) 가능 — str_replace 실패 시 Read로 확인 후 맞출 것.
+⚠ 색상(C/R/T)/네비 불변. MachineCard는 '배지(musclePill) 부분'만 수정, 나머지 금지.
+⚠ 부위 문자열(영어) 변형 금지. 표시 시 대문자 변환은 기존대로 .toUpperCase() 유지.
+⚠ 한 번에 여러 파일 수정 — 각 파일 변경을 명확히 구분해 적용할 것.
+
+================================================================================
+[STEP 1] splitUtils.ts — parseMuscles 헬퍼 추가 (모듈화)
+================================================================================
+파일: src/lib/splitUtils.ts
+기존 export 함수들(toKoMuscle 등) 근처에 추가.
+
+추가:
+// 머신 targetMuscle 문자열을 부위 배열로 파싱 (콤마구분, 공백 trim)
+// 단일값 "Chest" → ["Chest"], 다중값 "Chest, Shoulder" → ["Chest","Shoulder"]
+export function parseMuscles(targetMuscle?: string | null): string[] {
+  if (!targetMuscle) return [];
+  return targetMuscle.split(',').map(m => m.trim()).filter(Boolean);
+}
+
+  ※ 이 헬퍼를 다른 파일에서 import해서 사용 (중복 정의 금지).
+
+================================================================================
+[STEP 2] PostWorkoutLogModal.tsx — matchesMuscle 다중 대응
+================================================================================
+--- 2-1. parseMuscles import 추가
+splitUtils에서 이미 import 중인 게 있으면 거기에 parseMuscles 추가, 없으면 추가:
+  import { parseMuscles } from '../../lib/splitUtils';
+  (경로는 기존 splitUtils import 경로에 맞춤. toEnMuscle 등을 import하던 경로 그대로.)
+
+--- 2-2. matchesMuscle 사용처를 some으로 (L782~783, L795)
+matchesMuscle 함수 자체(L750~756)는 '단일 부위 문자열'을 받는 형태 그대로 두고,
+호출하는 쪽에서 parseMuscles로 쪼개 some을 적용한다. (함수 시그니처 유지 → 영향 최소)
+
+OLD (L782~783):
+    machines = gym.machines
+      .filter(m => matchesMuscle(m.targetMuscle))
+NEW:
+    machines = gym.machines
+      .filter(m => parseMuscles(m.targetMuscle).some(t => matchesMuscle(t)))
+
+  ※ .sort의 aOther/bOther 판정(L785~786)도 다중 대응:
+OLD:
+      .sort((a, b) => {
+        const aOther = a.targetMuscle === 'Other' ? 1 : 0;
+        const bOther = b.targetMuscle === 'Other' ? 1 : 0;
+        return aOther - bOther;
+      });
+NEW:
+      .sort((a, b) => {
+        const aOther = parseMuscles(a.targetMuscle).includes('Other') ? 1 : 0;
+        const bOther = parseMuscles(b.targetMuscle).includes('Other') ? 1 : 0;
+        return aOther - bOther;
+      });
+
+OLD (L795 프리웨이트):
+        .filter(fw => matchesMuscle(fw.targetMuscle));
+NEW:
+        .filter(fw => parseMuscles(fw.targetMuscle).some(t => matchesMuscle(t)));
+
+--- 2-3. extractCompletedTargets는 splitUtils에 있으므로 STEP 6에서 처리
+(여기선 PostWorkoutLogModal 내 사용처만. extractCompletedTargets 정의 수정은 STEP 6.)
+
+  ※ 파일 내 다른 m.targetMuscle === '...' 또는 targetMuscle 직접 비교가 있으면(부위 필터 목적)
+    parseMuscles 기반으로 통일. 단, WorkoutEntry.targetMuscle(스냅샷, 저장값)이나 표시 목적의
+    단일 값 사용은 건드리지 말 것 — '부위 필터/비교' 목적만 다중 대응.
+
+================================================================================
+[STEP 3] FindGymScreen.tsx — 부위 칩/필터 다중 대응
+================================================================================
+--- 3-1. parseMuscles import 추가
+  import { parseMuscles } from '../lib/splitUtils';
+  (경로는 실제 FindGymScreen 기준. 기존 splitUtils import 있으면 거기 추가.)
+
+--- 3-2. 부위 칩 목록 생성 (L392~399) — map → flatMap
+OLD:
+  const muscleOptions = useMemo(() => {
+    const unique = [...new Set(
+      allMachines.map(m => m.targetMuscle).filter(Boolean)
+    )];
+    const ordered = MUSCLE_ORDER.filter(m => unique.includes(m));
+    const rest = unique.filter(m => !MUSCLE_ORDER.includes(m)).sort();
+    return ['All', ...ordered, ...rest];
+  }, [allMachines]);
+NEW:
+  const muscleOptions = useMemo(() => {
+    const unique = [...new Set(
+      allMachines.flatMap(m => parseMuscles(m.targetMuscle))
+    )];
+    const ordered = MUSCLE_ORDER.filter(m => unique.includes(m));
+    const rest = unique.filter(m => !MUSCLE_ORDER.includes(m)).sort();
+    return ['All', ...ordered, ...rest];
+  }, [allMachines]);
+
+  ※ 이 변경으로 "Chest, Shoulder" 통짜 칩이 사라지고 Chest/Shoulder 각각 칩으로 나뉨.
+
+--- 3-3. 브랜드 옵션의 부위 필터 (L401~409) — === → some
+OLD:
+    const sourceMachines = activeMuscle === 'All'
+      ? allMachines
+      : allMachines.filter(m =>
+          m.targetMuscle?.toLowerCase() === activeMuscle.toLowerCase()
+        );
+NEW:
+    const sourceMachines = activeMuscle === 'All'
+      ? allMachines
+      : allMachines.filter(m =>
+          parseMuscles(m.targetMuscle).some(t => t.toLowerCase() === activeMuscle.toLowerCase())
+        );
+
+--- 3-4. 카테고리 옵션의 부위 필터 (L414~416) — === → some
+OLD:
+    const muscleFiltered = allMachines.filter(m =>
+      m.targetMuscle?.toLowerCase() === activeMuscle.toLowerCase()
+    );
+NEW:
+    const muscleFiltered = allMachines.filter(m =>
+      parseMuscles(m.targetMuscle).some(t => t.toLowerCase() === activeMuscle.toLowerCase())
+    );
+
+--- 3-5. 최종 필터 muscleOk (L498) — === → some
+OLD:
+      const muscleOk   = activeMuscle === 'All' || m.targetMuscle?.toLowerCase() === activeMuscle.toLowerCase();
+NEW:
+      const muscleOk   = activeMuscle === 'All' || parseMuscles(m.targetMuscle).some(t => t.toLowerCase() === activeMuscle.toLowerCase());
+
+  ※ category 관련(split) 로직은 그대로 둘 것 — 이미 다중 대응됨.
+
+================================================================================
+[STEP 4] MachineCard.tsx — 타겟부위 배지 2줄 (배지 부분만 구조 변경)
+================================================================================
+★ 사용자 승인: MachineCard '배지(musclePill) 부분'만 구조 변경 허용.
+  이미지/푸터/infoBand의 브랜드 로고 쪽/카드 뼈대는 절대 변경 금지.
+
+--- 4-1. parseMuscles import 추가
+  import { parseMuscles } from '../lib/splitUtils';
+  (MachineCard 기준 경로. 기존 import 구역에 추가.)
+
+--- 4-2. 배지 렌더를 세로 스택으로 (L143~147)
+현재 단일 pill을, parseMuscles로 나눠 세로로 렌더. 1개면 기존과 동일하게 보임, 2개면 2줄.
+
+OLD:
+        <View style={[s.musclePill, isGrid && { paddingHorizontal: 6, paddingVertical: 3 }]}>
+          <Text style={[s.muscleText, isGrid && { fontSize: 9, letterSpacing: 0.5 }]}>
+            {machine.targetMuscle.toUpperCase()}
+          </Text>
+        </View>
+NEW:
+        <View style={s.muscleColumn}>
+          {parseMuscles(machine.targetMuscle).slice(0, 2).map((mus, i) => (
+            <View
+              key={i}
+              style={[
+                s.musclePill,
+                isGrid && { paddingHorizontal: 5, paddingVertical: 2 },
+                i > 0 && { marginTop: isGrid ? 2 : 3 },
+              ]}
+            >
+              <Text style={[s.muscleText, isGrid && { fontSize: 8, letterSpacing: 0.3 }]}>
+                {mus.toUpperCase()}
+              </Text>
+            </View>
+          ))}
+        </View>
+
+  ※ slice(0,2): 최대 2개까지만 표시(요구사항 — 부위는 최대 2개).
+  ※ 1개면 pill 1개(기존과 동일한 모습), 2개면 세로 2줄.
+  ※ grid에서는 pill 패딩/폰트를 더 작게(패딩 5/2, 폰트 8) 하여 좁은 밴드에 2줄이 들어가게 함.
+
+--- 4-3. muscleColumn 스타일 추가 (styles에)
+musclePill 스타일 근처(L328 부근)에 추가:
+  muscleColumn: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+
+  ※ infoBand가 flexDirection:'row' + space-between 이므로, 우측에 세로 컬럼으로 배지가 쌓임.
+    브랜드 로고(좌)는 그대로, 부위 배지(우)만 세로 스택.
+
+--- 4-4. grid 밴드 높이 확인 (L67 부근)
+grid 밴드 높이(bandH = isGrid ? 38 : BAND_H)에서 2줄 배지가 넘치는지 디바이스 확인 필요.
+- 우선 38 그대로 두고 pill 축소(4-2)로 대응 시도.
+- 만약 2줄이 세로로 넘쳐 잘리면, isGrid일 때 bandH를 소폭 상향(예: 38 → 44)해도 됨.
+  단, 이 경우 이미지 영역이 살짝 줄어드므로 과하지 않게(+6 이내). 넘침 없으면 38 유지.
+OLD (필요 시에만):
+  const bandH   = isGrid ? 38             : BAND_H;
+NEW (넘칠 경우에만):
+  const bandH   = isGrid ? 44             : BAND_H;
+
+  ※ 이 변경(4-4)은 '배지 2줄이 grid에서 넘칠 때만' 적용. 우선 pill 축소로 해결 시도하고,
+    디바이스에서 넘치면 그때 bandH 상향. (테스트 결과에 따라 판단)
+
+================================================================================
+[STEP 5] AdminDashboard.tsx & ManagerDashboard.tsx — 부위 목록 flatMap
+================================================================================
+방금 Supabase 전환으로 부위 목록을 machines에서 useMemo로 뽑는 곳들. 단일 map → flatMap(parseMuscles).
+
+--- 5-1. AdminDashboard.tsx
+parseMuscles import 추가:
+  import { parseMuscles } from '../../lib/splitUtils';
+
+부위 목록 useMemo (MachineCatalogView의 CAT_MUSCLES, RegisterGymAdminView의 ADMIN_GYM_MUSCLES):
+OLD (각 위치, 예):
+  const CAT_MUSCLES = useMemo(() => ['All', ...Array.from(new Set(machines.map(m => m.targetMuscle))).sort()], [machines]);
+NEW:
+  const CAT_MUSCLES = useMemo(() => ['All', ...Array.from(new Set(machines.flatMap(m => parseMuscles(m.targetMuscle)))).sort()], [machines]);
+
+  ※ ADMIN_GYM_MUSCLES도 동일하게 map → flatMap(parseMuscles).
+  ※ 머신 필터(부위로 거르는 곳)가 === 단일 비교면 parseMuscles(...).some(...)으로. Read로 확인 후 적용.
+    (예: filteredMachines에서 muscleFilter 비교 부분)
+
+--- 5-2. ManagerDashboard.tsx
+parseMuscles import 추가:
+  import { parseMuscles } from '../../lib/splitUtils';
+
+부위 목록 useMemo (MachinesView의 CATALOG_MUSCLES):
+OLD:
+  const CATALOG_MUSCLES = useMemo(() => [...new Set(machines.map(m => m.targetMuscle))].sort(), [machines]);
+NEW:
+  const CATALOG_MUSCLES = useMemo(() => [...new Set(machines.flatMap(m => parseMuscles(m.targetMuscle)))].sort(), [machines]);
+
+  ※ 머신 필터의 부위 비교(=== )가 있으면 parseMuscles(...).some(...)으로. Read로 확인 후 적용.
+
+================================================================================
+[STEP 6] splitUtils.ts — extractCompletedTargets 다중 대응
+================================================================================
+extractCompletedTargets(L80~91)가 map으로 단일 부위만 반영. flatMap(parseMuscles)로 변경.
+OLD:
+export function extractCompletedTargets(
+  machines: Array<{ targetMuscle?: string }>
+): string[] {
+  return [
+    ...new Set(
+      machines
+        .map(m => m.targetMuscle)
+        .filter((t): t is string => !!t)
+        .map(t => toKoMuscle(t))
+    )
+  ];
+}
+NEW:
+export function extractCompletedTargets(
+  machines: Array<{ targetMuscle?: string }>
+): string[] {
+  return [
+    ...new Set(
+      machines
+        .flatMap(m => parseMuscles(m.targetMuscle))
+        .map(t => toKoMuscle(t))
+    )
+  ];
+}
+
+  ※ parseMuscles를 같은 파일에서 쓰므로 import 불필요(같은 파일에 정의). 순서상 parseMuscles가
+    먼저 정의되도록(위쪽에) 배치.
+
+================================================================================
+[STEP 7] GymDetailModal.tsx — 머신 탭 부위 필터 (있으면)
+================================================================================
+GymDetailModal 머신 탭에 타겟부위 필터가 있으면 동일하게 다중 대응.
+- parseMuscles import 추가
+- 부위 칩 생성: map → flatMap(parseMuscles)
+- 부위 필터 비교: === → parseMuscles(...).some(...)
+Read로 해당 부분을 찾아 FindGymScreen(STEP 3)과 동일 원리로 적용.
+  ※ 만약 GymDetailModal이 부위 필터를 자체 구현하지 않고 공통 컴포넌트/FindGym 로직을 재사용하면
+    별도 수정 불필요. 실제 코드 확인 후 판단. 없으면 이 STEP 건너뜀(보고).
+
+================================================================================
+■ 완료 후 자체 점검
+================================================================================
+1) npx tsc --noEmit → 신규 에러 0건
+2) splitUtils.ts: parseMuscles 추가, extractCompletedTargets가 flatMap 사용
+3) PostWorkoutLogModal: matchesMuscle 호출부가 parseMuscles(...).some(...)
+4) FindGymScreen: 부위 칩 flatMap, 필터 some (muscleOptions/brands/categories/filteredMachines)
+5) MachineCard: 배지가 parseMuscles(...).slice(0,2).map → 세로 스택, grid pill 축소, muscleColumn 스타일 추가
+   - MachineCard의 이미지/푸터/브랜드로고/뼈대는 변경 없음 (배지 부분만)
+6) Admin/Manager: 부위 목록 flatMap, 필터 some
+7) 파일 내 부위 '필터/비교' 목적의 단일 === 비교가 남지 않았는지 (표시/스냅샷 목적은 제외)
+8) 위 외 로직/구조 변경 없음
+
+■ 사람이 직접 할 일 (디바이스 테스트 — 테스트 머신 "Chest, Shoulder"로)
+- 찾기 화면 부위 칩: "Chest, Shoulder" 통짜 칩이 사라지고 Chest/Shoulder가 각각 있는지
+- 찾기 Chest 필터 → 테스트 머신 뜨는지 / Shoulder 필터 → 테스트 머신도 뜨는지 (양쪽 다)
+- 머신 카드(grid 2열): 테스트 머신에 배지가 CHEST / SHOULDER 2줄로 뜨는지, 안 잘리고 밴드에 들어가는지
+- 머신 카드(detail 큰 카드): 배지 2줄 정상인지
+- 단일 부위 머신: 기존처럼 배지 1개(한 줄)인지 (변화 없어야)
+- 운동일지: Chest 선택 시 테스트 머신 나오는지, Shoulder 선택 시도
+- 어드민/매니저 머신 필터: 부위 칩에 Chest/Shoulder 각각, 필터 동작
+- ★ grid 카드에서 2줄 배지가 넘치거나 잘리면 알려줄 것 (bandH 상향 or pill 추가 축소로 대응)
+
+■ 실패 시 참고
+- parseMuscles import 경로: splitUtils 실제 경로 확인(src/lib/splitUtils.ts).
+- MachineCard 배지가 밴드 높이 초과 시: STEP 4-4의 bandH 상향(38→44) 적용.
+- 부위 필터가 여전히 단일값만 걸리면: 해당 화면의 === 비교가 parseMuscles.some으로 안 바뀐 곳 확인.
+- GymDetailModal이 부위 필터를 자체 구현 안 하면 STEP 7 생략(보고).
+================================================================================

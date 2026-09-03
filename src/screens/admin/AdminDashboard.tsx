@@ -638,7 +638,12 @@ function MachineCatalogView({
   catSelected, catApproved, onToggleSelect, onApproveSelected,
 }: MachineCatalogViewProps) {
   const CAT_MUSCLES = useMemo(() => ['All', ...Array.from(new Set(machines.flatMap(m => parseMuscles(m.targetMuscle)))).sort()], [machines]);
-  const CAT_BRANDS  = useMemo(() => ['All', ...Array.from(new Set(machines.map(m => m.brand))).sort()], [machines]);
+  // NONE(노브랜드 카탈로그)는 항상 맨 뒤로
+  const CAT_BRANDS  = useMemo(() => ['All', ...Array.from(new Set(machines.map(m => m.brand))).sort((a, b) => {
+    if (a === 'NONE') return 1;
+    if (b === 'NONE') return -1;
+    return a.localeCompare(b);
+  })], [machines]);
   const MC: Record<string, { fg: string; bg: string }> = {
     Chest:       { fg: '#ff6b6b', bg: '#ff6b6b18' },
     Back:        { fg: '#5ba4ff', bg: '#5ba4ff18' },
@@ -805,7 +810,9 @@ function MachineCatalogView({
 }
 
 function BrandCopyrightView({ machines }: { machines: MachineWithGyms[] }) {
-  const allBrands = useMemo(() => Array.from(new Set(machines.map(m => m.brand))).sort(), [machines]);
+  // 노브랜드(CUSTOM) 카탈로그는 실제 제조사가 아니므로 브랜드 저작권 승인
+  // 목록에서 제외한다.
+  const allBrands = useMemo(() => Array.from(new Set(machines.filter(m => !m.isCustom).map(m => m.brand))).sort(), [machines]);
   const [entries, setEntries] = useState(() => getBrandCopyrightList(allBrands));
 
   function toggle(brand: string, value: boolean) {
@@ -1173,7 +1180,12 @@ function RegisterGymAdminView({ machines, registeredGyms, onSave, onUpdate, onOf
   const [gymSearchQuery,   setGymSearchQuery]   = useState('');
 
   const ADMIN_GYM_MUSCLES = useMemo(() => ['All', ...Array.from(new Set(machines.flatMap(m => parseMuscles(m.targetMuscle)))).sort()], [machines]);
-  const ADMIN_GYM_BRANDS  = useMemo(() => ['All', ...Array.from(new Set(machines.map(m => m.brand))).sort()], [machines]);
+  // NONE(노브랜드 카탈로그)는 항상 맨 뒤로
+  const ADMIN_GYM_BRANDS  = useMemo(() => ['All', ...Array.from(new Set(machines.map(m => m.brand))).sort((a, b) => {
+    if (a === 'NONE') return 1;
+    if (b === 'NONE') return -1;
+    return a.localeCompare(b);
+  })], [machines]);
 
   const updateGymDay = useCallback((day: keyof OperatingHours, field: any, value: any) => {
     setGymHours2(prev => ({ ...prev, [day]: { ...prev[day], [field]: value } }));

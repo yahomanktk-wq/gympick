@@ -1,0 +1,21 @@
+chore: 성능 개선 + 오운완 인증샷 레이아웃 E 추가/정리 + 버전 1.2.3
+
+- WorkoutFeedScreen: loadPosts()에서 fetchWorkoutLogs / fetchMyLatestGymId /
+  getActiveFeedPostsCached 3개의 순차 호출을 서로 독립적이므로 Promise.all로
+  병렬화 (다운스트림 소비 순서·로직은 동일하게 유지, 출력 화면 변경 없음)
+- PostWorkoutLogModal / WorkoutCameraOverlay: 오운완 인증샷 5번째 레이아웃
+  "GridOverlayE" 신규 추가 (모서리 각짐 + 테두리선 없음, 사용자 색상 테마
+  배경의 GYM PICK 로고 박스, 4열 루틴 그리드, 세로 회전 닉네임/일시)
+  - 로고 박스 위치·크기·두께, 로고 좌우 위치 수차례 미세 조정
+  - 세로 회전 요소(GYM PICK 로고, 닉네임/일시)는 flexbox 정렬 대신
+    회전 전 pre-rotation 좌표를 역산하는 방식으로 정확한 위치 정렬 구현
+  - 루틴 그리드 열 사이 구분선을 별도 sibling View + 대칭 margin 방식으로
+    변경해 정확히 중앙에 위치하도록 개선
+- PostWorkoutLogModal / WorkoutCameraOverlay: 레이아웃 선택 옵션 중
+  3A~3E, 4A~4E, 5A~5E, 9(아치형) 총 16개 삭제 (남은 옵션: 1A~1E, 2A~2E,
+  6A~6E). 관련 타입(OverlayStyle)/폰트셋(FONT_SETS 3·4·5번)/전용 컴포넌트
+  (ArchDayOverlay)와 렌더링 분기를 두 파일에서 함께 정리
+- 버전 업데이트: 1.2.2 → 1.2.3 (iOS buildNumber 40→41, Android versionCode
+  21→22)
+- ProfileScreen: 하드코딩된 버전 표시 텍스트 "GymPick v1.1.7"(이전 여러
+  버전 업데이트에서 갱신 누락되어 있던 값) → "GymPick v1.2.3"으로 수정

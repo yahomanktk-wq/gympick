@@ -1,0 +1,49 @@
+[수정 태스크 — 확인이나 중단 없이 끝까지 완료해줘]
+
+## 배경
+조사 결과, src/lib/machineImageUrl.ts의 getMachineImageUrl이 width만 받고
+height를 넘기지 않아서, Supabase Image Transformation이 세로축을 원본
+그대로(800px) 남겨둔 채 가로만 리사이즈 → 결과적으로 350×800처럼 완전히
+찌그러진 비율의 이미지가 반환됨. 이게 클라이언트에서 여백 없이 확대·크롭된
+것처럼 보이는 버그의 원인.
+
+curl로 직접 검증한 결과, `?width=350&height=350&quality=75`처럼 height를
+width와 동일하게 명시하면 정상적인 350×350 정사각형 축소본이 나오고,
+MachineCard.tsx는 이미 contentFit="contain"으로 9:16 세로 박스 안에
+정사각형 이미지를 letterbox하는 구조이므로, "항상 정사각형으로 리사이즈
+요청"하는 것이 기존 디자인을 그대로 유지하면서 용량만 줄이는 가장 안전한
+해결책으로 확인됨.
+
+## 목표
+`src/lib/machineImageUrl.ts`의 getMachineImageUrl 함수를 수정:
+- 현재는 `options.width`만 있으면 `?width={w}&quality={q}`로 요청하고 있음
+- 이걸 width가 주어지면 height도 자동으로 **같은 값**으로 채워서
+  `?width={w}&height={w}&quality={q}`로 요청하도록 변경
+- 만약 호출부에서 명시적으로 height를 다르게 지정하고 싶은 경우를 대비해,
+  MachineImageUrlOptions에 optional height 필드를 추가하고, height가
+  명시적으로 주어지면 그 값을 우선 사용, 없으면 width 값으로 채우는 방식으로
+  구현 (기존 호출부들은 전부 height를 안 넘기고 있으므로 자동으로
+  정사각형 요청이 되어야 함)
+- resize 모드는 별도로 지정하지 말 것 (source·target이 둘 다 1:1이라
+  cover/contain 차이가 없으므로 굳이 파라미터 추가 불필요)
+
+## 절대 지키기
+- 이 파일 하나만 수정하면 되는 작업. FindGymScreen.tsx, GymDetailModal.tsx,
+  AdminDashboard.tsx, PostWorkoutLogModal.tsx, JournalScreen.tsx,
+  WorkoutFeedScreen.tsx, GymStatsView.tsx, OlympicBattleScreen.tsx,
+  OlympicResultScreen.tsx 등 getMachineImageUrl을 호출하는 곳들은 전부
+  width만 넘기고 있으므로 그쪽 코드는 건드릴 필요 없음 — 만약 코드를 보다가
+  height를 이미 넘기고 있는 호출부가 있다면 건드리지 말고 나에게 알려줘
+- 같은 machineId + 같은 width 조합이면 항상 같은 문자열을 반환해야 함
+  (기존 규칙 그대로 유지)
+- MachineCard.tsx, MachineCardBorder.tsx는 건드리지 말 것 (이번 문제는
+  전적으로 URL 생성 로직의 문제였고 클라이언트 렌더링 로직은 정상이었음이
+  조사로 확인됨)
+
+## 완료 후 확인
+- npx tsc --noEmit 통과 확인
+- 수정 후 생성되는 URL 예시를 하나 만들어서 보여줘
+  (예: getMachineImageUrl('nautilus_shoulder_2', { width: 350 }) →
+  어떤 문자열이 나오는지)
+- 가능하면 curl로 실제 응답 이미지 픽셀 크기가 350×350으로 나오는지 재검증
+- 한국어 커밋 메시지로 커밋만 하고 git push는 하지 말 것

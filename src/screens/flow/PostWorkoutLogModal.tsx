@@ -61,6 +61,7 @@ import MachineCardBorder from '../../components/MachineCardBorder';
 import RoutineCardMachineThumb from '../../components/RoutineCardMachineThumb';
 import { FREE_WEIGHTS, FreeWeightExercise } from '../../data/freeWeights';
 import { fetchFreeWeights, fetchWorkoutLogs } from '../../lib/db';
+import { fetchMachines, getMachinesCacheSync } from '../../lib/db/machines';
 import * as Location from 'expo-location';
 import { calcDistanceKm, formatDistance } from '../../lib/geocoding';
 import { fetchGymsWithMachines } from '../../lib/db/gyms';
@@ -176,10 +177,17 @@ const WEIGHT_PRESETS = [
 ];
 const REPS_PRESETS   = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20];
 
-// Global machine lookup map for resolving routine machines not in current gym
-const ALL_MACHINES_MAP: Record<string, Machine> = Object.fromEntries(
-  MACHINES.map((m) => [m.id, m]),
-);
+// Global machine lookup for resolving routine machines not in current gym.
+// 2026-09-02: Supabase가 머신 카탈로그의 유일한 원본이 된 뒤로는, 로컬 정적
+// 배열(MACHINES)만 보면 Supabase에만 새로 추가된 항목(예: 새 STANDARD 유형)을
+// 못 찾을 수 있다 — fetchMachines()가 채워둔 최신 캐시(getMachinesCacheSync())를
+// 뒤에 합쳐서 그런 항목도 찾을 수 있게 한다. 캐시는 비동기로 채워지므로 이 값을
+// 쓰는 컴포넌트(ExerciseSelectStep)에서 fetchMachines() 완료 후 재계산한다.
+function buildAllMachinesMap(): Record<string, Machine> {
+  return Object.fromEntries(
+    [...MACHINES, ...getMachinesCacheSync()].map((m) => [m.id, m]),
+  );
+}
 
 // 부위 그룹 라벨 → 머신 targetMuscle 표준명으로 정규화
 // (예: 'Hip (Glutes)' → 'Glutes'). 저장/표시 경계에서만 사용한다.
@@ -269,30 +277,39 @@ function StepBar({ total, current }: { total: number; current: number }) {
 
 const WEIGHT_DIRECT_INPUT_MAX = 999;
 const WEIGHT_DIRECT_INPUT_MIN = 0;
+const REPS_DIRECT_INPUT_MAX   = 999;
 
 function formatWeightText(value: number): string {
   return value % 1 === 0 ? String(value) : value.toFixed(1);
 }
 
-function Stepper({ value, onChange, step = 1, min = 0, directInput = false }: {
-  value: number; onChange: (v: number) => void; step?: number; min?: number;
-  directInput?: boolean;
+// allowDecimal=false(REPS 등 정수 전용 입력)면 소수점을 아예 못 치게 막고, 커밋 시에도
+// 반올림한 정수로만 저장한다. weight 쪽은 기존 그대로 소수 첫째자리까지 입력 가능.
+function formatStepperText(value: number, allowDecimal: boolean): string {
+  if (!allowDecimal) return String(Math.round(value));
+  return value % 1 === 0 ? String(value) : value.toFixed(1);
+}
+
+function Stepper({ value, onChange, step = 1, min = 0, max = WEIGHT_DIRECT_INPUT_MAX, directInput = false, allowDecimal = true }: {
+  value: number; onChange: (v: number) => void; step?: number; min?: number; max?: number;
+  directInput?: boolean; allowDecimal?: boolean;
 }) {
   const display = value % 1 === 0 ? String(value) : value.toFixed(1);
 
   const [editing, setEditing] = useState(false);
-  const [text,    setText]    = useState(() => formatWeightText(value));
+  const [text,    setText]    = useState(() => formatStepperText(value, allowDecimal));
   const focusedRef            = useRef(false);
 
   // 프리셋/스테퍼로 값이 바뀌면 입력칸 텍스트 동기화 (단, 사용자가 타이핑 중이면 덮어쓰지 않음)
   useEffect(() => {
     if (directInput && !focusedRef.current) {
-      setText(formatWeightText(value));
+      setText(formatStepperText(value, allowDecimal));
     }
-  }, [value, directInput]);
+  }, [value, directInput, allowDecimal]);
 
   function handleChangeText(t: string) {
-    if (/^\d{0,3}(\.\d{0,1})?$/.test(t)) {
+    const pattern = allowDecimal ? /^\d{0,3}(\.\d{0,1})?$/ : /^\d{0,3}$/;
+    if (pattern.test(t)) {
       setText(t);
     }
   }
@@ -300,12 +317,13 @@ function Stepper({ value, onChange, step = 1, min = 0, directInput = false }: {
   function commit() {
     const parsed = parseFloat(text);
     if (text === '' || isNaN(parsed)) {
-      setText(formatWeightText(value));
+      setText(formatStepperText(value, allowDecimal));
       setEditing(false);
       return;
     }
-    const clamped = Math.min(WEIGHT_DIRECT_INPUT_MAX, Math.max(WEIGHT_DIRECT_INPUT_MIN, parsed));
-    setText(formatWeightText(clamped));
+    const normalized = allowDecimal ? parsed : Math.round(parsed);
+    const clamped     = Math.min(max, Math.max(min, normalized));
+    setText(formatStepperText(clamped, allowDecimal));
     if (clamped !== value) onChange(clamped);
     setEditing(false);
   }
@@ -328,7 +346,7 @@ function Stepper({ value, onChange, step = 1, min = 0, directInput = false }: {
           onFocus={() => { focusedRef.current = true; }}
           onBlur={() => { focusedRef.current = false; commit(); }}
           onSubmitEditing={() => { commit(); Keyboard.dismiss(); }}
-          keyboardType="decimal-pad"
+          keyboardType={allowDecimal ? 'decimal-pad' : 'number-pad'}
           returnKeyType="done"
           style={s.stepperValEditing}
           autoFocus
@@ -336,7 +354,7 @@ function Stepper({ value, onChange, step = 1, min = 0, directInput = false }: {
         />
       ) : directInput ? (
         <TouchableOpacity
-          onPress={() => { focusedRef.current = true; setText(formatWeightText(value)); setEditing(true); }}
+          onPress={() => { focusedRef.current = true; setText(formatStepperText(value, allowDecimal)); setEditing(true); }}
           activeOpacity={0.7}
         >
           <Text style={s.stepperVal} numberOfLines={1}>{display}</Text>
@@ -823,6 +841,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
   const [localSelectedId, setLocalSelectedId] = useState<string | null>(null);
   const [showTplList,     setShowTplList]     = useState(false);
   const [dbFreeWeights,   setDbFreeWeights]   = useState<typeof FREE_WEIGHTS>([]);
+  const [allMachinesMap,  setAllMachinesMap]  = useState<Record<string, Machine>>(() => buildAllMachinesMap());
   const [viewMode,        setViewMode]        = useState<'routine' | 'all'>('routine');
   const [viewCategory,    setViewCategory]    = useState<'machine' | 'freeweight'>('machine');
   // "다른 부위도 보기"(viewMode==='all') 상태의 프리웨이트 목록은 부위 필터가 없어
@@ -855,6 +874,16 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
     });
   }, []);
 
+  // Supabase 캐시가 채워진 뒤(또는 이미 채워져 있으면 즉시) 전역 머신 맵을 다시
+  // 계산 — 로컬 정적 배열엔 없는, Supabase에만 있는 새 항목도 반영되게 한다.
+  useEffect(() => {
+    fetchMachines().then(() => {
+      setAllMachinesMap(buildAllMachinesMap());
+    }).catch(() => {
+      // 조회 실패 시 로컬 폴백만으로 계산된 초기값을 그대로 사용
+    });
+  }, []);
+
   // 'Hip (Glutes)' selection should match machines with targetMuscle 'Glutes'
   function matchesMuscle(targetMuscle: string): boolean {
     if (selectedMuscles.has(targetMuscle)) return true;
@@ -874,7 +903,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
       .map(id => {
         const gymMachine = gym.machines.find(m => m.id === id);
         if (gymMachine) return gymMachine;
-        const globalMachine = ALL_MACHINES_MAP[id];
+        const globalMachine = allMachinesMap[id];
         if (globalMachine) return globalMachine;
         const dbFw = dbFreeWeights.find(f => f.id === id);
         if (dbFw) return { id: dbFw.id, name: dbFw.name, brand: dbFw.brand, targetMuscle: dbFw.targetMuscle, category: 'Free Weight', exerciseKind: 'freeweight' as const } as Machine;
@@ -1543,7 +1572,7 @@ function SetCard({ ex, sets, realPR, prefill, freeWeights, onChange, onAdd, onCo
           </View>
           <View style={s.stepperRow}>
             <Text style={s.stepperUnit}>reps</Text>
-            <Stepper value={set.reps} onChange={v => onChange(idx, 'reps', v)} step={1} min={1} />
+            <Stepper value={set.reps} onChange={v => onChange(idx, 'reps', v)} step={1} min={1} max={REPS_DIRECT_INPUT_MAX} directInput allowDecimal={false} />
           </View>
         </View>
       ))}
@@ -1599,7 +1628,13 @@ function SetLoggingStep({ exercise, sets, note, freeWeights, onChange, onAdd, on
   const pendingScrollIdx = useRef<number>(-1);
   const noteCardRef      = useRef<View>(null);
   const hasSets = sets.length > 0 && sets.some(s => s.weight > 0 || s.reps > 0);
-  const completedSets = sets.slice(0, -1);
+  // 버그 수정(2026-09-01): 예전엔 sets.slice(0, -1)로 마지막 세트를 "완료된 세트"
+  // 배너에서 항상 제외했음 — 하지만 "저장하고 다음 머신"(handleSaveExercise)은
+  // 잘린 배열이 아니라 sets(=logs[currentExerciseId]) 전체를 그대로 저장하고,
+  // 인증샷 오버레이도 같은 sets/logs를 그대로 쓴다. 그래서 배너에만 실제 저장되는
+  // 세트 수보다 항상 1개 적게 표시되는 불일치가 있었음 — 실제 저장 데이터와
+  // 항상 일치하도록 잘라내지 않고 sets 전체를 그대로 보여준다.
+  const completedSets = sets;
 
   function handleSetLayout(idx: number, y: number) {
     setLayoutsRef.current[idx] = y;
@@ -2785,6 +2820,9 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
   const [saveSuccess,   setSaveSuccess]   = useState(false);
   const [overlayStyle,  setOverlayStyle]  = useState<OverlayStyle>('s1a');
   const overlayRef = useRef<View>(null);
+  /** 사진 없이 오버레이(닉네임/부위/통계 텍스트)만 투명 배경 PNG로 캡처하기 위한
+   *  화면 밖 전용 뷰 참조. 영상에 직접 오버레이할 수 있도록 배경을 투명하게 유지한 채 캡처한다. */
+  const layoutOnlyRef = useRef<View>(null);
   const routineCardRef = useRef<View>(null);
   const photoFrameRef   = useRef<View>(null);
   const overlayStyleRef = useRef<View>(null);
@@ -2994,6 +3032,39 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
     }
   }
 
+  /** 사진 없이 오버레이(닉네임/부위/통계 텍스트)만 투명 배경 PNG로 사진첩에 저장.
+   *  루틴 카드는 포함하지 않고, 오버레이 프레임 한 장만 저장한다. 저장된 PNG는
+   *  짐픽 밖에서(예: 영상 편집 앱) 유저가 직접 영상 위에 올려 쓰는 용도다. */
+  async function handleSaveLayoutOnly() {
+    if (!photoTaken || !layoutOnlyRef.current) {
+      Alert.alert('사진 없음', '먼저 사진을 찍어주세요.');
+      return;
+    }
+    try {
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      await new Promise<void>(resolve => InteractionManager.runAfterInteractions(() => resolve()));
+      if (!layoutOnlyRef.current) {
+        Alert.alert('저장 실패', '저장에 실패했습니다.');
+        return;
+      }
+      const ratio = Math.max(PixelRatio.get(), 4);
+      const capturedUri = await captureRef(layoutOnlyRef, {
+        format: 'png', quality: 1, result: 'tmpfile',
+        pixelRatio: ratio,
+        ...(Platform.OS === 'android' ? { width: Math.round(PHOTO_W * ratio), height: Math.round(photoH * ratio) } : {}),
+      });
+      await MediaLibrary.saveToLibraryAsync(capturedUri);
+
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('저장 완료', '오버레이 이미지(투명 배경 PNG)가 사진첩에 저장되었습니다.\n영상 편집 앱에서 이 이미지를 영상 위에 올려서 사용하세요.');
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2500);
+    } catch (error) {
+      console.error('[GymPick] 오버레이 이미지 저장 오류:', error);
+      Alert.alert('저장에 실패했습니다', '다시 시도해 주세요.');
+    }
+  }
+
   async function handleInstagramShare() {
     if (!photoUri || !overlayRef.current) {
       Alert.alert('사진 없음', '먼저 사진을 찍어주세요.');
@@ -3095,6 +3166,104 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
   const tc = textColor;
   // 레이아웃 E(각진 모서리 + 테두리선 없음)만 사진 프레임 스타일이 달라서 미리 계산해둔다.
   const currentLayoutType = getLayoutType(overlayStyle);
+
+  // 스타일별 오버레이(닉네임/부위/통계 텍스트 등) — 사진 위 미리보기와
+  // 사진 없는 "오버레이만" 캡처 뷰 양쪽에서 동일하게 재사용한다.
+  function renderStyleOverlay() {
+    const fs = getFontSet(overlayStyle);
+    const layout = getLayoutType(overlayStyle);
+
+    const commonProps = {
+      exercises,
+      logs,
+      nickname: displayName,
+      timestamp,
+      muscleLabel,
+      tc,
+      photoW: PHOTO_W,
+      photoH,
+    };
+
+    // 유형 A: ClassicOverlay
+    if (layout === 'a') {
+      return (
+        <ClassicOverlay
+          exercises={exercises}
+          logs={logs}
+          nickname={displayName}
+          timestamp={timestamp}
+          muscleLabel={muscleLabel}
+          tc={tc}
+          photoW={PHOTO_W}
+          photoH={photoH}
+          fontSet={fs}
+        />
+      );
+    }
+
+    // 유형 B: LeftColOverlayB
+    if (layout === 'b') {
+      return (
+        <LeftColOverlayB
+          {...commonProps}
+          fontSet={fs}
+        />
+      );
+    }
+
+    // 유형 D: GridOverlayD
+    if (layout === 'd') {
+      return (
+        <GridOverlayD
+          exercises={exercises}
+          logs={logs}
+          nickname={displayName}
+          timestamp={timestamp}
+          muscleLabel={muscleLabel}
+          tc={tc}
+          photoW={PHOTO_W}
+          photoH={photoH}
+          fontSet={fs}
+        />
+      );
+    }
+
+    // 유형 C: GridOverlayC
+    if (layout === 'c') {
+      return (
+        <GridOverlayC
+          exercises={exercises}
+          logs={logs}
+          nickname={displayName}
+          timestamp={timestamp}
+          muscleLabel={muscleLabel}
+          tc={tc}
+          photoW={PHOTO_W}
+          photoH={photoH}
+          fontSet={fs}
+        />
+      );
+    }
+
+    // 유형 E: GridOverlayE (모서리 각짐 + 테두리선 없음 — 아래 테두리 렌더링에서 별도 처리)
+    if (layout === 'e') {
+      return (
+        <GridOverlayE
+          exercises={exercises}
+          logs={logs}
+          nickname={displayName}
+          timestamp={timestamp}
+          muscleLabel={muscleLabel}
+          tc={tc}
+          photoW={PHOTO_W}
+          photoH={photoH}
+          fontSet={fs}
+        />
+      );
+    }
+
+    return null;
+  }
 
   return (
     <SafeAreaView style={s.safe} edges={["top", "bottom"]}>
@@ -3207,101 +3376,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
             ) : null}
 
             {/* 스타일별 오버레이 */}
-            {(() => {
-              const fs = getFontSet(overlayStyle);
-              const layout = getLayoutType(overlayStyle);
-
-              const commonProps = {
-                exercises,
-                logs,
-                nickname: displayName,
-                timestamp,
-                muscleLabel,
-                tc,
-                photoW: PHOTO_W,
-                photoH,
-              };
-
-              // 유형 A: ClassicOverlay
-              if (layout === 'a') {
-                return (
-                  <ClassicOverlay
-                    exercises={exercises}
-                    logs={logs}
-                    nickname={displayName}
-                    timestamp={timestamp}
-                    muscleLabel={muscleLabel}
-                    tc={tc}
-                    photoW={PHOTO_W}
-                    photoH={photoH}
-                    fontSet={fs}
-                  />
-                );
-              }
-
-              // 유형 B: LeftColOverlayB
-              if (layout === 'b') {
-                return (
-                  <LeftColOverlayB
-                    {...commonProps}
-                    fontSet={fs}
-                  />
-                );
-              }
-
-              // 유형 D: GridOverlayD
-              if (layout === 'd') {
-                return (
-                  <GridOverlayD
-                    exercises={exercises}
-                    logs={logs}
-                    nickname={displayName}
-                    timestamp={timestamp}
-                    muscleLabel={muscleLabel}
-                    tc={tc}
-                    photoW={PHOTO_W}
-                    photoH={photoH}
-                    fontSet={fs}
-                  />
-                );
-              }
-
-              // 유형 C: GridOverlayC
-              if (layout === 'c') {
-                return (
-                  <GridOverlayC
-                    exercises={exercises}
-                    logs={logs}
-                    nickname={displayName}
-                    timestamp={timestamp}
-                    muscleLabel={muscleLabel}
-                    tc={tc}
-                    photoW={PHOTO_W}
-                    photoH={photoH}
-                    fontSet={fs}
-                  />
-                );
-              }
-
-              // 유형 E: GridOverlayE (모서리 각짐 + 테두리선 없음 — 아래 테두리 렌더링에서 별도 처리)
-              if (layout === 'e') {
-                return (
-                  <GridOverlayE
-                    exercises={exercises}
-                    logs={logs}
-                    nickname={displayName}
-                    timestamp={timestamp}
-                    muscleLabel={muscleLabel}
-                    tc={tc}
-                    photoW={PHOTO_W}
-                    photoH={photoH}
-                    fontSet={fs}
-                  />
-                );
-              }
-
-              return null;
-            })()}
+            {renderStyleOverlay()}
 
             {/* 테두리: overflow 클리핑 이후 absolute로 덮어 빈공간 방지 (레이아웃 E는 각진 디자인이라 생략) */}
             {currentLayoutType !== 'e' && (
@@ -3553,6 +3628,42 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
           );
         })}
 
+        {/* 오버레이만 저장용 — 사진 없이 오버레이(닉네임/부위/통계 텍스트)만 투명 배경으로
+            캡처하기 위한 화면 밖 전용 뷰. 사진 레이어를 넣지 않고 배경도 투명하게 유지해서,
+            캡처한 PNG를 유저가 영상 위에 직접 오버레이할 수 있게 한다. */}
+        {photoTaken && !showCamera && (
+          <View style={{ position: 'absolute', top: -9999, left: -9999, backgroundColor: 'transparent' }} pointerEvents="none">
+            <View
+              ref={layoutOnlyRef}
+              collapsable={false}
+              style={{
+                width: PHOTO_W,
+                height: photoH,
+                backgroundColor: 'transparent',
+                borderRadius: currentLayoutType === 'e' ? 0 : 20,
+                overflow: 'hidden',
+              }}
+            >
+              {renderStyleOverlay()}
+              {currentLayoutType !== 'e' && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    borderRadius: 20,
+                    borderWidth: 2,
+                    borderColor: tc,
+                  }}
+                  pointerEvents="none"
+                />
+              )}
+            </View>
+          </View>
+        )}
+
         {/* 다시 찍기 버튼: 사진이 찍혔을 때만 */}
         {photoTaken && (
           <TouchableOpacity
@@ -3713,13 +3824,14 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
               if (Platform.OS === 'ios') {
                 ActionSheetIOS.showActionSheetWithOptions(
                   {
-                    options: ['취소', '기기에 저장', '인스타그램에 업로드'],
+                    options: ['취소', '기기에 저장', '인스타그램에 업로드', '오버레이만 저장'],
                     cancelButtonIndex: 0,
                     title: '저장 방식 선택',
                   },
                   (buttonIndex) => {
                     if (buttonIndex === 1) handleSaveImage();
                     if (buttonIndex === 2) handleInstagramShare();
+                    if (buttonIndex === 3) handleSaveLayoutOnly();
                   }
                 );
               } else {
@@ -3730,6 +3842,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
                     { text: '취소', style: 'cancel' },
                     { text: '기기에 저장', onPress: handleSaveImage },
                     { text: '인스타그램에 업로드', onPress: handleInstagramShare },
+                    { text: '오버레이만 저장', onPress: handleSaveLayoutOnly },
                   ]
                 );
               }

@@ -1,0 +1,86 @@
+TASK: Investigation only. Do NOT modify any code yet. Please read this file fully
+and complete the entire investigation without stopping or asking for confirmation
+midway ("확인이나 중단 없이 끝까지 완료해줘"). This investigation will inform a
+follow-up implementation task.
+
+GOAL
+Plan a layout simplification of the "머신, 헬스장 찾기" screen (FindGymScreen.tsx)
+to make it more compact and give more vertical space to the machine/gym card
+grid. Reference: attached screenshot shows the current layout with hand-drawn
+annotations from the project owner.
+
+Planned changes (to be implemented in a follow-up task, not this one):
+1. Remove the subtitle text "머신, 부위, 브랜드로 검색하세요" below the main title
+   "머신 · 헬스장 찾기".
+2. Remove the standalone "머신" label text that currently sits below the brand
+   filter chips, next to the result count number (e.g. "머신  2565").
+3. Move that result count number into the "머신" tab pill itself (one of the four
+   top tabs: 머신/헬스장/즐겨찾기/랭킹), so the tab reads as a single pill like
+   "머신 2,565" (with thousands-separator comma formatting) instead of a
+   separate count elsewhere on screen.
+4. Apply the same three changes to the 헬스장 tab (its own subtitle-equivalent if
+   any, its own standalone count label if any, and its own result count moved
+   into the 헬스장 tab pill as "헬스장 N,NNN").
+
+---
+
+STEP 1 — Investigate current structure
+
+1. Locate FindGymScreen.tsx and find the exact JSX for:
+   a. The title + subtitle block ("머신 · 헬스장 찾기" / "머신, 부위, 브랜드로
+      검색하세요").
+   b. The four-tab pill row (머신/헬스장/즐겨찾기/랭킹) — read how each tab pill
+      is currently rendered (a shared component/array map, or four separate
+      hardcoded elements?) and how its label text and active/inactive styling
+      work.
+   c. The standalone "머신" label + count number block below the brand filter
+      chips (the "머신  2565" line per the screenshot) — find exactly where the
+      count value comes from (a filtered array's .length, presumably) and
+      confirm its exact source (e.g. `filteredMachines.length` or similar).
+   d. The equivalent structure for the 헬스장 tab — confirm whether it has: its
+      own subtitle text, its own standalone count label, and its own count
+      source (e.g. `filteredGyms.length`), and whether its overall layout
+      mirrors the 머신 tab's structure closely enough that the same change
+      pattern applies cleanly, or whether there are structural differences
+      worth flagging before implementation.
+2. Confirm whether the tab pill row's label text is simple hardcoded strings
+   ('머신', '헬스장', '즐겨찾기', '랭킹') or driven by a config array — this
+   matters for how cleanly a dynamic count can be appended to just two of the
+   four labels (머신, 헬스장) without affecting 즐겨찾기/랭킹 pills.
+3. Check current tab pill styling/width behavior — do the pills have a fixed
+   width, or do they auto-size to their text content (e.g. flexbox with
+   intrinsic content width)? This matters because appending a count will make
+   the 머신/헬스장 pills wider than 즐겨찾기/랭킹, and their width will also
+   change dynamically as the count changes (e.g. when a brand/muscle filter is
+   applied) — confirm whether this will cause any layout jank/reflow of
+   sibling pills, and note it as a consideration for the implementation task
+   (not something to fix in this investigation).
+4. Check if there's an existing number-formatting utility in this codebase
+   (e.g. a `toLocaleString()` usage or a formatting helper already used
+   elsewhere for large numbers) to reuse for the thousands-separator comma,
+   rather than writing a new one.
+
+STEP 2 — Report a concrete implementation plan (still no code changes)
+
+Based on Step 1's findings, write out exactly:
+1. Which lines/JSX blocks will be deleted (subtitle, standalone label+count).
+2. Exactly how the tab pill's label will be constructed for 머신 and 헬스장
+   (e.g. `` `머신 ${count.toLocaleString()}` `` inside the existing pill
+   component/text), while 즐겨찾기/랭킹 remain unchanged plain labels.
+3. Confirm removing the subtitle and standalone label doesn't leave any awkward
+   dangling spacing/margin (e.g. a margin that was relative to the now-removed
+   element) — note any spacing/style cleanup that will need to happen alongside
+   the text removal, so the implementation task can address it in the same
+   pass rather than leaving a visible gap.
+4. Any structural difference found between the 머신 tab and 헬스장 tab
+   (per Step 1.1.d) that means the change can't be applied 100% identically —
+   flag this clearly so the implementation task knows to handle it as a special
+   case if needed.
+
+---
+
+OUTPUT FORMAT
+
+A clear implementation plan per Step 2, plus all raw findings from Step 1. Do not
+write or modify any code in this task — this is planning only, for a separate
+follow-up implementation task.

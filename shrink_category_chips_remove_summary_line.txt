@@ -1,0 +1,266 @@
+TASK: On FindGymScreen.tsx's "machine" tab filters, (1) shrink the category chip
+row's vertical size (without affecting the muscle or brand chip rows, which must
+stay exactly as they are), and (2) delete the filter summary line that shows
+"타겟부위 + 카테고리 + 브랜드 + 검색어" text with a result count.
+
+FILE: src/screens/FindGymScreen.tsx
+
+============================================================
+STEP 0 — VERIFY
+============================================================
+Open the file and confirm these exist as described (search for the exact strings
+below). If the file has drifted from this, adapt the same intent but report the
+deviation.
+
+1. In the StyleSheet, `filterChip` is shared by all three chip rows (muscle,
+   category, brand):
+    filterChip:     {
+      paddingHorizontal: 16,
+      paddingVertical:   6,
+      borderRadius:      R.pill,
+      backgroundColor:   C.surface,
+      minHeight:         32,
+      justifyContent:    'center',
+      alignItems:        'center',
+    },
+    filterChipText: { fontSize: 13, fontWeight: '600', color: C.textSub },
+
+2. The category filter block (rendered only when a muscle is selected):
+    {/* Category filter - 부위 선택 시에만 표시 */}
+    {activeMuscle !== 'All' && categories.length > 0 && (
+      <View style={{ marginTop: 6 }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.filterRow}
+          style={{ flexGrow: 0 }}
+        >
+          <TouchableOpacity
+            style={[
+              s.filterChip,
+              activeCategory === 'All' && { backgroundColor: C.textDim, borderColor: C.textDim },
+            ]}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setActiveCategory('All'); }}
+            activeOpacity={0.75}
+          >
+            <Ionicons
+              name="refresh-outline"
+              size={12}
+              color={activeCategory === 'All' ? C.bg : C.textSub}
+            />
+            <Text style={[
+              s.filterChipText,
+              { marginLeft: 4 },
+              activeCategory === 'All' && { color: C.bg },
+            ]}>전체</Text>
+          </TouchableOpacity>
+
+          {categories.map(cat => {
+            const on = cat === activeCategory;
+            return (
+              <TouchableOpacity
+                key={cat}
+                style={[
+                  s.filterChip,
+                  on && { backgroundColor: C.accent, borderColor: C.accent },
+                ]}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setActiveCategory(on ? 'All' : cat); }}
+                activeOpacity={0.75}
+              >
+                <Text style={[s.filterChipText, on && { color: C.bg }]}>{cat}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+    )}
+
+3. The filter summary line right after the brand FilterRow:
+    {hasFilters && (
+      <View style={s.filterSummaryRow}>
+        <Ionicons name="options-outline" size={13} color={C.accent} />
+        <Text style={s.filterSummaryText}>
+          {[
+            activeMuscle  !== 'All' && activeMuscle,
+            activeCategory !== 'All' && activeCategory,
+            activeBrand   !== 'All' && activeBrand,
+            keyword.trim() && `"${keyword.trim()}"`,
+          ].filter(Boolean).join(' + ')}
+        </Text>
+        <Text style={s.filterSummaryCount}>{filteredMachines.length}개</Text>
+      </View>
+    )}
+
+4. Confirm `filterSummaryRow`, `filterSummaryText`, `filterSummaryCount` styles are
+   used ONLY in this one JSX block (search the whole file). If they're referenced
+   anywhere else, do not delete those style definitions — just remove the JSX block
+   and leave the unused styles in place with a `// unused` comment instead.
+
+============================================================
+STEP 1 — Add a smaller chip style, used ONLY for category chips
+============================================================
+Add these two new styles to the StyleSheet (place them right after the existing
+`filterChip` / `filterChipText` definitions):
+
+    filterChipSmall: {
+      paddingHorizontal: 12,
+      paddingVertical:   4,
+      borderRadius:      R.pill,
+      backgroundColor:   C.surface,
+      minHeight:         26,
+      justifyContent:    'center',
+      alignItems:        'center',
+    },
+    filterChipTextSmall: { fontSize: 12, fontWeight: '600', color: C.textSub },
+
+Do NOT change the existing `filterChip` / `filterChipText` styles themselves — the
+muscle chip row and the brand chip row (rendered via <FilterRow />) both use those
+and must stay visually identical to how they are now.
+
+============================================================
+STEP 2 — Apply the smaller style to the category row only
+============================================================
+In the category filter block found in STEP 0.2, replace every `s.filterChip` with
+`s.filterChipSmall`, and every `s.filterChipText` with `s.filterChipTextSmall`,
+WITHIN THAT BLOCK ONLY (the "전체" reset chip and the `categories.map(...)` chips).
+Also reduce its wrapping `marginTop` from 6 to 4:
+
+Change:
+    <View style={{ marginTop: 6 }}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={s.filterRow}
+        style={{ flexGrow: 0 }}
+      >
+        <TouchableOpacity
+          style={[
+            s.filterChip,
+            activeCategory === 'All' && { backgroundColor: C.textDim, borderColor: C.textDim },
+          ]}
+          ...
+        >
+          <Ionicons
+            name="refresh-outline"
+            size={12}
+            color={activeCategory === 'All' ? C.bg : C.textSub}
+          />
+          <Text style={[
+            s.filterChipText,
+            { marginLeft: 4 },
+            activeCategory === 'All' && { color: C.bg },
+          ]}>전체</Text>
+        </TouchableOpacity>
+
+        {categories.map(cat => {
+          const on = cat === activeCategory;
+          return (
+            <TouchableOpacity
+              key={cat}
+              style={[
+                s.filterChip,
+                on && { backgroundColor: C.accent, borderColor: C.accent },
+              ]}
+              ...
+            >
+              <Text style={[s.filterChipText, on && { color: C.bg }]}>{cat}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+
+To:
+    <View style={{ marginTop: 4 }}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={s.filterRow}
+        style={{ flexGrow: 0 }}
+      >
+        <TouchableOpacity
+          style={[
+            s.filterChipSmall,
+            activeCategory === 'All' && { backgroundColor: C.textDim, borderColor: C.textDim },
+          ]}
+          ...
+        >
+          <Ionicons
+            name="refresh-outline"
+            size={11}
+            color={activeCategory === 'All' ? C.bg : C.textSub}
+          />
+          <Text style={[
+            s.filterChipTextSmall,
+            { marginLeft: 4 },
+            activeCategory === 'All' && { color: C.bg },
+          ]}>전체</Text>
+        </TouchableOpacity>
+
+        {categories.map(cat => {
+          const on = cat === activeCategory;
+          return (
+            <TouchableOpacity
+              key={cat}
+              style={[
+                s.filterChipSmall,
+                on && { backgroundColor: C.accent, borderColor: C.accent },
+              ]}
+              ...
+            >
+              <Text style={[s.filterChipTextSmall, on && { color: C.bg }]}>{cat}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+
+(the `onPress`/`key`/`activeOpacity` props omitted above with "..." are unchanged —
+keep them exactly as they are, only the style/size props described change)
+
+============================================================
+STEP 3 — Remove the filter summary line
+============================================================
+Delete the entire block found in STEP 0.3:
+
+    {hasFilters && (
+      <View style={s.filterSummaryRow}>
+        <Ionicons name="options-outline" size={13} color={C.accent} />
+        <Text style={s.filterSummaryText}>
+          {[
+            activeMuscle  !== 'All' && activeMuscle,
+            activeCategory !== 'All' && activeCategory,
+            activeBrand   !== 'All' && activeBrand,
+            keyword.trim() && `"${keyword.trim()}"`,
+          ].filter(Boolean).join(' + ')}
+        </Text>
+        <Text style={s.filterSummaryCount}>{filteredMachines.length}개</Text>
+      </View>
+    )}
+
+Delete it entirely (do not replace with anything). Leave the `<View style={s.dividerLine} />`
+that comes right after it untouched — that divider stays.
+
+If `hasFilters` becomes an unused variable anywhere else in the file after this
+removal, check before deleting its declaration — it's likely used elsewhere (e.g.
+to show/hide a "필터 초기화" button or similar). Only remove its declaration if a
+search confirms zero remaining usages; otherwise leave it as-is.
+
+============================================================
+STEP 4 — SANITY CHECK
+============================================================
+1. `npx tsc --noEmit` clean.
+2. Confirm the muscle chip row and brand chip row are visually/structurally
+   unchanged (still use `filterChip`/`filterChipText`, same size).
+3. Confirm the category chip row now uses `filterChipSmall`/`filterChipTextSmall`
+   and renders at a visibly shorter height with tighter spacing above it.
+4. Confirm the "Chest + Chest Press + 브랜드 + N개" summary line no longer renders
+   anywhere on the machine tab, in any filter combination.
+5. Confirm the machine result grid below still renders normally (no leftover
+   spacing gap where the summary row used to be, unless that's visually fine as
+   normal breathing room — use judgment, but don't leave an obviously oversized gap).
+6. Report which lines changed and paste a short before/after of the category chip
+   height values used, so it can be checked on a physical device.
+
+Complete this fully without stopping for confirmation, except where STEP 0 reveals
+the file has drifted meaningfully from what's described above.

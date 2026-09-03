@@ -1,0 +1,92 @@
+TASK: Re-investigate the "헬스장 직접 등록" screen (RegisterGymAdminView in
+AdminDashboard.tsx). A previous investigation concluded the code and Supabase
+data both look correct, but a screenshot from the actual running app shows BOTH
+the gym name AND the location text are invisible — yet there IS a blank
+line-height's worth of empty space where the name would be (see attached
+description below), suggesting the Text element renders but its color may make
+it invisible, rather than the data/JSX being missing entirely. This task starts
+from that new hypothesis instead of re-guessing blindly.
+
+Screenshot description (for context, not literal input): each registered gym
+card shows a full-width blue "오피셜" pill and full-width green "수정" pill side
+by side at the top, then a gap of roughly one text line's height with nothing
+visible in it, then "머신 N개 · YYYY-MM-DD" below. No gym name, no location text,
+no location pin icon are visible anywhere on the card.
+
+============================================================
+STEP 0 — RE-VERIFY THE ACTUAL CURRENT RENDER CODE (do not trust prior summaries)
+============================================================
+Open the CURRENT src/screens/admin/AdminDashboard.tsx and find the exact JSX that
+renders each registered gym card in RegisterGymAdminView's list (the block that
+outputs the "오피셜"/"수정" pills, the machine-count/date line, etc. — this may
+look structurally different from what any earlier task description assumed,
+since the screenshot shows an "오피셜" pill that wasn't mentioned in prior
+summaries. Read this block fresh, in full, exactly as it exists right now.
+
+Specifically identify and report:
+1. Is `{gym.name}` (or equivalent) actually present in this exact JSX block? If
+   yes, what Text component wraps it, and what style(s) are applied to that Text
+   (both the named style from the StyleSheet AND any inline style overrides in
+   the JSX itself, e.g. conditional spreads like `[styles.pendingName, someCondition && {...}]`)?
+2. Same question for the location text — is it present in the JSX at all, or was
+   it removed/never added in whatever redesign introduced the "오피셜" pill?
+3. Pull up the actual `color` value for whatever style is applied to the name
+   Text, resolving it all the way to a real hex/token value (e.g. if it uses
+   `C.text`, check what `C.text` actually equals in the theme file). Compare that
+   color against the card's actual background color (also resolve to a real
+   value). If they're identical or very close, that confirms the "invisible text"
+   hypothesis.
+4. Check for any sibling element that might be absolutely-positioned and
+   overlapping the name text (covering it up visually even though it's
+   technically still rendered underneath).
+
+============================================================
+STEP 1 — Fix based on what STEP 0 actually finds
+============================================================
+This task intentionally does NOT prescribe a specific fix, since the exact cause
+depends entirely on what STEP 0 reveals. Handle whichever of these actually
+applies:
+
+  CASE A — name text color matches/is too close to the background (confirmed
+  invisible-text bug): fix the color to a properly visible/contrasting value
+  (use whatever this project's theme normally uses for a card title, e.g.
+  `C.text` if that's NOT what's currently broken, or whatever token this
+  screen's OTHER visible text — like the "머신 N개" line — correctly uses for
+  contrast, for consistency).
+
+  CASE B — the name/location Text elements were removed entirely from the JSX
+  in some past redesign (not a color bug, a genuinely missing element): add them
+  back, positioned above the "머신 N개 · 날짜" line, following this file's
+  existing patterns for how gym name + location are displayed elsewhere in this
+  same file (e.g. the pending-gyms queue's card layout, `pendingName`/`locRow`/
+  `locText` styles) for visual consistency.
+
+  CASE C — something else entirely (e.g. a z-index/overlap issue, a data
+  binding issue that STEP 0 somehow does newly reveal despite the earlier
+  investigation): fix that specific confirmed cause.
+
+Do not apply a fix for a case STEP 0 didn't actually confirm — match the fix to
+the real finding.
+
+============================================================
+STEP 2 — SANITY CHECK
+============================================================
+1. `npx tsc --noEmit` clean.
+2. Confirm both gym name AND location are now visibly readable (correct
+   contrast, no overlap) on the 헬스장 직접 등록 registered-gym list, for both
+   "오피셜" and non-오피셜 gyms if that distinction exists in this list.
+3. Confirm nothing else on this card (오피셜 pill, 수정 pill, 머신 개수/날짜 line)
+   changed visually — this fix should be scoped to just the name/location
+   visibility.
+4. Do NOT touch MachineCard.tsx, FindGymScreen.tsx, GymDetailModal.tsx, or other
+   AdminDashboard.tsx queues/views in this task.
+5. Report: the exact root cause confirmed in STEP 0 (which of CASE A/B/C it was,
+   with the actual color values or removed code found), and the fix applied.
+   Include a note on whether this needs to be visually re-checked on device
+   (screenshots aren't something you can verify yourself, so say so plainly if
+   the fix should be confirmed by the user before considering this fully closed).
+
+Complete this fully without stopping for confirmation, except if STEP 0 finds
+something genuinely ambiguous or contradictory that doesn't cleanly match any of
+CASE A/B/C — in that case, stop and report the exact finding instead of guessing
+a fix.

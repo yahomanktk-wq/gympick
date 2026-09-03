@@ -1,0 +1,241 @@
+TASK: Build a new "관리자에게 문의하기" (contact admin) feature end-to-end.
+User side: submit a free-form inquiry (title + content) from Profile screen, and
+view their own inquiry history with status (pending/answered) and the admin's
+answer once given. Admin side: a new queue in AdminDashboard.tsx to view pending
+inquiries and submit an answer.
+
+PRECONDITION: A new Supabase table `user_inquiries` must already exist (the user
+was given the SQL to run separately in Supabase SQL Editor before this task starts).
+Do NOT attempt to create or alter tables via this task — only write application
+code against the existing table. If any Supabase call in this task fails because
+the table doesn't exist yet, stop and report that the SQL step hasn't been run yet,
+rather than working around it.
+
+Table shape (for reference — do not create it, it should already exist, and HAS
+already been created and confirmed by the user via Supabase SQL Editor):
+    user_inquiries (
+      id           text primary key,          -- client-generated, TEXT
+      user_id      uuid not null,              -- references profiles(id), NOT text
+      title        text not null,
+      content      text not null,
+      status       text not null default 'pending',  -- 'pending' | 'answered'
+      answer       text,
+      answered_at  timestamptz,
+      created_at   timestamptz not null default now()
+    )
+
+IMPORTANT: unlike this project's other custom entities (gyms, machines, etc.) which
+use client-generated TEXT ids, `user_id` here is a Supabase Auth UUID (matches
+`profiles.id`, which is also uuid) — this is the one exception to the "everything
+is TEXT" convention, because it must match Supabase Auth's native id type. Do not
+try to "fix" this to TEXT. Only the inquiry's own `id` column is a client-generated
+TEXT id, following the existing convention.
+
+Admin role check in this codebase is done via `profiles.role === 'admin'`
+(confirmed in context/AuthContext.tsx: `mapSupabaseUser` reads `role` from the
+`profiles` table, and `useAuth().user.role` is what AdminDashboard.tsx / other
+admin-gated code already checks). There is no separate `users` table — everything
+keys off `profiles`, whose `id` equals the Supabase Auth uuid. `user.id` from
+`useAuth()` is already that same uuid as a string — pass it directly as `user_id`
+when calling `submitUserInquiry`, no conversion needed.
+
+============================================================
+STEP 0 — INVESTIGATE EXISTING PATTERN FIRST (mandatory, do not skip)
+============================================================
+This feature must closely mirror the existing "정보 제보" (gym info report) feature,
+since it's architecturally the same shape (user submits something free-form → admin
+reviews it in a queue). Before writing anything new:
+
+1. Open and read the full existing gym info report implementation:
+   - lib/db/gymInfoReports.ts (or wherever `submitGymInfoReport`,
+     `fetchGymInfoReports`... actually check exact file/module — this project uses
+     both a local data/gymReportStore.ts wrapper AND a real Supabase-backed fetch;
+     confirm which one AdminDashboard.tsx currently uses for gymReportCount/
+     GymReportsView — it should be the real Supabase-backed one per the earlier
+     fix in this project's history) and note its exact function signatures,
+     Supabase table/column names, and how it handles loading/error states.
+   - The `GymReportsView` component inside AdminDashboard.tsx (the JSX that lists
+     reports with a pending/reviewed split, and its `onMarkReviewed`/`onDelete`
+     handlers).
+   - How ProfileScreen.tsx currently fetches/displays its admin panel numbers
+     (from the earlier "매니저 신청 관리 / 헬스장 등록 신청 / 정보 제보 관리" work)
+     — mirror the same useFocusEffect + real-fetch pattern for anything new here.
+
+2. Open ProfileScreen.tsx in full and identify:
+   - Where a good place would be to add a "관리자에게 문의하기" entry point for
+     REGULAR users (this is visible to all logged-in users, not just admins —
+     it's a different section from the admin-only AdminSection panel already
+     built). Look for an existing "설정"/"고객센터"/"문의" style list of profile
+     menu rows to match the visual pattern (this project's docx/pptx-style
+     conventions don't apply here — just match existing ProfileScreen menu-row
+     styling).
+   - Confirm how modals are typically opened in this file (state + <Modal>,
+     matching the style of other flows in this codebase) so the new inquiry
+     modal fits the existing conventions.
+
+3. Confirm how `user.id` is accessed via `useAuth()` in this codebase (already
+   used elsewhere, e.g. AdminDashboard.tsx's `addGymFavoriteDB(user.id, ...)`
+   pattern) — use the same for `user_id` when submitting an inquiry.
+
+Report a brief summary of what you found for each of the 3 items above before
+proceeding to STEP 1, so the approach can be sanity-checked against your findings
+(but continue directly into STEP 1 automatically — this is a report, not a stop).
+
+============================================================
+STEP 1 — Create lib/db/userInquiries.ts
+============================================================
+Create a new file mirroring the real Supabase-backed pattern used by whichever
+gym-info-report fetch module you confirmed in STEP 0 (same style of try/catch,
+same style of returning typed arrays, same style of generating IDs if the existing
+pattern generates client-side IDs like `g_${Date.now()}` seen elsewhere in this
+codebase — reuse that exact convention here for consistency).
+
+Required exports:
+
+    export type InquiryStatus = 'pending' | 'answered';
+
+    export interface UserInquiry {
+      id:          string;
+      userId:      string;
+      title:       string;
+      content:     string;
+      status:      InquiryStatus;
+      answer:      string | null;
+      answeredAt:  string | null;
+      createdAt:   string;
+    }
+
+    // 유저: 문의 제출
+    export async function submitUserInquiry(userId: string, title: string, content: string): Promise<void>
+
+    // 유저: 본인 문의 내역 조회 (최신순)
+    export async function fetchUserInquiries(userId: string): Promise<UserInquiry[]>
+
+    // 어드민: 전체 문의 조회 (최신순)
+    export async function fetchAllUserInquiries(): Promise<UserInquiry[]>
+
+    // 어드민: 답변 등록 (status를 'answered'로, answered_at을 now()로 함께 반영)
+    export async function answerUserInquiry(id: string, answer: string): Promise<void>
+
+Map snake_case DB columns (user_id, answered_at, created_at) to the camelCase
+fields above when reading, and back to snake_case when writing — follow whatever
+mapping convention the gym info report module already uses for this exact purpose.
+
+All Supabase table IDs in this project are TEXT, not UUID — generate inquiry IDs
+client-side using the same convention as other client-generated TEXT ids in this
+codebase (check what pattern is already used, e.g. `inq_${Date.now()}` or similar
+— match the existing style, don't invent a new one).
+
+============================================================
+STEP 2 — ProfileScreen.tsx: user-facing inquiry UI
+============================================================
+Add a "관리자에게 문의하기" entry point visible to ALL logged-in users (regardless
+of role), placed in a sensible existing menu/section per STEP 0's findings — do not
+put it inside the admin-only AdminSection panel, it's a separate, universally
+visible feature.
+
+Tapping it opens a modal (matching this file's existing modal conventions) with two
+views:
+
+  A) "내 문의 내역" list view (default view when opened):
+     - Fetches via `fetchUserInquiries(user.id)` on open (and refresh via
+       useFocusEffect or on modal-open, whichever matches this file's existing
+       conventions for other lists).
+     - Each item shows: title, a status pill (대기중 / 답변완료 — use colors
+       consistent with this file's existing status pill patterns if any exist,
+       otherwise a sensible pending=orange/answered=green pattern matching the
+       rest of the app's C.accent/C.danger usage), created date.
+     - Tapping an item expands/opens to show full content + the admin's answer
+       (if answered) or a "아직 답변이 등록되지 않았어요" message (if pending).
+     - Empty state: "아직 문의한 내역이 없어요" (match existing EmptyRow/emptyState
+       patterns found elsewhere in the project for wording/visual consistency).
+     - A "새 문의 작성" button/FAB to switch to view B.
+
+  B) "새 문의 작성" form view:
+     - Title input (TextInput, single line, required)
+     - Content input (TextInput, multiline, required)
+     - Submit button: calls `submitUserInquiry(user.id, title, content)`, shows a
+       loading state while submitting, then on success shows a brief confirmation
+       and returns to view A with the list refreshed (re-fetch after submit).
+     - Basic validation: both fields required, trim whitespace, show an Alert if
+       either is empty (mirror how other forms in this codebase — e.g. the gym
+       registration request modal in FindGymScreen.tsx — validate and Alert).
+     - If user is not logged in when they try to open this (edge case — shouldn't
+       normally happen since this entry point should only be reachable when
+       `user` exists), guard against a null `user` and don't crash.
+
+Keep styling consistent with the rest of ProfileScreen.tsx — reuse existing style
+patterns (colors, radii via C/R/T theme) rather than inventing a new visual style.
+
+============================================================
+STEP 3 — AdminDashboard.tsx: admin queue
+============================================================
+Add a new admin queue, following the EXACT same structural pattern as the existing
+`GymReportsView` (module-level component, pending/reviewed split, count in
+HomeView's queue list, new AdminView union member, new state + fetch, new case in
+the main render switch, new entry in VIEW_TITLES).
+
+1. Add `'user-inquiries'` to the `AdminView` type union.
+
+2. Add state:
+    const [userInquiries, setUserInquiries] = useState<UserInquiry[]>([]);
+   and fetch it via `fetchAllUserInquiries()` — add this fetch to the SAME
+   `refreshQueues()` (or equivalent) mechanism already built for the other queues
+   in this file, so it refreshes together with everything else on 'home' focus.
+   Import `UserInquiry`, `fetchAllUserInquiries`, `answerUserInquiry` from the new
+   lib/db/userInquiries.ts.
+
+3. Add a count:
+    const userInquiryCount = userInquiries.filter(i => i.status === 'pending').length;
+   and add it to HomeView's queue list (a new row: icon e.g. 'chatbubble-outline',
+   title "유저 문의 관리", count = userInquiryCount, color — pick one not already
+   used by the other queue rows, e.g. '#38bdf8' if free, check the existing color
+   list in HomeView first and pick a distinct one).
+
+4. Add a new module-level view component `UserInquiriesView`, mirroring
+   `GymReportsView`'s structure:
+   - Pending list (status === 'pending'): title, content preview (numberOfLines),
+     submittedAt, and a way to open an answer input (either inline expand or a
+     simple TextInput + "답변 등록" button per item — match whichever pattern
+     `GymReportsView`/`PendingEditsView` already uses for similar per-item action
+     UI in this file, for visual consistency).
+   - On submitting an answer: call `answerUserInquiry(id, answerText)`, then
+     locally update state so the item moves to the "처리 완료" section without
+     needing a full refetch (mirror how `handleMarkReportReviewed` or similar
+     already does optimistic local updates elsewhere in this file), and also
+     trigger a background refetch for correctness.
+   - Answered list (status === 'answered'): title, the answer given, answeredAt,
+     shown with reduced opacity like other "처리 완료" sections in this file.
+   - Empty state matching `EmptyQueue` component already used elsewhere in this
+     file.
+
+5. Wire it into the main render: add
+   `{currentView === 'user-inquiries' && <UserInquiriesView ... />}`
+   and add `'user-inquiries': '유저 문의 관리'` to `VIEW_TITLES`.
+
+============================================================
+STEP 4 — SANITY CHECK
+============================================================
+1. `npx tsc --noEmit` clean.
+2. Confirm the new ProfileScreen entry point is visible to a regular (non-admin)
+   logged-in user, and NOT inside the admin-only panel.
+3. Confirm a submitted inquiry appears in AdminDashboard's new "유저 문의 관리"
+   queue as pending.
+4. Confirm submitting an answer in AdminDashboard moves it to answered there, AND
+   makes the answer visible back on the Profile screen's "내 문의 내역" for that
+   same user (may require the user to reopen/refresh the modal — that's fine, no
+   real-time push needed for this task).
+5. Confirm counts (AdminDashboard home badge for this queue) update correctly and
+   refresh the same way the other queues do (via the existing refreshQueues /
+   focus-based mechanism — no separate new polling logic).
+6. Do NOT touch MachineCard.tsx, FindGymScreen.tsx, or GymDetailModal.tsx in this
+   task.
+7. Report: exact files created/changed, exact function names added, and where in
+   ProfileScreen.tsx the entry point was placed (so it can be found and tested on
+   device).
+
+If STEP 0's investigation reveals the gym-info-report pattern is structured
+meaningfully differently than assumed above (e.g. no real Supabase-backed fetch
+exists, or ProfileScreen.tsx has no obvious place for a universal menu entry),
+stop and report the mismatch rather than improvising a large structural deviation.
+Otherwise, complete this fully without stopping for confirmation.

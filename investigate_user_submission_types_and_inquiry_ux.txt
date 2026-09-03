@@ -1,0 +1,69 @@
+TASK: Investigation only. Do NOT modify any code. Do NOT fix or build anything.
+Please read this file fully and complete the entire investigation without stopping
+or asking for confirmation midway ("확인이나 중단 없이 끝까지 완료해줘").
+
+GOAL
+Two things need to be answered clearly before any further feature work:
+
+PART A — Full catalog of everything a regular user can submit/propose/request in
+this app (not admin, not manager — the regular 'user' role).
+
+For EACH type found, report:
+1. Feature name (Korean, as shown in the UI) and what screen/flow the user submits
+   it from (exact file).
+2. Backing Supabase table name and key columns.
+3. Current status/lifecycle (e.g. pending → approved/rejected/reviewed/resolved —
+   list actual status values used).
+4. Whether admin can currently attach a comment/response to it, and whether that
+   comment is currently surfaced to the user in any way (this repo just added an
+   admin_comment column + notification-based delivery to THREE of these:
+   gym_registration_requests, manager_requests, gym_info_reports — as of commit
+   bf5274a — confirm this is still accurate by re-reading the current code, don't
+   assume the commit message is still correct).
+5. Whether it's currently reachable/submittable by users at all right now, or if
+   it's dead/removed (e.g. there was a previously-removed "정보 수정 요청" flow —
+   confirm whether users can still submit edit requests through any current UI, or
+   whether that capability was fully removed, not just hidden from the admin
+   preview widget).
+
+Include ALL types you find, even ones not listed here as a hint — do a real search
+(grep for supabase.from(' calls, check screens under src/screens for forms/submit
+flows, check src/data and src/lib/db for store/fetch functions related to user
+submissions). Do not limit yourself to: gym registration proposals, gym info
+reports, manager applications, user inquiries — if there are others (e.g. machine
+reviews, olympic voting, favorites — decide if these count as "user submits
+content for review" or are just normal app usage, and use judgment on what
+belongs in this catalog vs what doesn't; explain your reasoning for any borderline
+case you include or exclude).
+
+PART B — How does the existing "유저 문의" (user_inquiries) feature work, in detail?
+
+1. Find the user-facing screen(s) where a user submits an inquiry, and the
+   screen(s) where they view admin responses.
+2. Is there a persistent, dedicated UI showing the full inquiry + response as a
+   readable thread/history (e.g. a "내 문의 내역" list screen showing each inquiry
+   with its answer inline), separate from the generic notifications inbox? Or does
+   it also just rely on the same notifications feature (NotificationsScreen) that
+   was just reused for gym registration / manager requests / gym info reports?
+3. Describe the exact UI/UX difference (if any) between how a user currently
+   experiences an admin reply to a 유저 문의 versus how they'd experience an admin
+   reply to a 헬스장 등록 제안 (via the just-added notification-based system).
+   Be concrete: does one show a nicely formatted Q&A card with the original
+   question and reply together, while the other is just a single notification
+   list item with reply text appended to the body? Describe exactly what each
+   looks like.
+4. Report the exact file(s) implementing the user_inquiries submit + view flow.
+
+---
+
+OUTPUT FORMAT
+
+Part A: a table or clearly organized list, one entry per type, covering points 1-5.
+
+Part B: a clear factual description per points 1-4, plus a short side-by-side
+comparison of the user_inquiries experience vs. the notification-based
+admin-comment experience just added for the other 3 types — specifically calling
+out whether they are the same underlying UI pattern or genuinely different ones.
+
+Do not make any code changes. Do not add features. Do not fix anything you notice
+along the way, even if it looks broken — just note it in the report if relevant.

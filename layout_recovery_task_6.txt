@@ -1,0 +1,123 @@
+확인이나 중단 없이 끝까지 완료해줘.
+
+## 배경 (중요, 반드시 읽고 시작할 것)
+
+최근 Cowork(클로드) 세션에서 `src/screens/flow/PostWorkoutLogModal.tsx`의
+"운동일지 요약화면"(WorkoutDoneStep) 기능을 추가하는 편집을 했는데, 그 편집이
+당시 기기에 실제로 있던 최신 버전이 아니라 더 오래된 캐시본을 기준으로 이루어졌다.
+그 결과 아래 두 가지가 의도치 않게 되돌아갔다(regression):
+
+1. 예전에 이미 삭제했던 아치데이(archday, "9"번) 레이아웃과 s3/s4/s5 폰트세트 그룹이
+   다시 파일에 살아남,
+2. 그 이후 어느 시점엔가 추가되었던 "E" 유형(운동 사진 단계 레이아웃 피커에서
+   1E/2E/6E 등으로 표시되던, 또는 "GridOverlayE"라는 이름이었을 수도 있는 레이아웃)이
+   지금 파일에서 완전히 사라짐.
+
+이 작업은 위 회귀를 **git 히스토리를 뒤져서 정확히 원인과 정상 버전을 찾아낸 뒤,
+"운동일지 요약화면" 관련 새 코드는 절대 건드리지 않고, 레이아웃 피커 부분만
+정확히 원상 복구**하는 것이다.
+
+## 절대 하지 말 것
+
+- `git checkout <old-commit> -- src/screens/flow/PostWorkoutLogModal.tsx` 같은
+  파일 전체를 예전 커밋으로 되돌리는 방식은 절대 쓰지 말 것. 그렇게 하면 방금
+  추가된 운동일지 요약화면(WorkoutDoneStep, buildComparisonCard, ComparisonCard,
+  관련 스타일, export 처리, JournalScreen.tsx의 "요약 보기" 연동,
+  WorkoutLogSummaryModal.tsx)이 전부 사라진다. 반드시 레이아웃 피커 관련 코드
+  블록만 손으로 골라서 병합할 것.
+- E 유형을 "이런 거였을 것 같다"고 추측해서 새로 만들어내지 말 것. git 히스토리에서
+  실제 코드를 찾아서 그대로 가져올 것.
+- `git add -A` 또는 `git add .` 사용 금지. 실제로 수정한 파일명만 정확히 나열해서
+  `git add`할 것.
+
+## 1단계: 사전 조사 (git 히스토리에서 원인 파악)
+
+1. `git log --oneline -- src/screens/flow/PostWorkoutLogModal.tsx` 로 이 파일의
+   전체 커밋 히스토리를 시간순으로 확인한다.
+2. `git log -S"archday" --oneline -- src/screens/flow/PostWorkoutLogModal.tsx` 와
+   `git log -S"GridOverlayE" --oneline -- src/screens/flow/PostWorkoutLogModal.tsx`,
+   `git log -S"'s1e'" --oneline -- src/screens/flow/PostWorkoutLogModal.tsx` 등으로
+   archday/s3~s5 그룹이 삭제된 커밋과, "E" 유형이 추가된 커밋(있다면)을 각각 특정한다.
+3. 커밋 `93d39d8`(있다면 `git show 93d39d8 -- src/screens/flow/PostWorkoutLogModal.tsx`)
+   전후를 확인해서, 이 커밋이 archday/s3~s5 삭제를 포함하고 있는지, E 유형 추가가
+   이 커밋 이전/이후 중 어디였는지 확인한다.
+4. 만약 "E" 유형 추가 커밋을 git 히스토리에서 **찾을 수 없다면**(즉, 커밋된 적 없이
+   작업 트리에만 있다가 이번 덮어쓰기로 사라진 것으로 보인다면):
+   - `git fsck --no-reflog --lost-found` 나 `git stash list` 로 혹시 남아있는
+     dangling commit/stash가 있는지 한 번 확인해본다.
+   - 그래도 못 찾으면 **더 이상 코드를 추측해서 만들지 말고, 아래 "보고 형식"에
+     맞춰 "E 유형은 git 히스토리에서 찾지 못했고 커밋되지 않은 상태로 유실된 것으로
+     보임"이라고 정확히 보고하고 종료할 것.** 이 경우 사용자가 직접 다시 요청해서
+     새로 만들어야 한다.
+
+## 2단계: 정상 버전을 찾았다면 — 정확히 그 부분만 병합
+
+E 유형이 들어있던 정상 커밋을 찾았다면:
+
+1. `git show <정상커밋>:src/screens/flow/PostWorkoutLogModal.tsx` 로 그 시점의
+   전체 파일 내용을 뽑아서, 아래 영역들을 지금 작업 트리의 파일과 비교(diff)한다.
+   - `type OverlayStyle = ...` 타입 정의 및 `FONT_SETS`, `getFontSet`,
+     `getLayoutType` 함수
+   - 레이아웃 이름에 대응하는 렌더 함수들(`GridOverlay`, `GridOverlayC`,
+     `GridOverlayD`, 그리고 E 유형에 대응하는 함수 — 이름은 히스토리에서 확인)
+   - "운동 사진" 단계에서 레이아웃을 고르는 가로 스크롤 피커 UI(버튼 배열, 폰트세트×유형
+     조합 목록)
+   - 이 로직을 렌더 스텝에서 분기하는 부분(`if (overlayStyle === ...) return <...Overlay .../>`)
+   - `src/screens/flow/WorkoutCameraOverlay.tsx`의 `overlayStyle` prop 타입 유니온
+2. 지금 작업 트리 파일에서 **같은 역할을 하는 부분만** 정상 커밋 버전으로 교체한다.
+   지금 파일에 있는 archday/s3~s5도 이 교체 과정에서 자연스럽게 함께 정리될 것이다
+   (정상 커밋 시점에는 이미 archday/s3~s5가 삭제되어 있었을 것이므로).
+3. `buildComparisonCard`, `ComparisonCard`, `WorkoutDoneStep`, `export` 관련 줄,
+   그리고 그 아래 스타일(`sum*`, `comp*`, `bar*`, `rowsHeader*`, `col*`)은
+   **정상 커밋에는 존재하지 않는, 이번에 새로 추가된 코드이므로 절대 건드리지
+   말 것.** 지금 작업 트리 버전 그대로 유지.
+
+## 3단계: 검증
+
+1. `npx tsc --noEmit` 를 실행해서 타입 에러가 없는지 확인한다. 에러가 있으면
+   원인을 파악해서 고친다(추측성 수정 금지, 실제 원인 확인 후 수정).
+2. 아래 문자열들이 병합 후 파일에 남아있지 않은지 확인한다(archday/s3~s5가
+   제대로 정리됐는지):
+   - `grep -n "archday" src/screens/flow/PostWorkoutLogModal.tsx`
+   - `grep -n "'s3a'\|'s4a'\|'s5a'" src/screens/flow/PostWorkoutLogModal.tsx
+3. E 유형 관련 코드가 다시 들어와 있는지 확인한다(어떤 이름으로 찾았든, 그 이름으로 grep).
+4. `buildComparisonCard`, `ComparisonCard`, `WorkoutDoneStep`, `WorkoutLogSummaryModal`
+   관련 코드가 그대로 살아있는지 확인한다(실수로 지워지지 않았는지):
+   - `grep -n "buildComparisonCard\|ComparisonCard\|WorkoutDoneStep" src/screens/flow/PostWorkoutLogModal.tsx`
+   - `test -f src/screens/flow/WorkoutLogSummaryModal.tsx && echo EXISTS`
+
+## 4단계: 사전 확인 (git status)
+
+`git status`로 변경된 파일 목록을 확인한다. 이번 작업에서 실제로 수정했어야 할
+파일은 아래 중 실제로 병합이 일어난 파일들뿐이다(보통 2개):
+- `src/screens/flow/PostWorkoutLogModal.tsx`
+- `src/screens/flow/WorkoutCameraOverlay.tsx` (E 유형이 이 파일의 prop 타입에도
+  있었다면)
+
+주의: `git status`에 `src/screens/JournalScreen.tsx`(수정됨)와
+`src/screens/flow/WorkoutLogSummaryModal.tsx`(신규 파일)도 함께 나타날 수 있다.
+이 두 파일은 바로 직전에 별도로 진행된 "운동일지 요약화면 다시보기" 기능 추가
+작업물이며, **이번 레이아웃 복구 작업과는 완전히 무관하다.** 절대 건드리지 말고,
+되돌리지도 말고, 이번 커밋에도 포함시키지 말 것 — 그냥 수정된 상태 그대로 둘 것.
+
+이 두 파일과 task*.txt류 임시 파일들을 제외하고, 그 외에 예상과 다른 파일이
+변경되어 있으면 **커밋하지 말고 먼저 보고할 것.**
+task*.txt류 임시 파일들이 untracked로 보이더라도 절대 커밋 대상에 포함하지 말 것.
+
+## 5단계: 커밋 & 푸시
+
+위 파일 목록이 예상과 일치하면:
+1. `git add src/screens/flow/PostWorkoutLogModal.tsx` (및 해당 시 WorkoutCameraOverlay.tsx)
+   — 정확히 이 파일명만, `-A`/`.` 금지.
+2. 커밋 메시지: "fix: 운동일지 요약화면 작업 중 되돌아간 레이아웃 피커(E 유형) 복구"
+   내용으로 `git commit -m` 사용(이번엔 별도 커밋메시지 파일 없이 직접 -m으로 작성).
+3. `git push`
+
+## 보고 형식 (마지막에 반드시 이 형식으로)
+
+- E 유형을 git 히스토리에서 찾았는지 여부, 찾았다면 어느 커밋(해시)에 있었는지
+- 찾지 못했다면 그 사실과 이유(커밋된 적 없어 보임 등)
+- 실제로 수정한 파일 목록
+- `npx tsc --noEmit` 결과(에러 있었다면 무엇을 어떻게 고쳤는지)
+- 커밋 해시 및 푸시 결과
+- (E 유형을 못 찾아 복구를 못 했다면) 커밋/푸시는 하지 말고 여기까지 보고

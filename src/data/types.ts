@@ -55,6 +55,7 @@ export interface Machine {
   copyright?:   string;
   imageUrl?:    string;
   line?:        string;      // 제품 라인명 (optional, filled in gradually by project owner)
+  isCustom?:    boolean;     // true면 노브랜드(매니저 직접등록) 범용 카탈로그 항목 — brand는 'STANDARD' 고정, 실제 제품 사진/브랜드 없음
 }
 
 // --- gym_machines (join table)

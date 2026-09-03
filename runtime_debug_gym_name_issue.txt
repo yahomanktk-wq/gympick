@@ -1,0 +1,111 @@
+TASK: Two static-code investigations of the "헬스장 직접 등록" screen
+(RegisterGymAdminView in AdminDashboard.tsx) found no bug — JSX renders
+{gym.name}/{gym.location} correctly, colors have full contrast, no overlap.
+Yet the user still sees blank name/location on a real device (Expo Go, cache
+cleared, full reload done). A NEW discrepancy was just found: the screen shows
+a card dated "2026-07-12" (today) with "머신 0개", but a fresh SQL query of the
+`gyms` table's `created_at` column showed no row newer than "2026-07-09". This
+suggests the screen may be reading from a DIFFERENT data source than assumed,
+not just a rendering bug. This task moves from static code-reading to RUNTIME
+verification via temporary logging, since two rounds of static reading have been
+inconclusive/contradictory.
+
+FILE: src/screens/admin/AdminDashboard.tsx (RegisterGymAdminView and wherever
+`registeredGyms` state is fetched/set), plus src/lib/db/adminGyms.ts.
+
+============================================================
+STEP 0 — TRACE THE FULL DATA PATH FIRST (read, don't log yet)
+============================================================
+1. Find exactly where `registeredGyms` state is declared and set in
+   AdminDashboard.tsx (e.g. `const [registeredGyms, setRegisteredGyms] = useState(...)`
+   and whatever effect/handler calls `setRegisteredGyms(...)`).
+2. Trace that to whatever function is called (e.g. `fetchAdminGyms()` from
+   src/lib/db/adminGyms.ts) — open that function and read EXACTLY which Supabase
+   table it queries (`.from('...')`), which columns it selects, and whether it
+   has any mock/fallback data path that could silently return placeholder data
+   instead of real Supabase data (check for a `catch`/`error` branch that returns
+   local mock objects — if so, check what those mock objects' `name`/`location`
+   values look like, since a silent fallback to empty-name mock data would
+   perfectly explain this).
+3. Also check: is there any OTHER function/table involved — e.g. does this
+   screen merge `gyms` table data with a separate local/legacy source (in-memory
+   array, AsyncStorage, or a leftover reference to the old adminGymStore.ts)?
+   Search the whole file for every place `registeredGyms` or `RegisterGymAdminView`
+   related state gets populated from more than one source.
+4. Report what you find from this read-through BEFORE adding any logs.
+
+============================================================
+STEP 1 — Add temporary runtime logging
+============================================================
+Add temporary `console.log` statements (following this project's existing
+debug convention: temporary logs → check output → remove after the fix is
+confirmed) at these exact points:
+
+1. Immediately after the raw Supabase query result is received inside
+   `fetchAdminGyms()` (or whatever the actual function is called), before any
+   mapping/transformation:
+    console.log('[DEBUG gyms] raw supabase result:', JSON.stringify(data, null, 2));
+    console.log('[DEBUG gyms] supabase error:', error);
+
+2. Immediately after `setRegisteredGyms(...)` is called in AdminDashboard.tsx
+   (or right before, logging the array that's about to be set):
+    console.log('[DEBUG gyms] registeredGyms about to be set:', JSON.stringify(result, null, 2));
+
+3. Inside RegisterGymAdminView's `.map(gym => ...)` render loop, log each gym
+   object once (guard so it doesn't spam every re-render excessively, e.g. only
+   log id/name/location per item):
+    console.log('[DEBUG gyms] rendering card for:', gym.id, JSON.stringify({ name: gym.name, location: gym.location }));
+
+============================================================
+STEP 2 — Ask the user to reproduce and share the terminal output
+============================================================
+This step requires the user's help — you cannot see the phone screen or terminal
+yourself. After adding the logs from STEP 1:
+1. Tell the user to fully reload the app (shake device → Reload, or restart
+   `npx expo start -c`) and navigate to 프로필 → 관리자 대시보드 → 헬스장 직접
+   등록, the same screen as the screenshot.
+2. Ask the user to copy the terminal output lines starting with `[DEBUG gyms]`
+   (all of them, especially for the very first card shown, the one dated
+   "2026-07-12" with "머신 0개") and paste them back into the conversation.
+3. Do NOT guess or fabricate what the logs would show — actually wait for and
+   use the real output the user provides.
+
+============================================================
+STEP 3 — Diagnose from the real log output
+============================================================
+Once the user provides the actual `[DEBUG gyms]` log output, compare it against
+what's expected:
+- If the raw Supabase `data` already has empty `name`/`location` for some rows —
+  the bug is in the Supabase query/table, not the rendering. Compare the row's
+  `id` against the `gyms` table via SQL (ask the user to run
+  `select id, name, location, created_at from gyms where id = '<id from logs>';`
+  in Supabase SQL Editor) to see if it's a real row with empty fields, or if the
+  `id` doesn't exist in `gyms` at all (which would mean the data is coming from
+  somewhere else entirely — report this immediately, don't proceed further
+  without flagging it).
+- If the raw Supabase `data` has correct `name`/`location`, but the value logged
+  at the "about to be set" or "rendering card for" checkpoint is already
+  empty/different — the bug is in a transformation/mapping step between fetch
+  and render; find and fix that specific step.
+- If ALL log checkpoints show correct name/location values, but the user still
+  sees blank text on screen — this would mean the bug is not in this React Native
+  code's data/logic at all (possibly a font-loading issue, a
+  `useFonts`/custom-font rendering problem specific to this Text style, or some
+  other rendering-layer issue) — report this clearly rather than guessing a fix,
+  since it would need visual/device-level debugging beyond what logs can show.
+
+============================================================
+STEP 4 — Fix and clean up
+============================================================
+1. Once the real root cause is identified from actual log output (not
+   speculation), apply the fix.
+2. Remove ALL the temporary `[DEBUG gyms]` console.log statements added in
+   STEP 1 once the fix is confirmed working.
+3. `npx tsc --noEmit` clean.
+4. Report the confirmed root cause (quoting the actual log output that revealed
+   it) and the fix applied.
+
+Do NOT skip straight to a fix without the user-provided real log output from
+STEP 2 — this task's whole point is to stop guessing and get real runtime data
+first. If the user hasn't provided log output yet, stop after STEP 1 and ask for
+it rather than proceeding.

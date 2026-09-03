@@ -1,0 +1,107 @@
+TASK: The manager-role-sync logic added in the previous task doesn't appear to
+actually update `profiles.role` — the user confirmed via SQL that
+`profiles.role` stayed `'user'` after linking a manager. RLS is confirmed NOT
+the blocker (both `profiles` policies are wide open — `profiles_update_own` has
+`qual: "true"` with no actual ownership check, and `profiles_all_authenticated`
+only requires `auth.uid() IS NOT NULL`). Since RLS permits this update
+unconditionally, the problem must be in the application code path — either the
+role-sync logic isn't being reached at all, or it's reading/branching
+incorrectly before ever attempting the update, or it's failing silently in a
+way not yet surfaced.
+
+FILE: src/lib/db/adminGyms.ts (setGymManager's role-sync logic added in the
+prior task).
+
+============================================================
+STEP 0 — RE-READ THE ROLE-SYNC CODE ADDED PREVIOUSLY
+============================================================
+Open `setGymManager` and read the role-sync block added in the last task
+end-to-end. Specifically check:
+1. Is the role-sync block actually being reached in the LINK path (i.e., is it
+   inside the correct `if (managerId)` / linking branch, not accidentally
+   nested under a condition that's never true)?
+2. What does it use to fetch the target user's current role — confirm the
+   exact table/column/id used (`profiles`, `role`, matching on the correct
+   `managerId` value, not `gymId` or some other value by mistake).
+3. Confirm the branch logic: does it correctly detect `role === 'user'` and
+   proceed to update, or could a subtle bug (e.g. comparing against the wrong
+   variable, an off out-of-scope closure over a stale value, a typo like
+   `'User'` vs `'user'`) cause it to always fall into the "already correct,
+   no-op" branch even when the actual role is `'user'`?
+4. Is the actual `.update({ role: 'manager' })` call correctly targeting
+   `.eq('id', managerId)` and not some other id?
+
+============================================================
+STEP 1 — Add temporary logging to trace every step
+============================================================
+Add logs at each step of the role-sync block, regardless of what STEP 0 found
+(to get real runtime confirmation rather than relying on static reading alone):
+
+    console.log('[DEBUG role] role-sync start for managerId:', managerId);
+
+    // right after fetching the target profile's current role:
+    console.log('[DEBUG role] current profile role:', profileData, profileError);
+
+    // right before attempting the role update (only in the branch where it
+    // should actually update):
+    console.log('[DEBUG role] attempting role update to manager for:', managerId);
+
+    // right after the update call:
+    console.log('[DEBUG role] role update result:', updateData, updateError);
+
+    // in the branch where it's skipped (already manager / is admin):
+    console.log('[DEBUG role] skipping role update, reason:', /* 'already manager' or 'is admin' or whatever */);
+
+    // in the catch block if one exists:
+    console.log('[DEBUG role] caught error during role sync:', e);
+
+Also add an equivalent log at the very top of the UNLINK path's role-sync logic
+(the "revert to user if no other gyms" branch), since that path should also be
+tested even though this report focuses on linking:
+
+    console.log('[DEBUG role] unlink role-sync start, previousManagerId:', previousManagerId);
+    console.log('[DEBUG role] other gyms still managed:', otherGymsData, otherGymsError);
+    console.log('[DEBUG role] reverting role to user:', /* true/false and why */);
+
+============================================================
+STEP 2 — ASK THE USER TO REPRODUCE WITH THE NEW LOGS
+============================================================
+1. Tell the user to fully reload the app.
+2. Ask them to link a manager to a gym (a user whose current role is 'user'),
+   then check both the terminal output and re-run
+   `select id, role from profiles where id = '<that id>';` in Supabase SQL
+   Editor to see the actual DB state after the attempt.
+3. Ask them to paste every `[DEBUG role]` log line back into the conversation,
+   along with the SQL check result.
+4. Do NOT fabricate or assume the outcome — wait for real output.
+
+============================================================
+STEP 3 — FIX BASED ON REAL LOG OUTPUT (once provided)
+============================================================
+Do not fix speculatively before STEP 2's real output is available. Once
+provided:
+- If logs show it never reaches the update call: fix the branching/condition
+  bug that's causing it to skip.
+- If logs show the update call fires but `updateError` is non-null: read and
+  fix the actual Supabase error.
+- If logs show the update call fires, `updateError` is null, but the SQL
+  recheck still shows `role: 'user'`: this would be very unusual given RLS is
+  open — check for a possible second write elsewhere in the code path that
+  overwrites it back to 'user' immediately after (e.g. a stale full-profile
+  update elsewhere that includes `role: 'user'` unintentionally), or a
+  Postgres trigger/default resetting it — report this specific scenario clearly
+  if it occurs, since it would need broader investigation beyond this file.
+
+============================================================
+STEP 4 — CLEAN UP AND VERIFY
+============================================================
+1. Remove all temporary `[DEBUG role]` logs once confirmed fixed.
+2. `npx tsc --noEmit` clean.
+3. Confirm linking a manager now actually flips `profiles.role` to 'manager' in
+   the DB (verify via the same SQL recheck) and that the "헬스장 관리" section
+   appears on their Profile screen after re-login/reload.
+4. Do NOT touch MachineCard.tsx, FindGymScreen.tsx, or GymDetailModal.tsx in
+   this task.
+5. Report the confirmed root cause and fix.
+
+Do not skip to a fix without real log + SQL confirmation from STEP 2.

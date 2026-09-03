@@ -1,0 +1,135 @@
+TASK: Make the machine tab's card order randomized on each screen visit, instead
+of always showing the same alphabetical (`name`-sorted) order every time. Filter
+changes during a single visit should NOT re-shuffle the list — only entering/
+returning to the screen should produce a new random order.
+
+FILE: src/screens/FindGymScreen.tsx
+
+CONTEXT (already confirmed): `allMachines` comes from `fetchMachines()` /
+`getMachinesCacheSync()`, which queries Supabase with `.order('name')` — so the
+base order is always alphabetical, and `filteredMachines` (used to render the
+머신 tab's FlatList) only `.filter()`s that same order, never shuffles it. This
+task adds a shuffle step that runs once per screen focus, not on every filter
+change. Do NOT modify lib/db/machines.ts or the underlying `.order('name')` query
+— the alphabetical order from Supabase is still fine as the base fetch order;
+shuffling happens client-side in this screen only.
+
+============================================================
+STEP 0 — VERIFY
+============================================================
+Confirm these exist as described (search for them):
+1. `import { useNavigation, useRoute } from '@react-navigation/native';` near the
+   top — `useFocusEffect` is NOT currently imported from there.
+2. `const allMachines = machinesData ?? [];` (around line 368).
+3. The `filteredMachines` useMemo (around line 496):
+    const filteredMachines = useMemo(() => {
+      return allMachines.filter(m => {
+        const muscleOk   = ...
+        const brandOk    = ...
+        const categoryOk = ...
+        const keyOk      = ...
+        return muscleOk && brandOk && categoryOk && keyOk;
+      });
+    }, [keyword, activeMuscle, activeBrand, activeCategory, allMachines]);
+4. `favTabMachines` (around line 538-540) — a separate derivation for the
+   즐겨찾기 tab: `useMemo(() => allMachines.filter(m => favorites.has(m.id)), [allMachines, favorites])`.
+   Leave this one untouched — this task only affects the 머신 tab's ordering, not
+   the favorites tab.
+
+If any of this has drifted, adapt the same intent but report the deviation.
+
+============================================================
+STEP 1 — Add useFocusEffect import
+============================================================
+Change:
+    import { useNavigation, useRoute } from '@react-navigation/native';
+To:
+    import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
+
+============================================================
+STEP 2 — Add a shuffle helper (module level)
+============================================================
+Add this near the top of the file, at module level (alongside other module-level
+helper functions in this file, if any exist — otherwise just above the component
+function):
+
+    function shuffleMachines<T>(arr: T[]): T[] {
+      const result = [...arr];
+      for (let i = result.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [result[i], result[j]] = [result[j], result[i]];
+      }
+      return result;
+    }
+
+(Standard Fisher-Yates shuffle, non-mutating — takes a copy so `allMachines`
+itself is never mutated.)
+
+============================================================
+STEP 3 — Add a shuffle trigger + shuffled base list
+============================================================
+Inside the component, near where `allMachines` is defined, add:
+
+    const [shuffleTick, setShuffleTick] = useState(0);
+
+    useFocusEffect(
+      useCallback(() => {
+        setShuffleTick(t => t + 1);
+      }, [])
+    );
+
+    const shuffledMachines = useMemo(
+      () => shuffleMachines(allMachines),
+      [allMachines, shuffleTick]
+    );
+
+(`useCallback` is already imported in this file per the existing import list —
+confirm this before using it; it should already be there.)
+
+`shuffledMachines` reshuffles when: (a) `allMachines` itself changes (new data
+fetched), or (b) the screen regains focus (`shuffleTick` bumps). It does NOT
+reshuffle when only `keyword`/`activeMuscle`/`activeBrand`/`activeCategory`
+change.
+
+============================================================
+STEP 4 — Filter from the shuffled list instead of allMachines
+============================================================
+Change:
+    const filteredMachines = useMemo(() => {
+      return allMachines.filter(m => {
+        ...
+      });
+    }, [keyword, activeMuscle, activeBrand, activeCategory, allMachines]);
+
+To (only the source array and the dependency array change — the filter body
+itself stays exactly the same):
+    const filteredMachines = useMemo(() => {
+      return shuffledMachines.filter(m => {
+        ...
+      });
+    }, [keyword, activeMuscle, activeBrand, activeCategory, shuffledMachines]);
+
+Do not change anything inside the `.filter(m => { ... })` callback body itself —
+only swap `allMachines` → `shuffledMachines` as the source, and update the
+dependency array to match.
+
+============================================================
+STEP 5 — SANITY CHECK
+============================================================
+1. `npx tsc --noEmit` clean.
+2. Confirm `favTabMachines` still derives from `allMachines` (unshuffled) —
+   untouched by this change, per STEP 0.4.
+3. Confirm changing a filter chip (muscle/brand/category) or typing a search
+   keyword does NOT visibly reshuffle the already-visible cards — only entering
+   the screen fresh (or returning to it via navigation) produces a new random
+   order.
+4. Confirm the existing `useEffect(() => { flatListRef.current?.scrollToOffset(...) }, [filteredMachines])`
+   still works (scrolls to top) — this behavior is unaffected by the shuffle
+   change and should be left as-is.
+5. Do NOT touch lib/db/machines.ts, MachineCard.tsx, GymDetailModal.tsx, or any
+   other file in this task.
+6. Report: confirm the shuffle only triggers on focus/data-change, not on filter
+   interaction, and confirm `favTabMachines` was left alone.
+
+Complete this fully without stopping for confirmation, except where STEP 0's
+verification reveals the file has drifted meaningfully from what's described.

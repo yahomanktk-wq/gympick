@@ -1,0 +1,75 @@
+[수정 태스크 — 확인이나 중단 없이 끝까지 완료해줘]
+
+## 배경
+조사 결과, 머신 이미지(machine-images 버킷, 800×800 WebP)가 그리드/썸네일 등
+작은 크기로 노출되는 곳에서도 항상 원본 크기 그대로 요청되고 있음이 확인됨.
+Supabase Storage의 Image Transformation 기능(Pro 플랜)을 사용해 노출 크기에
+맞는 이미지를 서빙하도록 개선함.
+
+⚠️ 사전 조건 (코드 작업 전에 태경님이 직접 확인/설정해야 함, Claude Code가
+할 수 없는 부분):
+- Supabase Dashboard → Storage → Settings → "Enable Image Transformations"
+  토글이 켜져 있는지 확인
+- Pro 플랜 이상 가입 여부 확인
+- 이 두 가지가 안 되어 있으면 아래 코드는 변환 없이 원본 이미지가 그대로
+  나가거나 에러가 날 수 있음
+
+## 목표
+
+### 1. 공통 헬퍼 함수 생성 (새 파일)
+`src/lib/machineImageUrl.ts` (또는 프로젝트의 기존 lib 디렉토리 구조에 맞는 위치)에
+아래와 같은 함수를 만들 것:
+
+```ts
+// 머신 이미지 URL을 원하는 크기로 변환해서 반환
+// width, quality는 옵션 — 안 주면 원본 그대로 반환
+function getMachineImageUrl(machineId: string, options?: { width?: number; quality?: number }): string
+```
+
+- 기존에 머신 이미지 URL을 문자열로 직접 조립하던 방식
+  (`https://.../machine-images/{id}.webp`)을 base로 하되,
+  Supabase의 render 엔드포인트 형식으로 변환:
+  `https://{project}.supabase.co/storage/v1/render/image/public/machine-images/{id}.webp?width={w}&quality={q}`
+- Supabase 프로젝트 URL은 기존 `lib/supabase.ts`에서 이미 쓰고 있는 환경변수/상수를
+  그대로 재사용할 것 (하드코딩 금지)
+- quality 기본값은 75 정도로 (기존 문서 확인 결과 기본값 80, 60~80 사이 권장)
+
+### 2. 노출 크기별로 width 파라미터를 다르게 적용해서 아래 위치들의 이미지 로딩부를
+   위 헬퍼 함수를 쓰도록 교체:
+
+- AdminDashboard.tsx의 MachineCatalogView 그리드 카드 (CAT_CARD_W 기준,
+  현재 카드 너비의 2배 정도를 width로 — 레티나 대응)
+- AdminDashboard.tsx의 RegisterGymAdminView / AdminMachineItem 그리드
+  (ADMIN_CARD_W 기준)
+- PostWorkoutLogModal.tsx의 루틴카드 썸네일 3곳 (라인 ~3010, ~3076, ~3151) —
+  이 파일은 별도로 "루틴카드 3중 렌더링" 수정 작업을 이미 했을 수도 있으니,
+  이미 반영된 최신 코드 기준으로 작업할 것. 여기서는 이미지 자체 크기를
+  줄이는 것이 목적 (기존 파일에서 실제 렌더링되는 픽셀 크기 확인 후 적용)
+- FindGymScreen, GymDetailModal 등 머신 목록/그리드가 있는 다른 화면에서도
+  동일한 패턴(원본 문자열 조립)을 쓰는 곳이 있다면 함께 찾아서 적용
+  (grep으로 `machine-images` 문자열 사용처 전체 검색해서 나열 후 적용)
+
+### 3. 상세 보기(예: MachineDetailModal, GymAllMachinesScreen 등 큰 사이즈로
+   보여주는 화면)는 원본 그대로 유지하거나 필요시 더 큰 width(예: 800 그대로
+   또는 화면 실제 너비 기준)를 명시적으로 넘길 것 — 무조건 축소하지 말 것
+
+## 절대 지키기
+- MachineCard.tsx 자체의 구조는 변경하지 말 것. 이미지 URL을 prop으로 받는
+  방식이라면, MachineCard를 호출하는 쪽(부모 컴포넌트)에서 변환된 URL을
+  넘기도록 처리. 만약 MachineCard 내부에서 URL을 직접 조립하고 있어서
+  구조 변경이 불가피하다면, 진행하지 말고 먼저 나에게 알려줘
+- 새 파일로 헬퍼 함수 분리 (기존 컴포넌트 파일에 로직 욱여넣지 말 것)
+- 같은 machineId + 같은 width/quality 조합이면 항상 동일한 URL이 나오도록
+  (캐싱이 정상 작동하려면 URL이 매번 달라지면 안 됨 — 랜덤 쿼리 파라미터
+  등 절대 추가하지 말 것)
+- 변경 범위가 예상보다 커지거나(예: machine-images 참조 위치가 예상 밖으로
+  많이 나오는 경우) 애매하면, 먼저 나에게 알려줘
+
+## 완료 후 확인
+- npx tsc --noEmit 통과 확인
+- 한국어 커밋 메시지로 커밋만 하고 git push는 하지 말 것
+- 수정/생성한 파일 목록과 각 파일에서 어떤 width 값을 적용했는지 표로
+  정리해서 알려줘
+- Dashboard에서 Image Transformations가 꺼져 있는 상태에서도 앱이 깨지지
+  않고 (최소한 원본 이미지라도) 정상 표시되는지 코드상으로 확인해줘
+  (render 엔드포인트가 비활성화 상태여도 에러 없이 fallback 되는지)

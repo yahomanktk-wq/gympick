@@ -1,0 +1,119 @@
+TASK: When an admin links a manager to a gym via the "헬스장 관리" screen's
+매니저 연결 feature, the linked user's `profiles.role` must also become
+'manager' (so ProfileScreen.tsx's role-gated "헬스장 관리" section, which checks
+`user.role === 'manager'` at line ~953, actually appears for them). Currently
+only `gyms.manager_id` is updated — `profiles.role` is never touched, so linked
+managers see nothing different on their Profile screen.
+
+CONFIRMED ROOT CAUSE: ProfileScreen.tsx gates the manager dashboard section
+purely on `user.role === 'manager'`. `setGymManager()` in
+src/lib/db/adminGyms.ts only writes `gyms.manager_id` and has no side effect on
+`profiles.role`.
+
+FILE: src/lib/db/adminGyms.ts (setGymManager), possibly src/screens/admin/AdminDashboard.tsx
+if the role-sync logic is better placed at the call site.
+
+============================================================
+STEP 0 — INVESTIGATE THE EXISTING APPROVAL FLOW FIRST (mirror its convention)
+============================================================
+Before writing new logic, find how the EXISTING "매니저 신청 승인" flow (in
+AdminDashboard.tsx's manager-applications queue, or wherever
+`updateApplicationStatus`/manager request approval is implemented — check
+src/lib/db/managerRequests.ts or similar) sets a user's `profiles.role` to
+'manager' upon approval. Read its exact Supabase update call (table, column,
+value, any conditions) and mirror that exact same pattern here, rather than
+inventing a new convention. Report what you find before proceeding.
+
+============================================================
+STEP 1 — Update setGymManager to sync profiles.role
+============================================================
+Modify `setGymManager(gymId: string, managerId: string | null)` so that:
+
+1. WHEN LINKING (managerId is a non-null string):
+   - After successfully updating `gyms.manager_id`, check the linked user's
+     current `profiles.role`.
+   - If it's currently `'user'`, update it to `'manager'` (mirroring STEP 0's
+     found convention).
+   - If it's already `'manager'`, no change needed (no-op, don't error).
+   - If it's `'admin'`, DO NOT downgrade/overwrite it to `'manager'` — leave
+     admin accounts as admin. Log a dev warning if this case is hit
+     (`if (__DEV__) console.warn(...)`) so it's visible during testing, but
+     don't change the role.
+
+2. WHEN UNLINKING (managerId is null):
+   - Before clearing `gyms.manager_id`, capture which user WAS the manager for
+     this gym (fetch the gym's current `manager_id` first, or accept it as an
+     additional parameter from the caller if the caller already has it —
+     whichever is simpler given the existing call sites).
+   - After successfully clearing `gyms.manager_id`, check whether that same
+     user still manages ANY OTHER gym:
+     `select id from gyms where manager_id = '<that user id>'`
+     (this query naturally excludes the just-unlinked gym since its
+     manager_id was already cleared).
+   - If zero other gyms remain AND their current `profiles.role` is
+     `'manager'` (not `'admin'` — never touch admin accounts), revert their
+     `profiles.role` back to `'user'`.
+   - If they still manage at least one other gym, leave their role as
+     `'manager'` — do not downgrade.
+
+3. Wrap the role-sync logic so a failure in it doesn't silently corrupt the
+   primary `gyms.manager_id` write — the gym-manager link/unlink itself should
+   already have succeeded before role-sync runs; if role-sync fails, throw/log
+   clearly but the caller should still know the primary action succeeded (e.g.
+   don't roll back the gym update — but do surface the role-sync failure
+   somehow, at minimum a `console.warn` with enough detail to debug later, since
+   this project doesn't have a broader error-reporting system to hook into for
+   this task's scope).
+
+============================================================
+STEP 2 — Update the call site if needed
+============================================================
+Check where `setGymManager` is called from in AdminDashboard.tsx (the link and
+unlink handlers). If unlinking needs the previous manager_id and the caller
+already has it available (e.g. from the gym object already in local state),
+pass it through rather than doing an extra fetch inside `setGymManager` — match
+whichever is simpler given what's already in scope at the call site. Adjust the
+function signature if needed (e.g. an optional `previousManagerId` parameter),
+but keep the change minimal and consistent with this file's existing style.
+
+============================================================
+STEP 3 — SANITY CHECK
+============================================================
+1. `npx tsc --noEmit` clean.
+2. Confirm linking a manager (whose current role is 'user') to a gym updates
+   their `profiles.role` to 'manager'.
+3. Confirm that user, upon logging in (or the admin can verify via a fresh
+   `select role from profiles where id = '<id>'` in Supabase SQL Editor), now
+   sees the "헬스장 관리" section on their Profile screen.
+4. Confirm unlinking that same manager from their ONLY gym reverts their role
+   back to 'user'.
+5. Confirm a manager linked to TWO gyms, when unlinked from only ONE of them,
+   keeps their role as 'manager' (since they still manage the other gym).
+6. Confirm admin accounts are never touched by this logic even if somehow
+   linked as a gym's manager_id.
+7. Do NOT touch MachineCard.tsx, FindGymScreen.tsx, or GymDetailModal.tsx in
+   this task.
+8. Report: the exact convention found in STEP 0 and confirmation it was
+   mirrored, the final implementation of the link/unlink role-sync logic, and
+   any edge case decisions made where this task's instructions left room for
+   judgment.
+
+============================================================
+STEP 4 — COMMIT
+============================================================
+Run `git status` to confirm only the files touched in this task are modified
+(likely src/lib/db/adminGyms.ts and possibly src/screens/admin/AdminDashboard.tsx).
+If other unrelated files show as modified, stop and report instead of
+committing them.
+
+If only the expected files are modified:
+    git add <the modified files>
+    git commit -m "fix(admin): 매니저 연결/해제 시 profiles.role도 동기화되도록 수정"
+
+Do NOT run git push — leave that for the user to do manually.
+Report `git log --oneline -3`.
+
+If STEP 0 reveals the existing approval flow does something meaningfully
+different than assumed here (e.g. role isn't stored the way expected, or
+there's additional state beyond `profiles.role` that also needs syncing), stop
+and report before proceeding to STEP 1.

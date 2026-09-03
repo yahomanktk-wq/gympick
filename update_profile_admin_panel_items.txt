@@ -1,0 +1,100 @@
+TASK: Replace the 3 items shown in ProfileScreen.tsx's admin panel (AdminSection)
+with a new set of 3 items, reusing already-correct real data sources where possible.
+
+FILE: src/screens/ProfileScreen.tsx (confirm actual path first)
+
+CONTEXT (from prior task's findings — do not re-investigate from scratch, but do
+open the file and confirm this still matches before editing):
+- AdminSection currently shows 3 badges: "헬스장" (real, fetchGymRegistrationRequests
+  filtered requesterRole==='manager' && status==='pending'), "수정" (fake mock,
+  PENDING_EDITS, always 5 — this stays as-is, out of scope, do not touch), "신고"
+  (real, fetchGymInfoReports filtered status==='pending').
+- Both real counts already refresh via a useFocusEffect gated on user.role==='admin'.
+
+============================================================
+STEP 0 — VERIFY CURRENT STATE
+============================================================
+Open ProfileScreen.tsx and locate the AdminSection code (the array/list or JSX that
+renders the 3 badges with their labels and counts, and the useFocusEffect that
+fetches gymRequests/gymReports for them). Confirm:
+1. Current 3 labels are 헬스장 / 수정 / 신고 (or find their current exact Korean
+   text if slightly different from this).
+2. What each badge does on tap (does it navigate/open AdminDashboard? to a specific
+   sub-view, or just opens the dashboard at 'home'?). Note this per badge — the
+   new items should follow the same tap-navigation pattern as their closest existing
+   equivalent.
+3. Whether managerRequestCount / manager applications data is already imported
+   anywhere in this file. If not, you'll need to import fetchManagerRequests (same
+   function AdminDashboard.tsx uses for managerRequestCount) and its ManagerApplication
+   type if needed.
+
+If anything here doesn't match, adapt accordingly and note the deviation in your
+final report — don't stop unless the whole AdminSection structure is fundamentally
+different from what's described.
+
+============================================================
+STEP 1 — Replace the 3 panel items
+============================================================
+New set of 3 items (replacing 헬스장 / 수정 / 신고 entirely):
+
+1. Label: "매니저 신청 관리"
+   Count source: fetchManagerRequests() (same function used by AdminDashboard.tsx
+   for managerRequestCount), filtered to status === 'pending'.
+   This is a NEW item — 매니저 신청 data was not previously shown on this screen.
+   Tap behavior: open AdminDashboard at its manager-requests view if the existing
+   tap-navigation mechanism supports jumping to a specific sub-view (check how
+   AdminDashboard is opened elsewhere in this file / whether it accepts an initial
+   view param). If there's no existing mechanism to open AdminDashboard at a
+   specific sub-view, just open AdminDashboard at its default/home view, same as
+   whatever the simplest existing badge does — do not build new deep-linking
+   plumbing for this, that would be out of scope. Report which behavior you used.
+
+2. Label: "헬스장 등록 신청"
+   Count source: KEEP the existing real data source unchanged — this is just a
+   rename of the current "헬스장" badge. Same fetchGymRegistrationRequests() call,
+   same filter (status === 'pending' && (requesterRole ?? 'user') === 'manager'),
+   same refresh mechanism. Only the label text changes, from "헬스장" to
+   "헬스장 등록 신청". Keep its existing tap behavior exactly as-is.
+
+3. Label: "정보 제보 관리"
+   Count source: KEEP the existing real data source unchanged — this is just a
+   rename of the current "신고" badge. Same fetchGymInfoReports() call, same filter
+   (status === 'pending'), same refresh mechanism. Only the label text changes,
+   from "신고" to "정보 제보 관리". Keep its existing tap behavior exactly as-is.
+
+REMOVE: the "수정" badge (PENDING_EDITS-based mock count) from the panel entirely —
+it is being replaced by "매니저 신청 관리" above, not kept alongside it. The panel
+should show exactly 3 items after this change, matching the new list, not 4.
+
+If removing the "수정" badge means PENDING_EDITS / mockAdmin.ts imports in
+ProfileScreen.tsx become unused, remove those unused imports too (but do NOT delete
+PENDING_EDITS from data/mockAdmin.ts itself — only stop importing/using it in
+ProfileScreen.tsx; leave the mock data file itself alone since it's out of scope
+and may be used elsewhere).
+
+============================================================
+STEP 2 — Update the useFocusEffect / refresh logic
+============================================================
+Extend the existing admin-panel useFocusEffect (the one gated on
+user.role === 'admin') to also fetch managerRequestCount (via fetchManagerRequests(),
+filtered to 'pending') alongside the existing gymRequests/gymReports fetches, so all
+3 new panel numbers refresh together whenever the admin returns to the Profile tab.
+Do not create a second separate useFocusEffect for this — add to the existing one.
+
+============================================================
+STEP 3 — SANITY CHECK
+============================================================
+1. `npx tsc --noEmit` clean.
+2. Confirm exactly 3 items render in the admin panel, with the exact labels:
+   매니저 신청 관리 / 헬스장 등록 신청 / 정보 제보 관리
+3. Confirm all 3 counts are driven by real fetch functions (no mock arrays left in
+   this panel).
+4. Do NOT touch AdminDashboard.tsx in this task — it already shows the correct
+   equivalent counts under its own (differently-worded) labels; this task only
+   changes how the Profile screen's summary panel is labeled and what it counts.
+5. Report: final labels + data sources for all 3 items, what tap behavior each one
+   has, and confirm 수정/PENDING_EDITS is fully removed from this screen's admin
+   panel (but left untouched in data/mockAdmin.ts).
+
+Complete this fully without stopping for confirmation, except where STEP 0's
+verification reveals a structurally different AdminSection than described.

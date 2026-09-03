@@ -31,6 +31,25 @@ export const GYMVISUAL_GIF_IDS: ReadonlySet<string> = new Set([
   'fw153', 'fw154', 'fw155', 'fw156', 'fw157', 'fw158', 'fw159', 'fw160', 'fw161', 'fw162', 'fw163', 'fw164',
   'fw165', 'fw166', 'fw167', 'fw168', 'fw169', 'fw170', 'fw171', 'fw172', 'fw173',
   'fw174',
+
+  // 노브랜드(STANDARD) 머신 카탈로그(src/data/customMachines.ts) 43개 — 2026-09-02
+  // "겹치는 변형도 다 살려서 각각 별도 항목으로 등록" 개편판. Gym Visual에서 받은
+  // 애니메이션 GIF를 machine-images 버킷에 `${id}.gif`로 업로드해서 씀.
+  // id 목록은 customMachines.ts / Supabase machines 테이블과 반드시 1:1로
+  // 맞춰 유지할 것 (claude 프로젝트 문서 "gymvisual-gif-구매-다운로드-현황.md" 참고).
+  // Calf Raise / Incline Fly / Hip Press는 구매한 GIF가 없어서 아직 제외 상태.
+  'custom_chest_press', 'custom_chest_press_plate', 'custom_chest_press_lying', 'custom_chest_fly',
+  'custom_chest_incline', 'custom_chest_incline_hammer', 'custom_chest_decline',
+  'custom_back_pulldown', 'custom_back_pulldown_plate', 'custom_back_middle_row', 'custom_back_low_row',
+  'custom_back_high_row', 'custom_back_t_bar', 'custom_back_t_bar_close_grip', 'custom_back_pullover', 'custom_back_chin_dip',
+  'custom_shoulder_press', 'custom_shoulder_press_cable', 'custom_shoulder_lateral', 'custom_shoulder_lateral_plate',
+  'custom_shoulder_lateral_standing', 'custom_shoulder_rear_delt',
+  'custom_arms_biceps', 'custom_arms_biceps_plate', 'custom_arms_triceps',
+  'custom_leg_press', 'custom_leg_press_plate', 'custom_leg_curl', 'custom_leg_curl_kneeling', 'custom_leg_curl_seated',
+  'custom_leg_extension', 'custom_leg_extension_plate', 'custom_leg_squat_machine', 'custom_leg_squat_machine_plate',
+  'custom_leg_squat_machine_press', 'custom_leg_squat_machine_belt', 'custom_leg_inner_outer',
+  'custom_leg_hack_squat', 'custom_leg_hack_squat_sled', 'custom_leg_hack_squat_pendulum',
+  'custom_glutes_hip_abduction', 'custom_glutes_hip_thrust', 'custom_glutes_hip_thrust_plate',
 ]);
 
 export const FREE_WEIGHTS_GYMVISUAL: FreeWeightExercise[] = [

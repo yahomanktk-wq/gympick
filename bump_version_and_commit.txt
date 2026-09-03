@@ -1,0 +1,118 @@
+TASK: Bump the app version, then commit today's session's changes as separate,
+logically-grouped git commits (local commits only — do NOT push to origin, the
+user will push manually after reviewing `git log`).
+
+============================================================
+STEP 1 — Version bump
+============================================================
+Open app.json and update:
+  - "version": "1.1.2" → "1.1.3"
+  - ios.buildNumber: "30" → "31"
+  - android.versionCode: 12 → 13
+
+(Adjust exact JSON paths/keys if they differ slightly from this description — this
+project's app.json structure should have `expo.version`, `expo.ios.buildNumber`,
+`expo.android.versionCode` or similar; confirm the actual keys first via `view`
+before editing, since versionCode is a number not a string while buildNumber is
+typically a string.)
+
+Do not touch any other fields in app.json.
+
+============================================================
+STEP 2 — Review the full diff before committing anything
+============================================================
+Run `git status` and `git diff --stat` first to see the full scope of uncommitted
+changes from this session. Cross-reference against the file list below so nothing
+unexpected gets swept into a commit, and so nothing gets missed.
+
+Expected files with uncommitted changes from this session:
+  - src/screens/admin/AdminDashboard.tsx        (touched across multiple features)
+  - src/screens/ProfileScreen.tsx                (touched across multiple features)
+  - src/data/gymRegistrationStore.ts             (deleted)
+  - src/screens/FindGymScreen.tsx                (filter chip UI change)
+  - src/screens/flow/GymDetailModal.tsx          (FlatList virtualization)
+  - src/lib/db/userInquiries.ts                  (new file)
+  - src/lib/db/reviews.ts                        (nickname sync fix)
+  - app.json                                     (version bump, from STEP 1)
+
+If `git status` shows other modified/untracked files not in this list, do NOT
+include them in any commit below — leave them unstaged and report them at the end
+instead of guessing what they're for.
+
+============================================================
+STEP 3 — Create commits, grouped by feature
+============================================================
+Some files (AdminDashboard.tsx, ProfileScreen.tsx) were edited across MULTIPLE
+separate features in this session with no commits in between, so their changes
+are now intermixed in the working tree. For each commit below:
+  - If you can cleanly isolate the relevant hunks for that file using
+    `git add -p` (interactive patch staging), do so, so each commit only contains
+    the hunks belonging to that feature.
+  - If the hunks for a given file are too intertwined to cleanly separate (e.g.
+    the same function was edited twice by two different features), it's fine to
+    include the whole file in whichever commit is the best conceptual fit, and
+    note in your final report which commit "absorbed" extra unrelated-looking
+    changes for that reason. Do not spend excessive effort trying to force a
+    perfect split — a reasonable, mostly-clean grouping is good enough.
+
+Target commit list (in this order):
+
+1. "fix(admin): 헬스장 등록 심사 뱃지 오카운트 버그 수정 및 자동 새로고침 추가"
+   - The gymList/legacy-mock removal from pendingGymCount, reviewGym/
+     handleApproveGym/handleRejectGym fixes, and the refreshQueues() +
+     focus-based refresh additions in AdminDashboard.tsx.
+
+2. "chore(admin): 레거시 gymRegistrationStore 제거 및 프로필 관리자 패널 실데이터 연동"
+   - Deletion of src/data/gymRegistrationStore.ts.
+   - The ProfileScreen.tsx changes that replaced mock-driven 헬스장/신고 counts
+     with real fetchGymRegistrationRequests()/fetchGymInfoReports()-based counts
+     and added the focus-based refresh for them.
+
+3. "refactor(profile): 관리자 패널 3항목을 매니저 신청/헬스장 등록 신청/정보 제보 관리로 재구성"
+   - The ProfileScreen.tsx changes that added the 매니저 신청 관리 item, renamed
+     헬스장→헬스장 등록 신청 and 신고→정보 제보 관리, and removed the 수정
+     (PENDING_EDITS mock) badge.
+
+4. "fix(findgym): 카테고리 필터칩 축소 및 필터 요약 라인 제거"
+   - FindGymScreen.tsx: filterChipSmall/filterChipTextSmall addition, category
+     row using the smaller style, and removal of the filterSummaryRow block.
+
+5. "perf(gymdetail): 헬스장 상세 머신 탭을 가상화 FlatList로 전환"
+   - GymDetailModal.tsx: FlatList conversion, GymMachineItem memoized component.
+
+6. "feat(inquiry): 유저-어드민 문의 기능 추가 (유저 제출/내역 + 어드민 큐/답변)"
+   - New src/lib/db/userInquiries.ts.
+   - ProfileScreen.tsx changes that added the "관리자에게 문의하기" entry point
+     and InquiryModal.
+   - AdminDashboard.tsx changes that added the 'user-inquiries' view,
+     UserInquiriesView component, userInquiryCount, and related state/handlers.
+
+7. "fix(reviews): 머신 리뷰 작성자 닉네임을 실시간 프로필 기준으로 동기화"
+   - src/lib/db/reviews.ts: withCurrentNicknames helper and its use in
+     fetchMachineReviews/fetchAllReviews.
+
+8. "chore: bump version to 1.1.3 (build 31 / versionCode 13)"
+   - app.json only.
+
+Use `git add <specific files or -p for partial>` then `git commit -m "<message>"`
+for each of the 8 commits above, in order. Do not squash any of these together
+even if that would be technically simpler — the user wants separate commits for
+history tracking.
+
+============================================================
+STEP 4 — SANITY CHECK
+============================================================
+1. After all commits, run `git status` — should show a clean working tree (or
+   only the deliberately-excluded unexpected files from STEP 2, if any).
+2. Run `git log --oneline -10` and confirm 8 commits exist in the order above.
+3. Do NOT run `git push`. Leave that for the user to do manually after reviewing.
+4. Report the final `git log --oneline -10` output, and explicitly call out any
+   case where a commit ended up containing more than its "target" description
+   above due to unsplittable intermixed hunks (per STEP 3's allowance).
+5. Also report the result of STEP 2's cross-check — confirm whether any
+   unexpected files showed up in `git status` that aren't in the expected list.
+
+Complete this fully without stopping for confirmation, except where STEP 2 reveals
+unexpected uncommitted files that aren't accounted for above — in that case, still
+proceed with the 8 commits for the known files, but flag the unexpected files
+clearly in your final report instead of committing them.

@@ -1,0 +1,261 @@
+TASK: Fix jank/stutter in GymDetailModal.tsx's "머신" (machine) tab by converting it
+from a plain ScrollView + .map() (renders every machine card at once, no memoization)
+to a virtualized FlatList with a memoized item component — mirroring the exact
+pattern that already works well in FindGymScreen.tsx's machine tab.
+
+FILE TO CHANGE: src/screens/flow/GymDetailModal.tsx (confirm actual path — the
+uploaded copy used for analysis was at screens/flow/GymDetailModal.tsx per its
+relative imports like '../../theme').
+
+REFERENCE (do not modify): src/screens/FindGymScreen.tsx — its machine tab already
+uses this exact pattern correctly. Look at its `MachineItem` (React.memo component)
+and its FlatList render block for the machine tab as the template to mirror.
+
+CONFIRMED ROOT CAUSE (no further investigation needed): GymDetailModal.tsx's 머신
+tab renders ALL `filteredMachines` synchronously via `<ScrollView><View style={s.machineGrid}>{filteredMachines.map(...)}</View></ScrollView>`,
+with no virtualization and no per-item memoization. Every filter chip press or any
+parent re-render re-renders every single MachineCard (which does SVG border drawing
++ image loading), and the list never virtualizes off-screen items. FindGymScreen.tsx
+avoids this entirely with a virtualized FlatList + React.memo item component. This
+task brings GymDetailModal.tsx in line with that proven pattern. Do NOT modify
+MachineCard.tsx in this task — it stays exactly as-is, only GymDetailModal.tsx's
+container/rendering strategy changes.
+
+============================================================
+STEP 0 — VERIFY BEFORE EDITING
+============================================================
+Open GymDetailModal.tsx and confirm this block currently exists as described
+(search for `{activeTab === '머신'`):
+
+    {/* ── 머신 tab ── */}
+    {activeTab === '머신' && (
+      <ScrollView showsVerticalScrollIndicator={false}>
+
+        {/* 타겟부위 필터 */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.filterRow}
+        >
+          {muscleOptions.map(opt => (
+            <TouchableOpacity
+              key={opt}
+              style={[s.filterChip, machineMuscleFilter === opt && s.filterChipActive]}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMachineMuscleFilter(opt); }}
+              activeOpacity={0.8}
+            >
+              <Text style={[s.filterChipText, machineMuscleFilter === opt && s.filterChipTextActive]}>
+                {opt}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* 브랜드 필터 */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.filterRow}
+        >
+          {brandOptions.map(opt => (
+            <TouchableOpacity
+              key={opt}
+              style={[s.filterChip, machineBrandFilter === opt && s.filterChipActive]}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMachineBrandFilter(opt); }}
+              activeOpacity={0.8}
+            >
+              <Text style={[s.filterChipText, machineBrandFilter === opt && s.filterChipTextActive]}>
+                {opt}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* 머신 카드 그리드 */}
+        {filteredMachines.length === 0 ? (
+          <View style={s.emptyState}>
+            <Ionicons name="barbell-outline" size={36} color={C.textDim} />
+            <Text style={s.emptyText}>조건에 맞는 머신이 없어요</Text>
+          </View>
+        ) : (
+          <View style={s.machineGrid}>
+            {filteredMachines.map(machine => (
+              <TouchableOpacity
+                key={machine.id}
+                onPress={() => setSelectedMachineId(machine.id)}
+                activeOpacity={0.85}
+              >
+                <MachineCardBorder width={CARD_W}>
+                  <MachineCard machine={machine} variant="grid" width={CARD_W} />
+                </MachineCardBorder>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+    )}
+
+Also confirm:
+- `filteredMachines`, `muscleOptions`, `brandOptions`, `machineMuscleFilter`,
+  `machineBrandFilter`, `setMachineMuscleFilter`, `setMachineBrandFilter`,
+  `setSelectedMachineId` are defined via useState/useMemo in the component (they
+  are — this is just a sanity check).
+- `CARD_W` is defined near the top of the file as a module-level constant.
+- `MachineCardBorder` and `MachineCard` are already imported at the top of the file.
+- `FlatList` is currently NOT imported from 'react-native' in this file (check the
+  react-native import block near the top — it currently imports View, Text,
+  StyleSheet, Modal, ScrollView, TouchableOpacity, SafeAreaView, Dimensions,
+  TextInput, KeyboardAvoidingView, Platform, Alert, Image).
+
+If anything above doesn't match, adapt the same intent but report the deviation
+instead of guessing blindly.
+
+============================================================
+STEP 1 — Import FlatList
+============================================================
+Add `FlatList` to the existing react-native import block at the top of the file
+(alongside View, Text, StyleSheet, Modal, ScrollView, etc.) — do not create a
+separate import statement, just add it to the existing one.
+
+============================================================
+STEP 2 — Add a memoized machine card item component (module level)
+============================================================
+Add this component near the top of the file, at MODULE LEVEL (alongside the other
+existing module-level components like `GymPhotoStrip`, `PhotoViewer`, `HoursTable`
+— NOT inside the `GymDetailModal` function body; this project's established rule is
+that RN subcomponents must be defined at module level, never nested inside another
+component function):
+
+    const GymMachineItem = React.memo(({
+      machine,
+      cardWidth,
+      onPress,
+    }: {
+      machine: GymWithMachines['machines'][number];
+      cardWidth: number;
+      onPress: (machineId: string) => void;
+    }) => (
+      <TouchableOpacity
+        onPress={() => onPress(machine.id)}
+        activeOpacity={0.85}
+      >
+        <MachineCardBorder width={cardWidth}>
+          <MachineCard machine={machine} variant="grid" width={cardWidth} />
+        </MachineCardBorder>
+      </TouchableOpacity>
+    ));
+
+If `GymWithMachines['machines'][number]` doesn't type-check cleanly (depends on how
+GymWithMachines is defined in data/types), use whatever the existing element type of
+`gym.machines` / `filteredMachines` already resolves to elsewhere in this file
+instead — check how `filteredMachines.map(machine => ...)` currently types `machine`
+in the block being replaced, and match that exact type. Do not use `any`.
+
+============================================================
+STEP 3 — Replace the 머신 tab block with a virtualized FlatList
+============================================================
+Replace the entire block found in STEP 0 with:
+
+    {/* ── 머신 tab ── */}
+    {activeTab === '머신' && (
+      <FlatList
+        data={filteredMachines}
+        keyExtractor={(m) => m.id}
+        numColumns={2}
+        columnWrapperStyle={{ gap: 8 }}
+        initialNumToRender={12}
+        maxToRenderPerBatch={12}
+        windowSize={5}
+        removeClippedSubviews={true}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32, gap: 8 }}
+        renderItem={({ item: machine }) => (
+          <GymMachineItem
+            machine={machine}
+            cardWidth={CARD_W}
+            onPress={setSelectedMachineId}
+          />
+        )}
+        ListHeaderComponent={
+          <View>
+            {/* 타겟부위 필터 */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={s.filterRow}
+            >
+              {muscleOptions.map(opt => (
+                <TouchableOpacity
+                  key={opt}
+                  style={[s.filterChip, machineMuscleFilter === opt && s.filterChipActive]}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMachineMuscleFilter(opt); }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[s.filterChipText, machineMuscleFilter === opt && s.filterChipTextActive]}>
+                    {opt}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* 브랜드 필터 */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={s.filterRow}
+            >
+              {brandOptions.map(opt => (
+                <TouchableOpacity
+                  key={opt}
+                  style={[s.filterChip, machineBrandFilter === opt && s.filterChipActive]}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMachineBrandFilter(opt); }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[s.filterChipText, machineBrandFilter === opt && s.filterChipTextActive]}>
+                    {opt}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        }
+        ListEmptyComponent={
+          <View style={s.emptyState}>
+            <Ionicons name="barbell-outline" size={36} color={C.textDim} />
+            <Text style={s.emptyText}>조건에 맞는 머신이 없어요</Text>
+          </View>
+        }
+      />
+    )}
+
+Notes:
+- `columnWrapperStyle={{ gap: 8 }}` (horizontal gap between the 2 columns) plus
+  `contentContainerStyle={{ ..., gap: 8 }}` (vertical gap between rows) together
+  reproduce the original `s.machineGrid` style's `gap: 8`. Visually check on device
+  that spacing looks the same as before; adjust the two `gap: 8` values together if
+  it looks off (keep them equal to each other).
+- The old `s.machineGrid` / inline `<View style={s.machineGrid}>` wrapper is no
+  longer used by this block. Check if `s.machineGrid` (in the StyleSheet at the
+  bottom of the file) is used anywhere else in this same file. If not used
+  anywhere else, leave the style definition in place but unused is fine — do not
+  spend time removing it, this is a minor cleanup not worth the risk.
+
+============================================================
+STEP 4 — SANITY CHECK
+============================================================
+1. `npx tsc --noEmit` clean.
+2. Confirm `GymMachineItem` is defined at module level (not nested inside the
+   `GymDetailModal` function).
+3. Confirm the 머신 탭 still shows: 부위 필터 chips, 브랜드 필터 chips, then the
+   2-column machine card grid below, in the same visual order as before.
+4. Confirm tapping a machine card still opens the machine detail (via
+   `setSelectedMachineId`) exactly as before.
+5. Confirm filter chip taps still filter the grid correctly.
+6. This is a performance fix — there's no way to verify the jank is gone from
+   static code alone. Report the change is complete and ask for on-device
+   confirmation: scroll a gym with many machines (e.g. a gym with 30+ machines,
+   if one exists in test data) and compare scroll smoothness to before.
+7. Do NOT touch MachineCard.tsx, FindGymScreen.tsx, or the C/R/T theme in this task.
+
+Complete this fully without stopping for confirmation, except where STEP 0's
+verification reveals the file has drifted meaningfully from what's described above.

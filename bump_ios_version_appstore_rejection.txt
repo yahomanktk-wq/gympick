@@ -1,0 +1,79 @@
+TASK: Bump the iOS app version so a new TestFlight/App Store build can be
+submitted (App Store Connect rejected the last upload because version 1.1.6 was
+already approved and its submission train is closed). Please read this file
+fully and complete the entire task without stopping or asking for confirmation
+midway ("확인이나 중단 없이 끝까지 완료해줘").
+
+SCOPE — app.json (or app.config.js/ts if this project uses that instead — check
+which one actually exists and is authoritative) only.
+
+---
+
+BACKGROUND
+
+Apple rejected the last EAS build submission with:
+- "CFBundleShortVersionString [1.1.6] must contain a higher version than the
+  previously approved version [1.1.6]"
+- "Invalid Pre-Release Train. The train version '1.1.6' is closed for new build
+  submissions"
+
+This means version 1.1.6 was already approved/used and Apple won't accept
+another submission under the same marketing version string. The fix is to bump
+the version.
+
+---
+
+STEP 1 — Investigate current state
+
+1. Find the authoritative version config — check for app.json vs app.config.js/
+   app.config.ts (only one should be the actual source of truth; if both exist,
+   determine which one EAS Build actually reads and report this).
+2. Read the current values of:
+   - `expo.version` (marketing version, currently 1.1.6 per the error)
+   - `expo.ios.buildNumber` (iOS build number — per project memory this was
+     recently 34, confirm the actual current value)
+   - `expo.android.versionCode` (confirm current value too, for awareness, even
+     though this specific error is iOS-only — do not change it unless Step 2
+     determines it should also bump for a coordinated release, see Step 2).
+
+STEP 2 — Implement
+
+1. Bump `expo.version` from 1.1.6 to 1.1.7 (a straightforward patch bump — this
+   is a Korean fitness app in active iteration, patch-level bump is appropriate
+   unless the changes being shipped are clearly a larger release, which is not
+   indicated here).
+2. Bump `expo.ios.buildNumber` to the next integer value above whatever Step 1.2
+   found as the current value.
+3. Leave `expo.android.versionCode` unchanged unless this project's convention
+   is to always ship both platforms in lockstep with matching version — check
+   for any existing convention/comment indicating this, and only change it if
+   there's clear evidence both platforms are meant to move together. If
+   uncertain, leave Android untouched and report that you left it as-is pending
+   the owner's decision, since bumping it unnecessarily could cause its own
+   confusion on the Play Store side.
+
+STEP 3 — Verify
+
+1. Confirm the new version.json/app.json values are syntactically valid (valid
+   JSON, correct types — version as a string like "1.1.7", buildNumber as a
+   string per Expo's convention if that's how the existing value was typed,
+   confirm and match the existing type exactly).
+2. Confirm no other file in the repo hardcodes the old version number in a way
+   that would now be inconsistent (a quick grep for "1.1.6" across the repo,
+   excluding node_modules/lock files, to catch anything like a changelog or
+   about-screen display string that might need updating too — report what you
+   find, but only update version-config files, not changelogs/marketing copy,
+   unless it's trivially obviously supposed to track this value).
+
+STEP 4 — Git
+
+Stage and commit only the modified config file(s) with a clear message, e.g.:
+  chore(release): bump iOS version to 1.1.7 (build N) to resolve App Store Connect rejection
+
+Do NOT run `git push` — that is handled manually by the project owner.
+
+---
+
+REPORT BACK: exact old → new values for version and buildNumber, which config
+file was authoritative, and what (if anything) else referenced the old version
+string.

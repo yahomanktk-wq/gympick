@@ -858,7 +858,12 @@ function MachinesView({
   onToggleMachine, onRequestMachine,
 }: MachinesViewProps) {
   const CATALOG_MUSCLES = useMemo(() => [...new Set(machines.flatMap(m => parseMuscles(m.targetMuscle)))].sort(), [machines]);
-  const CATALOG_BRANDS  = useMemo(() => [...new Set(machines.map(m => m.brand))].sort(), [machines]);
+  // NONE(노브랜드 카탈로그)는 항상 맨 뒤로 — 실제 브랜드들이 먼저 보이게
+  const CATALOG_BRANDS  = useMemo(() => [...new Set(machines.map(m => m.brand))].sort((a, b) => {
+    if (a === 'NONE') return 1;
+    if (b === 'NONE') return -1;
+    return a.localeCompare(b);
+  }), [machines]);
 
   const filteredMachines = machines.filter(m => {
     if (!m || !m.name || !m.brand || !m.targetMuscle) return false;

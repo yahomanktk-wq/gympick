@@ -1,0 +1,217 @@
+TASK: Expand RegisterGymAdminView (AdminDashboard.tsx) from "헬스장 직접 등록"
+into a full "헬스장 관리" screen covering ALL gyms in the system (both
+admin-added and manager-registered), adding manager-linking and gym deletion,
+while keeping all existing functionality (add gym, 오피셜 toggle, machine edit).
+
+Agreed requirements (already confirmed with user, do not re-ask):
+1. 오피셜/보유머신 edit must work for ALL gyms, including manager-registered ones.
+2. Rename the queue card label from "헬스장 직접 등록" to "헬스장 관리".
+3. Add: 매니저 연결 (search by user email/nickname, then link), 헬스장 삭제
+   (hard delete, no undo) — in addition to the existing 오피셜/수정 features,
+   which stay as-is.
+
+============================================================
+STEP 0 — INVESTIGATE CURRENT STATE FIRST (important, likely changes scope)
+============================================================
+1. Open src/lib/db/adminGyms.ts and confirm exactly what `fetchAdminGyms()`
+   queries. Based on prior debug logging in this session, it appears to already
+   query the ENTIRE `gyms` table (all 34+ rows, unfiltered by `manager_id`) with
+   a `gym_machines` join — meaning the "등록된 헬스장" list in
+   RegisterGymAdminView may ALREADY show every gym in the system, including any
+   that have a `manager_id` set, not just ones added via this admin form.
+   CONFIRM this by reading the actual query (does it have any `.eq(...)` or
+   `.is('manager_id', null)` filter, or is it a plain unfiltered select?).
+2. If fetchAdminGyms() is already unfiltered: requirement #1 (오피셜/머신수정 for
+   ALL gyms including manager ones) may already be satisfied by the existing
+   오피셜/수정 buttons on every card — in that case, do NOT add new fetch logic
+   for this part, just confirm and report it's already covered. Focus STEP 1-3
+   below on the genuinely new pieces (rename, manager-link, delete).
+3. If fetchAdminGyms() IS filtered somehow (e.g. excludes gyms with a
+   manager_id) — then requirement #1 needs a real fix: remove that filter so
+   every gym appears here regardless of manager_id.
+4. Check the `profiles` table structure (already known: id uuid, email text,
+   nickname text, role text, etc.) to confirm what to search on for 매니저 연결.
+5. Check Supabase foreign key constraints referencing `gyms.id` (query
+   information_schema, e.g.:
+   `select tc.table_name, kcu.column_name from information_schema.table_constraints tc join information_schema.key_column_usage kcu on tc.constraint_name = kcu.constraint_name where tc.constraint_type = 'FOREIGN KEY' and kcu.referenced_table_name = 'gyms';`
+   — adapt the query as needed for Postgres/Supabase's actual schema views).
+   This determines what "헬스장 삭제" needs to handle — report which tables
+   would block or cascade on a gym delete (e.g. gym_machines, workout_sessions,
+   gym_favorites, machine_reviews via workout linkage, gym_info_reports,
+   gym_reports, gym_official_brands, gym_registration_requests, gym_routines,
+   gym_popularity_ranking, etc. — whichever actually reference gyms.id).
+6. Report findings from 1-5 before proceeding to implementation.
+
+============================================================
+STEP 1 — Rename the queue card and screen title
+============================================================
+1. In HomeView's queue list array, change the item with title '헬스장 직접 등록'
+   to '헬스장 관리' (keep its icon/color/onPress target the same — just the
+   label text changes).
+2. In `VIEW_TITLES` (or equivalent), change the 'register-gym' entry's Korean
+   title from '헬스장 직접 등록' to '헬스장 관리'.
+3. Any other user-facing string in this file that says "헬스장 직접 등록" (e.g.
+   section headers inside RegisterGymAdminView itself) should also be updated to
+   "헬스장 관리" for consistency, EXCEPT the "헬스장 등록" button that opens the
+   add-gym form — that stays as "헬스장 등록" (it's the action of adding one new
+   gym, distinct from the screen's overall name).
+
+============================================================
+STEP 2 — 매니저 연결 (link a manager to a gym by email/nickname search)
+============================================================
+1. Add a new lib function in src/lib/db/adminGyms.ts (or a suitable existing
+   db module):
+
+    export interface ProfileSearchResult {
+      id: string;
+      email: string | null;
+      nickname: string | null;
+    }
+
+    export async function searchProfilesByEmailOrNickname(query: string): Promise<ProfileSearchResult[]> {
+      const q = query.trim();
+      if (!q) return [];
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, email, nickname')
+        .or(`email.ilike.%${q}%,nickname.ilike.%${q}%`)
+        .limit(20);
+      if (error) {
+        if (__DEV__) console.warn('[db/adminGyms] searchProfilesByEmailOrNickname error:', error.message);
+        return [];
+      }
+      return data ?? [];
+    }
+
+    export async function setGymManager(gymId: string, managerId: string | null): Promise<void> {
+      const { error } = await supabase
+        .from('gyms')
+        .update({ manager_id: managerId })
+        .eq('id', gymId);
+      if (error) throw new Error(error.message);
+    }
+
+   (Adjust exact function names/signatures if this project's existing db module
+   conventions differ — match whatever pattern fetchAdminGyms/insertAdminGym
+   already use for consistency, e.g. error handling style.)
+
+2. In RegisterGymAdminView's gym card, add a "매니저 연결" button (or, if a
+   manager is already linked, show the linked manager's nickname/email with an
+   "변경"/"연결 해제" option instead). Tapping it opens a small search UI:
+   - Text input for email/nickname search.
+   - As the admin types (debounced, or on a "검색" button tap — match whatever
+     simple pattern fits this codebase, no need for fancy debouncing if not
+     already a pattern here), call `searchProfilesByEmailOrNickname` and show
+     matching results in a simple list (nickname + email).
+   - Tapping a result calls `setGymManager(gym.id, profile.id)`, then closes the
+     search UI and refreshes the gym list (or updates local state optimistically
+     + background refetch, matching this file's existing patterns elsewhere,
+     e.g. how handleAnswerInquiry or handleRejectGym do optimistic updates).
+   - If a manager is already linked, offer a "연결 해제" (unlink) action that
+     calls `setGymManager(gym.id, null)`.
+   - Show the currently-linked manager (if any) somewhere visible on the gym
+     card, e.g. a small text line "매니저: {nickname}" — use whatever field
+     structure `fetchAdminGyms()` already returns; if it doesn't currently
+     return manager info (nickname), you may need to join `profiles` in
+     `fetchAdminGyms()`'s query similarly to how `gym_machines` is already
+     joined, to show the linked manager's nickname without an extra fetch per
+     card.
+   - Reuse this file's existing modal/search UI conventions (e.g. the same
+     visual style as other admin search inputs in this file) rather than
+     inventing a new visual pattern.
+
+============================================================
+STEP 3 — 헬스장 삭제 (hard delete)
+============================================================
+1. Add a lib function:
+
+    export async function deleteGym(gymId: string): Promise<void> {
+      // 먼저 gym_machines 관계 행 정리
+      const { error: gmError } = await supabase
+        .from('gym_machines')
+        .delete()
+        .eq('gym_id', gymId);
+      if (gmError) throw new Error(gmError.message);
+
+      const { error } = await supabase
+        .from('gyms')
+        .delete()
+        .eq('id', gymId);
+      if (error) throw new Error(error.message);
+    }
+
+   Adjust based on STEP 0.5's actual foreign-key findings:
+   - If other tables (workout_sessions, gym_favorites, gym_info_reports,
+     gym_reports, gym_official_brands, gym_registration_requests, gym_routines,
+     gym_popularity_ranking, etc.) have a NOT NULL / RESTRICT foreign key to
+     `gyms.id` (not ON DELETE CASCADE), the plain `.delete()` on `gyms` will fail
+     with a foreign-key-violation error. Do NOT silently cascade-delete user
+     workout history, reviews, or favorites to force the gym delete through —
+     that would destroy real user data unrelated to this admin action. Instead:
+     catch that specific error and surface a clear message to the admin, e.g.
+     "이 헬스장에는 운동기록/즐겨찾기 등 연결된 데이터가 있어 삭제할 수 없습니다."
+     rather than deleting those related rows automatically.
+   - It IS fine to delete `gym_machines` and other purely-administrative
+     relation/metadata rows that only exist to describe the gym itself (e.g.
+     gym_official_brands, gym_registration_requests referencing this gym) as
+     part of the delete — use judgment based on STEP 0.5's findings for exactly
+     which tables are "safe to cascade" (gym-describing metadata) vs
+     "must not touch" (real user activity/data). Report your reasoning for each
+     table you decide to include in the cascade.
+
+2. In RegisterGymAdminView's gym card, add a "삭제" button (visually distinct,
+   e.g. red/danger styling consistent with this file's other danger actions like
+   the "거절" button pattern). Tapping it shows a confirmation Alert (e.g.
+   "정말 삭제하시겠어요? 되돌릴 수 없습니다.") before calling `deleteGym(gym.id)`.
+   On success, remove it from local state and show a brief confirmation. On
+   failure (e.g. the FK-violation case above), show the specific error message
+   to the admin via Alert rather than a generic failure message.
+
+============================================================
+STEP 4 — Confirm existing features still work for ALL gyms
+============================================================
+Per STEP 0's findings: if 오피셜/수정 already work for every gym in the system
+(because fetchAdminGyms() is unfiltered), just confirm this explicitly by
+testing/tracing through the code — do not add redundant new logic. If STEP 0
+found a real gap (e.g. a filter excluding manager-linked gyms), fix that gap
+here specifically.
+
+============================================================
+STEP 5 — SANITY CHECK
+============================================================
+1. `npx tsc --noEmit` clean.
+2. Confirm the queue card and screen title both now read "헬스장 관리".
+3. Confirm every gym in the system (regardless of manager_id) appears in this
+   list with working 오피셜/수정/매니저 연결/삭제 actions.
+4. Confirm 매니저 연결 search works against real `profiles` data (email/nickname
+   partial match) and correctly sets/clears `gyms.manager_id`.
+5. Confirm 삭제 requires confirmation, performs a real hard delete when
+   unblocked, and shows a clear error (not a crash or silent failure) when
+   blocked by real user data (workout sessions etc.), per STEP 3's design.
+6. Confirm existing 헬스장 등록 (add new gym) and machine-selection editing flow
+   are completely unaffected by these changes.
+7. Do NOT touch MachineCard.tsx, FindGymScreen.tsx, GymDetailModal.tsx, or other
+   AdminDashboard.tsx queues/views (gym reports, manager applications, user
+   inquiries, etc.) in this task.
+8. Report: STEP 0's findings in full (especially whether requirement #1 was
+   already satisfied), all new functions added, the exact FK-safety reasoning
+   for the delete cascade, and any UI decisions made where this task's
+   instructions left room for judgment (e.g. exact placement/styling of the new
+   buttons).
+
+============================================================
+STEP 6 — COMMIT
+============================================================
+After STEP 5 passes and before finishing, run `git status` to confirm only the
+files touched in this task are modified, then:
+    git add <the modified files>
+    git commit -m "feat(admin): 헬스장 관리 화면에 매니저 연결/삭제 기능 추가 및 전체 헬스장 대상으로 확장"
+
+Do NOT run git push — leave that for the user to do manually.
+Report `git log --oneline -3` at the end.
+
+If STEP 0's investigation reveals something structurally surprising (e.g. no FK
+constraints exist at all and a delete would silently orphan large amounts of
+data with no DB-level protection, or profiles table search requires different
+column names than assumed), stop and report before proceeding to STEP 1-3 rather
+than guessing.

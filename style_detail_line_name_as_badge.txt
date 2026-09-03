@@ -1,0 +1,104 @@
+TASK: Restyle the detail variant's line-name display (currently plain muted text
+stacked under the brand logo, inside the info band) so it visually matches the
+badge/pill style already used for the grid variant's corner overlay — same dark
+pill look, but keep its current POSITION unchanged (still under the brand logo,
+inside the info band — do not move it to a corner or anywhere else). Please read
+this file fully and complete the entire task without stopping or asking for
+confirmation midway ("확인이나 중단 없이 끝까지 완료해줘").
+
+APPROVAL NOTE: further approved refinement to MachineCard.tsx (protected
+component), scoped only to restyling the existing detail-variant line-name Text
+element. Do not change its position, do not touch the grid-variant badge
+implementation, do not change anything else in the file.
+
+---
+
+CONTEXT
+
+Two previous tasks built two different treatments for the same `machine.line`
+field:
+1. Detail variant: a small plain muted-white Text stacked directly under the
+   brand logo (or brand-name fallback), inside the info band — this is what
+   needs to be RESTYLED now.
+2. Grid variant: a small dark pill/badge (rgba(0,0,0,0.62) background, white
+   bold text, `R.pill` border radius, small padding) positioned as an absolute
+   overlay in the top-right corner of the image area — this is the STYLE to
+   reuse (not its position).
+
+This task: take the grid badge's visual style and apply it to the detail
+variant's line-name element, WITHOUT moving that element from its current
+under-the-logo position in the info band.
+
+---
+
+STEP 1 — Investigate before implementing
+
+1. Re-read the current MachineCard.tsx in full (read the actual current file —
+   it's been modified twice since this task was originally scoped, don't rely
+   on any remembered version).
+2. Locate the exact grid-variant badge implementation (the top-right corner
+   overlay) and note its exact style values: background color/opacity, text
+   color/size/weight, padding, border radius, letter spacing — whatever was
+   actually used.
+3. Locate the exact detail-variant line-name Text element (currently plain text
+   under the logo/brand-name in the stacked column) and note its current style
+   values and its exact position in the JSX tree (which parent View wraps it,
+   what layout properties that parent has — e.g. is it inside a `flexDirection:
+   'column'` stack with `alignItems` set a certain way).
+
+STEP 2 — Implement
+
+1. Change the detail-variant line-name element from a plain Text to a small
+   badge/pill — wrap it in a View styled with the same background
+   color/opacity, padding, and border radius as the grid badge (reuse those
+   exact values, or a style object shared/duplicated from it — whichever fits
+   this file's existing conventions better; duplication is fine if extracting a
+   shared style would require awkward refactoring).
+2. Keep the text content, truncation behavior (`numberOfLines={1}`,
+   `ellipsizeMode="tail"`), and its position directly under the logo/brand-name
+   exactly as before — only the visual container/style changes, not the
+   position, not the parent stacking layout, not the vertical-centering
+   behavior already established (the whole logo+badge group must remain
+   vertically centered as a unit, per the earlier implementation — confirm this
+   still holds after wrapping the text in a badge View).
+3. Adjust sizing carefully: the detail info band's height (`BAND_H_WITH_LINE`,
+   78 per the earlier task) was calculated based on the PLAIN TEXT version's
+   height. Since a badge/pill adds padding around the text, re-check whether
+   this now needs slightly more height to avoid clipping the badge's padding —
+   recompute if needed, following the same reasoning approach as the original
+   BAND_H_WITH_LINE derivation (actual pixel math from the new badge's
+   dimensions, not a guess), and only increase it if the actual math shows
+   clipping would otherwise occur.
+4. Do NOT touch the grid variant's badge implementation at all — this task only
+   modifies the detail-variant's line-name element.
+5. Do NOT change anything for machines with no `line` value — both variants
+   must remain exactly as they already are (pixel-identical, no rendering at
+   all) when the field is empty.
+
+STEP 3 — Verify
+
+1. Detail variant, machine WITH a line value: confirm the line name now renders
+   as a small dark pill/badge (matching the grid badge's visual style) directly
+   under the logo/brand-name, still vertically centered as part of the same
+   group as before, with no clipping against the band's edges.
+2. Detail variant, machine WITHOUT a line value: confirm still pixel-identical
+   to before (unaffected by this restyle).
+3. Grid variant: confirm completely unaffected — badge implementation,
+   position, and styling untouched.
+4. Confirm long line-name values still truncate cleanly within the new badge
+   container.
+5. If a TypeScript/lint check is available, run it for the modified file and
+   report any errors.
+
+STEP 4 — Git
+
+Stage and commit only the modified file with a clear message, e.g.:
+  style(machine-card): restyle detail-variant line-name as a badge matching grid's style
+
+Do NOT run `git push` — that is handled manually by the project owner.
+
+---
+
+REPORT BACK: exact badge style values reused/duplicated, whether BAND_H_WITH_LINE
+needed adjustment (and the new value + math if so), confirmation the grid
+variant is untouched, and Step 3 verification results.

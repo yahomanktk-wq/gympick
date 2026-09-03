@@ -1,5 +1,6 @@
 import { Machine, MachineWithGyms } from './types';
 import { getMachineGymIds } from './gymMachines';
+import { CUSTOM_MACHINES } from './customMachines';
 
 const BASE_MACHINES: Machine[] = [
   { id: 'arsenal_back_1', name: 'SELECTORIZED LAT PULLDOWN', brand: 'Arsenal', targetMuscle: 'Back', category: 'Pull Down', exerciseKind: 'machine', copyright: 'no' },
@@ -2029,7 +2030,7 @@ const BASE_MACHINES: Machine[] = [
 // Auto-generate unique IDs for any machine entry that has a blank id.
 // Pattern: {brand}_{targetMuscle}_auto_{n}  (all lowercase, spaces/slashes → _)
 let _autoIdCounter = 0;
-export const MACHINES: MachineWithGyms[] = BASE_MACHINES.map(machine => {
+export const MACHINES: MachineWithGyms[] = [...BASE_MACHINES, ...CUSTOM_MACHINES].map(machine => {
   let id = machine.id;
   if (!id) {
     _autoIdCounter++;
