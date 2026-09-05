@@ -248,13 +248,24 @@ export default function MachineCard({ machine, width, variant = 'detail', autopl
         <GymPickLogo color="#000000" width={logoW} />
       </View>
 
-      {/* ── Grid variant: line-name badge (top-right, image area) ── */}
+      {/* ── Grid variant: line-name badge (top-right, image area) ──
+          2026-09-05: maxWidth가 카드 폭의 50%뿐이라 "FREEWEIGHT ONE"처럼
+          긴 라인명이 "FREEWEIGHT..."로 잘려 보이는 문제 — 72%로 넓히고,
+          그래도 화면 폭이 아주 좁은 기기에서 넘칠 경우를 대비해
+          adjustsFontSizeToFit으로 최대 15%까지 자동 축소해 항상 한 줄에
+          다 보이도록 함(글자가 잘리는 것보다 살짝 작아지는 쪽을 택함). */}
       {isGrid && !!machine.line && (
         <View
-          style={[s.gridLineBadge, { top: LOGO_MARGIN, right: LOGO_MARGIN, maxWidth: cardW * 0.5 }]}
+          style={[s.gridLineBadge, { top: LOGO_MARGIN, right: LOGO_MARGIN, maxWidth: cardW * 0.72 }]}
           pointerEvents="none"
         >
-          <Text style={s.gridLineBadgeText} numberOfLines={1} ellipsizeMode="tail">
+          <Text
+            style={s.gridLineBadgeText}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+            adjustsFontSizeToFit
+            minimumFontScale={0.85}
+          >
             {machine.line}
           </Text>
         </View>

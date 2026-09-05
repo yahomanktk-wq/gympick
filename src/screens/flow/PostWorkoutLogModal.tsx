@@ -20,6 +20,8 @@ import {
   ActionSheetIOS,
   KeyboardAvoidingView,
   Keyboard,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
@@ -51,6 +53,7 @@ import { getMachineImageUrl } from '../../lib/machineImageUrl';
 import { invalidateActiveFeedPostsCache } from '../../data/feedPostsCache';
 import GymPickLogo from '../../components/GymPickLogo';
 import OnboardingTooltip from '../../components/OnboardingTooltip';
+import VerticalWheelPicker from '../../components/VerticalWheelPicker';
 import { useOnboarding } from '../../hooks/useOnboarding';
 import type { OnboardingPointKey } from '../../data/onboardingSteps';
 import type { SpotlightRect } from '../../components/OnboardingTooltip';
@@ -154,6 +157,31 @@ export function getFontSet(style: OverlayStyle): FontSet {
 export function getLayoutType(style: OverlayStyle): 'a' | 'b' | 'c' | 'd' | 'e' {
   const t = style.charAt(2);
   return (t === 'a' || t === 'b' || t === 'c' || t === 'd' || t === 'e') ? t : 'a';
+}
+
+// 2026-09-04: 폰트 세트 번호만 뽑아내는 헬퍼 — 레이아웃/폰트 선택 UI를
+// 세로 스크롤 피커 두 축으로 분리하면서 필요해짐 (아래 composeOverlayStyle 참고).
+export function getFontSetNumber(style: OverlayStyle): number {
+  const n = parseInt(style.charAt(1));
+  return FONT_SETS[n] ? n : 1;
+}
+
+// 폰트 세트 번호(FONT_SETS의 키) 목록 — 새 폰트 세트를 추가할 땐 여기에 번호만 추가하면 됨.
+const FONT_SET_NUMBERS = [1, 2, 6] as const;
+
+// 레이아웃 타입별 표시 이름(영문) — 새 레이아웃을 추가할 땐 여기에 한 줄만 추가하면 됨.
+const LAYOUT_TYPE_OPTIONS: { key: 'a' | 'b' | 'c' | 'd' | 'e'; label: string }[] = [
+  { key: 'a', label: 'Classic' },
+  { key: 'b', label: 'Simple' },
+  { key: 'c', label: 'Card' },
+  { key: 'd', label: 'Impact' },
+  { key: 'e', label: 'Magazine' },
+];
+
+// 폰트 번호 + 레이아웃 문자를 합쳐 OverlayStyle 문자열을 만든다.
+// FONT_SET_NUMBERS × LAYOUT_TYPE_OPTIONS 조합은 항상 OverlayStyle 유니온의 유효한 멤버.
+function composeOverlayStyle(fontNum: number, layoutType: 'a' | 'b' | 'c' | 'd' | 'e'): OverlayStyle {
+  return `s${fontNum}${layoutType}` as OverlayStyle;
 }
 
 /**
@@ -1352,7 +1380,10 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
   );
 }
 
-// --- Set Progress Banner (완료된 세트 요약 — SetLoggingStep 상단에 표시)
+// --- Set Progress Banner (기록한 세트 요약 — SetLoggingStep 상단에 표시)
+// 2026-09-05: "완료된 세트"는 실제로는 아직 다 채워지지 않은 세트도 포함해서
+// 오해 소지가 있다는 피드백으로 "기록한 세트"로 명칭 변경, 테두리도 눈에
+// 띄도록 accent(라임그린)로 변경.
 
 function SetProgressBanner({
   sets,
@@ -1366,7 +1397,7 @@ function SetProgressBanner({
       <View style={s.setProgressHeader}>
         <Ionicons name="checkmark-circle" size={13} color={C.accent} />
         <Text style={s.setProgressHeaderText} numberOfLines={1}>
-          완료된 세트{machineName ? ` · ${machineName}` : ''}
+          기록한 세트{machineName ? ` · ${machineName}` : ''}
         </Text>
         <View style={s.setProgressCountBadge}>
           <Text style={s.setProgressCountText}>{sets.length}</Text>
@@ -1412,6 +1443,9 @@ function PresetScrollRow({ presets, value, onSelect }: {
   const chipLayouts     = useRef<Record<number, { x: number; width: number }>>({});
   const containerWidth  = useRef(0);
   const isMount          = useRef(true);
+  // 2026-09-05: 스크롤 중 화면 중앙에 가장 가까운 칩이 바뀔 때마다 햅틱 틱을
+  // 울리기 위한 추적용 ref (실제 선택은 기존대로 onPress로만 확정됨)
+  const lastHapticPreset = useRef<number | null>(value);
 
   // 정확히 일치하는 프리셋이 있으면 그 값, 없으면 가장 가까운 값
   const nearestPreset = presets.reduce((a, b) => (Math.abs(b - value) < Math.abs(a - value) ? b : a));
@@ -1431,12 +1465,31 @@ function PresetScrollRow({ presets, value, onSelect }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
+  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (!containerWidth.current) return;
+    const centerX = e.nativeEvent.contentOffset.x + containerWidth.current / 2;
+    let nearest: number | null = null;
+    let nearestDist = Infinity;
+    for (const p of presets) {
+      const layout = chipLayouts.current[p];
+      if (!layout) continue;
+      const dist = Math.abs(layout.x + layout.width / 2 - centerX);
+      if (dist < nearestDist) { nearestDist = dist; nearest = p; }
+    }
+    if (nearest !== null && nearest !== lastHapticPreset.current) {
+      lastHapticPreset.current = nearest;
+      Haptics.selectionAsync();
+    }
+  }, [presets]);
+
   return (
     <ScrollView
       ref={scrollRef}
       horizontal
       showsHorizontalScrollIndicator={false}
       style={{ flexShrink: 1 }}
+      onScroll={handleScroll}
+      scrollEventThrottle={16}
       onLayout={(e) => {
         containerWidth.current = e.nativeEvent.layout.width;
         centerOn(nearestPreset, false);
@@ -1552,7 +1605,7 @@ function SetCard({ ex, sets, realPR, prefill, freeWeights, onChange, onAdd, onCo
             <Text style={s.setBlockLabel}>세트 {idx + 1}</Text>
             {sets.length > 1 && (
               <TouchableOpacity onPress={() => onRemove(idx)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="remove-circle-outline" size={16} color={C.textDim} />
+                <Ionicons name="close-circle" size={19} color={C.textSub} />
               </TouchableOpacity>
             )}
           </View>
@@ -3184,6 +3237,8 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
   const tc = textColor;
   // 레이아웃 E(각진 모서리 + 테두리선 없음)만 사진 프레임 스타일이 달라서 미리 계산해둔다.
   const currentLayoutType = getLayoutType(overlayStyle);
+  // 레이아웃/폰트 세로 피커 두 축을 독립적으로 다루기 위해 현재 폰트 번호도 미리 계산.
+  const currentFontNum    = getFontSetNumber(overlayStyle);
 
   // 스타일별 오버레이(닉네임/부위/통계 텍스트 등) — 사진 위 미리보기와
   // 사진 없는 "오버레이만" 캡처 뷰 양쪽에서 동일하게 재사용한다.
@@ -3707,117 +3762,110 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
         {/* 텍스트 색상 + 레이아웃 스타일: 카메라 활성 중 또는 사진 찍힌 후 모두 표시 */}
         {(photoTaken || showCamera) && (
           <>
-          {/* 레이아웃 스타일: 폰트 세트 × 유형 버튼 */}
-          <View
-            ref={overlayStyleRef}
-            style={{ marginBottom: 10 }}
-            onLayout={() => {
-              if (onboardingActive && onboardingKey === 'photo-overlay') {
-                overlayStyleRef.current?.measureInWindow((x, y, width, height) => {
-                  onRegisterRect?.('photo-overlay', { x, y, width, height });
-                });
-              }
-            }}
-          >
-            <Text style={{ fontSize: 9, fontWeight: '700', color: C.textDim, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8, paddingHorizontal: 2 }}>
-              레이아웃
-            </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ flexDirection: 'row', gap: 6, paddingRight: 4 }}
+          {/* 2026-09-04: 레이아웃/폰트/색상 — 각각 독립된 세로 스크롤 휠 피커 3개를
+              한 줄에 나란히 배치. 예전엔 폰트세트×레이아웃 조합 15개를 한 줄
+              가로 스크롤에 다 펼쳐놓았는데, 두 축을 분리해서 각자 고르면
+              composeOverlayStyle()로 다시 합치는 방식으로 변경. */}
+          <View style={{ flexDirection: 'row', alignItems: 'stretch', gap: 10, marginBottom: 16 }}>
+            <View
+              ref={overlayStyleRef}
+              style={{ flex: 2, flexDirection: 'row', alignItems: 'stretch', gap: 10 }}
+              onLayout={() => {
+                if (onboardingActive && onboardingKey === 'photo-overlay') {
+                  overlayStyleRef.current?.measureInWindow((x, y, width, height) => {
+                    onRegisterRect?.('photo-overlay', { x, y, width, height });
+                  });
+                }
+              }}
             >
-              {([
-                { key: 's1a', set: 1, type: 'A', muscle: 'Quicksilver-Italic' },
-                { key: 's1b', set: 1, type: 'B', muscle: 'Quicksilver-Italic' },
-                { key: 's1c', set: 1, type: 'C', muscle: 'Quicksilver-Italic' },
-                { key: 's1d', set: 1, type: 'D', muscle: 'Quicksilver-Italic' },
-                { key: 's1e', set: 1, type: 'E', muscle: 'Quicksilver-Italic' },
-                { key: 's2a', set: 2, type: 'A', muscle: 'Matcha Cih' },
-                { key: 's2b', set: 2, type: 'B', muscle: 'Matcha Cih' },
-                { key: 's2c', set: 2, type: 'C', muscle: 'Matcha Cih' },
-                { key: 's2d', set: 2, type: 'D', muscle: 'Matcha Cih' },
-                { key: 's2e', set: 2, type: 'E', muscle: 'Matcha Cih' },
-                { key: 's6a', set: 6, type: 'A', muscle: 'biergartenlt' },
-                { key: 's6b', set: 6, type: 'B', muscle: 'biergartenlt' },
-                { key: 's6c', set: 6, type: 'C', muscle: 'biergartenlt' },
-                { key: 's6d', set: 6, type: 'D', muscle: 'biergartenlt' },
-                { key: 's6e', set: 6, type: 'E', muscle: 'biergartenlt' },
-              ] as { key: OverlayStyle; set: number; type: string; muscle: string }[]).map((opt, idx) => {
-                const isActive = overlayStyle === opt.key;
-                const isTypeD   = opt.type === 'D';
-                return (
-                  <TouchableOpacity
-                    key={opt.key}
-                    onPress={() => { setOverlayStyle(opt.key); onStyleChange(opt.key); }}
-                    activeOpacity={0.8}
-                    style={{
-                      paddingHorizontal: 10,
-                      paddingVertical: 10,
-                      borderRadius: 10,
-                      borderWidth: isActive ? 2 : 1.5,
-                      borderColor: isActive ? C.accent : C.border,
-                      backgroundColor: isActive ? '#1a1a1a' : C.surface,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      minWidth: 48,
-                      marginLeft: (idx > 0 && idx % 5 === 0) ? 8 : 0,
-                    }}
-                  >
-                    <Text style={{
-                      fontSize: 14,
-                      color: isActive ? C.accent : C.textSub,
-                      fontFamily: opt.muscle,
-                    }}>
-                      DAY
-                    </Text>
-                    <Text style={{
-                      fontSize: 8,
-                      fontWeight: '700',
-                      color: isActive ? C.accent : C.textDim,
-                      marginTop: 3,
-                    }}>
-                      {`${opt.set}${opt.type}`}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-
-          {/* 컬러칩 */}
-          <View
-            ref={colorChipRef}
-            style={{ marginBottom: 16 }}
-            onLayout={() => {
-              if (onboardingActive && onboardingKey === 'photo-color') {
-                colorChipRef.current?.measureInWindow((x, y, width, height) => {
-                  onRegisterRect?.('photo-color', { x, y, width, height });
-                });
-              }
-            }}
-          >
-            <Text style={{ fontSize: 9, fontWeight: '700', color: C.textDim, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8, paddingHorizontal: 2 }}>
-              텍스트 색상
-            </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ flexDirection: 'row', gap: 6, alignItems: 'center', paddingRight: 8 }}
-            >
-              {TEXT_COLORS.map(opt => (
-                <TouchableOpacity
-                  key={opt.hex}
-                  style={[
-                    s.colorChip,
-                    { backgroundColor: opt.hex },
-                    textColor === opt.hex && s.colorChipActive,
-                  ]}
-                  onPress={() => { setTextColor(opt.hex); onColorChange(opt.hex); }}
-                  activeOpacity={0.8}
+              {/* 레이아웃 */}
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: C.textSub, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6, paddingHorizontal: 2, textAlign: 'center' }}>
+                  레이아웃
+                </Text>
+                <VerticalWheelPicker
+                  itemHeight={36}
+                  selectedKey={currentLayoutType}
+                  onChange={(layoutKey) => {
+                    const next = composeOverlayStyle(currentFontNum, layoutKey);
+                    setOverlayStyle(next);
+                    onStyleChange(next);
+                  }}
+                  items={LAYOUT_TYPE_OPTIONS.map(opt => ({
+                    key: opt.key,
+                    render: (active: boolean) => (
+                      <Text style={{ fontSize: active ? 16 : 13, fontWeight: active ? '800' : '600', color: active ? textColor : C.textSub }}>
+                        {opt.label}
+                      </Text>
+                    ),
+                  }))}
                 />
-              ))}
-            </ScrollView>
+              </View>
+
+              {/* 구분선: 레이아웃 | 폰트 */}
+              <View style={{ width: 1, backgroundColor: C.border }} />
+
+              {/* 폰트 */}
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: C.textSub, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6, paddingHorizontal: 2, textAlign: 'center' }}>
+                  폰트
+                </Text>
+                <VerticalWheelPicker
+                  itemHeight={36}
+                  selectedKey={currentFontNum}
+                  onChange={(fontNum) => {
+                    const next = composeOverlayStyle(fontNum, currentLayoutType);
+                    setOverlayStyle(next);
+                    onStyleChange(next);
+                  }}
+                  items={FONT_SET_NUMBERS.map(num => ({
+                    key: num,
+                    render: (active: boolean) => (
+                      <Text style={{ fontSize: active ? 20 : 14, color: active ? textColor : C.textSub, fontFamily: FONT_SETS[num].muscle }}>
+                        DAY
+                      </Text>
+                    ),
+                  }))}
+                />
+              </View>
+            </View>
+
+            {/* 구분선: (레이아웃·폰트) | 색상 */}
+            <View style={{ width: 1, backgroundColor: C.border }} />
+
+            {/* 텍스트 색상 */}
+            <View
+              ref={colorChipRef}
+              style={{ flex: 1 }}
+              onLayout={() => {
+                if (onboardingActive && onboardingKey === 'photo-color') {
+                  colorChipRef.current?.measureInWindow((x, y, width, height) => {
+                    onRegisterRect?.('photo-color', { x, y, width, height });
+                  });
+                }
+              }}
+            >
+              <Text style={{ fontSize: 10, fontWeight: '700', color: C.textSub, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6, paddingHorizontal: 2, textAlign: 'center' }}>
+                색상
+              </Text>
+              <VerticalWheelPicker
+                itemHeight={36}
+                selectedKey={textColor}
+                onChange={(hex) => { setTextColor(hex); onColorChange(hex); }}
+                items={TEXT_COLORS.map(opt => ({
+                  key: opt.hex,
+                  render: (active: boolean) => (
+                    <View
+                      style={[
+                        s.colorChip,
+                        { backgroundColor: opt.hex },
+                        active && s.colorChipActive,
+                      ]}
+                    />
+                  ),
+                }))}
+              />
+            </View>
           </View>
           </>
         )}
@@ -4602,15 +4650,17 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   }
 
   // 새 슬롯을 만들어 세트 입력으로 진입 (프리필 적용 여부 isFirstSlot로 제어)
-  // 2026-09-03: 화면은 항상 빈 상태로 시작 — 세트는 "세트 추가" 버튼을 눌러야 생긴다.
-  // 대신 마지막 사용 무게/횟수는 prefillInfo에 담아뒀다가, handleAddSet에서 첫 세트를
-  // 추가하는 순간 그 값을 채워 넣어 기존의 "마지막 무게로 시작" 편의는 유지한다.
+  // 2026-09-05: "머신 선택 → 세트 입력하기" 진입 시 세트 1이 곧바로 채워져
+  // 있던 이전 방식으로 되돌림 — "세트 추가"를 한 번 더 눌러야 하는 게 불편하다는
+  // 피드백. 마지막 사용 무게/횟수(prefillInfo)가 있으면 그 값으로, 없으면
+  // 기존 기본값(60kg x 10회)으로 세트 1을 미리 채워서 진입시킨다.
   function openNewSlot(machineId: string, slotKey: string, isFirstSlot: boolean) {
     const last = isFirstSlot ? findLastFirstSet(machineId) : null;
+    const seed: SetEntry = last ? { weight: last.weight, reps: last.reps } : { weight: 60, reps: 10 };
     setCurrentExerciseId(slotKey);
     setLogs(prev => ({
       ...prev,
-      [slotKey]: prev[slotKey] ?? [],
+      [slotKey]: prev[slotKey] ?? [seed],
     }));
     setPrefillInfo(prev => ({
       ...prev,
@@ -5415,7 +5465,7 @@ const s = StyleSheet.create({
 
   setBlock:       { backgroundColor: C.surfaceHigh, borderRadius: R.inner, padding: 16, marginBottom: 10 },
   setBlockHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  setBlockLabel:  { fontSize: 11, fontWeight: '800', color: C.textSub, letterSpacing: 0.5, textTransform: 'uppercase' },
+  setBlockLabel:  { fontSize: 13, fontWeight: '800', color: C.text, letterSpacing: 0.5, textTransform: 'uppercase' },
 
   inputRow:    { flexDirection: 'row', alignItems: 'center', gap: 6 },
   inputLabel:  { fontSize: 10, fontWeight: '700', color: C.textSub, width: 44, letterSpacing: 0.5, textTransform: 'uppercase' },
@@ -5494,8 +5544,9 @@ const s = StyleSheet.create({
   colorPickerWrap:   { marginBottom: 20 },
   colorPickerLabel:  { fontSize: 9, fontWeight: '700', color: C.textDim, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 10 },
   colorPickerRow:    { flexDirection: 'row' },
-  colorChip:         { width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: 'rgba(255,255,255,0.15)', marginRight: 8 },
-  colorChipActive:   { borderColor: C.accent, transform: [{ scale: 1.2 }] },
+  // 2026-09-05: 세로 스크롤 색상 피커용 — 기존 원형 칩을 직사각형으로 변경
+  colorChip:         { width: 48, height: 26, borderRadius: 5, borderWidth: 2, borderColor: 'rgba(255,255,255,0.15)' },
+  colorChipActive:   { borderColor: C.accent, transform: [{ scale: 1.15 }] },
 
   // Done
   doneHero:    { alignItems: 'center', paddingVertical: 32 },
@@ -5754,8 +5805,8 @@ const s = StyleSheet.create({
     marginBottom: 2,
     backgroundColor: C.surface,
     borderRadius: R.card,
-    borderWidth: 1,
-    borderColor: C.border,
+    borderWidth: 1.5,
+    borderColor: C.accent,
     overflow: 'hidden',
     paddingBottom: 4,
   },

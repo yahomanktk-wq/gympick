@@ -2,3 +2,8 @@ machine_card_image/
 archive_check/
 dist/
 standard-machine-gifs/
+# Gym Visual GIF 원본(zip)/추출본 — Supabase Storage에 이미 129/129 업로드 완료,
+# 로컬 require() 없이 원격 URL로만 쓰임. .gitignore엔 있었지만 .easignore가 있으면
+# EAS 빌드가 .gitignore를 무시하고 .easignore만 보기 때문에 별도로 추가해야 함
+# (약 400MB, zip 원본 + 360/ 추출 GIF 129개).
+gymvisual-gifs/
