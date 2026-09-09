@@ -44,6 +44,7 @@ import { addNewSession } from '../../data/sessionStore';
 import { saveTemplate, getTemplates, deleteTemplate, WorkoutTemplate } from '../../data/templateStore';
 import { recordPR } from '../../data/prStore';
 import { useAuth } from '../../context/AuthContext';
+import { track } from '../../lib/analytics';
 import { submitGymRegistrationRequest } from '../../lib/db/gymRegistrationRequests';
 import { insertWorkoutSession, insertWorkoutEntry, insertWorkoutSet, insertWorkoutPhoto, fetchWorkoutEntriesForSessions, fetchWorkoutSetsForEntries } from '../../lib/db/workouts';
 import { uploadWorkoutPhoto } from '../../lib/photoStorage';
@@ -4499,6 +4500,18 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   const [isSaving,           setIsSaving]           = useState(false);
   const [savingProgress,     setSavingProgress]     = useState(0);
   const savingAnim = useRef(new Animated.Value(0)).current;
+
+  // 2026-09-09: 운동일지 작성 퍼널(어느 단계에서 이탈이 많은지) 추적용.
+  // 헬스장선택→부위선택→루틴선택→머신선택→세트입력→사진, 6단계 각각을
+  // 이 모달이 열려있는 동안(=세션 한 번) 최초 1회만 기록한다. 여러 머신을
+  // 오가며 세트입력을 반복해도 flow_machine/flow_setinput이 중복 집계되지
+  // 않도록 막아서, "이 세션이 이 단계까지 도달했는가"를 정확히 볼 수 있게 함.
+  const funnelTrackedStages = useRef<Set<string>>(new Set());
+  function trackFunnelStage(stage: string, props: Record<string, any> = {}) {
+    if (funnelTrackedStages.current.has(stage)) return;
+    funnelTrackedStages.current.add(stage);
+    track(stage, props);
+  }
   // Template loading
   const [showTemplates,       setShowTemplates]       = useState(false);
   const [templates,           setTemplates]           = useState<WorkoutTemplate[]>([]);
@@ -4615,6 +4628,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   }
 
   function handleSelectGym(g: GymWithMachines) {
+    trackFunnelStage('flow_gym', { gym_id: g.id });
     setGym(g);
     setStep('muscle-select');
   }
@@ -4655,6 +4669,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   // 피드백. 마지막 사용 무게/횟수(prefillInfo)가 있으면 그 값으로, 없으면
   // 기존 기본값(60kg x 10회)으로 세트 1을 미리 채워서 진입시킨다.
   function openNewSlot(machineId: string, slotKey: string, isFirstSlot: boolean) {
+    trackFunnelStage('flow_setinput');
     const last = isFirstSlot ? findLastFirstSet(machineId) : null;
     const seed: SetEntry = last ? { weight: last.weight, reps: last.reps } : { weight: 60, reps: 10 };
     setCurrentExerciseId(slotKey);
@@ -4670,6 +4685,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   }
 
   function handleSelectExercise(id: string) {
+    if (loggedIds.size === 0) trackFunnelStage('flow_machine', { machine_id: id });
     // id = 순수 machineId
     const existing = slotKeysForMachine(id);
     if (existing.length === 0) {
@@ -5104,7 +5120,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
           <MuscleSelectStep
             selected={selectedMuscles}
             onToggle={toggleMuscle}
-            onNext={() => setStep('routine-reference')}
+            onNext={() => { trackFunnelStage('flow_muscle', { muscle_count: selectedMuscles.size }); setStep('routine-reference'); }}
             onBack={goBack}
             onClose={() => onClose(false)}
             isRestDay={isRestDay}
@@ -5121,6 +5137,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             selectedMuscles={Array.from(selectedMuscles)}
             pastSessions={sessions}
             onSelectMachineIds={(ids, extraInfo) => {
+              trackFunnelStage('flow_routine', { preloaded: ids.length > 0 });
               if (ids.length === 0) {
                 setStep('exercise-select');
               } else {
@@ -5170,7 +5187,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             onSelectExercise={handleSelectExercise}
             onLoadTemplate={handleLoadTemplate}
             onDeleteTemplate={handleDeleteTemplate}
-            onFinish={() => setStep('photo')}
+            onFinish={() => { trackFunnelStage('flow_photo'); setStep('photo'); }}
             onBack={goBack}
             onClose={() => onClose(false)}
             onRegisterRect={onboarding.registerRect}
@@ -5193,7 +5210,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             onRemove={handleRemoveSet}
             onNoteChange={handleNoteChange}
             onSave={handleSaveExercise}
-            onFinish={() => { setCurrentExerciseId(null); setStep('photo'); }}
+            onFinish={() => { trackFunnelStage('flow_photo'); setCurrentExerciseId(null); setStep('photo'); }}
             onBack={goBack}
             onClose={() => onClose(false)}
             onRegisterRect={onboarding.registerRect}
