@@ -16,6 +16,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { C, R, T } from '../theme';
 import { btnHeight, cardPadH, cardPadV, iconSize, screenPad } from '../theme/responsive';
 import GymDetailModal from './flow/GymDetailModal';
+import HomeRankingSections from '../components/HomeRankingSections';
 import { useAuth } from '../context/AuthContext';
 
 import { WorkoutLog, WorkoutFeedPost, UserSplitConfig, WeekdaySplit } from '../data/types';
@@ -635,6 +636,9 @@ export default function HomeScreen() {
           onMorePress={handleFeedPress}
         />
         <AutoScrollOunwan posts={ounwanPosts} onPressPost={handleFeedPress} />
+
+        {/* ── 이번 주 인기 머신 / 인기 헬스장 (2026-09-09: 랭킹 탭에서 이전) ── */}
+        <HomeRankingSections />
 
         <View style={{ height: 32 }} />
       </ScrollView>
