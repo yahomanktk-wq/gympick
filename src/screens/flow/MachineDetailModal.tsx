@@ -20,6 +20,7 @@ import { Machine } from '../../data';
 import { MachineComment } from '../../data/gymDetails';
 import GymDetailModal from './GymDetailModal';
 import { isFavoriteMachine, addFavoriteMachine, removeFavoriteMachine } from '../../data/favoritesStore';
+import { addFavoriteMachineDB, removeFavoriteMachineDB } from '../../lib/db/machineFavorites';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import MachineCard from '../../components/MachineCard';
@@ -201,7 +202,9 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
   const allReviews  = [...userReviews];
   const isFavorited = isFav;
 
-  function handleToggleFavorite() {
+  // 2026-09-09: 즐겨찾기 토글 시 로컬 캐시(favoritesStore)뿐 아니라 Supabase
+  // favorite_machines 테이블에도 저장 — 기존엔 메모리에만 있어서 앱 재시작하면 사라졌음.
+  async function handleToggleFavorite() {
     if (!machine) return;
     if (!user) {
       onClose();
@@ -210,11 +213,15 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
     }
     if (isFav) {
       removeFavoriteMachine(machine.id);
+      setIsFav(false);
+      onToggleFavorite?.(machine.id);
+      await removeFavoriteMachineDB(user.id, machine.id);
     } else {
       addFavoriteMachine(machine.id);
+      setIsFav(true);
+      onToggleFavorite?.(machine.id);
+      await addFavoriteMachineDB(user.id, machine.id);
     }
-    setIsFav(!isFav);
-    onToggleFavorite?.(machine.id);
   }
 
   async function submitReview() {

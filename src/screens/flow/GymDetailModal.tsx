@@ -18,6 +18,7 @@ import {
   Platform,
   Alert,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { brandLogos } from '../../constants/brandLogos';
 import { Ionicons } from '@expo/vector-icons';
@@ -351,7 +352,35 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
     });
   }, [gymMachines, machineMuscleFilter, machineBrandFilter]);
 
-  if (!gymId || !gym) return null;
+  if (!gymId) return null;
+
+  // 2026-09-09: 헬스장 데이터(gym)가 아직 로딩 중이어도 Modal 자체는 즉시 mount해서
+  // 슬라이드 애니메이션을 바로 시작한다. 예전엔 데이터가 도착할 때까지 여기서 null을
+  // 반환해버려서, 목록에서 헬스장을 탭한 순간부터 네트워크 조회가 끝날 때까지 화면이
+  // 아무 반응 없이 멈춰있는 것처럼 보이는 지연 문제가 있었음.
+  if (!gym) {
+    return (
+      <Modal
+        visible={visible}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={onClose}
+      >
+        <SafeAreaView style={s.safe}>
+          <View style={s.navHeader}>
+            <TouchableOpacity style={s.navBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onClose(); }} activeOpacity={0.7}>
+              <Ionicons name="chevron-back" size={20} color={C.text} />
+            </TouchableOpacity>
+            <View style={{ flex: 1 }} />
+            <View style={s.navBtn} />
+          </View>
+          <View style={s.loadingWrap}>
+            <ActivityIndicator size="large" color={C.accent} />
+          </View>
+        </SafeAreaView>
+      </Modal>
+    );
+  }
 
   const machineForDetail = selectedMachineId
     ? gym.machines.find(m => m.id === selectedMachineId) ?? null
@@ -783,6 +812,7 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
 const s = StyleSheet.create({
   safe:    { flex: 1, backgroundColor: C.bg },
   content: { paddingHorizontal: 16, paddingBottom: 24 },
+  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   // Report button
   reportBtn: {

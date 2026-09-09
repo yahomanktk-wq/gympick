@@ -7,6 +7,8 @@ import { UserRole } from '../data/types';
 import { supabase } from '../lib/supabase';
 import { fetchGymFavorites } from '../lib/db/gymFavorites';
 import { initGymFavorites } from '../data/gymFavoriteStore';
+import { fetchFavoriteMachines } from '../lib/db/machineFavorites';
+import { initFavoriteMachines } from '../data/favoritesStore';
 import { containsBannedWord } from '../lib/bannedWords';
 
 // --- Types
@@ -196,6 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const profileData = await fetchProfileData(session.user.id);
           setUser(mapSupabaseUser(session.user, profileData));
           fetchGymFavorites(session.user.id).then(ids => initGymFavorites(ids));
+          fetchFavoriteMachines(session.user.id).then(ids => initFavoriteMachines(ids));
         } else {
           setUser(null);
         }
@@ -215,6 +218,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fetchProfileData(session.user!.id).then(profileData => {
           setUser(mapSupabaseUser(session.user!, profileData));
           fetchGymFavorites(session.user!.id).then(ids => initGymFavorites(ids));
+          fetchFavoriteMachines(session.user!.id).then(ids => initFavoriteMachines(ids));
         });
       } else {
         setUser(null);
@@ -237,6 +241,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setUser(entry.user);
       initGymFavorites([]);
+      initFavoriteMachines([]);
       return { error: null };
     }
 
@@ -251,6 +256,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(mapSupabaseUser(data.user, profileData));
       const gymFavIds = await fetchGymFavorites(data.user.id);
       initGymFavorites(gymFavIds);
+      const machineFavIds = await fetchFavoriteMachines(data.user.id);
+      initFavoriteMachines(machineFavIds);
     }
     return { error: null };
   };
@@ -320,6 +327,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await supabase.auth.signOut();
     }
     initGymFavorites([]);
+    initFavoriteMachines([]);
     setUser(null);
   };
 
@@ -398,6 +406,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           managedGymIds: [],
         });
         initGymFavorites([]);
+        initFavoriteMachines([]);
         return { error: null };
       }
 
@@ -437,6 +446,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUser(mapSupabaseUser(sessionData.user, profileData));
             const gymFavIds = await fetchGymFavorites(sessionData.user.id);
             initGymFavorites(gymFavIds);
+            const machineFavIds = await fetchFavoriteMachines(sessionData.user.id);
+            initFavoriteMachines(machineFavIds);
           }
           return { error: null };
         }
@@ -482,6 +493,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           managedGymIds: [],
         });
         initGymFavorites([]);
+        initFavoriteMachines([]);
         return { error: null };
       }
 
@@ -497,6 +509,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(mapSupabaseUser(data.user, profileData));
         const gymFavIds = await fetchGymFavorites(data.user.id);
         initGymFavorites(gymFavIds);
+        const machineFavIds = await fetchFavoriteMachines(data.user.id);
+        initFavoriteMachines(machineFavIds);
       }
       return { error: null };
     } catch (e: any) {

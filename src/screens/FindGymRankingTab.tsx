@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R } from '../theme';
+import { brandLogos } from '../constants/brandLogos';
 import type {
   WeeklyRankingEntry,
   FavoriteRankingEntry,
@@ -12,16 +13,23 @@ import type {
 } from '../lib/db/rankingQueries';
 import type { OlympicRankingEntry } from '../lib/db/olympicRankings';
 
+// 2026-09-09: '이번 주 인기 머신' 랭킹 행에 브랜드 로고를 머신명 옆에 표시하기 위한 조회 헬퍼.
+function brandLogoFor(brand: string | undefined) {
+  if (!brand) return undefined;
+  const key = brand.toUpperCase().replace(/\s+/g, '_');
+  return brandLogos[key];
+}
+
 // ── Constants ───────────────────────────────────────────────────────────────
 
-const WEEKLY_THRESHOLD = 100;
-const RANKING_MUSCLES  = ['CHEST', 'BACK', 'LEG', 'SHOULDER', 'ARMS', 'GLUTES'];
+export const WEEKLY_THRESHOLD = 100;
+export const RANKING_MUSCLES  = ['CHEST', 'BACK', 'LEG', 'SHOULDER', 'ARMS', 'GLUTES'];
 
 const MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-function formatUpdatedAt(iso: string): string {
+export function formatUpdatedAt(iso: string): string {
   const d = new Date(iso);
   const m   = d.getMonth() + 1;
   const day = d.getDate();
@@ -32,7 +40,7 @@ function formatUpdatedAt(iso: string): string {
 
 // ── EmptyState ───────────────────────────────────────────────────────────────
 
-function RankingEmpty({ icon, title, sub }: { icon: any; title: string; sub: string }) {
+export function RankingEmpty({ icon, title, sub }: { icon: any; title: string; sub: string }) {
   return (
     <View style={rs.emptyBox}>
       <Ionicons name={icon} size={28} color={C.textDim} style={{ marginBottom: 8 }} />
@@ -44,18 +52,23 @@ function RankingEmpty({ icon, title, sub }: { icon: any; title: string; sub: str
 
 // ── Weekly Ranking Row ───────────────────────────────────────────────────────
 
-function WeeklyRow({ entry, onPress }: { entry: WeeklyRankingEntry; onPress: () => void }) {
+export function WeeklyRow({ entry, onPress }: { entry: WeeklyRankingEntry; onPress: () => void }) {
+  const logo = brandLogoFor(entry.machineBrand);
   return (
     <TouchableOpacity style={rs.rankRow} onPress={onPress} activeOpacity={0.75}>
       <Text style={rs.medal}>{MEDAL[entry.rank] ?? `${entry.rank}`}</Text>
+      {/* 2026-09-09: 로고를 머신명 옆 인라인 배지 → 흰 배경 박스로 바꾸고, 높이를
+          제조사명 라인까지 확장해 머신명+제조사명 두 줄 옆에 나란히 표시 (시인성 개선) */}
+      {logo && (
+        <View style={rs.rankLogoBox}>
+          <Image source={logo} style={rs.rankLogoImg} resizeMode="contain" />
+        </View>
+      )}
       <View style={{ flex: 1 }}>
         <Text style={rs.rankName} numberOfLines={1}>{entry.machineName}</Text>
         <Text style={rs.rankSub}>{entry.machineBrand}</Text>
       </View>
-      <View style={rs.rankScoreBox}>
-        <Text style={rs.rankScore}>{entry.setCount.toLocaleString()}</Text>
-        <Text style={rs.rankScoreLabel}>세트</Text>
-      </View>
+      {/* 2026-09-09: 우측 세트 수 숫자 + '세트' 텍스트 삭제 */}
     </TouchableOpacity>
   );
 }
@@ -80,7 +93,7 @@ function FavoriteRow({ entry, onPress }: { entry: FavoriteRankingEntry; onPress:
 
 // ── Gym Ranking Row ──────────────────────────────────────────────────────────
 
-function GymRow({ entry, onPress }: { entry: GymRankingEntry; onPress: () => void }) {
+export function GymRow({ entry, onPress }: { entry: GymRankingEntry; onPress: () => void }) {
   return (
     <TouchableOpacity style={rs.rankRow} onPress={onPress} activeOpacity={0.75}>
       <Text style={rs.medal}>{MEDAL[entry.rank] ?? `${entry.rank}`}</Text>
@@ -88,9 +101,7 @@ function GymRow({ entry, onPress }: { entry: GymRankingEntry; onPress: () => voi
         <Text style={rs.rankName} numberOfLines={1}>{entry.gymName}</Text>
         <Text style={rs.rankSub} numberOfLines={1}>{entry.location}</Text>
       </View>
-      <View style={rs.rankScoreBox}>
-        <Text style={rs.rankScoreLabel}>❤️ {entry.favoriteCount}</Text>
-      </View>
+      {/* 2026-09-09: 하트 이모티콘 + 즐겨찾기 수치 삭제 */}
       <Ionicons name="chevron-forward" size={14} color={C.textDim} />
     </TouchableOpacity>
   );
@@ -130,11 +141,11 @@ function OlympicRankingRow({ entry, onPress }: { entry: OlympicRankingEntry; onP
 
 // ── Section Card ─────────────────────────────────────────────────────────────
 
-function SectionCard({ children }: { children: React.ReactNode }) {
+export function SectionCard({ children }: { children: React.ReactNode }) {
   return <View style={rs.sectionCard}>{children}</View>;
 }
 
-function SectionHeader({ icon, title, sub }: { icon: any; title: string; sub?: string }) {
+export function SectionHeader({ icon, title, sub }: { icon: any; title: string; sub?: string }) {
   return (
     <View style={rs.sectionHeader}>
       <Ionicons name={icon} size={18} color={C.accent} />
@@ -234,10 +245,12 @@ export function RankingTab({ data, loading, olympicRankings, olympicLoading, onP
                 sub="운동을 기록하면 랭킹에 반영돼요"
               />
             ) : (
-              weeklyByMuscle.slice(0, 10).map(entry => (
+              // 2026-09-09: entry.rank는 부위 구분 없는 전체 목록 기준이라 부위로
+              // 거르면 순번이 어긋남 — 이 목록 안에서의 위치(i+1)로 다시 매김
+              weeklyByMuscle.slice(0, 10).map((entry, i) => (
                 <WeeklyRow
                   key={entry.machineId}
-                  entry={entry}
+                  entry={{ ...entry, rank: i + 1 }}
                   onPress={() => onPressMachine(
                     entry.machineId,
                     entry.machineName,
@@ -347,7 +360,7 @@ export function RankingTab({ data, loading, olympicRankings, olympicLoading, onP
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
-const rs = StyleSheet.create({
+export const rs = StyleSheet.create({
   scroll: { padding: 16, gap: 16 },
 
   loadingBox: {
@@ -396,6 +409,19 @@ const rs = StyleSheet.create({
   },
   medal:          { fontSize: 20, width: 28, textAlign: 'center' },
   rankName:       { fontSize: 14, fontWeight: '700', color: C.text, marginBottom: 2 },
+  // 2026-09-09부터 미사용 (로고를 인라인 배지 → rankLogoBox 방식으로 교체)
+  rankNameRow:    { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 2 },
+  rankNameLogo:   { width: 16, height: 16 },
+  // 2026-09-09: '이번 주 인기 머신' 행 — 머신명+제조사명 두 줄 옆 브랜드 로고
+  // (흰 배경 박스, 제조사명 라인까지 높이 확장 — 시인성 개선)
+  rankLogoBox: {
+    width: 34, height: 34,
+    backgroundColor: '#ffffff',
+    borderRadius: 6,
+    borderWidth: 1, borderColor: C.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  rankLogoImg:    { width: 26, height: 26 },
   rankSub:        { fontSize: 11, color: C.textSub },
   rankScoreBox:   { alignItems: 'flex-end' },
   rankScore:      { fontSize: 16, fontWeight: '900', color: C.accent },

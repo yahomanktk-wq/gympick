@@ -30,17 +30,17 @@ import { useAuth } from '../context/AuthContext';
 import { submitGymRegistrationRequest } from '../lib/db/gymRegistrationRequests';
 import { fetchMachines, fetchGymsWithMachines, getGymsCacheSync, getMachinesCacheSync } from '../lib/db';
 import { MachineWithGyms, GymWithMachines } from '../data/types';
-import { fetchRankingTabData, type RankingTabData } from '../lib/db/rankingQueries';
-import { fetchOlympicRankings, type OlympicRankingEntry } from '../lib/db/olympicRankings';
-import { RankingTab } from './FindGymRankingTab';
 import ManagerRequestModal from './flow/ManagerRequestModal';
 import { isGymOpenNow } from '../lib/gymHours';
 import { getGymFavorites } from '../data/gymFavoriteStore';
+import { getFavoriteMachineIds } from '../data/favoritesStore';
 import { getAllAdminGyms } from '../data/adminGymStore';
 import GymDetailModal     from './flow/GymDetailModal';
 import MachineDetailModal from './flow/MachineDetailModal';
 import MachineCard        from '../components/MachineCard';
 import MachineCardBorder  from '../components/MachineCardBorder';
+import MachineFilterSheet from '../components/MachineFilterSheet';
+import SegmentedToggle    from '../components/SegmentedToggle';
 import { getMachineImageUrl } from '../lib/machineImageUrl';
 
 import * as Location from 'expo-location';
@@ -97,49 +97,6 @@ function mpStyle(muscle: string) {
 }
 
 // muscleOptions is built dynamically inside the component from actual data
-
-// --- Filter chip row
-
-function FilterRow({
-  sectionLabel,
-  options,
-  active,
-  onSelect,
-  activeColor,
-}: {
-  sectionLabel: string;
-  options:      string[];
-  active:       string;
-  onSelect:     (v: string) => void;
-  activeColor:  string;
-}) {
-  return (
-    <View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={s.filterRow}
-      >
-        {options.map(opt => {
-          const on = opt === active;
-          return (
-            <TouchableOpacity
-              key={opt}
-              style={[
-                s.filterChip,
-                on && { backgroundColor: activeColor, borderColor: activeColor },
-              ]}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onSelect(on ? 'All' : opt); }}
-              activeOpacity={0.75}
-            >
-              <Text style={[s.filterChipText, on && { color: C.bg }]}>{opt}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-    </View>
-  );
-}
 
 // --- Section heading
 
@@ -298,17 +255,54 @@ export default function FindGymScreen() {
   const flatListRef = useRef<FlatList<MachineWithGyms>>(null);
   const [keyword,          setKeyword]          = useState('');
   const [activeMuscle,     setActiveMuscle]     = useState('All');
-  const [activeBrand,      setActiveBrand]      = useState('All');
+  // 2026-09-09: 브랜드 필터를 단일선택 → 다중선택으로 변경(바텀시트 UI 개편).
+  const [activeBrands,     setActiveBrands]     = useState<Set<string>>(new Set());
   const [activeCategory,   setActiveCategory]   = useState('All');
+  const [filterSheetVisible, setFilterSheetVisible] = useState(false);
+  const [filterSheetTab,     setFilterSheetTab]     = useState<'muscle' | 'category' | 'brand'>('muscle');
   const [detailMachine,    setDetailMachine]    = useState<MachineWithGyms | null>(null);
   const [gymDetailId,      setGymDetailId]      = useState<string | null>(null);
   const [gymDetailVisible, setGymDetailVisible] = useState(false);
-  const [favorites,         setFavorites]         = useState<Set<string>>(new Set());
-  const [activeTab,         setActiveTab]         = useState<'machine' | 'gym' | 'favorite' | 'ranking'>('machine');
+  // 2026-09-09: favoritesStore(전역 캐시, AuthContext가 로그인 시 Supabase에서
+  // 채워둠)로부터 초기값을 가져오도록 변경 — 기존엔 항상 빈 Set으로 시작해서
+  // 화면을 새로 열 때마다(그리고 당연히 앱 재시작 시) 즐겨찾기 표시가 사라졌었음.
+  const [favorites,         setFavorites]         = useState<Set<string>>(() => new Set(getFavoriteMachineIds()));
+  const [activeTab,         setActiveTab]         = useState<'machine' | 'gym' | 'favorite'>('machine');
+  // 2026-09-09: 즐겨찾기가 검색바 옆 하트 아이콘 토글로 이동 — 재탭 시 이전에 보던
+  // 머신/헬스장 탭으로 복귀시키기 위해 직전 탭을 기억해둔다.
+  const [preFavoriteTab,  setPreFavoriteTab]  = useState<'machine' | 'gym'>('machine');
   const [gymFavoriteIds, setGymFavoriteIds] = useState<string[]>(() => getGymFavorites());
+
+  function toggleFavoriteTab() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (activeTab === 'favorite') {
+      setActiveTab(preFavoriteTab);
+    } else {
+      setPreFavoriteTab(activeTab);
+      setActiveTab('favorite');
+    }
+  }
+
+  // 2026-09-09: 머신⇄헬스장 토글 — 어느 쪽을 탭하든(이미 활성화된 쪽을 탭해도) 항상
+  // 반대 값으로 전환되는 스위치 방식으로 변경. 즐겨찾기 화면에서는 두 값 다 비활성 상태로
+  // 보이므로, 진입 직전 탭(preFavoriteTab)을 기준으로 반대쪽으로 전환한다.
+  function flipMainTab() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const current = activeTab === 'favorite' ? preFavoriteTab : activeTab;
+    setActiveTab(current === 'gym' ? 'machine' : 'gym');
+  }
+
+  // 2026-09-09: 리스트⇄지도 토글도 동일하게 스위치 방식으로 전환.
+  function flipGymViewMode() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setGymViewMode(prev => (prev === 'list' ? 'map' : 'list'));
+  }
 
   useEffect(() => {
     setGymFavoriteIds(getGymFavorites());
+    // 2026-09-09: 로그인 완료(AuthContext의 Supabase 즐겨찾기 로딩) 시점에 맞춰
+    // 머신 즐겨찾기도 전역 캐시에서 다시 읽어와 동기화
+    setFavorites(new Set(getFavoriteMachineIds()));
   }, [user?.id]);
 
   const [showGymRequestModal, setShowGymRequestModal] = useState(false);
@@ -321,11 +315,6 @@ export default function FindGymScreen() {
   const [gymViewMode,   setGymViewMode]   = useState<'list' | 'map'>('list');
   const [mapSelectedId, setMapSelectedId] = useState<string | null>(null);
 
-  const [rankingData,    setRankingData]    = useState<RankingTabData | null>(null);
-  const [rankingLoading, setRankingLoading] = useState(false);
-  const [olympicRankings, setOlympicRankings] = useState<OlympicRankingEntry[]>([]);
-  const [olympicLoading,  setOlympicLoading]  = useState(false);
-
   const route = useRoute<any>();
 
   useEffect(() => {
@@ -334,25 +323,6 @@ export default function FindGymScreen() {
       setGymViewMode('map');
     }
   }, []);
-
-  useEffect(() => {
-    if (activeTab !== 'ranking') return;
-    if (rankingData) return;
-    setRankingLoading(true);
-    fetchRankingTabData()
-      .then(data => setRankingData(data))
-      .catch(() => setRankingData(null))
-      .finally(() => setRankingLoading(false));
-  }, [activeTab]);
-
-  useEffect(() => {
-    if (activeTab !== 'ranking') return;
-    if (olympicRankings.length > 0) return;
-    setOlympicLoading(true);
-    fetchOlympicRankings()
-      .then(setOlympicRankings)
-      .finally(() => setOlympicLoading(false));
-  }, [activeTab]);
 
   // GPS 위치 요청
   useEffect(() => {
@@ -443,21 +413,25 @@ export default function FindGymScreen() {
     return ['All', ...ordered, ...rest];
   }, [allMachines]);
 
-  const brands = useMemo(() => {
-    const sourceMachines = activeMuscle === 'All'
+  // 2026-09-09: MachineFilterSheet(바텀시트)에서 임의의(아직 적용 전인) 부위
+  // 값에 대해서도 브랜드/카테고리 옵션을 미리 계산해야 해서, 기존
+  // activeMuscle 전용 useMemo를 "부위를 인자로 받는 순수 함수"로 바꿈.
+  // 화면에 실제로 쓰는 값(brands/categories)은 바로 아래에서 activeMuscle로
+  // 호출한 결과를 그대로 useMemo로 캐싱해서 기존과 동일하게 동작함.
+  const brandsForMuscle = useCallback((muscle: string) => {
+    const sourceMachines = muscle === 'All'
       ? allMachines
       : allMachines.filter(m =>
-          parseMuscles(m.targetMuscle).some(t => t.toLowerCase() === activeMuscle.toLowerCase())
+          parseMuscles(m.targetMuscle).some(t => t.toLowerCase() === muscle.toLowerCase())
         );
-    const uniqueBrands = [...new Set(sourceMachines.map(m => m.brand))].sort();
-    return ['All', ...uniqueBrands];
-  }, [allMachines, activeMuscle]);
+    return [...new Set(sourceMachines.map(m => m.brand))].sort();
+  }, [allMachines]);
 
-  const categories = useMemo(() => {
-    if (activeMuscle === 'All') return [];
+  const categoriesForMuscle = useCallback((muscle: string) => {
+    if (muscle === 'All') return [];
 
     const muscleFiltered = allMachines.filter(m =>
-      parseMuscles(m.targetMuscle).some(t => t.toLowerCase() === activeMuscle.toLowerCase())
+      parseMuscles(m.targetMuscle).some(t => t.toLowerCase() === muscle.toLowerCase())
     );
 
     const available = new Set(
@@ -468,7 +442,7 @@ export default function FindGymScreen() {
       )
     );
 
-    const muscleEn    = toEnMuscle(activeMuscle) || activeMuscle;
+    const muscleEn    = toEnMuscle(muscle) || muscle;
     const orderedList = CATEGORY_ORDER[muscleEn] ?? [];
 
     const ordered   = orderedList.filter(cat => available.has(cat));
@@ -477,35 +451,70 @@ export default function FindGymScreen() {
       .filter(cat => !orderedList.includes(cat))
       .sort();
 
-    return [...ordered, ...remaining];
-  }, [allMachines, activeMuscle]);
+    // 2026-09-09: 'Etc'가 들어간 카테고리(Chest_Etc, Leg_Etc, 그냥 'Etc' 등)는
+    // 부위별 CATEGORY_ORDER 안에서 이미 각 목록 맨 끝에 있긴 하지만, 혹시
+    // CATEGORY_ORDER에 없어서 remaining으로 빠지는 경우까지 포함해 항상
+    // 최종 목록 제일 하단에 오도록 마지막에 한 번 더 정리.
+    const combined = [...ordered, ...remaining];
+    const nonEtc   = combined.filter(cat => !cat.toLowerCase().includes('etc'));
+    const etcOnly  = combined.filter(cat => cat.toLowerCase().includes('etc'));
+
+    return [...nonEtc, ...etcOnly];
+  }, [allMachines]);
+
+  const brands     = useMemo(() => ['All', ...brandsForMuscle(activeMuscle)], [brandsForMuscle, activeMuscle]);
+  const categories = useMemo(() => categoriesForMuscle(activeMuscle), [categoriesForMuscle, activeMuscle]);
 
   useEffect(() => {
-    if (activeBrand === 'All') return;
-    const stillValid = brands.some(b => b.toLowerCase() === activeBrand.toLowerCase());
-    if (!stillValid) setActiveBrand('All');
-  }, [brands, activeBrand]);
+    if (activeBrands.size === 0) return;
+    const validSet = new Set(brands.map(b => b.toLowerCase()));
+    const filtered = new Set([...activeBrands].filter(b => validSet.has(b.toLowerCase())));
+    if (filtered.size !== activeBrands.size) setActiveBrands(filtered);
+  }, [brands, activeBrands]);
 
+  // 2026-09-09: 예전엔 activeMuscle이 바뀌면 무조건 카테고리를 'All'로
+  // 리셋했는데, 바텀시트에서 "부위+카테고리"를 한 번에 적용(onApply)하면
+  // activeMuscle이 바뀌는 시점에 이 effect가 방금 적용한 카테고리 값을
+  // 곧바로 덮어써버리는 문제가 있었음 — 유효할 때는 건드리지 않고, 새
+  // 부위 기준으로 더 이상 유효하지 않을 때만 리셋하도록 검증 방식으로 변경.
   useEffect(() => {
-    setActiveCategory('All');
-  }, [activeMuscle]);
+    if (activeCategory === 'All') return;
+    if (!categories.includes(activeCategory)) setActiveCategory('All');
+  }, [categories, activeCategory]);
 
+  // 결과 개수 계산 — MachineFilterSheet의 "OOO개 머신보기" 버튼에서
+  // 임시(적용 전) 선택값 기준으로 실시간 계산할 때 재사용.
+  const computeMachineCount = useCallback((muscle: string, category: string, brandSet: Set<string>) => {
+    return shuffledMachines.filter(m => {
+      const muscleOk   = muscle === 'All' || parseMuscles(m.targetMuscle).some(t => t.toLowerCase() === muscle.toLowerCase());
+      const brandOk    = brandSet.size === 0 || [...brandSet].some(b => b.toLowerCase() === m.brand?.toLowerCase());
+      const categoryOk = category === 'All' || m.category?.split(',').map(c => c.trim()).includes(category);
+      return muscleOk && brandOk && categoryOk;
+    }).length;
+  }, [shuffledMachines]);
+
+  // 2026-09-09: MachineDetailModal이 이 콜백을 부를 시점엔 이미 favoritesStore(전역
+  // 캐시)가 갱신되어 있으므로, 직접 뒤집는 대신 전역 캐시에서 다시 읽어와 동기화한다
+  // (두 상태가 서로 다르게 어긋나는 것을 방지).
   function toggleFavorite(id: string) {
-    setFavorites(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+    setFavorites(new Set(getFavoriteMachineIds()));
   }
 
   const hasFilters =
-    keyword.trim().length > 0 || activeMuscle !== 'All' || activeBrand !== 'All' || activeCategory !== 'All';
+    keyword.trim().length > 0 || activeMuscle !== 'All' || activeBrands.size > 0 || activeCategory !== 'All';
 
   function clearAll() {
     setKeyword('');
     setActiveMuscle('All');
-    setActiveBrand('All');
+    setActiveBrands(new Set());
+    setActiveCategory('All');
     flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }
+
+  function openFilterSheet(tab: 'muscle' | 'category' | 'brand') {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setFilterSheetTab(tab);
+    setFilterSheetVisible(true);
   }
 
   async function handleSubmitGymRequest() {
@@ -551,7 +560,7 @@ export default function FindGymScreen() {
   const filteredMachines = useMemo(() => {
     return shuffledMachines.filter(m => {
       const muscleOk   = activeMuscle === 'All' || parseMuscles(m.targetMuscle).some(t => t.toLowerCase() === activeMuscle.toLowerCase());
-      const brandOk    = activeBrand  === 'All' || m.brand?.toLowerCase()         === activeBrand.toLowerCase();
+      const brandOk    = activeBrands.size === 0 || [...activeBrands].some(b => b.toLowerCase() === m.brand?.toLowerCase());
       const categoryOk = activeCategory === 'All' ||
         m.category?.split(',').map(c => c.trim()).includes(activeCategory);
       const kw         = keyword.trim().toLowerCase();
@@ -561,7 +570,7 @@ export default function FindGymScreen() {
         m.brand?.toLowerCase().includes(kw);
       return muscleOk && brandOk && categoryOk && keyOk;
     });
-  }, [keyword, activeMuscle, activeBrand, activeCategory, shuffledMachines]);
+  }, [keyword, activeMuscle, activeBrands, activeCategory, shuffledMachines]);
 
   useEffect(() => {
     flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
@@ -603,53 +612,46 @@ export default function FindGymScreen() {
 
       {/* Fixed header + filters */}
       <View>
-        {/* Title row */}
+        {/* Title row — 2026-09-09: 머신/헬스장/즐겨찾기/랭킹 4탭 라인을 없애고,
+            머신⇄헬스장은 제목 우측 토글로, 즐겨찾기는 검색바 옆 하트 아이콘으로 이동 */}
         <View style={s.header}>
           <View>
             <Text style={s.headerTitle}>머신 · 헬스장 찾기</Text>
             <Text style={s.headerSub}>머신, 부위, 브랜드로 검색하세요</Text>
           </View>
-          {hasFilters && activeTab === 'machine' && (
-            <TouchableOpacity style={s.clearBtn} onPress={clearAll} activeOpacity={0.75}>
-              <Text style={s.clearBtnText}>초기화</Text>
-            </TouchableOpacity>
-          )}
+          {/* 2026-09-09: SegmentedToggle로 교체 — 탭 전환 시 배경 하이라이트가
+              부드럽게 슬라이드되는 애니메이션 적용.
+              2026-09-09(2차): 어느 쪽을 탭해도 반대 값으로 전환되는 스위치 방식으로 변경
+              — 두 옵션이 같은 flipMainTab 핸들러를 공유 */}
+          <SegmentedToggle
+            style={s.mainToggle}
+            options={[
+              {
+                key: 'machine',
+                active: activeTab === 'machine',
+                onPress: flipMainTab,
+                render: () => (
+                  <View style={s.mainToggleBtn}>
+                    <Text style={[s.mainToggleText, activeTab === 'machine' && s.mainToggleTextActive]}>머신</Text>
+                  </View>
+                ),
+              },
+              {
+                key: 'gym',
+                active: activeTab === 'gym',
+                onPress: flipMainTab,
+                render: () => (
+                  <View style={s.mainToggleBtn}>
+                    <Text style={[s.mainToggleText, activeTab === 'gym' && s.mainToggleTextActive]}>헬스장</Text>
+                  </View>
+                ),
+              },
+            ]}
+          />
         </View>
 
-        {/* Tab buttons */}
-        <View style={s.tabRow}>
-          <TouchableOpacity
-            style={[s.tabBtn, activeTab === 'machine' && s.tabBtnActive]}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setActiveTab('machine'); }}
-            activeOpacity={0.75}
-          >
-            <Text style={[s.tabBtnText, activeTab === 'machine' && s.tabBtnTextActive]}>머신</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[s.tabBtn, activeTab === 'gym' && s.tabBtnActive]}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setActiveTab('gym'); }}
-            activeOpacity={0.75}
-          >
-            <Text style={[s.tabBtnText, activeTab === 'gym' && s.tabBtnTextActive]}>헬스장</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[s.tabBtn, activeTab === 'favorite' && s.tabBtnActive]}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setActiveTab('favorite'); }}
-            activeOpacity={0.75}
-          >
-            <Text style={[s.tabBtnText, activeTab === 'favorite' && s.tabBtnTextActive]}>즐겨찾기</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[s.tabBtn, activeTab === 'ranking' && s.tabBtnActive]}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setActiveTab('ranking'); }}
-            activeOpacity={0.75}
-          >
-            <Text style={[s.tabBtnText, activeTab === 'ranking' && s.tabBtnTextActive]}>랭킹</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Keyword search */}
-        {activeTab !== 'ranking' && (
+        {/* Keyword search — 즐겨찾기 하트 토글(항상), 리스트/지도 토글(헬스장 탭에서만) 포함 */}
+        <View style={s.searchRow}>
           <View style={s.searchWrap}>
             <Ionicons name="search-outline" size={16} color={C.textSub} style={{ marginRight: 8 }} />
             <TextInput
@@ -671,99 +673,102 @@ export default function FindGymScreen() {
               </TouchableOpacity>
             )}
           </View>
-        )}
 
-        {/* Machine tab filters */}
+          {/* 2026-09-09: 리스트/지도 버튼 2개 → 토글 1개로 통합, 헬스장 검색바 우측으로 이동.
+              SegmentedToggle로 부드러운 슬라이드 애니메이션 적용.
+              2026-09-09(2차): 어느 쪽을 탭해도 반대 값으로 전환되는 스위치 방식 —
+              두 옵션이 같은 flipGymViewMode 핸들러를 공유 */}
+          {activeTab === 'gym' && (
+            <SegmentedToggle
+              style={s.viewToggleInline}
+              options={[
+                {
+                  key: 'list',
+                  active: gymViewMode === 'list',
+                  onPress: flipGymViewMode,
+                  render: () => (
+                    <View style={s.viewToggleInlineBtn}>
+                      <Ionicons name="list" size={15} color={gymViewMode === 'list' ? C.bg : C.textSub} />
+                    </View>
+                  ),
+                },
+                {
+                  key: 'map',
+                  active: gymViewMode === 'map',
+                  onPress: flipGymViewMode,
+                  render: () => (
+                    <View style={s.viewToggleInlineBtn}>
+                      <Ionicons name="map-outline" size={15} color={gymViewMode === 'map' ? C.bg : C.textSub} />
+                    </View>
+                  ),
+                },
+              ]}
+            />
+          )}
+
+          <TouchableOpacity
+            style={[s.favToggleBtn, activeTab === 'favorite' && s.favToggleBtnActive]}
+            onPress={toggleFavoriteTab}
+            activeOpacity={0.75}
+          >
+            <Ionicons
+              name={activeTab === 'favorite' ? 'heart' : 'heart-outline'}
+              size={18}
+              color={activeTab === 'favorite' ? '#ff4d6d' : C.textSub}
+            />
+          </TouchableOpacity>
+        </View>
+
+        {/* Machine tab filters — 2026-09-09: 가로 칩 스크롤 3줄을 필터 버튼 1줄 +
+            바텀시트(MachineFilterSheet)로 교체. 옵션이 많은 브랜드는 검색+
+            알파벳 리스트+다중선택이 가능해지고, 부위/카테고리도 같은 시트 안
+            탭으로 묶여서 화면이 훨씬 간결해짐. 초기화 버튼도 같은 줄로 이동. */}
         {activeTab === 'machine' && (
-          <>
-            {/* Muscle filter */}
-            <View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={s.filterRow}
-                style={{ marginBottom: 6 }}
-              >
-                {muscleOptions.map(opt => {
-                  const on = opt === activeMuscle;
-                  return (
-                    <TouchableOpacity
-                      key={opt}
-                      style={[
-                        s.filterChip,
-                        on && { backgroundColor: C.tagMuscle.fg, borderColor: C.tagMuscle.fg },
-                      ]}
-                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setActiveMuscle(on ? 'All' : opt); }}
-                      activeOpacity={0.75}
-                    >
-                      <Text style={[s.filterChipText, on && { color: C.bg }]}>{opt}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.filterPillRow}
+          >
+            <TouchableOpacity
+              style={[s.filterPillBtn, activeMuscle !== 'All' && s.filterPillBtnActive]}
+              onPress={() => openFilterSheet('muscle')}
+              activeOpacity={0.75}
+            >
+              <Text style={[s.filterPillText, activeMuscle !== 'All' && s.filterPillTextActive]}>
+                {activeMuscle === 'All' ? '부위' : activeMuscle}
+              </Text>
+              <Ionicons name="chevron-down" size={14} color={activeMuscle !== 'All' ? C.bg : C.textSub} />
+            </TouchableOpacity>
 
-            {/* Category filter - 부위 선택 시에만 표시 */}
-            {activeMuscle !== 'All' && categories.length > 0 && (
-              <View style={{ marginTop: 4 }}>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={s.filterRow}
-                  style={{ flexGrow: 0 }}
-                >
-                  <TouchableOpacity
-                    style={[
-                      s.filterChipSmall,
-                      activeCategory === 'All' && { backgroundColor: C.textDim, borderColor: C.textDim },
-                    ]}
-                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setActiveCategory('All'); }}
-                    activeOpacity={0.75}
-                  >
-                    <Ionicons
-                      name="refresh-outline"
-                      size={11}
-                      color={activeCategory === 'All' ? C.bg : C.textSub}
-                    />
-                    <Text style={[
-                      s.filterChipTextSmall,
-                      { marginLeft: 4 },
-                      activeCategory === 'All' && { color: C.bg },
-                    ]}>전체</Text>
-                  </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.filterPillBtn, activeCategory !== 'All' && s.filterPillBtnActive]}
+              onPress={() => openFilterSheet('category')}
+              activeOpacity={0.75}
+            >
+              <Text style={[s.filterPillText, activeCategory !== 'All' && s.filterPillTextActive]} numberOfLines={1}>
+                {activeCategory === 'All' ? '카테고리' : activeCategory}
+              </Text>
+              <Ionicons name="chevron-down" size={14} color={activeCategory !== 'All' ? C.bg : C.textSub} />
+            </TouchableOpacity>
 
-                  {categories.map(cat => {
-                    const on = cat === activeCategory;
-                    return (
-                      <TouchableOpacity
-                        key={cat}
-                        style={[
-                          s.filterChipSmall,
-                          on && { backgroundColor: C.accent, borderColor: C.accent },
-                        ]}
-                        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setActiveCategory(on ? 'All' : cat); }}
-                        activeOpacity={0.75}
-                      >
-                        <Text style={[s.filterChipTextSmall, on && { color: C.bg }]}>{cat}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </View>
+            <TouchableOpacity
+              style={[s.filterPillBtn, activeBrands.size > 0 && s.filterPillBtnActive]}
+              onPress={() => openFilterSheet('brand')}
+              activeOpacity={0.75}
+            >
+              <Text style={[s.filterPillText, activeBrands.size > 0 && s.filterPillTextActive]}>
+                {activeBrands.size === 0 ? '브랜드' : `브랜드 ${activeBrands.size}`}
+              </Text>
+              <Ionicons name="chevron-down" size={14} color={activeBrands.size > 0 ? C.bg : C.textSub} />
+            </TouchableOpacity>
+
+            {hasFilters && (
+              <TouchableOpacity style={s.clearBtnInline} onPress={clearAll} activeOpacity={0.75}>
+                <Ionicons name="refresh" size={13} color={C.accent} />
+                <Text style={s.clearBtnInlineText}>초기화</Text>
+              </TouchableOpacity>
             )}
-
-            {/* Brand filter */}
-            <View style={{ marginTop: 6 }}>
-              <FilterRow
-                sectionLabel="브랜드"
-                options={brands}
-                active={activeBrand}
-                onSelect={setActiveBrand}
-                activeColor={C.tagBrand.fg}
-              />
-            </View>
-
-          </>
+          </ScrollView>
         )}
 
         <View style={s.dividerLine} />
@@ -823,25 +828,7 @@ export default function FindGymScreen() {
       {/* Gym tab */}
       {activeTab === 'gym' && (
         <View style={{ flex: 1 }}>
-          {/* 리스트/지도 토글 */}
-          <View style={s.viewToggleRow}>
-            <TouchableOpacity
-              style={[s.viewToggleBtn, gymViewMode === 'list' && s.viewToggleBtnActive]}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setGymViewMode('list'); }}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="list" size={14} color={gymViewMode === 'list' ? C.bg : C.textSub} />
-              <Text style={[s.viewToggleText, gymViewMode === 'list' && s.viewToggleTextActive]}>리스트</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[s.viewToggleBtn, gymViewMode === 'map' && s.viewToggleBtnActive]}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setGymViewMode('map'); }}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="map-outline" size={14} color={gymViewMode === 'map' ? C.bg : C.textSub} />
-              <Text style={[s.viewToggleText, gymViewMode === 'map' && s.viewToggleTextActive]}>지도</Text>
-            </TouchableOpacity>
-          </View>
+          {/* 리스트/지도 토글 — 2026-09-09: 검색바 옆 토글로 이동 (위 searchRow 참고) */}
 
           {/* 리스트 뷰 */}
           {gymViewMode === 'list' && (
@@ -972,26 +959,6 @@ export default function FindGymScreen() {
         />
       )}
 
-      {/* Ranking tab */}
-      {activeTab === 'ranking' && (
-        <RankingTab
-          data={rankingData}
-          loading={rankingLoading}
-          olympicRankings={olympicRankings}
-          olympicLoading={olympicLoading}
-          onPressMachine={(machineId, machineName, machineBrand, targetMuscle) => {
-            const found = allMachines.find(m => m.id === machineId);
-            if (found) {
-              setDetailMachine(found);
-            }
-          }}
-          onPressGym={(gymId) => {
-            setGymDetailId(gymId);
-            setGymDetailVisible(true);
-          }}
-        />
-      )}
-
       {/* Modals */}
       <MachineDetailModal
         visible={detailMachine !== null}
@@ -1012,6 +979,24 @@ export default function FindGymScreen() {
         visible={gymDetailVisible}
         gymId={gymDetailId}
         onClose={() => setGymDetailVisible(false)}
+      />
+
+      <MachineFilterSheet
+        visible={filterSheetVisible}
+        initialTab={filterSheetTab}
+        onClose={() => setFilterSheetVisible(false)}
+        onApply={({ muscle, category, brands: newBrands }) => {
+          setActiveMuscle(muscle);
+          setActiveCategory(category);
+          setActiveBrands(newBrands);
+        }}
+        muscleOptions={muscleOptions}
+        initialMuscle={activeMuscle}
+        getCategoryOptions={categoriesForMuscle}
+        initialCategory={activeCategory}
+        getBrandOptions={brandsForMuscle}
+        initialBrands={activeBrands}
+        computeCount={computeMachineCount}
       />
 
       <Modal visible={showGymRequestModal} transparent animationType="slide" onRequestClose={() => setShowGymRequestModal(false)}>
@@ -1116,6 +1101,7 @@ const s = StyleSheet.create({
   },
   headerTitle: { ...T.title, color: C.text },
   headerSub:   { fontSize: 13, color: C.textSub, marginTop: 3 },
+  // 2026-09-09부터 미사용 (초기화 버튼이 헤더에서 필터 라인으로 이동 — clearBtnInline 참고)
   clearBtn:    {
     marginTop: 4,
     paddingHorizontal: 12, paddingVertical: 6,
@@ -1124,20 +1110,85 @@ const s = StyleSheet.create({
   },
   clearBtnText: { fontSize: 12, fontWeight: '700', color: C.accent },
 
-  // Search
+  // 2026-09-09: 머신⇄헬스장 전환 토글 (헤더 우측, 기존 tabRow 대체)
+  // 2026-09-09: 컨테이너 배경/테두리/슬라이딩 하이라이트는 SegmentedToggle 컴포넌트가
+  // 자체적으로 그려주므로, 여기서는 헤더 안에서의 위치(marginTop)만 지정
+  mainToggle: { marginTop: 2 },
+  mainToggleBtn: {
+    paddingHorizontal: 16, paddingVertical: 7,
+    borderRadius: R.pill,
+  },
+  mainToggleText:       { fontSize: 13, fontWeight: '700', color: C.textSub },
+  mainToggleTextActive: { color: C.bg },
+
+  // Search — 2026-09-09: 즐겨찾기(하트)/리스트·지도 토글을 같은 줄에 배치하기 위해
+  // 검색창(searchWrap)을 감싸는 가로 행(searchRow) 추가
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 8,
+  },
   searchWrap: {
+    flex: 1,
     flexDirection:  'row',
     alignItems:     'center',
     backgroundColor: C.surface,
     borderRadius:   R.inner,
-    marginHorizontal: 16,
-    marginBottom:   8,
     paddingHorizontal: 14,
     paddingVertical: 11,
   },
   searchInput: { flex: 1, fontSize: 14, color: C.text, padding: 0 },
 
-  // Filters
+  // 즐겨찾기 하트 토글 버튼 (검색바 우측)
+  favToggleBtn: {
+    width: 40, height: 40,
+    borderRadius: R.pill,
+    backgroundColor: C.surface,
+    borderWidth: 1, borderColor: C.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  favToggleBtnActive: {
+    backgroundColor: '#ff4d6d18',
+    borderColor: '#ff4d6d40',
+  },
+
+  // 초기화 버튼 — 2026-09-09: 헤더에서 머신 탭 필터 라인으로 이동
+  clearBtnInline: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: R.pill, backgroundColor: C.surface,
+    borderWidth: 1, borderColor: C.border,
+  },
+  clearBtnInlineText: { fontSize: 13, fontWeight: '700', color: C.accent },
+
+  // 리스트/지도 토글 (헬스장 탭 검색바 우측) — 2026-09-09: 별도 버튼 2개 → 토글 1개로 통합
+  // 컨테이너 스타일은 SegmentedToggle 자체 기본값 사용 (추가 위치 조정 불필요)
+  viewToggleInline: {},
+  viewToggleInlineBtn: {
+    paddingHorizontal: 10, paddingVertical: 7,
+    borderRadius: R.pill,
+  },
+
+  // Machine tab filter pills — 2026-09-09: 바텀시트(MachineFilterSheet)를 여는 버튼 3개
+  filterPillRow: {
+    flexDirection: 'row', gap: 8,
+    paddingHorizontal: 16, paddingBottom: 8,
+  },
+  filterPillBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: R.pill, backgroundColor: C.surface,
+    borderWidth: 1, borderColor: C.border,
+    maxWidth: 130,
+  },
+  filterPillBtnActive: { backgroundColor: C.text, borderColor: C.text },
+  filterPillText: { fontSize: 13, fontWeight: '600', color: C.textSub },
+  filterPillTextActive: { color: C.bg },
+
+  // Filters (2026-09-09부터 미사용 — 부위/카테고리/브랜드 가로 칩 방식을
+  // MachineFilterSheet 바텀시트로 교체하며 대체됨. 참고용으로만 남겨둠)
   filterRow:      { paddingHorizontal: 16, gap: 8, paddingBottom: 4 },
   filterChip:     {
     paddingHorizontal: 16,
@@ -1190,7 +1241,7 @@ const s = StyleSheet.create({
   emptyRow:     { paddingVertical: 18, alignItems: 'center', marginBottom: 16 },
   emptyRowText: { fontSize: 13, color: C.textDim },
 
-  // Tab buttons
+  // 2026-09-09부터 미사용 (4탭 라인 삭제 — 머신/헬스장은 mainToggle, 즐겨찾기는 favToggleBtn으로 대체)
   tabRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,
@@ -1253,6 +1304,7 @@ const s = StyleSheet.create({
   distText:      { fontSize: 11, fontWeight: '700', color: C.accent },
   gymMatchText:  { fontSize: 12, color: C.textSub },
 
+  // 2026-09-09부터 미사용 (랭킹 탭 삭제 — 이번 주 인기 머신/인기 헬스장은 홈 화면으로 이전)
   rankingEmptyBox: {
     alignItems:      'center',
     justifyContent:  'center',
@@ -1279,6 +1331,7 @@ const s = StyleSheet.create({
     lineHeight: 18,
   },
 
+  // 2026-09-09부터 미사용 (검색바 아래 별도 행 → 검색바 우측 viewToggleInline으로 대체)
   viewToggleRow: {
     flexDirection:     'row',
     gap:               6,
