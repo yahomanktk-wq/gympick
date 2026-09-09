@@ -60,3 +60,7 @@ gymvisual-gifs/
 # (43개 x 2벌 = 약 80MB)
 standard-machine-gifs/
 
+# Claude 세션이 Supabase SQL 스크립트/작업 지시서를 임시로 저장하는 폴더 — 앱 코드가
+# 아니라서 git에는 안 올림 (2026-09-09)
+Claude outputs/
+
