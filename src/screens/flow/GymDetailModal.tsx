@@ -39,6 +39,7 @@ import MachineCard from '../../components/MachineCard';
 import MachineCardBorder from '../../components/MachineCardBorder';
 import { getMachineImageUrl } from '../../lib/machineImageUrl';
 import { containsBannedWord } from '../../lib/bannedWords';
+import { shareGym } from '../../lib/share';
 
 const SCREEN_W = Dimensions.get('window').width;
 const CARD_W   = (SCREEN_W - 32 - 8) / 2;
@@ -401,27 +402,39 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
             <Ionicons name="chevron-back" size={20} color={C.text} />
           </TouchableOpacity>
           <Text style={s.navTitle} numberOfLines={1}>{gym.name}</Text>
-          <TouchableOpacity
-            style={s.navBtn}
-            activeOpacity={0.7}
-            onPress={async () => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              if (!user) { onClose(); nav.navigate('Profile'); return; }
-              const next = toggleGymFavorite(gym.id);
-              setIsFav(next);
-              if (next) {
-                await addGymFavoriteDB(user.id, gym.id);
-              } else {
-                await removeGymFavoriteDB(user.id, gym.id);
-              }
-            }}
-          >
-            <Ionicons
-              name={isFav ? 'bookmark' : 'bookmark-outline'}
-              size={20}
-              color={isFav ? C.accent : C.textSub}
-            />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row' }}>
+            <TouchableOpacity
+              style={s.navBtn}
+              activeOpacity={0.7}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                shareGym(gym.name, gym.id);
+              }}
+            >
+              <Ionicons name="share-outline" size={20} color={C.textSub} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.navBtn}
+              activeOpacity={0.7}
+              onPress={async () => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                if (!user) { onClose(); nav.navigate('Profile'); return; }
+                const next = toggleGymFavorite(gym.id);
+                setIsFav(next);
+                if (next) {
+                  await addGymFavoriteDB(user.id, gym.id);
+                } else {
+                  await removeGymFavoriteDB(user.id, gym.id);
+                }
+              }}
+            >
+              <Ionicons
+                name={isFav ? 'bookmark' : 'bookmark-outline'}
+                size={20}
+                color={isFav ? C.accent : C.textSub}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* ── Tab bar ── */}
