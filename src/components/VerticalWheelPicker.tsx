@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react';
-import { View, ScrollView, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
+import { View, ScrollView, Pressable, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
 /**
@@ -10,6 +10,9 @@ import * as Haptics from 'expo-haptics';
  *
  * 2026-09-05: 항목이 하나 지날 때마다 햅틱(Medium)을 울리고, 각 항목은
  * 컨테이너 가로폭 중앙에 정렬되도록 수정.
+ * 2026-09-15: 화면에 보이는(위/가운데/아래 3줄) 이전값·다음값을 탭해도
+ * 그 항목이 가운데로 스크롤되며 선택되도록 개선 — 기존엔 직접 스크롤해서
+ * 원하는 값을 가운데로 옮겨와야만 선택이 가능했음.
  */
 
 export interface WheelPickerItem<T extends string | number> {
@@ -64,6 +67,14 @@ export default function VerticalWheelPicker<T extends string | number>({
     scrollRef.current?.scrollTo({ y: idx * itemHeight, animated: true });
   }, [items, itemHeight, selectedKey, onChange]);
 
+  // 화면에 보이는 위/아래 미리보기 항목을 탭하면, 직접 스크롤한 것과 동일하게
+  // 그 항목이 가운데로 스냅되도록 애니메이션 스크롤시킨다 — 선택 반영은
+  // 기존과 동일하게 onMomentumScrollEnd(settle)에서 처리됨.
+  const handleItemPress = useCallback((idx: number) => {
+    if (idx === selectedIndex) return;
+    scrollRef.current?.scrollTo({ y: idx * itemHeight, animated: true });
+  }, [selectedIndex, itemHeight]);
+
   return (
     <View style={{ height: containerHeight, overflow: 'hidden' }}>
       <ScrollView
@@ -76,10 +87,14 @@ export default function VerticalWheelPicker<T extends string | number>({
         scrollEventThrottle={16}
         onMomentumScrollEnd={settle}
       >
-        {items.map(it => (
-          <View key={String(it.key)} style={{ height: itemHeight, alignItems: 'center', justifyContent: 'center' }}>
+        {items.map((it, idx) => (
+          <Pressable
+            key={String(it.key)}
+            onPress={() => handleItemPress(idx)}
+            style={{ height: itemHeight, alignItems: 'center', justifyContent: 'center' }}
+          >
             {it.render(it.key === selectedKey)}
-          </View>
+          </Pressable>
         ))}
       </ScrollView>
     </View>

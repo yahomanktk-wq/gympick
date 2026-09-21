@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import ManagerOnboardingModal from '../screens/manager/ManagerOnboardingModal';
+import { track } from '../lib/analytics';
 
 import HomeScreen       from '../screens/HomeScreen';
 import FindGymScreen    from '../screens/FindGymScreen';
@@ -96,9 +97,17 @@ export default function TabNavigator() {
         })}
       >
         <Tab.Screen name="Home"       component={HomeScreen}       />
-        <Tab.Screen name="FindGym"    component={FindGymScreen}    />
+        <Tab.Screen
+          name="FindGym"
+          component={FindGymScreen}
+          listeners={{ tabPress: () => track('tab_search') }}
+        />
         <Tab.Screen name="LogWorkout" component={LogWorkoutScreen} />
-        <Tab.Screen name="Journal"    component={JournalScreen}    />
+        <Tab.Screen
+          name="Journal"
+          component={JournalScreen}
+          listeners={{ tabPress: () => track('tab_journal') }}
+        />
         <Tab.Screen name="Profile"    component={ProfileScreen}    />
       </Tab.Navigator>
 

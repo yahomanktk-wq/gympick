@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Dimensions, PixelRatio, Image as RNImage } from 'react-native';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Rect } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R } from '../theme';
@@ -94,6 +95,15 @@ export default function MachineCard({ machine, width, variant = 'detail', autopl
   const topZonePadBot = isGrid ? 6 : 10;
   const logoH         = isGrid ? 14 : Math.round(LOGO_SIZE / (2805 / 279)); // SVG 비율 약 10:1
 
+  // 2026-09-21: 머신명 텍스트 구역 뒤 반투명 그라데이션 스크림 높이.
+  // contentFit="contain"이라 이미지가 카드 폭에 맞춰 정사각형 그대로
+  // 표시되고 상하단에 약간의 여백(레터박싱)이 남는데, 그 여백이든 실제
+  // 이미지든 텍스트 구역이 자연스럽게 얹혀 보이도록 상단만 살짝 밝게
+  // 스크림 처리한다. 텍스트 구역 실제 높이(topZonePadTop + 이름 구역 +
+  // topZonePadBot)보다 살짝 더 크게 잡아 하단부가 자연스럽게 이어지도록 함.
+  const nameZoneH  = isGrid ? 70 : 108;
+  const gradientH  = topZonePadTop + nameZoneH + topZonePadBot + (isGrid ? 24 : 36);
+
   return (
     <View style={[s.card, { width: cardW, height: cardH }]}>
 
@@ -119,6 +129,14 @@ export default function MachineCard({ machine, width, variant = 'detail', autopl
           </Text>
         </View>
       )}
+
+      {/* ── 머신명 텍스트 구역 뒤 반투명 그라데이션 (여백/이미지 경계가
+          자연스럽게 이어지도록, 가독성 확보용) ── */}
+      <LinearGradient
+        colors={['rgba(255,255,255,0.92)', 'rgba(255,255,255,0)']}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: gradientH }}
+        pointerEvents="none"
+      />
 
       {/* ── Top zone: 머신명만 (로고는 absolute로 분리) ── */}
       <View style={[s.topZone, {

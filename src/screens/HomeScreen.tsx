@@ -26,6 +26,7 @@ import { fetchActiveFeedPosts } from '../lib/db/feedPosts';
 import { fetchSplitConfig } from '../lib/db/splitRoutine';
 import { getTodayTarget, getTodayTargets, toEnMuscle, toKoMuscle } from '../lib/splitUtils';
 import { getTransformedImageUrl } from '../lib/photoImageUrl';
+import { track } from '../lib/analytics';
 import * as Haptics from 'expo-haptics';
 
 // --- Helpers
@@ -453,6 +454,9 @@ export default function HomeScreen() {
 
   function openNearby() { nav.navigate('FindGym', { initialTab: 'gym', viewMode: 'map' }); }
   const handleFeedPress = useCallback(() => nav.navigate('WorkoutFeed'), [nav]);
+  // "더보기" 버튼 전용 — 개별 오운완 게시물 탭(handleFeedPress)과는 별도로,
+  // "더보기" 버튼 탭 횟수만 집계하기 위해 분리함.
+  const handleFeedMorePress = useCallback(() => { track('ounwan_more'); nav.navigate('WorkoutFeed'); }, [nav]);
 
   return (
     <SafeAreaView style={st.safe} edges={['top']}>
@@ -633,7 +637,7 @@ export default function HomeScreen() {
                   ? `오늘 ${ounwanDisplayTarget} 운동한 사람들이에요! 💪`
                   : '오늘 운동한 사람들이에요! 💪')
           }
-          onMorePress={handleFeedPress}
+          onMorePress={handleFeedMorePress}
         />
         <AutoScrollOunwan posts={ounwanPosts} onPressPost={handleFeedPress} />
 

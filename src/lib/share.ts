@@ -16,7 +16,7 @@ export function getGymShareUrl(gymId: string) {
  * gympick-web의 카카오톡 등 공유 미리보기 문구(제목/설명)와 동일하게 맞춤.
  */
 export async function shareGym(gymName: string, gymId: string) {
-  const title = `${gymName} 보유머신`;
+  const title = `${gymName} 보유머신 목록 확인하기`;
   const description = "'짐픽'을 통해 보유머신을 확인하세요.";
   const url = getGymShareUrl(gymId);
 

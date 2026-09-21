@@ -189,6 +189,18 @@ function FunnelChart({ events }: { events: EventRow[] }) {
   );
 }
 
+// --- 주요 버튼 탭 (2026-09-14: 검색/오운완 더보기/운동일지 탭 횟수)
+//
+// TabNavigator.tsx(FindGym/Journal 탭 tabPress 리스너), HomeScreen.tsx(오운완
+// "더보기" 버튼)에서 새로 추가한 이벤트 3개를 기존 이벤트 브레이크다운
+// (admin_event_breakdown_30d)에서 그대로 필터링 — 새 VIEW 없이 이미 불러온
+// events 배열만 활용(퍼널 섹션과 동일한 패턴).
+const KEY_TAP_EVENTS: { key: string; label: string }[] = [
+  { key: 'tab_search',  label: '머신·헬스장 검색' },
+  { key: 'ounwan_more', label: '오늘의 오운완 더보기' },
+  { key: 'tab_journal', label: '운동일지' },
+];
+
 // --- Stat card
 
 function StatCard({ label, value, color = C.text }: { label: string; value: string | number; color?: string }) {
@@ -340,6 +352,17 @@ export default function AdminAnalyticsView() {
       <Text style={styles.sectionTitle}>일별 활성 유저 (DAU)</Text>
       <View style={styles.chartCard}>
         <BarChart data={dau} labelKey="day" valueKey="active_users" formatLabel={(d) => d.slice(5)} autoScrollToEnd />
+      </View>
+
+      <Text style={styles.sectionTitle}>주요 버튼 탭 (최근 30일)</Text>
+      <View style={styles.statsRow}>
+        {KEY_TAP_EVENTS.map(k => (
+          <StatCard
+            key={k.key}
+            label={k.label}
+            value={events.find(e => e.event_type === k.key)?.event_count ?? 0}
+          />
+        ))}
       </View>
 
       <Text style={styles.sectionTitle}>신규 vs 재방문 (최근 30일 활동 유저)</Text>

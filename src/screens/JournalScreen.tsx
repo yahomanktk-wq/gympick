@@ -39,7 +39,7 @@ import { deleteFeedPostBySession, fetchFeedPostPublicStatus, updateFeedPostPubli
 import { useFetch } from '../lib/useFetch';
 import { useAuth } from '../context/AuthContext';
 import PostWorkoutLogModal, {
-  ClassicOverlay, LeftColOverlayB, GridOverlayC, GridOverlayD, GridOverlayE,
+  ClassicOverlay, LeftColOverlayB, GridOverlayC, GridOverlayD, GridOverlayE, PosterOverlay, RosterOverlay,
   getFontSet, getLayoutType,
   type OverlayStyle, type SetEntry, type ExerciseInfo,
 } from './flow/PostWorkoutLogModal';
@@ -652,6 +652,8 @@ function SessionDetailModal({
     if (layout === 'd') return <GridOverlayD {...commonProps} fontSet={fs} />;
     if (layout === 'c') return <GridOverlayC {...commonProps} fontSet={fs} />;
     if (layout === 'e') return <GridOverlayE {...commonProps} fontSet={fs} />;
+    if (layout === 'f') return <PosterOverlay {...commonProps} fontSet={fs} />;
+    if (layout === 'g') return <RosterOverlay {...commonProps} fontSet={fs} />;
     return null;
   }
 

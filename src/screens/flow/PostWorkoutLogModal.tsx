@@ -134,9 +134,11 @@ const OVERLAY_PAD = 20;
 
 // Overlay layout style variants
 export type OverlayStyle =
-  | 's1a' | 's1b' | 's1c' | 's1d' | 's1e'
-  | 's2a' | 's2b' | 's2c' | 's2d' | 's2e'
-  | 's6a' | 's6b' | 's6c' | 's6d' | 's6e';
+  | 's1a' | 's1b' | 's1c' | 's1d' | 's1e' | 's1f' | 's1g'
+  | 's2a' | 's2b' | 's2c' | 's2d' | 's2e' | 's2f' | 's2g'
+  | 's6a' | 's6b' | 's6c' | 's6d' | 's6e' | 's6f' | 's6g'
+  | 's7a' | 's7b' | 's7c' | 's7d' | 's7e' | 's7f' | 's7g'
+  | 's8a' | 's8b' | 's8c' | 's8d' | 's8e' | 's8f' | 's8g';
 
 type FontSet = {
   muscle: string | undefined;
@@ -148,6 +150,8 @@ const FONT_SETS: Record<number, FontSet> = {
   1: { muscle: 'Quicksilver-Italic',       routine: undefined,              nickname: undefined              },
   2: { muscle: 'Matcha Cih',               routine: 'Mat Saleh',            nickname: 'KCC-Ganpan'           },
   6: { muscle: 'biergartenlt',             routine: undefined,              nickname: undefined              },
+  7: { muscle: 'My_handwriting',           routine: 'Leorio',               nickname: undefined              },
+  8: { muscle: 'GLAMOROUS',                routine: 'Leorio',               nickname: undefined              },
 };
 
 export function getFontSet(style: OverlayStyle): FontSet {
@@ -155,9 +159,9 @@ export function getFontSet(style: OverlayStyle): FontSet {
   return FONT_SETS[setNum] ?? FONT_SETS[1];
 }
 
-export function getLayoutType(style: OverlayStyle): 'a' | 'b' | 'c' | 'd' | 'e' {
+export function getLayoutType(style: OverlayStyle): 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' {
   const t = style.charAt(2);
-  return (t === 'a' || t === 'b' || t === 'c' || t === 'd' || t === 'e') ? t : 'a';
+  return (t === 'a' || t === 'b' || t === 'c' || t === 'd' || t === 'e' || t === 'f' || t === 'g') ? t : 'a';
 }
 
 // 2026-09-04: 폰트 세트 번호만 뽑아내는 헬퍼 — 레이아웃/폰트 선택 UI를
@@ -168,20 +172,22 @@ export function getFontSetNumber(style: OverlayStyle): number {
 }
 
 // 폰트 세트 번호(FONT_SETS의 키) 목록 — 새 폰트 세트를 추가할 땐 여기에 번호만 추가하면 됨.
-const FONT_SET_NUMBERS = [1, 2, 6] as const;
+const FONT_SET_NUMBERS = [1, 2, 6, 7, 8] as const;
 
 // 레이아웃 타입별 표시 이름(영문) — 새 레이아웃을 추가할 땐 여기에 한 줄만 추가하면 됨.
-const LAYOUT_TYPE_OPTIONS: { key: 'a' | 'b' | 'c' | 'd' | 'e'; label: string }[] = [
+const LAYOUT_TYPE_OPTIONS: { key: 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g'; label: string }[] = [
   { key: 'a', label: 'Classic' },
   { key: 'b', label: 'Simple' },
   { key: 'c', label: 'Card' },
   { key: 'd', label: 'Impact' },
   { key: 'e', label: 'Magazine' },
+  { key: 'f', label: 'Poster' },
+  { key: 'g', label: 'Roster' },
 ];
 
 // 폰트 번호 + 레이아웃 문자를 합쳐 OverlayStyle 문자열을 만든다.
 // FONT_SET_NUMBERS × LAYOUT_TYPE_OPTIONS 조합은 항상 OverlayStyle 유니온의 유효한 멤버.
-function composeOverlayStyle(fontNum: number, layoutType: 'a' | 'b' | 'c' | 'd' | 'e'): OverlayStyle {
+function composeOverlayStyle(fontNum: number, layoutType: 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g'): OverlayStyle {
   return `s${fontNum}${layoutType}` as OverlayStyle;
 }
 
@@ -2854,6 +2860,507 @@ export function GridOverlayE({ exercises, logs, nickname, timestamp, muscleLabel
   );
 }
 
+// 2026-09-15 (6차, POSTER 재조정): "[타겟부위] DAY" 타이틀이 머신 목록 위로
+// 겹쳐서 올라가는 포스터형 레이아웃.
+// 2026-09-15 (8차): 겹침 비율을 15% → 5%로 축소 (TITLE_OVERLAP 참고).
+// 2026-09-15 (9차): 타이틀 폰트를 Bigolive → My_handwriting으로 교체
+// (FONT_SETS[7].muscle 참고, 폰트 파일 자체를 사용자가 새로 지정).
+// - 닉네임/운동일시 표시 제거
+// - 머신 표기는 브랜드 로고 이미지가 아니라 "[브랜드] 머신명" 텍스트, 앞에
+//   001/002/003... 순번을 붙이고 화면 밖으로 넘어가면 항목 단위로 줄바꿈
+//   (각 항목을 독립된 Text로 만들어 flexWrap에 맡김 — 글자 중간이 아니라
+//   항목 경계에서만 줄이 바뀜)
+// - 짐픽 로고는 화면 최하단 고정이 아니라 머신 목록 바로 아래에 위치
+export function PosterOverlay({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH, fontSet }: OverlayProps & { fontSet: FontSet }) {
+  const pureLabel = muscleLabel.replace(/_?day$/i, '').replace(/\s*day$/i, '').trim() || muscleLabel;
+  const titleText = `${pureLabel} DAY`;
+  const shownExercises = exercises.slice(0, 6);
+
+  // 타이틀 20% 확대, 겹침 5%로 축소, 머신 목록 폰트 20% 축소·행간 50% 축소.
+  const TITLE_FONT_SIZE = Math.round(photoW * 0.145 * 1.2);
+  const TITLE_BLOCK_H   = Math.round(TITLE_FONT_SIZE * 1.05);
+  const TITLE_OVERLAP   = Math.round(TITLE_BLOCK_H * 0.05);
+  const ITEM_FONT_SIZE  = Math.round(photoW * 0.032 * 0.8);
+  const ROW_GAP         = 5; // 기존 10의 50%
+  const ITEM_GAP_H      = Math.round(ITEM_FONT_SIZE * 1.3);
+
+  return (
+    <View style={{ position: 'absolute', top: 0, bottom: 0, left: OVERLAY_PAD, right: OVERLAY_PAD, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ width: '100%' }}>
+        {/* 머신 목록 — 타이틀이 겹칠 만큼 위쪽에 미리 여백을 비워둔다 */}
+        <View style={{ paddingTop: TITLE_BLOCK_H - TITLE_OVERLAP }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', rowGap: ROW_GAP, columnGap: ITEM_GAP_H }}>
+            {shownExercises.map((ex, i) => (
+              <Text key={ex.id} style={{ fontSize: ITEM_FONT_SIZE, color: tc, fontFamily: fontSet.routine }}>
+                {`${String(i + 1).padStart(3, '0')} [${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
+              </Text>
+            ))}
+          </View>
+          {exercises.length > 6 && (
+            <Text style={{ fontSize: ITEM_FONT_SIZE * 0.85, color: tc, opacity: 0.6, textAlign: 'center', fontFamily: fontSet.routine, marginTop: ROW_GAP }}>
+              {`+${exercises.length - 6} more...`}
+            </Text>
+          )}
+        </View>
+
+        {/* "[타겟부위] DAY" — 머신 목록 위로 15% 겹쳐서 오버레이(최상위 레이어) */}
+        <Text
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            fontFamily: fontSet.muscle,
+            color: tc,
+            textAlign: 'center',
+            letterSpacing: -1,
+            fontSize: TITLE_FONT_SIZE,
+          }}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.05}
+        >
+          {titleText}
+        </Text>
+      </View>
+
+      {/* 짐픽 로고 — 화면 최하단 고정이 아니라 머신 목록 바로 아래 */}
+      <View style={{ marginTop: 14 }}>
+        <GymPickLogo color={tc} width={Math.round(LOGO_STRIP_W * 0.595)} height={Math.round(LOGO_STRIP_H * 0.595)} />
+      </View>
+    </View>
+  );
+}
+
+// 2026-09-15 (6차, ROSTER 재조정): 타이틀("[타겟부위] DAY", GLAMOROUS 폰트,
+// 20% 확대) → 운동일시 → 머신 목록(순번 001/002/003..., 브랜드는 텍스트,
+// 넘치면 항목 단위로 줄바꿈) → 짐픽 로고 순으로 4개 요소를 배치하되, 이 4개
+// 요소 전체를 하나의 그룹으로 묶어 시계방향 90도 회전시켜 화면 우측에
+// 붙인다. 닉네임은 표시하지 않는다.
+// 2026-09-15 (8차, ROSTER 간격/정렬 재조정):
+// - 회전 전 좌표계에서 4개 요소를 flexDirection:'row'로 배치해야, 회전 후
+//   (시계방향 90도) 화면에서 위→아래 순서(타이틀→운동일시→머신목록→로고)가
+//   유지된다는 것을 재확인함. 기존 코드는 실수로 'column'을 사용하고
+//   있었는데, 이 경우 회전 후 순서가 아래→위로 뒤집히고 배치축도 어긋나는
+//   버그였음 (이미 동작 중인 GridOverlayE의 회전 텍스트가 'row'를 쓰는 것과
+//   비교해 확인) — 이번 수정으로 함께 바로잡음.
+// - 요소 사이 간격을 확 줄이기 위해 justifyContent를 'space-evenly'
+//   (GROUP_LEN 전체에 걸쳐 균등 분산) 대신 'center' + 작은 columnGap으로
+//   변경 — 4개 요소가 서로 붙어서 그룹 중앙에 모이게 됨.
+// - "우측 정렬"을 위해 교차축 정렬을 alignItems:'flex-start'로 변경. 회전
+//   전 좌표계의 교차축 시작점(위쪽)이 회전 후에는 화면의 오른쪽 끝에
+//   대응되므로(좌→상, 우→하, 상→우, 하→좌 매핑), 이렇게 하면 각 요소가
+//   오른쪽 끝에 밀착된다.
+// - GROUP_THICK(교차축 두께, 회전 후 화면의 가로 두께)을 고정값(photoW*0.82)
+//   대신 실제 들어가는 요소들(타이틀/머신목록/로고) 중 가장 두꺼운 것을
+//   기준으로 계산 — 불필요하게 넓어서 오른쪽 정렬처럼 보이지 않던 문제 해결.
+// 2026-09-15 (9차): "[타겟부위]를 제일 우측에 위치"라는 요청을 "4개 요소를
+// 각각 독립적으로 회전시켜 가로로 나열"하는 구조로 잘못 해석해 전면
+// 재작성했었으나, 사용자가 보내준 실제 목업 이미지를 보고 확인한 결과 그런
+// 뜻이 아니었음이 밝혀짐 — 아래 10차 참고.
+// 2026-09-15 (10차, 9차 되돌림): 사용자가 보내준 목업 이미지는 타이틀→
+// 운동일시→머신목록→로고가 간격 없이 하나로 이어진 "연속된 세로 띠" 형태였음
+// (사진을 시계방향 90도로 돌려서 읽으면 왼쪽부터 로고→머신목록→운동일시→
+// 타겟부위 순으로 읽혀서, 돌려서 봤을 때 타겟부위가 가장 오른쪽에 오게 됨).
+// 즉 "우측"은 4개 요소를 화면에 물리적으로 좌우로 늘어놓으라는 뜻이 아니라,
+// (이미 8차에 있던) "하나의 그룹으로 묶어 통째로 회전"시키는 구조를 그대로
+// 돌려서 읽었을 때의 순서를 가리킨 것이었음 — 8차 구조가 이미 정확히
+// 요청과 일치했던 것. 9차에서 추가했던 RotatedItem 헬퍼와 4-요소-개별-회전
+// 구조는 전부 제거하고, 8차의 "하나의 그룹으로 묶어 통째로 회전" 구조로
+// 복원함(로직은 8차와 동일 — 아래 참고).
+// 2026-09-15 (11차, 겹침/잘림 버그 수정 — 동적 재분배): 10차(=8차) 구조에서
+// 타이틀과 머신목록 둘 다에게 maxWidth를 거의 GROUP_LEN 전체(GROUP_LEN - 20)로
+// 줬던 것이 원인이 되어, 실제 머신 데이터(이름이 긴 머신 여러 개)가 들어가면
+// 타이틀+운동일시+머신목록+로고 4개를 합친 실제 폭이 GROUP_LEN을 넘어버림.
+// RN의 flexDirection:'row' 자식은 기본적으로 줄어들지 않으므로(flexShrink
+// 기본값 0), 넘친 만큼은 justifyContent:'center' 기준으로 양쪽에 똑같이
+// 밀려나다가 바깥 overflow:'hidden' 박스에 잘림 — 회전 때문에 화면에서는
+// 이게 위/아래(세로) 잘림으로 보였음(타이틀이 "AY"만 남고 머신목록도 일부만
+// 보이는 버그).
+//
+// 단순히 maxWidth만 나눠주는 것으로는 부족했음: 운동일시(고정 포맷, ~21자)와
+// 로고(고정 크기)만 해도 이미 GROUP_LEN의 절반 가까이를 차지해서, 남는 길이를
+// 타이틀/머신목록에 아무리 비율로 나눠도 기존 "20% 확대"된 큰 타이틀 폰트가
+// 들어갈 자리가 나오지 않음 — 그대로 두면 adjustsFontSizeToFit이 억지로 아주
+// 작게 줄여버려 사실상 안 보이게 됨. 그래서 타이틀 "폰트 크기" 자체를 고정값이
+// 아니라, 자신에게 배분된 폭(TITLE_MAXW)과 글자 수에서 역산해서 정하도록
+// 바꿈 — 머신이 적어 여유가 있으면 원래의 "확대된" 크기에 가깝게, 머신이
+// 많아 배분된 폭이 좁아지면 그에 맞춰 작아지되 최소 크기 밑으로는 떨어지지
+// 않게 함(가독성 하한선).
+//
+// 운동일시(고정 포맷이라 글자수로 폭 예측 가능)와 로고(고정 크기)를 먼저 뺀
+// 나머지 길이(CONTENT_LEN)를, 타이틀과 머신목록에 "실제 글자 수"(타이틀은
+// 폰트가 훨씬 커서 가중치를 높여 계산)에 비례해서 동적으로 나눠줌 — 머신이
+// 많거나 이름이 길수록 머신목록 쪽 예산이 커지고, 타겟부위 이름이 길면 타이틀
+// 쪽 예산도 늘어남(30%~60% 사이로 클램프). 두 예산의 합은 항상 CONTENT_LEN과
+// 정확히 일치하므로, 타이틀은 그 예산에 맞춰 폰트 크기를 역산하고(안전장치로
+// adjustsFontSizeToFit도 유지) 머신목록은 flexWrap으로 그 예산 안에서
+// 줄바꿈되어 — 4개 요소를 다 더해도 절대 GROUP_LEN을 넘지 않는 것이 계산상
+// 보장됨. GROUP_THICK(교차축 두께)도 머신목록이 실제로 몇 줄로 줄바꿈될지
+// (GRID_MAXW 기준 추정)와 최종 타이틀 폰트 크기를 반영해서 계산 — 기존엔
+// "최대 2줄"과 고정 타이틀 폰트를 가정했었음.
+//
+// 참고: 이 계산은 실제 렌더링 측정이 아니라 근사치(글자 수 × 평균 글자폭)
+// 기반이라, 머신이 많을 때는 타이틀이 기존보다 눈에 띄게 작아질 수 있음 —
+// 실제 폰트(GLAMOROUS/My_handwriting 등)의 정확한 글자폭과는 차이가 있을 수
+// 있어 실기기 확인 후 배율 조정이 필요할 수 있음.
+// 2026-09-16 (12차, 요소 순서 재배치): 실기기 스크린샷 확인 후 "정상 방향으로
+// 돌려 읽었을 때 좌측부터 로고 → 머신목록 → 운동일시 → 타겟부위 순서가
+// 되도록" 요청받음 — 기존(11차까지) 순서(타이틀→운동일시→머신목록→로고)의
+// 정확히 반대. 4개 요소의 렌더링 순서만 로고→머신목록→운동일시→타이틀로
+// 뒤집음(각 요소의 폭 배분/폰트 크기 계산 로직은 위치와 무관하므로 그대로
+// 유지). "폰트 크기는 이전에 말한대로"라는 요청에 대해서는, 11차에서 이미
+// 타이틀 폰트 크기를 "여유 있으면 원래의 20% 확대 크기에 최대한 가깝게,
+// 부족할 때만 최소한으로 줄어드는" 방식으로 만들어둔 상태라 — 이 로직이 이미
+// "가능하면 원래 크기, 필요할 때만 축소"라는 취지를 만족하고 있다고 보고
+// 그대로 유지함(고정 크기로 완전히 되돌리면 머신이 여러 개일 때 11차에서
+// 고친 잘림 버그가 재발할 수 있음).
+// 2026-09-17 (13차, 타이틀 크기 우선순위 조정): 사용자가 손으로 그린 배치
+// 이미지를 픽셀 단위로 확인한 결과, 순서(로고→머신목록→운동일시→타겟부위)는
+// 12차와 정확히 일치했지만, 타이틀("[타겟부위] DAY")의 세로 두께가 다른 3개
+// 요소보다 훨씬 크게(밴드 전체 두께의 절반 이상) 그려져 있는 것을 확인 —
+// "타이틀만 훨씬 크게, 공통 밴드 두께 제약을 깨고" 만들어야 한다는 것을
+// AskUserQuestion으로 재확인함. 11차의 "머신 개수에 비례해 타이틀/머신목록
+// 예산을 나누는" 방식(titleWeight/gridWeight 비율 분배)은 머신이 많아지면
+// 타이틀이 계속 작아지는 구조라 이 요청과 맞지 않아 폐기 — 대신 타이틀을
+// 먼저 MAX_TITLE_FONT_SIZE(기존 "20% 확대" 크기) 기준으로 필요한 폭을
+// 계산해서 우선 배분하고(TITLE_MAX_RATIO=0.7을 상한으로 둬서 머신목록 공간이
+// 0이 되는 극단적 경우만 방지), 머신목록은 남는 길이를 받아 그 안에서
+// 줄바꿈되도록 바꿈. 결과적으로 타이틀은 머신 개수와 거의 무관하게 항상 큰
+// 크기로 렌더링되고, GROUP_THICK(밴드 두께)은 커진 타이틀에 맞춰 자동으로
+// 두꺼워짐 — "공통 두께 제약"이 사라지고 타이틀이 두께를 주도하는 구조가 됨.
+// 머신목록이 받는 폭이 줄어들어 줄바꿈이 더 많이 필요해질 수 있어, 줄바꿈
+// 추정 상한(rowsNeeded)도 기존 4줄에서 6줄로 늘려 두께 언더추정으로 인한
+// 교차축 잘림을 방지함.
+// 2026-09-17 (14차, 구조 전면 변경 — 그룹 통째 회전 폐기 → 요소별 개별
+// 회전): 13차 반영본 실기기 확인 후 "수정한 레이아웃 출력물은 내가 원하는게
+// 아니야"라는 피드백 — "각 요소들을 한번에 묶지 말고" 개별적으로 회전·배치할
+// 것을 명시적으로 요청받음(8차부터 유지해온 "4개 요소를 하나의 그룹으로 묶어
+// 통째로 회전"하는 구조 자체를 폐기하라는 뜻). 이 개별-회전 구조는 9차에서
+// 한 번 시도했다가 "우측" 요청의 의미를 오해한 것으로 밝혀져 10차에서
+// 되돌려진 적이 있어(AskUserQuestion으로 "9차와 같은 구조가 맞는지" 재확인),
+// 이번엔 사용자가 명시적으로 그 구조를 다시 원한다는 것을 확인 후 진행함.
+//
+// 구조: 9차 때 쓰던 RotatedItem(len, thick) 헬퍼를 복원 — 각 요소를 감싸는
+// "바깥 클리핑 박스(thick×len, 화면에 보일 최종 크기) + 안쪽 콘텐츠 박스
+// (len×thick, 회전 전 자연 크기) 90도 회전" 기법을 요소 하나 단위로 적용.
+// 최상위 컨테이너는 더 이상 회전시키지 않는 일반 flexDirection:'row' —
+// 4개의 RotatedItem을 로고→머신목록→운동일시→타이틀 순서(배열 순서 그대로
+// 왼쪽→오른쪽)로 배치하면, 컨테이너 자체가 회전하지 않으므로 이 순서가 곧
+// 화면에 보이는 좌→우 순서와 그대로 일치함(타이틀이 가장 오른쪽 — "우측→
+// 타겟부위→운동일시→머신목록→로고→좌측" 요청과 일치, 회전 방향을 머릿속으로
+// 계산할 필요가 없어져 이전보다 훨씬 직관적).
+//
+// 가장 큰 이점: 각 요소가 더 이상 하나의 공통 GROUP_THICK을 나눠 쓰지
+// 않고 자기 자신의 len/thick을 독립적으로 가짐 — 13차에서 시도했던 "타이틀만
+// 크게, 나머지는 작게"가 이제 별도의 트릭(예산 우선순위 계산) 없이 구조적으로
+// 자연스럽게 됨: 타이틀은 그냥 항상 MAX_TITLE_FONT_SIZE(20% 확대 크기)로
+// 렌더링하고, 그 자연스러운 텍스트 폭(len)을 그대로 쓰면 됨 — 머신 개수나
+// 다른 요소 크기와 전혀 무관.
+// 14차: 요소 하나를 감싸서 "회전 전 자연 크기(len×thick)"로 렌더링한 뒤
+// 화면에는 "회전 후 최종 크기(thick×len)"로 보이도록 시계방향 90도 회전시키는
+// 헬퍼 — 9차에서 쓰던 것과 동일한 기법(바깥 클리핑 박스 가운데에 회전 전
+// 콘텐츠 박스를 놓고 회전)을 그대로 복원. len=회전 전 폭(=화면상 세로 길이),
+// thick=회전 전 높이(=화면상 가로 두께).
+// 21차: innerJustify 추가 — 회전 전 박스 안에서 컨텐츠를 세로(top/bottom)로
+// 어디에 붙일지 지정하는 옵션(기본값 'center', 기존 동작 그대로 유지).
+// 이 세로(top/bottom, = thick) 방향이 회전 후에는 화면의 가로(좌/우, 즉
+// row 안에서 옆 요소와의 간격이 생기는 바로 그 축)에 대응된다(90도 시계
+// 회전: 회전 전 top→회전 후 right, 회전 전 bottom→회전 후 left — 8차에서
+// 검증된 매핑과 동일). TITLE_THICK/TIMESTAMP_THICK 같은 두께 배수는
+// 15~16차에서 "옆 요소와 붙어 보이지 않게" 일부러 실제 텍스트 높이보다
+// 넉넉하게 잡아둔 여유값인데, 기존엔 이 여유가 justifyContent:'center'로
+// 위/아래(=회전 후 좌/우) 양쪽에 똑같이 나뉘어 있었음. 즉 GAP_3를 0으로
+// 만들어도 이 내부 여유 때문에 운동일시↔타이틀 사이에 눈에 보이는 공백이
+// 남아있었던 것 — 여유 자체를 줄이면(클리핑 위험 재발) 안 되니, 대신
+// 운동일시는 여유를 회전 후 왼쪽(로고 쪽, innerJustify='flex-start')으로,
+// 타이틀은 여유를 회전 후 오른쪽(사진 바깥쪽, innerJustify='flex-end')으로
+// 몰아서 두 요소가 맞닿는 경계 쪽에는 여유가 남지 않도록 재배치함(안전
+// 여백 총량은 그대로 유지 — 클리핑 위험 추가 없음).
+function RotatedItem({ len, thick, children, style, innerJustify = 'center' }: { len: number; thick: number; children: React.ReactNode; style?: any; innerJustify?: 'center' | 'flex-start' | 'flex-end' }) {
+  return (
+    <View style={[{ width: thick, height: len, overflow: 'hidden' }, style]}>
+      <View
+        style={{
+          position: 'absolute',
+          left: (thick - len) / 2,
+          top: (len - thick) / 2,
+          width: len,
+          height: thick,
+          transform: [{ rotate: '90deg' }],
+          alignItems: 'center',
+          justifyContent: innerJustify,
+        }}
+      >
+        {children}
+      </View>
+    </View>
+  );
+}
+
+// 2026-09-17 (15차, 14차 실기기 확인 후 3건): ① 머신목록이 운동일시 쪽으로
+// 붙어 잘려 보이는 문제, ② 타겟부위 글자 수와 무관하게 타이틀이 항상 밴드
+// 상하단(GROUP_LEN)에 꽉 차도록, ③ 머신목록이 한 줄에 한 개씩만 나오는 문제
+// (잘리지 않는 선에서 최대한 여러 개씩 배치)에 대한 수정.
+//
+// 원인: (a) 머신목록 줄바꿈 추정을 "평균 글자수" 기반으로 계산했는데, 실제
+// 머신명은 길이 편차가 커서 평균값이 실제 배치와 어긋났고, 줄 높이도
+// 1.25배로 가정했지만 실제 폰트(Leorio 등)의 줄 간격이 이보다 커서 두께가
+// 과소 추정됨 — 그 결과 GRID_THICK이 실제 필요한 두께보다 작게 계산돼
+// 바로 옆(운동일시) 쪽 여백이 부족해 붙어 보임. (b) 줄바꿈 폭 예산
+// (GRID_WRAP_LEN)이 photoH*0.4 정도로 좁아서, 웬만큼 짧은 머신명도 두 개가
+// 한 줄에 못 들어가고 거의 항상 1개씩만 배치됐음. (c) 타이틀은 자기 폰트
+// 크기(TITLE_FONT_SIZE, 고정 "20% 확대" 값) 기준 자연 폭만 썼기 때문에
+// 타겟부위 글자 수(8~13자)에 따라 실제 길이가 들쭉날쭉했음.
+//
+// 수정:
+// - 머신목록 줄바꿈 폭 예산을 GROUP_LEN의 70%(이전 photoH*0.4보다 훨씬
+//   넉넉함)로 키우고, "평균 글자수 추정" 대신 각 항목을 실제 순서대로 왼쪽
+//   부터 채우다 넘치면 다음 줄로 넘기는 그리디 packing(packGridLines,
+//   React Native flexWrap의 실제 동작과 동일한 방식)으로 몇 줄이 필요한지
+//   정확히 계산 — 짧은 머신명 여러 개는 자연스럽게 한 줄에 같이 들어가고,
+//   실제 렌더링(flexWrap)도 같은 폭 예산을 쓰므로 추정과 실제가 거의 일치함.
+// - 줄 높이 가정을 1.25배 → 1.45배로 늘려 실제 폰트 줄간격과의 오차 여유를
+//   더 두고, 4개 요소 사이 간격(GROUP_GAP)도 2% → 2.5%, 운동일시 두께
+//   배수도 1.4 → 1.6으로 소폭 늘려 인접 요소끼리 붙어 보이지 않게 함.
+// - 타이틀은 더 이상 "자기 폰트 크기 기준 자연 폭"이 아니라, 밴드 전체 길이
+//   (GROUP_LEN)를 목표 길이로 두고 글자 수로 나눠 필요한 폰트 크기를
+//   역산(짧은 라벨일수록 폰트가 커지고, 긴 라벨일수록 작아지되 항상 같은
+//   물리적 길이를 채움) — MIN/MAX_TITLE_FONT_SIZE는 실제 라벨 범위(8~13자)
+//   에서는 거의 걸리지 않는 안전장치용 상/하한선.
+//
+// Node.js 시뮬레이션 검증: photoW=1179, photoH=round(1179*4/3)=1572
+// (photoH는 실제 코드의 photoH = Math.round(PHOTO_W*4/3) 공식을 그대로 사용)
+// 기준으로 7개 타겟부위 라벨 × 머신 개수(1/3/6) 21개 조합을 모두 확인 —
+// 최악의 경우(BACK/LEGS/ARMS DAY처럼 짧은 라벨 + 머신 6개)에도 4개 요소
+// 두께 합이 photoW의 약 62%(736/1179)에 그쳐 여유 있게 들어옴. 실기기 확인
+// 아직 안 함 — 사용자가 실제 화면으로 다시 확인 필요.
+function packGridLines(strings: string[], lineWidth: number, itemFontSize: number, gap: number): string[][] {
+  const lines: string[][] = [];
+  let current: string[] = [];
+  let currentWidth = 0;
+  for (const s of strings) {
+    const w = s.length * itemFontSize * 0.62;
+    const needed = current.length === 0 ? w : currentWidth + gap + w;
+    if (current.length === 0 || needed <= lineWidth) {
+      current.push(s);
+      currentWidth = needed;
+    } else {
+      lines.push(current);
+      current = [s];
+      currentWidth = w;
+    }
+  }
+  if (current.length > 0) lines.push(current);
+  return lines;
+}
+
+export function RosterOverlay({ exercises, logs, nickname, timestamp, muscleLabel, tc, photoW, photoH, fontSet }: OverlayProps & { fontSet: FontSet }) {
+  const pureLabel = muscleLabel.replace(/_?day$/i, '').replace(/\s*day$/i, '').trim() || muscleLabel;
+  const titleText = `${pureLabel} DAY`;
+  const shownExercises = exercises.slice(0, 6);
+  const hasMore = exercises.length > 6;
+
+  const ITEM_FONT_SIZE      = Math.round(photoW * 0.032 * 0.8); // 20% 축소
+  const TIMESTAMP_FONT_SIZE = Math.round(12 * 1.2); // 19차: 20% 확대 요청(12→14)
+  const ROW_GAP             = 5;                                 // 기존 10의 50%
+  const ITEM_GAP_H          = Math.round(ITEM_FONT_SIZE * 1.3);
+  const LOGO_W              = Math.round(LOGO_STRIP_W * 0.595);
+  const LOGO_H              = Math.round(LOGO_STRIP_H * 0.595);
+
+  // 16차: 15차에서 타이틀이 양끝("C"/"Y")이 잘려 보이던 원인은 이 폰트의
+  // 실제 글자 폭이 TITLE_CHAR_W_RATIO(0.6)로 추정한 것보다 넓어서 —
+  // "글자수 × 비율"로 역산한 폰트 크기가 실제보다 크게 나왔고, 그 결과 실제
+  // 렌더링 폭이 선언한 박스(TITLE_LEN)를 넘어섰기 때문(adjustsFontSizeToFit이
+  // 이 중첩 회전 구조에서 안정적으로 줄여주지 않음). 같은 이유로 운동일시도
+  // TIMESTAMP_CHAR_W_RATIO(기존 0.55)가 과소추정되어 "..." 로 잘림 —
+  // 두 증상이 같은 근본 원인(글자폭 비율 과소추정)을 뒷받침. 비율을 올리고,
+  // 목표 길이도 100%가 아닌 92%(TITLE_FILL_RATIO)로 잡아 안전 여유를 둠.
+  // 17차: 16차까지도 타이틀이 여전히 카드 위/아래 바깥으로 심하게 넘치는
+  // 문제가 재발 — 원인은 MIN/MAX_TITLE_FONT_SIZE를 photoW=1179라는 잘못된
+  // 가정(13차 때의 교차검증 오류)을 기준으로 고정 절대값(120~280)으로 정해둔
+  // 것이었음. 실기기 스크린샷을 픽셀 단위로 직접 측정해보니 실제 카드
+  // 폭(테두리 기준)은 화면 배율(3x)을 감안하면 약 361pt(=SCREEN_W-32,
+  // iPhone 기준 393-32)로, 지금까지 가정해온 1179보다 약 3.27배 작음 —
+  // 즉 photoW=1179는 애초에 틀린 값이었음. 이 잘못된 가정 때문에
+  // GROUP_LEN도 실제보다 훨씬 크다고 착각했고, 그 결과 "채움 목표 길이에서
+  // 역산한 폰트 크기"가 실제로는 아주 작게(약 40~65) 나와야 정상인데,
+  // MIN_TITLE_FONT_SIZE=120이 그보다 훨씬 커서 MIN 쪽으로 강제로 끌어
+  // 올려지며 실제 사용 가능한 공간(GROUP_LEN≈441)의 거의 2배에 달하는
+  // 크기로 렌더링돼 카드 위/아래 바깥까지 넘친 것 — 15차 때와 16차 때
+  // 서로 다른 비율(TITLE_CHAR_W_RATIO)을 썼는데도 똑같이 잘렸던 이유가
+  // 바로 이 MIN 클램프였음(비율을 아무리 바꿔도 클램프가 항상 이겼음).
+  // 수정: 다른 요소들(ITEM_FONT_SIZE, GROUP_GAP 등)처럼 MIN/MAX도 고정
+  // 절대값이 아니라 photoW에 비례한 값으로 바꿔, 실제 기기 폭이 얼마든
+  // (이번처럼 361이든, 이전에 착각했던 1179든) 항상 올바른 비율로
+  // 스케일되게 함 — 특정 기기 폭을 추측해서 하드코딩하는 근본 문제 자체를
+  // 없앰.
+  const TITLE_CHAR_W_RATIO  = 0.78; // 16차 값 유지(글자 폭 비율 자체는 문제 없었음)
+  const TITLE_FILL_RATIO    = 0.92; // 16차 값 유지
+  const MIN_TITLE_FONT_SIZE = Math.round(photoW * 0.09); // 120(고정) → photoW 비례
+  const MAX_TITLE_FONT_SIZE = Math.round(photoW * 0.30); // 280(고정) → photoW 비례
+
+  // 목표 길이 — 사진 세로 길이에서 상하 여백(OVERLAY_PAD)만 뺀, 밴드가
+  // 실제로 채울 수 있는 최대 길이. 타이틀은 이 값의 TITLE_FILL_RATIO만큼 채움(16차).
+  const GROUP_LEN = photoH - OVERLAY_PAD * 2;
+
+  // 16차: 기존엔 4개 요소 사이 간격이 전부 GROUP_GAP 하나로 동일했으나,
+  // "타이틀-운동일시 사이만 좁혀달라"는 요청에 맞춰 쌍(pair)별로 독립된
+  // 간격을 둠. 17차: 이번엔 "타이틀/운동일시/머신목록/로고 사이 간격을
+  // 전부 더 줄여달라"는 요청 — GRID_THICK은 이미 정확한 줄바꿈 계산
+  // (packGridLines)으로 안전하게 산출되고 있어(15차), 겹침 방지용
+  // 여백(GAP_2)을 조금 줄여도 실제 겹침 위험은 낮음. 세 간격 모두 비율을
+  // 낮춰 더 촘촘하게 배치.
+  // 18차: 17차(photoW 스케일 수정)로 잘림 문제가 해소된 뒤, "간격을 더
+  // 줄여달라"는 요청이 다시 와서 세 간격 모두 추가로 절반 수준까지 축소.
+  // GRID_THICK은 15차의 정확한 그리디 packing으로 이미 안전하게 계산되고
+  // 있어(줄바꿈 자체가 실제 폭 기준이라 여유가 있음), 간격을 줄여도 겹침
+  // 재발 위험은 낮음.
+  // 19차: "타이틀-운동일시, 운동일시-머신목록 사이만 더 줄여달라"는 요청 —
+  // 로고→머신목록 간격(GAP_1)은 이번 요청 범위 밖이라 그대로 유지, GAP_2는
+  // 더 축소, GAP_3(운동일시→타이틀)는 거의 맞닿을 정도로 0에 가깝게 축소.
+  // 20차: "간격을 지금보다 50% 더 줄여달라"는 요청 — GAP_2를 다시 절반으로
+  // 축소(0.005→0.0025). GAP_3는 19차에 이미 0(완전히 맞닿은 상태)이라 이
+  // 이상 물리적으로 더 줄일 여지가 없어 그대로 유지(사용자에게 별도 안내 필요).
+  const GAP_1 = Math.round(photoW * 0.01);   // 로고 → 머신목록 (18차 값 유지)
+  const GAP_2 = Math.round(photoW * 0.0025); // 머신목록 → 운동일시 (20차: 0.005→0.0025 추가 축소)
+  const GAP_3 = 0;                            // 운동일시 → 타이틀 (19차부터 0 — 더 줄일 수 없음)
+
+  const gridItemStrings = shownExercises.map((ex, i) => `${String(i + 1).padStart(3, '0')} [${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`);
+  const moreText = hasMore ? `+${exercises.length - 6} more...` : '';
+  const allGridStrings = hasMore ? [...gridItemStrings, moreText] : gridItemStrings;
+
+  // --- 로고: 회전 전 자연 크기 그대로 ---
+  const LOGO_LEN   = LOGO_W;
+  const LOGO_THICK = LOGO_H;
+
+  // --- 운동일시: 고정 포맷(21자)이라 폭 예측 가능 — 15차: 두께 배수를
+  // 1.4→1.6으로 늘려 옆 요소와 붙어 보이지 않게 여유를 둠. 16차: 실제
+  // 폰트 폭이 0.55 비율보다 넓어 "..." 로 잘리던 문제를 고쳐 전체 출력되게 함
+  // (비율 0.55→0.65, 여유 패딩 +6→+14) ---
+  const TIMESTAMP_CHAR_W_RATIO = 0.65; // 0.55 → 0.65(16차)
+  // 19차: 폰트가 커진 만큼 글자폭 과소추정 오차도 비례해서 커지므로, 여유
+  // 패딩(16차에 도입한 +14)도 폰트 확대 비율(1.2배)만큼 같이 늘려 잘림
+  // 재발을 예방(14 → 17).
+  const TIMESTAMP_LEN   = Math.round(timestamp.length * TIMESTAMP_FONT_SIZE * TIMESTAMP_CHAR_W_RATIO) + Math.round(14 * 1.2);
+  const TIMESTAMP_THICK = Math.round(TIMESTAMP_FONT_SIZE * 1.6);
+
+  // --- 머신목록(15차 재작성): 줄바꿈 폭 예산(GRID_WRAP_LEN)을 GROUP_LEN의
+  // 70%로 넉넉하게 잡고(이전 photoH*0.4보다 훨씬 큼 — 짧은 머신명 여러 개가
+  // 한 줄에 같이 들어갈 여지를 줌), "평균 글자수" 추정이 아니라 실제 항목을
+  // 순서대로 채우다 넘치면 다음 줄로 넘기는 그리디 packing(packGridLines)으로
+  // 몇 줄이 필요한지 정확히 계산 — 실제 렌더링(flexWrap)도 같은 폭 예산을
+  // 쓰므로 추정과 실제 줄 수가 거의 일치함. 줄 높이 배수도 1.25→1.45로 늘려
+  // 실제 폰트 줄간격 오차에 대한 여유를 더 둠(두께 과소추정이 인접 요소와
+  // 붙어 보이던 문제의 주 원인이었음).
+  // 20차: "첫 줄만 2개, 그 다음부터는 한 줄에 1개씩만 나오는 게 줄바꿈
+  // 조건이 첫 줄에만 적용되는 버그인지" 질문 — 조사 결과 그런 특수 로직은
+  // 코드에 없음(순수 RN flexWrap, 줄 위치와 무관하게 동일한 폭 예산으로 동작).
+  // 실측 photoW(361) 기준 GROUP_LEN*0.7≈309인데, 실제 머신명 길이(9pt 폰트
+  // 기준 약 128~195pt)가 이 예산에 비해 빠듯해서 가장 짧은 두 개만 우연히
+  // 한 줄에 들어가고 나머지는 각각 한 줄씩 차지했던 것 — 그리디 packing이
+  // 의도대로 정확히 동작한 결과이지 버그가 아님. 예산을 GROUP_LEN*0.9로
+  // 넓히면 GRID_LEN(397)이 여전히 GROUP_LEN(441) 안에 안전하게 들어오면서,
+  // 시뮬레이션상 필요한 줄 수가 줄고(예: 5줄→3줄) GRID_THICK도 함께
+  // 작아지는(85→49) 순수 개선이라 이 비율로 확장.
+  const GRID_WRAP_LEN = Math.round(GROUP_LEN * 0.9);
+  const gridLines     = packGridLines(allGridStrings, GRID_WRAP_LEN, ITEM_FONT_SIZE, ITEM_GAP_H);
+  const rowsNeeded    = Math.max(1, gridLines.length);
+  const GRID_LEN      = GRID_WRAP_LEN;
+  const GRID_THICK    = Math.round(rowsNeeded * ITEM_FONT_SIZE * 1.45 + (rowsNeeded - 1) * ROW_GAP);
+
+  // --- 타이틀(16차): 타겟부위 글자 수와 무관하게 항상 밴드 길이의
+  // TITLE_FILL_RATIO(92%)만큼 채우도록 폰트 크기를 역산 — 라벨이 짧을수록
+  // (BACK/LEGS/ARMS DAY 등) 폰트가 커지고, 길수록(SHOULDERS DAY) 작아지되
+  // 항상 같은 물리적 길이를 채움. 16차: 글자폭 비율을 0.78로 올리고 목표를
+  // 100%→92%로 낮춰, 실제 렌더링 폭이 박스를 넘어 양끝이 잘리던 문제를 해결.
+  // 두께 배수도 1.25→1.35로 늘려 실제 줄 높이에 대한 여유를 더 둠.
+  const TITLE_TARGET_LEN = Math.round(GROUP_LEN * TITLE_FILL_RATIO);
+  const titleFontRaw    = TITLE_TARGET_LEN / (titleText.length * TITLE_CHAR_W_RATIO);
+  const TITLE_FONT_SIZE = Math.round(Math.min(MAX_TITLE_FONT_SIZE, Math.max(MIN_TITLE_FONT_SIZE, titleFontRaw)));
+  const TITLE_LEN       = Math.round(titleText.length * TITLE_FONT_SIZE * TITLE_CHAR_W_RATIO);
+  const TITLE_THICK     = Math.round(TITLE_FONT_SIZE * 1.35);
+
+  return (
+    <View
+      style={{
+        position: 'absolute',
+        // 16차: 타이틀(가장 오른쪽 요소)이 사진 우측 끝에 더 가깝게 붙도록
+        // 밴드 전체를 오른쪽으로 당김. 17차: "더 우측으로" 요청이 다시 와서
+        // 추가로 더 줄임 — 16차 시점엔 MIN_TITLE_FONT_SIZE 버그로 타이틀
+        // 박스 자체가 실제보다 훨씬 두꺼워서(TITLE_THICK 과대) 시각적으로
+        // 여백이 커 보였던 것도 있었지만, 그 버그를 고친 뒤에도 여전히
+        // 더 붙여달라는 요청이므로 배율을 추가로 낮춤.
+        right: Math.round(OVERLAY_PAD * 0.1),
+        top: 0,
+        bottom: 0,
+        flexDirection: 'row',
+        alignItems: 'center',
+      }}
+    >
+      {/* 1) 짐픽 로고 — 14차: 컨테이너 자체는 회전하지 않으므로, 배열 순서가
+          곧 화면에 보이는 좌→우 순서. */}
+      <RotatedItem len={LOGO_LEN} thick={LOGO_THICK}>
+        <GymPickLogo color={tc} width={LOGO_LEN} height={LOGO_THICK} />
+      </RotatedItem>
+
+      {/* 2) 머신 목록 — 순번 + "[브랜드] 머신명" 텍스트, GRID_LEN 폭 안에서
+          넘치면 항목 단위로 줄바꿈. 16차: 로고와의 간격은 GAP_1(독립 마진)로 관리 */}
+      <RotatedItem len={GRID_LEN} thick={GRID_THICK} style={{ marginLeft: GAP_1 }}>
+        <View style={{ width: GRID_LEN, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', rowGap: ROW_GAP, columnGap: ITEM_GAP_H }}>
+          {shownExercises.map((ex, i) => (
+            <Text key={ex.id} style={{ fontSize: ITEM_FONT_SIZE, color: tc, fontFamily: fontSet.routine }}>
+              {gridItemStrings[i]}
+            </Text>
+          ))}
+          {hasMore && (
+            <Text style={{ fontSize: ITEM_FONT_SIZE * 0.85, color: tc, opacity: 0.6, fontFamily: fontSet.routine }}>
+              {moreText}
+            </Text>
+          )}
+        </View>
+      </RotatedItem>
+
+      {/* 3) 운동일시 — 고정 포맷이라 폭 고정(TIMESTAMP_LEN). 16차: 머신목록과의
+          간격은 GAP_2(15차 값 유지, 겹침 방지). 21차: innerJustify='flex-start'로
+          두께 여유를 로고 쪽에 몰아, 타이틀과 맞닿는 경계 쪽 여백을 최소화 */}
+      <RotatedItem len={TIMESTAMP_LEN} thick={TIMESTAMP_THICK} style={{ marginLeft: GAP_2 }} innerJustify="flex-start">
+        <Text
+          style={{ fontSize: TIMESTAMP_FONT_SIZE, color: tc, opacity: 0.85, fontFamily: fontSet.nickname, width: TIMESTAMP_LEN }}
+          numberOfLines={1}
+        >
+          {timestamp}
+        </Text>
+      </RotatedItem>
+
+      {/* 4) "[타겟부위] DAY" — 15차: 글자 수와 무관하게 항상 밴드 전체 길이를
+          채우도록 폰트 크기를 역산(TITLE_FONT_SIZE). 다른 요소와 두께를
+          공유하지 않음(가장 오른쪽 = 요청한 "우측에 타겟부위"). 16차: 운동일시와의
+          간격만 GAP_3로 축소(요청사항 — 겹치지 않는 선에서 좁힘). 21차:
+          GAP_3가 이미 0이라 더 줄일 수 없어, innerJustify='flex-end'로 두께
+          여유를 사진 바깥쪽(오른쪽)으로 몰아 운동일시와 맞닿는 경계의 여백을
+          최소화(안전 여백 총량은 그대로, 위치만 반대편으로 이동). */}
+      <RotatedItem len={TITLE_LEN} thick={TITLE_THICK} style={{ marginLeft: GAP_3 }} innerJustify="flex-end">
+        <Text
+          style={{
+            fontFamily: fontSet.muscle,
+            color: tc,
+            textAlign: 'center',
+            letterSpacing: -1,
+            fontSize: TITLE_FONT_SIZE,
+            width: TITLE_LEN,
+          }}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.3}
+        >
+          {titleText}
+        </Text>
+      </RotatedItem>
+    </View>
+  );
+}
+
 // --- Step 5: Photo
 
 function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, photoUri, nickname, fontsLoaded, onColorChange, onStyleChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera, onRegisterRect, onboardingActive, onboardingKey, onOnboardingNext, onOnboardingJump }: {
@@ -3238,6 +3745,13 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
   const tc = textColor;
   // 레이아웃 E(각진 모서리 + 테두리선 없음)만 사진 프레임 스타일이 달라서 미리 계산해둔다.
   const currentLayoutType = getLayoutType(overlayStyle);
+  // 21차: "POSTER(F), ROSTER(G)도 MAGAZINE(E)과 동일하게 테두리선 없애달라"는
+  // 요청으로 테두리선 제외 대상에 f/g를 추가. 모서리 둥글기(borderRadius)는
+  // 요청 범위 밖이라 그대로 유지 — 테두리 "선"만 없앰. 이 목록은 사진
+  // 오버레이 미리보기와 '오버레이만 저장' 캡처 뷰 양쪽에서 동일하게 재사용된다
+  // (두 곳 모두 같은 조건을 쓰므로, 여기 하나만 바꾸면 저장 결과도 자동으로
+  // 테두리 없이 나옴).
+  const NO_BORDER_LAYOUTS = ['e', 'f', 'g'];
   // 레이아웃/폰트 세로 피커 두 축을 독립적으로 다루기 위해 현재 폰트 번호도 미리 계산.
   const currentFontNum    = getFontSetNumber(overlayStyle);
 
@@ -3331,6 +3845,26 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
           tc={tc}
           photoW={PHOTO_W}
           photoH={photoH}
+          fontSet={fs}
+        />
+      );
+    }
+
+    // 유형 F: PosterOverlay (My_handwriting 타이틀 + Leorio 2열 루틴 그리드, 브랜드 로고)
+    if (layout === 'f') {
+      return (
+        <PosterOverlay
+          {...commonProps}
+          fontSet={fs}
+        />
+      );
+    }
+
+    // 유형 G: RosterOverlay (GLAMOROUS 타이틀 + Leorio 2열 그리드, 순번 001/002/003...)
+    if (layout === 'g') {
+      return (
+        <RosterOverlay
+          {...commonProps}
           fontSet={fs}
         />
       );
@@ -3452,8 +3986,9 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
             {/* 스타일별 오버레이 */}
             {renderStyleOverlay()}
 
-            {/* 테두리: overflow 클리핑 이후 absolute로 덮어 빈공간 방지 (레이아웃 E는 각진 디자인이라 생략) */}
-            {currentLayoutType !== 'e' && (
+            {/* 테두리: overflow 클리핑 이후 absolute로 덮어 빈공간 방지
+                (21차: E/F/G는 테두리선 없는 디자인이라 생략 — NO_BORDER_LAYOUTS 참고) */}
+            {!NO_BORDER_LAYOUTS.includes(currentLayoutType) && (
               <View
                 style={{
                   position: 'absolute',
@@ -3719,7 +4254,9 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
               }}
             >
               {renderStyleOverlay()}
-              {currentLayoutType !== 'e' && (
+              {/* 21차: 사진 오버레이의 NO_BORDER_LAYOUTS 조건과 동일 — POSTER/ROSTER도
+                  이 '오버레이만 저장' 캡처본에서 테두리선 없이 저장됨 */}
+              {!NO_BORDER_LAYOUTS.includes(currentLayoutType) && (
                 <View
                   style={{
                     position: 'absolute',
@@ -4471,6 +5008,9 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     'HeirofLightRegular':       require('../../../assets/fonts/heiroflightregular.ttf'),
     'BMkkubulimTTF-Regular':    require('../../../assets/fonts/bmkkubulim.ttf'),
     'biergartenlt':             require('../../../assets/fonts/biergartenlt.ttf'),
+    'My_handwriting':           require('../../../assets/fonts/my_handwriting.ttf'),
+    'Leorio':                   require('../../../assets/fonts/leorio.ttf'),
+    'GLAMOROUS':                require('../../../assets/fonts/glamorous.otf'),
   });
 
   const onboarding = useOnboarding();
