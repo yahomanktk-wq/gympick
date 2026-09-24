@@ -58,6 +58,7 @@ import {
 } from '../../lib/db/gymManagerLinkRequests';
 import { geocodeAddress } from '../../lib/geocoding';
 import AdminAnalyticsView from './AdminAnalyticsView';
+import AdminMachineRegisterView from './AdminMachineRegisterView';
 import {
   OperatingHoursEditor,
   serializeHours,
@@ -94,7 +95,7 @@ const CAT_CARD_W   = Math.floor((SCREEN_W - 40 - 12) / 2);
 
 // --- Types
 
-export type AdminView = 'home' | 'pending-gyms' | 'gym-detail' | 'machine-catalog' | 'brand-copyright' | 'gym-reports' | 'manager-requests' | 'register-gym' | 'gym-registration-requests' | 'gym-official-brands' | 'all-gyms-official' | 'machine-requests' | 'user-inquiries' | 'gym-manager-link' | 'gym-manager-link-requests' | 'user-overview' | 'analytics';
+export type AdminView = 'home' | 'pending-gyms' | 'gym-detail' | 'machine-catalog' | 'brand-copyright' | 'gym-reports' | 'manager-requests' | 'register-gym' | 'gym-registration-requests' | 'gym-official-brands' | 'all-gyms-official' | 'machine-requests' | 'machine-register' | 'user-inquiries' | 'gym-manager-link' | 'gym-manager-link-requests' | 'user-overview' | 'analytics';
 
 // --- Shared components
 
@@ -464,6 +465,14 @@ function HomeView({ machines, pendingGymCount, gymReportCount, managerRequestCou
           sub: machineRequestCount > 0 ? `${machineRequestCount}개 검토 대기` : '접수된 신청 없음',
           onPress: () => onPush('machine-requests'),
           color: '#22d3ee',
+        },
+        {
+          icon: 'add-circle-outline' as const,
+          title: '신규 머신 등록',
+          count: 0,
+          sub: '브랜드 머신 직접 등록 (승인 절차 없음)',
+          onPress: () => onPush('machine-register'),
+          color: '#f472b6',
         },
         {
           icon: 'link-outline' as const,
@@ -1974,6 +1983,15 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentView]);
 
+  const loadMachines = useCallback(async () => {
+    try {
+      const data = await fetchMachines();
+      setMachines(data);
+    } catch (e) {
+      if (__DEV__) console.warn('[AdminDashboard] 머신 목록 새로고침 오류:', e);
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     fetchMachines().then(data => { if (!cancelled) setMachines(data); }).catch(() => {});
@@ -2435,6 +2453,7 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
     'gym-registration-requests':  '헬스장 신규 등록 제안(유저)',
     'analytics':         '사용자 지표',
     'machine-requests':           '머신 등록 신청(매니저)',
+    'machine-register':           '신규 머신 등록',
     'gym-official-brands':        `${officialGymName} 오피셜 브랜드`,
     'all-gyms-official':          '헬스장 오피셜 관리',
     'user-inquiries':             '유저 문의 관리',
@@ -2477,6 +2496,9 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
         />
       )}
       {currentView === 'analytics' && <AdminAnalyticsView />}
+      {currentView === 'machine-register' && (
+        <AdminMachineRegisterView machines={machines} onRegistered={loadMachines} />
+      )}
       {currentView === 'pending-gyms' && (
         <PendingGymsView
           pendingGyms={[...pendingGyms, ...managerGymRequests]}

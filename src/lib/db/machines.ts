@@ -1,6 +1,7 @@
 import { supabase } from '../supabase';
 import { Machine, MachineWithGyms, ExerciseKind } from '../../data/types';
 import { MACHINES } from '../../data/machines';
+import { uploadMachineImage } from '../machineImageUpload';
 
 // ── 메모리 캐시 ──────────────────────────────────────────────
 let _machinesCache:     MachineWithGyms[] | null = null;
@@ -138,4 +139,96 @@ export async function fetchMachine(id: string): Promise<MachineWithGyms | undefi
 
   const { getMachineGymIds } = await import('./gymMachines');
   return { ...rowToMachine(data), gymIds: await getMachineGymIds(id) };
+}
+
+// --- Admin: 신규 브랜드 머신 직접 등록 (승인 절차 없음, 즉시 반영)
+
+/** 영문/숫자만 남기고 소문자로 변환 — id 조합용. */
+function slugifyIdPart(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+/**
+ * 브랜드+타겟부위 조합으로 다음 사용 가능한 순번을 붙인 새 머신 id를 생성한다.
+ * 형식: `<브랜드slug>_<타겟부위slug>_<2자리 순번>` (예: `lifefitness_chest_01`).
+ * 같은 접두사를 가진 기존 id들을 조회해 가장 큰 순번의 다음 값을 사용한다 —
+ * 동시 등록으로 인한 충돌은 insertMachine()의 재시도 루프에서 한 번 더 방어한다.
+ */
+export async function generateMachineId(brand: string, targetMuscle: string): Promise<string> {
+  const prefix     = `${slugifyIdPart(brand)}_${slugifyIdPart(targetMuscle)}`;
+  const likePrefix = prefix.replace(/_/g, '\\_'); // ILIKE에서 '_'는 와일드카드라 이스케이프 필요
+
+  const { data, error } = await supabase
+    .from('machines')
+    .select('id')
+    .ilike('id', `${likePrefix}\\_%`);
+
+  if (error && __DEV__) {
+    console.warn('[db/machines] generateMachineId query failed:', error.message);
+  }
+
+  const seqPattern = new RegExp(`^${prefix}_(\\d+)$`);
+  let maxSeq = 0;
+  for (const row of data ?? []) {
+    const match = row.id.match(seqPattern);
+    if (match) maxSeq = Math.max(maxSeq, parseInt(match[1], 10));
+  }
+
+  const next   = maxSeq + 1;
+  const padded = next < 100 ? String(next).padStart(2, '0') : String(next);
+  return `${prefix}_${padded}`;
+}
+
+export interface NewMachineInput {
+  name:         string;
+  brand:        string;
+  targetMuscle: string;
+  category:     string;
+  /**
+   * 이미 800×800 흰 배경 정사각형으로 합성된 로컬 이미지 경로(선택).
+   * 전달하면 생성된 id로 webp 변환·업로드까지 이 함수 안에서 처리한다
+   * (파일명이 최종 id에 종속되므로 id 생성과 업로드를 한 곳에서 묶어 처리).
+   */
+  squareImageLocalUri?: string;
+}
+
+/**
+ * 어드민이 신규 브랜드 머신을 카탈로그에 직접 등록한다 — 매니저 신청 큐와
+ * 달리 승인 절차 없이 즉시 반영된다. id는 자동 생성되며, 동시 등록으로
+ * id가 충돌(23505 unique_violation)하면 다음 순번으로 최대 3회까지
+ * 재시도한다. 쓰기 함수라 실패 시 폴백 없이 에러를 그대로 반환한다.
+ */
+export async function insertMachine(
+  input: NewMachineInput,
+): Promise<{ id: string } | { error: string }> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const id = await generateMachineId(input.brand, input.targetMuscle);
+
+    let imageUrl: string | undefined;
+    if (input.squareImageLocalUri) {
+      imageUrl = (await uploadMachineImage(input.squareImageLocalUri, id)) ?? undefined;
+    }
+
+    const { error } = await supabase.from('machines').insert({
+      id,
+      name:          input.name,
+      brand:         input.brand,
+      target_muscle: input.targetMuscle,
+      category:      input.category,
+      exercise_kind: 'machine',
+      image_url:     imageUrl ?? null,
+    });
+
+    if (!error) {
+      invalidateMachinesCache();
+      return { id };
+    }
+
+    if (error.code !== '23505') {
+      return { error: error.message };
+    }
+    // 23505(id 충돌) — 루프를 돌며 다음 순번으로 재시도
+  }
+
+  return { error: '머신 ID 생성에 반복적으로 실패했습니다. 다시 시도해주세요.' };
 }

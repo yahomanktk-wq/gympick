@@ -35,6 +35,7 @@ export const brandLogos: Record<string, number> = {
   MAGNUM:            require('../assets/brand-logos/MAGNUM.png'),
   MATRIX:            require('../assets/brand-logos/MATRIX.png'),
   MAXPUMP:           require('../assets/brand-logos/MAXPUMP.png'),
+  MEDX:              require('../assets/brand-logos/MEDX.png'),
   MEGAMASS:          require('../assets/brand-logos/Megamass.png'),
   NAUTILUS:          require('../assets/brand-logos/NAUTILUS.png'),
   NEBULA:            require('../assets/brand-logos/NEBULA.png'),
@@ -57,6 +58,7 @@ export const brandLogos: Record<string, number> = {
   TECHNOGYM:         require('../assets/brand-logos/TECHNOGYM.png'),
   TELJU:             require('../assets/brand-logos/TELJU.png'),
   TRUE:              require('../assets/brand-logos/TRUE.png'),
+  UNIVERSAL:         require('../assets/brand-logos/UNIVERSAL.png'),
   USP:               require('../assets/brand-logos/USP.png'),
   WATSON:            require('../assets/brand-logos/WATSON.png'),
 };
