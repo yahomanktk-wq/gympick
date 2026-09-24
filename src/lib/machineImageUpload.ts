@@ -15,6 +15,7 @@ async function uploadToBucket(
   localUri:    string,
   fileName:    string,
   contentType: string,
+  upsert:      boolean,
 ): Promise<string | null> {
   const response    = await fetch(localUri);
   const blob        = await response.blob();
@@ -27,7 +28,7 @@ async function uploadToBucket(
 
   const { data, error } = await supabase.storage
     .from(BUCKET)
-    .upload(fileName, arrayBuffer, { contentType, upsert: false });
+    .upload(fileName, arrayBuffer, { contentType, upsert });
 
   if (error || !data) {
     console.warn('[machineImageUpload] upload failed:', error?.message, fileName);
@@ -43,17 +44,21 @@ async function uploadToBucket(
  * webp로 변환해 `machine-images` 버킷에 `${machineId}.webp`로 업로드하고
  * 공개 URL을 반환한다. 캡처 결과가 이미 800×800이어도 기기별 캡처 오차에
  * 대비해 한 번 더 정확히 리사이즈한다.
+ *
+ * options.upsert — 기존 머신 수정 시 같은 id의 이미지를 새로 교체할 때 true로
+ * 전달한다(기본값 false = 신규 등록, 파일이 이미 있으면 실패해야 정상).
  */
 export async function uploadMachineImage(
   squareLocalUri: string,
   machineId:      string,
+  options?:       { upsert?: boolean },
 ): Promise<string | null> {
   try {
     const context  = ImageManipulator.manipulate(squareLocalUri);
     const rendered = await context.resize({ width: IMAGE_SIZE, height: IMAGE_SIZE }).renderAsync();
     const result   = await rendered.saveAsync({ compress: IMAGE_QUALITY, format: SaveFormat.WEBP });
 
-    return await uploadToBucket(result.uri, `${machineId}.webp`, 'image/webp');
+    return await uploadToBucket(result.uri, `${machineId}.webp`, 'image/webp', options?.upsert ?? false);
   } catch (err) {
     console.warn('[machineImageUpload] convert/upload error:', err);
     return null;

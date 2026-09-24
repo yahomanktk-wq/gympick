@@ -45,6 +45,7 @@ export const brandLogos: Record<string, number> = {
   POWER_LIFT:        require('../assets/brand-logos/POWER_LIFT.png'),
   PRECOR:            require('../assets/brand-logos/PRECOR.png'),
   PRIME:             require('../assets/brand-logos/PRIME.png'),
+  QUANTUM:           require('../assets/brand-logos/QUANTUM.png'),
   REAL_READER_USA:   require('../assets/brand-logos/REAL_READER_USA.png'),
   REPCON:            require('../assets/brand-logos/REPCON.png'),
   ROGERS:            require('../assets/brand-logos/ROGERS.png'),

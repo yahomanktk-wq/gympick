@@ -22,6 +22,7 @@ export function getMachinesCacheSync(): MachineWithGyms[] {
 type MachineRow = {
   id:            string;
   name:          string;
+  display_name:  string | null;
   brand:         string;
   target_muscle: string;
   category:      string;
@@ -30,10 +31,15 @@ type MachineRow = {
   line:          string | null;
 };
 
+// 모든 조회 함수가 공유하는 select 컬럼 목록 — 어드민 수정 화면이 기존 값을
+// 그대로 불러와 편집하려면 display_name까지 항상 함께 조회돼야 한다.
+const MACHINE_SELECT_COLUMNS = 'id, name, display_name, brand, target_muscle, category, exercise_kind, image_url, line';
+
 function rowToMachine(row: MachineRow): Machine {
   return {
     id:           row.id,
     name:         row.name,
+    displayName:  row.display_name ?? undefined,
     brand:        row.brand,
     targetMuscle: row.target_muscle,
     category:     row.category,
@@ -60,7 +66,7 @@ export async function fetchMachines(): Promise<MachineWithGyms[]> {
   const [machinesResult, gymMachinesResult] = await Promise.all([
     supabase
       .from('machines')
-      .select('id, name, brand, target_muscle, category, exercise_kind, image_url, line')
+      .select(MACHINE_SELECT_COLUMNS)
       .order('name')
       .range(0, 2999),
     supabase
@@ -100,7 +106,7 @@ export async function fetchMachines(): Promise<MachineWithGyms[]> {
 export async function fetchFreeWeights(): Promise<MachineWithGyms[]> {
   const { data, error } = await supabase
     .from('machines')
-    .select('id, name, brand, target_muscle, category, exercise_kind, image_url, line')
+    .select(MACHINE_SELECT_COLUMNS)
     .eq('exercise_kind', 'freeweight')
     .order('target_muscle');
 
@@ -128,7 +134,7 @@ export async function fetchFreeWeights(): Promise<MachineWithGyms[]> {
 export async function fetchMachine(id: string): Promise<MachineWithGyms | undefined> {
   const { data, error } = await supabase
     .from('machines')
-    .select('id, name, brand, target_muscle, category, exercise_kind, image_url, line')
+    .select(MACHINE_SELECT_COLUMNS)
     .eq('id', id)
     .single();
 
@@ -181,9 +187,15 @@ export async function generateMachineId(brand: string, targetMuscle: string): Pr
 
 export interface NewMachineInput {
   name:         string;
+  /** 화면에 name 대신 우선 표시할 이름(선택). */
+  displayName?: string;
   brand:        string;
   targetMuscle: string;
   category:     string;
+  /** 제품 라인명(선택). 값이 있을 때만 MachineCard에 뱃지로 표시된다. */
+  line?:         string;
+  /** 'machine' | 'freeweight'. 생략하면 'machine'. */
+  exerciseKind?: ExerciseKind;
   /**
    * 이미 800×800 흰 배경 정사각형으로 합성된 로컬 이미지 경로(선택).
    * 전달하면 생성된 id로 webp 변환·업로드까지 이 함수 안에서 처리한다
@@ -212,10 +224,12 @@ export async function insertMachine(
     const { error } = await supabase.from('machines').insert({
       id,
       name:          input.name,
+      display_name:  input.displayName?.trim() || null,
       brand:         input.brand,
       target_muscle: input.targetMuscle,
       category:      input.category,
-      exercise_kind: 'machine',
+      line:          input.line?.trim() || null,
+      exercise_kind: input.exerciseKind ?? 'machine',
       image_url:     imageUrl ?? null,
     });
 
@@ -231,4 +245,54 @@ export async function insertMachine(
   }
 
   return { error: '머신 ID 생성에 반복적으로 실패했습니다. 다시 시도해주세요.' };
+}
+
+export interface MachineUpdateInput {
+  id:            string;
+  name:          string;
+  displayName?:  string;
+  category:      string;
+  line?:         string;
+  exerciseKind:  ExerciseKind;
+  /**
+   * 새 이미지로 교체할 때만 전달한다(선택). 이미 800×800 흰 배경 정사각형으로
+   * 합성된 로컬 이미지 경로 — 전달하지 않으면 기존 image_url을 그대로 둔다.
+   * 파일명은 id로 고정되므로 업로드 시 upsert로 기존 파일을 덮어쓴다.
+   */
+  squareImageLocalUri?: string;
+}
+
+/**
+ * 기존 머신 정보를 수정한다. id·brand·target_muscle은 여기서 바꾸지 않는다 —
+ * id는 gym_machines/favorite_machines 등에서 참조되는 키라 브랜드나
+ * 타겟부위가 바뀌어도 자동으로 재생성하지 않기로 했다(어드민 화면에서도
+ * 두 필드는 잠긴 채로 표시만 된다). 실패 시 폴백 없이 에러를 그대로 반환한다.
+ */
+export async function updateMachine(
+  input: MachineUpdateInput,
+): Promise<{ ok: true } | { error: string }> {
+  const patch: Record<string, unknown> = {
+    name:          input.name,
+    display_name:  input.displayName?.trim() || null,
+    category:      input.category,
+    line:          input.line?.trim() || null,
+    exercise_kind: input.exerciseKind,
+  };
+
+  if (input.squareImageLocalUri) {
+    const imageUrl = await uploadMachineImage(input.squareImageLocalUri, input.id, { upsert: true });
+    if (!imageUrl) {
+      return { error: '이미지 업로드에 실패했습니다. 다른 값은 저장되지 않았어요 — 다시 시도해주세요.' };
+    }
+    patch.image_url = imageUrl;
+  }
+
+  const { error } = await supabase.from('machines').update(patch).eq('id', input.id);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  invalidateMachinesCache();
+  return { ok: true };
 }
