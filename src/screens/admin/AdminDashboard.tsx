@@ -89,13 +89,15 @@ import {
   fetchUserOverviewStats,
   type UserOverviewStats,
 } from '../../lib/db/userStats';
+import { fetchAllReviews } from '../../lib/db/reviews';
+import type { MachineReview } from '../../data/types';
 
 const SCREEN_W     = Dimensions.get('window').width;
 const CAT_CARD_W   = Math.floor((SCREEN_W - 40 - 12) / 2);
 
 // --- Types
 
-export type AdminView = 'home' | 'pending-gyms' | 'gym-detail' | 'machine-catalog' | 'brand-copyright' | 'gym-reports' | 'manager-requests' | 'register-gym' | 'gym-registration-requests' | 'gym-official-brands' | 'all-gyms-official' | 'machine-requests' | 'machine-register' | 'user-inquiries' | 'gym-manager-link' | 'gym-manager-link-requests' | 'user-overview' | 'analytics';
+export type AdminView = 'home' | 'pending-gyms' | 'gym-detail' | 'machine-catalog' | 'brand-copyright' | 'gym-reports' | 'manager-requests' | 'register-gym' | 'gym-registration-requests' | 'gym-official-brands' | 'all-gyms-official' | 'machine-requests' | 'machine-register' | 'user-inquiries' | 'gym-manager-link' | 'gym-manager-link-requests' | 'user-overview' | 'analytics' | 'activity-feed';
 
 // --- Shared components
 
@@ -505,6 +507,14 @@ function HomeView({ machines, pendingGymCount, gymReportCount, managerRequestCou
           sub: '브랜드별 이미지 사용 승인 관리',
           onPress: () => onPush('brand-copyright'),
           color: '#34d399',
+        },
+        {
+          icon: 'sparkles-outline' as const,
+          title: '신규 리뷰 · 요청 모아보기',
+          count: 0,
+          sub: '최신 리뷰 · 요청 내역을 한 화면에서 확인',
+          onPress: () => onPush('activity-feed'),
+          color: '#fbbf24',
         },
       ].map(q => (
         <TouchableOpacity key={q.title} style={styles.queueCard} onPress={q.onPress} activeOpacity={0.85}>
@@ -1905,7 +1915,17 @@ function GymManagerLinkView({
             activeOpacity={0.8}
           >
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: C.text }}>{profile.nickname ?? '(닉네임 없음)'}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: C.text }}>{profile.nickname ?? '(닉네임 없음)'}</Text>
+                <View style={{
+                  paddingHorizontal: 7, paddingVertical: 2, borderRadius: R.pill,
+                  backgroundColor: profile.role === 'manager' ? C.accentBg : C.surfaceHigh,
+                }}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: profile.role === 'manager' ? C.accent : C.textDim }}>
+                    {profile.role === 'admin' ? '어드민' : profile.role === 'manager' ? '매니저' : '일반유저'}
+                  </Text>
+                </View>
+              </View>
               <Text style={{ fontSize: 12, color: C.textSub, marginTop: 2 }}>{profile.email ?? ''}</Text>
             </View>
             <Ionicons name="link-outline" size={18} color={C.textSub} />
@@ -1913,6 +1933,78 @@ function GymManagerLinkView({
         ))
       )}
       <View style={{ height: 32 }} />
+    </ScrollView>
+  );
+}
+
+// --- ActivityFeedView — 신규 리뷰 + 각종 요청을 최신순으로 한 화면에 모아 보여준다.
+// 요청 종류별 승인/거절 액션은 각자의 기존 관리 화면에서 그대로 하고, 여기서는
+// 항목을 탭하면 해당 화면으로 이동만 시켜준다(리뷰는 별도 관리 화면이 없어 이동 없음).
+
+type FeedItem = {
+  id:        string;
+  kind:      'review' | 'manager_request' | 'gym_registration' | 'gym_info_report' | 'machine_request' | 'gym_manager_link';
+  createdAt: string;
+  title:     string;
+  sub:       string;
+  onPress?:  () => void;
+};
+
+const FEED_KIND_META: Record<FeedItem['kind'], { label: string; color: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = {
+  review:            { label: '신규 리뷰',        color: '#fbbf24', icon: 'star' },
+  manager_request:   { label: '매니저 신청',      color: '#a78bfa', icon: 'person-add-outline' },
+  gym_registration:  { label: '헬스장 등록 제안', color: '#fb923c', icon: 'business-outline' },
+  gym_info_report:   { label: '정보 제보',        color: '#ff7eb3', icon: 'flag-outline' },
+  machine_request:   { label: '머신 등록 신청',   color: '#22d3ee', icon: 'barbell-outline' },
+  gym_manager_link:  { label: '매니저 연결 요청', color: '#818cf8', icon: 'link-outline' },
+};
+
+function ActivityFeedView({ items, onBack }: { items: FeedItem[]; onBack: () => void }) {
+  return (
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }} showsVerticalScrollIndicator={false}>
+      <TouchableOpacity onPress={onBack} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+        <Ionicons name="chevron-back" size={20} color={C.text} />
+        <Text style={{ fontSize: 16, fontWeight: '800', color: C.text }}>신규 리뷰 · 요청 모아보기</Text>
+      </TouchableOpacity>
+      <Text style={{ fontSize: 12, color: C.textDim, marginBottom: 4 }}>
+        최신순 {items.length}건 — 항목을 누르면 해당 관리 화면으로 이동해요
+      </Text>
+
+      {items.length === 0 && (
+        <Text style={{ fontSize: 13, color: C.textDim, paddingVertical: 40, textAlign: 'center' }}>표시할 활동이 없어요.</Text>
+      )}
+
+      {items.map(item => {
+        const meta = FEED_KIND_META[item.kind];
+        const Row = (
+          <View style={{
+            flexDirection: 'row', alignItems: 'center', gap: 12,
+            backgroundColor: C.surface, borderRadius: R.card, borderWidth: 1, borderColor: C.border,
+            padding: 14,
+          }}>
+            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: meta.color + '18', alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name={meta.icon} size={17} color={meta.color} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: R.pill, backgroundColor: meta.color + '18' }}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: meta.color }}>{meta.label}</Text>
+                </View>
+                <Text style={{ fontSize: 11, color: C.textDim }}>{new Date(item.createdAt).toLocaleDateString('ko-KR')}</Text>
+              </View>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: C.text, marginTop: 4 }} numberOfLines={1}>{item.title}</Text>
+              <Text style={{ fontSize: 12, color: C.textSub, marginTop: 2 }} numberOfLines={2}>{item.sub}</Text>
+            </View>
+            {item.onPress && <Ionicons name="chevron-forward" size={16} color={C.textDim} />}
+          </View>
+        );
+        return item.onPress ? (
+          <TouchableOpacity key={item.id} onPress={item.onPress} activeOpacity={0.8}>{Row}</TouchableOpacity>
+        ) : (
+          <View key={item.id}>{Row}</View>
+        );
+      })}
+      <View style={{ height: 24 }} />
     </ScrollView>
   );
 }
@@ -1946,10 +2038,11 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
   const [machines, setMachines] = useState<MachineWithGyms[]>(() => getMachinesCacheSync());
   const [userInquiries, setUserInquiries] = useState<UserInquiry[]>([]);
   const [linkRequests, setLinkRequests] = useState<GymManagerLinkRequest[]>([]);
+  const [allReviews, setAllReviews] = useState<MachineReview[]>([]);
 
   const refreshQueues = useCallback(async () => {
     try {
-      const [requests, reports, apps, gyms, mReqs, inquiries, linkReqs] = await Promise.all([
+      const [requests, reports, apps, gyms, mReqs, inquiries, linkReqs, reviews] = await Promise.all([
         fetchGymRegistrationRequests(),
         fetchGymInfoReports(),
         fetchManagerRequests(),
@@ -1957,6 +2050,7 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
         fetchMachineRequests(),
         fetchAllUserInquiries(),
         fetchGymManagerLinkRequests(),
+        fetchAllReviews(),
       ]);
       setGymRequests(requests);
       setGymReports(reports);
@@ -1965,6 +2059,7 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
       setMachineRequests(mReqs);
       setUserInquiries(inquiries);
       setLinkRequests(linkReqs);
+      setAllReviews(reviews);
     } catch (e: any) {
       if (__DEV__) console.warn('[AdminDashboard] 큐 새로고침 오류:', e);
     }
@@ -2371,6 +2466,13 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
 
   const handleLinkManager = useCallback(async (profile: ProfileSearchResult) => {
     if (!linkGymId) return;
+    if (profile.role !== 'manager') {
+      Alert.alert(
+        '연결할 수 없어요',
+        '매니저 등급인 유저만 헬스장에 연결할 수 있어요. 먼저 "매니저 신청 관리"에서 이 유저의 매니저 신청을 승인해주세요.',
+      );
+      return;
+    }
     const { error } = await setGymManager(linkGymId, profile.id);
     if (error) {
       Alert.alert('연결 오류', '매니저 연결에 실패했습니다. ' + error);
@@ -2403,6 +2505,13 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
     }
     setLinkRequests(prev => prev.map(r => r.id === request.id ? { ...r, status: 'approved' } : r));
     await loadRegisteredGyms();
+    await sendNotification(
+      request.requesterId,
+      'gym_manager_link_approved',
+      '헬스장 연결 요청이 승인됐어요! 🎉',
+      `"${request.gymName}" 헬스장의 매니저로 연결됐어요.`,
+      request.id,
+    );
   }, [loadRegisteredGyms]);
 
   const handleRejectLinkRequest = useCallback(async (request: GymManagerLinkRequest) => {
@@ -2412,6 +2521,13 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
       return;
     }
     setLinkRequests(prev => prev.map(r => r.id === request.id ? { ...r, status: 'rejected' } : r));
+    await sendNotification(
+      request.requesterId,
+      'gym_manager_link_rejected',
+      '헬스장 연결 요청 처리 결과',
+      `"${request.gymName}" 헬스장 연결 요청이 거절됐어요.`,
+      request.id,
+    );
   }, []);
 
   const handleDeleteGym = useCallback((gymId: string, gymName: string) => {
@@ -2439,6 +2555,71 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
     );
   }, [loadRegisteredGyms]);
 
+  // --- Activity feed (신규 리뷰 + 각종 요청 모아보기) — 표시 전용, 액션은 각 관리 화면에서
+  const activityFeedItems: FeedItem[] = useMemo(() => {
+    const machineNameById = new Map(machines.map(m => [m.id, m.displayName || m.name]));
+
+    const reviewItems: FeedItem[] = allReviews.map(r => ({
+      id:        `review-${r.id}`,
+      kind:      'review',
+      createdAt: r.createdAt,
+      title:     machineNameById.get(r.machineId) ?? '머신',
+      sub:       `${r.userName} · ★${r.rating} · ${r.text}`,
+    }));
+
+    const managerReqItems: FeedItem[] = managerRequests.map(r => ({
+      id:        `manager_request-${r.id}`,
+      kind:      'manager_request',
+      createdAt: r.createdAt,
+      title:     r.gymName,
+      sub:       `매니저 신청 · ${r.status === 'pending' ? '심사 대기' : r.status === 'approved' ? '승인됨' : '반려됨'}`,
+      onPress:   () => push('manager-requests'),
+    }));
+
+    const gymRegItems: FeedItem[] = gymRequests
+      .filter(r => (r.requesterRole ?? 'user') === 'user')
+      .map(r => ({
+        id:        `gym_registration-${r.id}`,
+        kind:      'gym_registration',
+        createdAt: r.createdAt,
+        title:     r.gymName,
+        sub:       `헬스장 등록 제안 · ${r.status === 'pending' ? '검토 대기' : r.status === 'reviewed' ? '등록완료' : '등록불가'}`,
+        onPress:   () => push('gym-registration-requests'),
+      }));
+
+    const gymReportItems: FeedItem[] = gymReports.map(r => ({
+      id:        `gym_info_report-${r.id}`,
+      kind:      'gym_info_report',
+      createdAt: r.createdAt,
+      title:     `${r.gymName || '헬스장'} · ${r.reportType}`,
+      sub:       r.content,
+      onPress:   () => push('gym-reports'),
+    }));
+
+    const machineReqItems: FeedItem[] = machineRequests.map(r => ({
+      id:        `machine_request-${r.id}`,
+      kind:      'machine_request',
+      createdAt: r.createdAt,
+      title:     r.machineName,
+      sub:       `${r.gymName} · ${r.status === 'pending' ? '검토 대기' : '확인 완료'}`,
+      onPress:   () => push('machine-requests'),
+    }));
+
+    const linkReqItems: FeedItem[] = linkRequests.map(r => ({
+      id:        `gym_manager_link-${r.id}`,
+      kind:      'gym_manager_link',
+      createdAt: r.createdAt,
+      title:     r.gymName,
+      sub:       `매니저 연결 요청 · ${r.status === 'pending' ? '검토 대기' : r.status === 'approved' ? '연결됨' : '거절됨'}`,
+      onPress:   () => push('gym-manager-link-requests'),
+    }));
+
+    return [
+      ...reviewItems, ...managerReqItems, ...gymRegItems,
+      ...gymReportItems, ...machineReqItems, ...linkReqItems,
+    ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [allReviews, machines, managerRequests, gymRequests, gymReports, machineRequests, linkRequests, push]);
+
   // --- View titles
 
   const VIEW_TITLES: Record<AdminView, string> = {
@@ -2460,6 +2641,7 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
     'gym-manager-link':           `${linkGymName} 매니저 연결`,
     'gym-manager-link-requests':  '헬스장 매니저 연결 요청',
     'user-overview':              '유저 현황',
+    'activity-feed':              '신규 리뷰 · 요청 모아보기',
   };
 
   // --- Render
@@ -2677,6 +2859,9 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
           stats={userOverviewStats}
           loading={userOverviewLoading}
         />
+      )}
+      {currentView === 'activity-feed' && (
+        <ActivityFeedView items={activityFeedItems} onBack={pop} />
       )}
     </SafeAreaView>
   );

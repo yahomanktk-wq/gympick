@@ -14,6 +14,7 @@ import { C, R } from '../theme';
 import { fetchMyGymRegistrationRequests, type GymRegistrationRequest } from '../lib/db/gymRegistrationRequests';
 import { fetchMyGymInfoReports, type GymInfoReport } from '../lib/db/gymInfoReports';
 import { getManagerRequests, type ManagerRequest } from '../lib/db/managerRequests';
+import { fetchMyGymManagerLinkRequests, type GymManagerLinkRequest } from '../lib/db/gymManagerLinkRequests';
 import { getManagerDocSignedUrl } from '../lib/managerDocStorage';
 
 interface Props {
@@ -25,12 +26,14 @@ interface Props {
 type MergedItem =
   | { kind: 'gym_registration'; data: GymRegistrationRequest }
   | { kind: 'gym_info_report';  data: GymInfoReport }
-  | { kind: 'manager_request';  data: ManagerRequest };
+  | { kind: 'manager_request';  data: ManagerRequest }
+  | { kind: 'gym_manager_link'; data: GymManagerLinkRequest };
 
 const KIND_META: Record<MergedItem['kind'], { label: string; fg: string; bg: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = {
   gym_registration: { label: '헬스장 등록 제안', fg: C.tagCategory.fg, bg: C.tagCategory.bg, icon: 'business-outline' },
   gym_info_report:  { label: '정보 제보',        fg: C.tagMuscle.fg,   bg: C.tagMuscle.bg,   icon: 'flag-outline' },
   manager_request:  { label: '매니저 신청',      fg: C.tagBrand.fg,    bg: C.tagBrand.bg,    icon: 'person-add-outline' },
+  gym_manager_link: { label: '헬스장 연결 요청', fg: C.tagCategory.fg, bg: C.tagCategory.bg, icon: 'link-outline' },
 };
 
 function isPending(item: MergedItem): boolean {
@@ -53,6 +56,8 @@ function statusLabel(item: MergedItem): string {
       return status === 'pending' ? '검토 대기' : '검토 완료';
     case 'manager_request':
       return status === 'pending' ? '심사 대기' : status === 'approved' ? '승인됨' : '반려됨';
+    case 'gym_manager_link':
+      return status === 'pending' ? '검토 대기' : status === 'approved' ? '연결됨' : '거절됨';
   }
 }
 
@@ -109,6 +114,12 @@ function MyRequestCard({ item, expanded, onToggle }: { item: MergedItem; expande
             </View>
           )}
 
+          {item.kind === 'gym_manager_link' && (
+            <View style={{ gap: 4 }}>
+              <Text style={{ fontSize: 13, color: C.textSub, lineHeight: 18 }}>기존에 등록된 헬스장에 매니저로 연결해달라는 요청이에요.</Text>
+            </View>
+          )}
+
           {item.kind === 'manager_request' && (
             <View style={{ gap: 4 }}>
               <Text style={{ fontSize: 13, color: C.textSub, lineHeight: 18 }}>위치: {item.data.location}</Text>
@@ -151,15 +162,17 @@ export default function MyRequestsModal({ visible, onClose, userId }: Props) {
     if (!userId) return;
     setLoading(true);
     try {
-      const [gymRegs, gymReports, managerReqs] = await Promise.all([
+      const [gymRegs, gymReports, managerReqs, linkReqs] = await Promise.all([
         fetchMyGymRegistrationRequests(userId),
         fetchMyGymInfoReports(userId),
         getManagerRequests(userId),
+        fetchMyGymManagerLinkRequests(userId),
       ]);
       const merged: MergedItem[] = [
         ...gymRegs.map(data => ({ kind: 'gym_registration' as const, data })),
         ...gymReports.map(data => ({ kind: 'gym_info_report' as const, data })),
         ...managerReqs.map(data => ({ kind: 'manager_request' as const, data })),
+        ...linkReqs.map(data => ({ kind: 'gym_manager_link' as const, data })),
       ].sort((a, b) => b.data.createdAt.localeCompare(a.data.createdAt));
       setItems(merged);
     } catch (e: any) {

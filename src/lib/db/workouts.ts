@@ -18,6 +18,25 @@ import {
 } from '../../data/workoutSessions';
 import { getNewSessions } from '../../data/sessionStore';
 
+// ── 메모리 캐시 (사용자별) ──────────────────────────────────
+// machines.ts/gyms.ts와 동일한 패턴. fetchWorkoutLogs는 여러 화면
+// (홈/프로필/운동일지/오운완 작성/오운완 피드)에서 반복 호출되는데
+// 캐시가 전혀 없어 화면 전환·탭 포커스마다 매번 전체 재조립이
+// 일어나던 것을 방지한다. 운동 기록은 로그인 직후 자주 바뀔 수
+// 있어 TTL을 machines(5분)/gyms(30분)보다 짧게 1분으로 둔다.
+const _workoutLogsCache:    Map<string, { data: WorkoutLog[]; time: number }> = new Map();
+const _workoutLogsInFlight: Map<string, Promise<WorkoutLog[]>>                = new Map();
+const WORKOUT_LOGS_CACHE_TTL_MS = 60 * 1000; // 1분
+
+/** userId를 주면 그 사용자만, 생략하면 전체 캐시를 무효화한다. */
+export function invalidateWorkoutLogsCache(userId?: string) {
+  if (userId) {
+    _workoutLogsCache.delete(userId);
+  } else {
+    _workoutLogsCache.clear();
+  }
+}
+
 // --- Row types matching the actual Supabase table schemas
 // Notes on deviations from the TypeScript interfaces:
 //   workout_entries.sort_order  - "order" is a reserved SQL keyword
@@ -309,8 +328,36 @@ export async function fetchUserPhotos(userId: string): Promise<WorkoutPhoto[]> {
  * If fetchWorkoutSessions returns the mock dataset (detected by session IDs),
  * the pre-built MOCK_SESSIONS view is returned directly to avoid an unnecessary
  * reassembly pass.
+ *
+ * 캐시(1분 TTL)를 먼저 확인하고, 진행 중인 동일 userId 요청이 있으면
+ * 그 Promise를 그대로 공유한다 — 같은 화면이 마운트/포커스 시점에
+ * 이 함수를 중복 호출해도(예: WorkoutFeedScreen) 네트워크 요청은
+ * 한 번만 나간다. 실제 조회/조립 로직은 fetchWorkoutLogsUncached에 있다.
  */
 export async function fetchWorkoutLogs(userId: string): Promise<WorkoutLog[]> {
+  const now = Date.now();
+  const cached = _workoutLogsCache.get(userId);
+  if (cached && now - cached.time < WORKOUT_LOGS_CACHE_TTL_MS) {
+    return cached.data;
+  }
+
+  const inFlight = _workoutLogsInFlight.get(userId);
+  if (inFlight) return inFlight;
+
+  const promise = fetchWorkoutLogsUncached(userId)
+    .then(result => {
+      _workoutLogsCache.set(userId, { data: result, time: Date.now() });
+      return result;
+    })
+    .finally(() => {
+      _workoutLogsInFlight.delete(userId);
+    });
+
+  _workoutLogsInFlight.set(userId, promise);
+  return promise;
+}
+
+async function fetchWorkoutLogsUncached(userId: string): Promise<WorkoutLog[]> {
   try {
     // 1. Sessions - fetchWorkoutSessions owns the mock fallback
     const sessions = await fetchWorkoutSessions(userId);
@@ -430,6 +477,7 @@ export async function insertWorkoutSession(
     .single();
 
   if (error || !data) throw new Error(error?.message ?? 'insertWorkoutSession failed');
+  invalidateWorkoutLogsCache();
   return rowToSession(data);
 }
 
@@ -452,6 +500,7 @@ export async function insertWorkoutEntry(
     .single();
 
   if (error || !data) throw new Error(error?.message ?? 'insertWorkoutEntry failed');
+  invalidateWorkoutLogsCache();
   return rowToEntry(data);
 }
 
@@ -474,6 +523,7 @@ export async function insertWorkoutSet(
 
   if (error || !data) throw new Error(error?.message ?? 'insertWorkoutSet failed');
   track('log_set', { entry_id: set.entryId, weight: set.weight, reps: set.reps });
+  invalidateWorkoutLogsCache();
   return rowToSet(data);
 }
 
@@ -495,6 +545,7 @@ export async function insertWorkoutPhoto(
     .single();
 
   if (error || !data) throw new Error(error?.message ?? 'insertWorkoutPhoto failed');
+  invalidateWorkoutLogsCache();
   return rowToPhoto(data);
 }
 
@@ -514,6 +565,7 @@ export async function deleteWorkoutSession(sessionId: string): Promise<void> {
 
     await supabase.from('workout_sessions').delete().eq('id', sessionId);
 
+    invalidateWorkoutLogsCache();
     if (__DEV__) console.log('[workouts] deleteWorkoutSession 완료:', sessionId);
   } catch (e) {
     if (__DEV__) console.warn('[workouts] deleteWorkoutSession 오류:', e);

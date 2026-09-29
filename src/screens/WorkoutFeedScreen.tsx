@@ -193,8 +193,17 @@ function FeedDetailModal({
   onPressGym:     (gymId: string) => void;
   onPressMachine: (machineId: string) => void;
 }) {
-  const displayUri = post.compositeUri ?? post.photoUri;
-  const MODAL_W    = Dimensions.get('window').width;
+  const rawUri  = post.compositeUri ?? post.photoUri;
+  const MODAL_W = Dimensions.get('window').width;
+  // 화면에 보여줄 수 있는 실제 픽셀 수(화면 너비 × 기기 배율)로만 리사이즈 —
+  // 핀치줌 등 확대 기능이 없는 고정 크기 이미지라 화질 손실 없이 전송량만
+  // 줄어든다. 그리드 카드보다 화면에서 차지하는 비중이 큰 '메인' 사진이라
+  // quality는 기본값(75)보다 높은 95로 지정.
+  const displayUri = getTransformedImageUrl(rawUri, {
+    width:  Math.round(MODAL_W * IMAGE_PIXEL_RATIO),
+    height: Math.round(MODAL_W * (4 / 3) * IMAGE_PIXEL_RATIO),
+    quality: 95,
+  });
   const [sessionData,    setSessionData]    = useState<any>(null);
   const [sessionLoading, setSessionLoading] = useState(false);
 

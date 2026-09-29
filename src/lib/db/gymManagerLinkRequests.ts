@@ -58,6 +58,22 @@ export async function fetchGymManagerLinkRequests(): Promise<GymManagerLinkReque
   }
 }
 
+/** 내가 제출한 매니저 연결 요청 내역 (최신순) — 프로필 "내 요청 내역"용 */
+export async function fetchMyGymManagerLinkRequests(userId: string): Promise<GymManagerLinkRequest[]> {
+  try {
+    const { data, error } = await supabase
+      .from('gym_manager_link_requests')
+      .select('id, gym_id, requester_id, gym_name, status, admin_comment, created_at')
+      .eq('requester_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error || !data) return [];
+    return data.map(rowToLinkRequest);
+  } catch {
+    return [];
+  }
+}
+
 /** 매니저 연결 요청 승인/거절 처리 (다음 태스크의 어드민 사이드에서 사용) */
 export async function updateGymManagerLinkRequestStatus(
   id:            string,

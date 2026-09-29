@@ -1,7 +1,9 @@
 import { supabase } from '../supabase';
 import { Machine, MachineWithGyms, ExerciseKind } from '../../data/types';
-import { MACHINES } from '../../data/machines';
 import { uploadMachineImage } from '../machineImageUpload';
+// data/machines.ts(약 330KB, 1,984개 머신 정적 데이터)는 Supabase 조회가
+// 실패했을 때만 쓰이는 폴백이라, 앱 시작 시 항상 파싱되는 top-level import
+// 대신 실제로 필요한 에러 경로에서만 동적 import로 불러온다.
 
 // ── 메모리 캐시 ──────────────────────────────────────────────
 let _machinesCache:     MachineWithGyms[] | null = null;
@@ -76,7 +78,9 @@ export async function fetchMachines(): Promise<MachineWithGyms[]> {
 
   if (machinesResult.error || !machinesResult.data?.length) {
     if (__DEV__ && machinesResult.error) console.warn('[db/machines] fetchMachines error, using mock:', machinesResult.error.message);
-    return _machinesCache ?? MACHINES;
+    if (_machinesCache) return _machinesCache;
+    const { MACHINES } = await import('../../data/machines');
+    return MACHINES;
   }
 
   // gym_machines를 machineId 기준으로 인메모리 맵핑
@@ -140,6 +144,7 @@ export async function fetchMachine(id: string): Promise<MachineWithGyms | undefi
 
   if (error || !data) {
     if (__DEV__ && error) console.warn('[db/machines] fetchMachine error, using mock:', error.message);
+    const { MACHINES } = await import('../../data/machines');
     return MACHINES.find(m => m.id === id);
   }
 
@@ -218,7 +223,11 @@ export async function insertMachine(
 
     let imageUrl: string | undefined;
     if (input.squareImageLocalUri) {
-      imageUrl = (await uploadMachineImage(input.squareImageLocalUri, id)) ?? undefined;
+      // upsert:true — 이전 시도에서 이미지 업로드까진 성공했지만(그 다음 단계인
+      // machines insert가 실패해) id가 재사용되는 재시도 케이스에서, 파일이
+      // 이미 있다는 이유로 재업로드가 조용히 실패해 image_url이 null로 저장되는
+      // 걸 막는다.
+      imageUrl = (await uploadMachineImage(input.squareImageLocalUri, id, { upsert: true })) ?? undefined;
     }
 
     const { error } = await supabase.from('machines').insert({

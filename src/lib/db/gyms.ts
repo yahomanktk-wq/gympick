@@ -54,7 +54,7 @@ function rowToGym(row: GymRow): Gym {
 export async function fetchGyms(): Promise<Gym[]> {
   const { data, error } = await supabase
     .from('gyms')
-    .select('id, name, location, address_detail, description, latitude, longitude, hours, hours_note, phone, website')
+    .select('id, name, location, address_detail, description, latitude, longitude, hours, hours_note, phone, website, manager_id')
     .order('name');
 
   if (error || !data?.length) {

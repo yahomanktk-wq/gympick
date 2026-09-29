@@ -68,6 +68,7 @@ export interface ProfileSearchResult {
   id:       string;
   email:    string | null;
   nickname: string | null;
+  role:     string | null;
 }
 
 export async function searchProfilesByEmailOrNickname(query: string): Promise<ProfileSearchResult[]> {
@@ -75,7 +76,7 @@ export async function searchProfilesByEmailOrNickname(query: string): Promise<Pr
   if (!q) return [];
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, email, nickname')
+    .select('id, email, nickname, role')
     .or(`email.ilike.%${q}%,nickname.ilike.%${q}%`)
     .limit(20);
   if (error) {
@@ -87,6 +88,10 @@ export async function searchProfilesByEmailOrNickname(query: string): Promise<Pr
 
 // 헬스장에 매니저 연결/해제 (managerId=null이면 해제).
 // 해제 시 role 동기화를 위해 이전 매니저 id가 필요하면 previousManagerId로 전달.
+// 연결 대상은 이미 role='manager'인 유저여야 한다 — role 체크/경고는 호출부
+// (AdminDashboard.tsx의 handleLinkManager)에서 이 함수를 부르기 전에 수행한다.
+// 예전에는 여기서 자동으로 role을 'manager'로 승격시켰지만, 그 동작을 없애고
+// "매니저 등급만 연결 가능"으로 바꿨다.
 export async function setGymManager(
   gymId: string, managerId: string | null, previousManagerId?: string | null,
 ): Promise<{ error: string | null }> {
@@ -97,25 +102,10 @@ export async function setGymManager(
   if (error) return { error: error.message };
   invalidateGymsCache();
 
-  // profiles.role 동기화는 부수 효과 — 실패해도 위 gyms.manager_id 갱신 성공은 그대로 유지.
-  // 매니저 신청 승인 플로우(handleApproveGym/handleApproveApplication)와 동일하게
-  // profiles.update({ role: 'manager' }).eq('id', ...) 패턴을 사용.
+  // 연결 해제 시 role 되돌리기 동기화는 부수 효과 — 실패해도 위 gyms.manager_id
+  // 갱신 성공은 그대로 유지.
   try {
-    if (managerId) {
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', managerId)
-        .single();
-      if (profileError) {
-        console.warn('[db/adminGyms] role 동기화용 프로필 조회 실패:', profileError.message);
-      } else if (profile?.role === 'admin') {
-        if (__DEV__) console.warn('[db/adminGyms] admin 계정이 매니저로 연결됨 — role 변경 생략:', managerId);
-      } else if (profile?.role !== 'manager') {
-        const { error: roleError } = await supabase.from('profiles').update({ role: 'manager' }).eq('id', managerId);
-        if (roleError) console.warn('[db/adminGyms] profiles.role=manager 업데이트 실패:', roleError.message);
-      }
-    } else if (previousManagerId) {
+    if (previousManagerId && !managerId) {
       const { data: otherGyms, error: otherGymsError } = await supabase
         .from('gyms')
         .select('id')

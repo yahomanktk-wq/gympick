@@ -33,6 +33,7 @@ import AuthFlow from './auth/AuthFlow';
 import NotificationsScreen from './NotificationsScreen';
 import ManagerRequestModal from './flow/ManagerRequestModal';
 import ManagerManualScreen from './manager/ManagerManualScreen';
+import ManagerOnboardingModal from './manager/ManagerOnboardingModal';
 import MyRequestsModal from './MyRequestsModal';
 import { fetchUnreadCount } from '../lib/db/notifications';
 import { fetchGymRegistrationRequests } from '../lib/db/gymRegistrationRequests';
@@ -543,6 +544,8 @@ export default function ProfileScreen() {
   const [showInquiryModal,  setShowInquiryModal]  = useState(false);
   const [showMyRequests,    setShowMyRequests]    = useState(false);
   const [showManagerManual, setShowManagerManual] = useState(false);
+  // 도움말 > 헬스장 운영 가이드 "가이드 보기" — 신규 매니저 온보딩 슬라이드를 즉시 재생
+  const [showManagerGuideReplay, setShowManagerGuideReplay] = useState(false);
   const [resetLoading,      setResetLoading]      = useState<'app' | 'workout' | null>(null);
   const [showFeedbackSheet, setShowFeedbackSheet] = useState(false);
   const [feedbackText,      setFeedbackText]      = useState('');
@@ -1153,6 +1156,14 @@ export default function ProfileScreen() {
       <Modal visible={showManagerManual} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowManagerManual(false)}>
         <ManagerManualScreen onClose={() => setShowManagerManual(false)} />
       </Modal>
+      {/* 도움말 > 헬스장 운영 가이드 "가이드 보기" — 신규 매니저 가입 때와 동일한
+          온보딩 슬라이드를 다시 보여준다. 마지막 슬라이드에서 "시작하기"를 누르면
+          실제 최초 온보딩과 똑같이 헬스장 관리(등록) 화면으로 이동한다. */}
+      <ManagerOnboardingModal
+        visible={showManagerGuideReplay}
+        onComplete={() => setShowManagerGuideReplay(false)}
+        onFinish={() => { setManagerInitialView('register'); setShowManager(true); }}
+      />
       <Modal visible={showPrivacy} animationType="slide" onRequestClose={() => setShowPrivacy(false)}>
         <PrivacyPolicyScreen onClose={() => setShowPrivacy(false)} />
       </Modal>
@@ -1282,7 +1293,14 @@ export default function ProfileScreen() {
                 </View>
                 <TouchableOpacity
                   style={{ backgroundColor: C.accent, borderRadius: R.btn, paddingVertical: 12, alignItems: 'center' }}
-                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowManagerManual(true); }}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    // 온보딩 모달과 도움말 모달이 동시에 떠 있으면 안드로이드에서 새
+                    // 모달이 화면에 안 나타나는 문제가 있어(두 개의 네이티브 Modal이
+                    // 동시에 visible) 도움말을 먼저 닫고 온보딩을 띄운다.
+                    setShowHelpModal(false);
+                    setShowManagerGuideReplay(true);
+                  }}
                   activeOpacity={0.85}
                 >
                   <Text style={{ fontSize: 14, fontWeight: '800', color: C.bg }}>가이드 보기</Text>

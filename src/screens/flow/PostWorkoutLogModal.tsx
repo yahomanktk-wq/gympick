@@ -48,6 +48,7 @@ import { track } from '../../lib/analytics';
 import { submitGymRegistrationRequest } from '../../lib/db/gymRegistrationRequests';
 import { insertWorkoutSession, insertWorkoutEntry, insertWorkoutSet, insertWorkoutPhoto, fetchWorkoutEntriesForSessions, fetchWorkoutSetsForEntries } from '../../lib/db/workouts';
 import { uploadWorkoutPhoto } from '../../lib/photoStorage';
+import { androidFauxBold } from '../../lib/photoOverlayUtils';
 import { containsBannedWord } from '../../lib/bannedWords';
 import { insertFeedPost } from '../../lib/db/feedPosts';
 import { getMachineImageUrl } from '../../lib/machineImageUrl';
@@ -1862,8 +1863,8 @@ export function ClassicOverlay({ exercises, logs, nickname, timestamp, muscleLab
         <GymPickLogo color={tc} width={LOGO_STRIP_W_L} height={LOGO_STRIP_H_L} />
       </View>
       <View style={s.overlayTopRight}>
-        <Text style={[s.overlayUsername, { color: tc, fontFamily: fontSet.nickname, fontWeight: Platform.OS === 'android' ? undefined : '900' }]}>{nickname}</Text>
-        <Text style={[s.overlayTimestamp, { color: tc, fontFamily: fontSet.nickname, fontWeight: Platform.OS === 'android' ? undefined : '500' }]}>{timestamp}</Text>
+        <Text style={[s.overlayUsername, { color: tc, fontFamily: fontSet.nickname, fontWeight: Platform.OS === 'android' ? undefined : '900' }, androidFauxBold(tc)]}>{nickname}</Text>
+        <Text style={[s.overlayTimestamp, { color: tc, fontFamily: fontSet.nickname, fontWeight: Platform.OS === 'android' ? undefined : '500' }, androidFauxBold(tc)]}>{timestamp}</Text>
       </View>
       <View style={s.overlayBottomLeft}>
         <Text style={[s.overlayMuscleTitle, { color: tc, fontFamily: fontSet.muscle }]}>{muscleLabel}</Text>
@@ -1873,17 +1874,17 @@ export function ClassicOverlay({ exercises, logs, nickname, timestamp, muscleLab
             const setsLine = sets.map(st => `${st.weight} x ${st.reps}`).join(' / ');
             return (
               <View key={ex.id} style={s.overlayExBlock}>
-                <Text style={[s.overlayExName, { color: tc, fontFamily: fontSet.routine, fontWeight: Platform.OS === 'android' ? undefined : '900' }]} numberOfLines={1}>
+                <Text style={[s.overlayExName, { color: tc, fontFamily: fontSet.routine, fontWeight: Platform.OS === 'android' ? undefined : '900' }, androidFauxBold(tc)]} numberOfLines={1}>
                   {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
                 </Text>
                 {setsLine ? (
-                  <Text style={[s.overlayExSet, { color: tc, fontFamily: fontSet.routine, fontWeight: Platform.OS === 'android' ? undefined : '500' }]} numberOfLines={2}>{setsLine}</Text>
+                  <Text style={[s.overlayExSet, { color: tc, fontFamily: fontSet.routine, fontWeight: Platform.OS === 'android' ? undefined : '500' }, androidFauxBold(tc)]} numberOfLines={2}>{setsLine}</Text>
                 ) : null}
               </View>
             );
           })}
           {exercises.length > 7 && (
-            <Text style={[s.overlayExName, { color: tc, opacity: 0.6, marginTop: 2, fontFamily: fontSet.routine, fontWeight: Platform.OS === 'android' ? undefined : '900' }]}>
+            <Text style={[s.overlayExName, { color: tc, opacity: 0.6, marginTop: 2, fontFamily: fontSet.routine, fontWeight: Platform.OS === 'android' ? undefined : '900' }, androidFauxBold(tc)]}>
               {`+${exercises.length - 7} more...`}
             </Text>
           )}
@@ -2420,6 +2421,7 @@ export function LeftColOverlayB({ exercises, logs, nickname, timestamp, muscleLa
           color: tc,
           letterSpacing: 0.3,
           fontFamily: fontSet.nickname,
+          ...androidFauxBold(tc),
         }}>
           {nickname}
         </Text>
@@ -2445,6 +2447,7 @@ export function LeftColOverlayB({ exercises, logs, nickname, timestamp, muscleLa
           opacity: 0.75,
           marginBottom: 4,
           fontFamily: fontSet.nickname,
+          ...androidFauxBold(tc),
         }}>
           {timestamp}
         </Text>
@@ -2474,6 +2477,7 @@ export function LeftColOverlayB({ exercises, logs, nickname, timestamp, muscleLa
                   color: tc,
                   letterSpacing: 0.5,
                   fontFamily: fontSet.routine,
+                  ...androidFauxBold(tc),
                 }} numberOfLines={1}>
                   {`[${ex.brand.toUpperCase()}] ${ex.name.toUpperCase()}`}
                 </Text>
@@ -2485,6 +2489,7 @@ export function LeftColOverlayB({ exercises, logs, nickname, timestamp, muscleLa
                     opacity: 0.85,
                     marginTop: 2,
                     fontFamily: fontSet.routine,
+                    ...androidFauxBold(tc),
                   }} numberOfLines={1}>
                     {setsLine}
                   </Text>
@@ -2519,6 +2524,7 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
           color: tc,
           letterSpacing: 0.3,
           fontFamily: fontSet.nickname,
+          ...androidFauxBold(tc),
         }}>
           {nickname}
         </Text>
@@ -2532,6 +2538,7 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
           color: tc,
           opacity: 0.85,
           fontFamily: fontSet.nickname,
+          ...androidFauxBold(tc),
         }}>
           {timestamp}
         </Text>
@@ -2585,6 +2592,7 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
                   letterSpacing: 0.5,
                   textAlign: 'center',
                   fontFamily: fontSet.routine,
+                  ...androidFauxBold(tc),
                 }}>
                   {`[${ex.brand.toUpperCase()}]`}
                 </Text>
@@ -2597,6 +2605,7 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
                   lineHeight: 13,
                   textAlign: 'center',
                   fontFamily: fontSet.routine,
+                  ...androidFauxBold(tc),
                 }} numberOfLines={2}>
                   {ex.name.toUpperCase()}
                 </Text>
@@ -2609,6 +2618,7 @@ export function GridOverlayD({ exercises, logs, nickname, timestamp, muscleLabel
                     lineHeight: 11,
                     textAlign: 'center',
                     fontFamily: fontSet.routine,
+                    ...androidFauxBold(tc),
                   }}>
                     {`S${si + 1} ${st.weight}kg × ${st.reps}`}
                   </Text>
@@ -2648,7 +2658,7 @@ export function GridOverlayC({ exercises, logs, nickname, timestamp, muscleLabel
     <>
       {/* 상단: 닉네임 좌, 날짜 우 */}
       <View style={{ position: 'absolute', top: OVERLAY_PAD, left: OVERLAY_PAD, right: OVERLAY_PAD, flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text style={{ fontSize: 13, fontWeight: Platform.OS === 'android' ? undefined : '900', color: tc, fontFamily: fontSet.nickname }}>{nickname}</Text>
+        <Text style={{ fontSize: 13, fontWeight: Platform.OS === 'android' ? undefined : '900', color: tc, fontFamily: fontSet.nickname, ...androidFauxBold(tc) }}>{nickname}</Text>
         <Text style={{ fontSize: 10, color: tc, opacity: 0.85, fontFamily: fontSet.nickname }}>{timestamp}</Text>
       </View>
       {/* 타겟부위 */}
@@ -2675,7 +2685,7 @@ export function GridOverlayC({ exercises, logs, nickname, timestamp, muscleLabel
               <Text style={{ fontSize: 8, color: tc, opacity: 0.7, fontFamily: fontSet.routine, letterSpacing: 0.5 }} numberOfLines={1}>
                 {`[${ex.brand.toUpperCase()}]`}
               </Text>
-              <Text style={{ fontSize: 9, fontWeight: Platform.OS === 'android' ? undefined : '900', color: tc, fontFamily: fontSet.routine, marginBottom: 2 }} numberOfLines={2}>
+              <Text style={{ fontSize: 9, fontWeight: Platform.OS === 'android' ? undefined : '900', color: tc, fontFamily: fontSet.routine, marginBottom: 2, ...androidFauxBold(tc) }} numberOfLines={2}>
                 {ex.name.toUpperCase()}
               </Text>
               {sets.map((st, si) => (
@@ -2762,14 +2772,14 @@ export function GridOverlayE({ exercises, logs, nickname, timestamp, muscleLabel
           }}
         >
           <Text
-            style={{ fontSize: 10, fontWeight: Platform.OS === 'android' ? undefined : '900', color: tc, letterSpacing: 0.3, fontFamily: fontSet.nickname }}
+            style={{ fontSize: 10, fontWeight: Platform.OS === 'android' ? undefined : '900', color: tc, letterSpacing: 0.3, fontFamily: fontSet.nickname, ...androidFauxBold(tc) }}
             numberOfLines={1}
           >
             {nickname}
           </Text>
           <Text style={{ fontSize: 10, color: tc, opacity: 0.6, marginHorizontal: 5, fontFamily: fontSet.nickname }}>|</Text>
           <Text
-            style={{ fontSize: 9, fontWeight: Platform.OS === 'android' ? undefined : '600', color: tc, opacity: 0.85, fontFamily: fontSet.nickname }}
+            style={{ fontSize: 9, fontWeight: Platform.OS === 'android' ? undefined : '600', color: tc, opacity: 0.85, fontFamily: fontSet.nickname, ...androidFauxBold(tc) }}
             numberOfLines={1}
           >
             {timestamp}
@@ -2824,13 +2834,13 @@ export function GridOverlayE({ exercises, logs, nickname, timestamp, muscleLabel
                     )}
                     <View style={{ width: COL_W }}>
                       <Text
-                        style={{ fontSize: 7, fontWeight: Platform.OS === 'android' ? undefined : '700', color: tc, opacity: 0.75, letterSpacing: 0.2, fontFamily: fontSet.routine, textAlign: 'center' }}
+                        style={{ fontSize: 7, fontWeight: Platform.OS === 'android' ? undefined : '700', color: tc, opacity: 0.75, letterSpacing: 0.2, fontFamily: fontSet.routine, textAlign: 'center', ...androidFauxBold(tc) }}
                         numberOfLines={1}
                       >
                         {`[${ex.brand.toUpperCase()}]`}
                       </Text>
                       <Text
-                        style={{ fontSize: 8, fontWeight: Platform.OS === 'android' ? undefined : '900', color: tc, marginBottom: 2, fontFamily: fontSet.routine, textAlign: 'center' }}
+                        style={{ fontSize: 8, fontWeight: Platform.OS === 'android' ? undefined : '900', color: tc, marginBottom: 2, fontFamily: fontSet.routine, textAlign: 'center', ...androidFauxBold(tc) }}
                         numberOfLines={2}
                       >
                         {ex.name.toUpperCase()}
@@ -2838,7 +2848,7 @@ export function GridOverlayE({ exercises, logs, nickname, timestamp, muscleLabel
                       {sets.map((st, si) => (
                         <Text
                           key={si}
-                          style={{ fontSize: 7, fontWeight: Platform.OS === 'android' ? undefined : '600', color: tc, opacity: 0.85, fontFamily: fontSet.routine, textAlign: 'center' }}
+                          style={{ fontSize: 7, fontWeight: Platform.OS === 'android' ? undefined : '600', color: tc, opacity: 0.85, fontFamily: fontSet.routine, textAlign: 'center', ...androidFauxBold(tc) }}
                         >
                           {`S${si + 1} ${st.weight}kg × ${st.reps}`}
                         </Text>

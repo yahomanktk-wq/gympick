@@ -15,11 +15,12 @@ import {
   Platform,
   Dimensions,
   Switch,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { C, R, T } from '../../theme';
-import { ManagedGym, Machine, GymStatus, MachineWithGyms } from '../../data/types';
+import { ManagedGym, Machine, GymStatus, MachineWithGyms, Gym } from '../../data/types';
 import { fetchMachines, getMachinesCacheSync } from '../../lib/db';
 import { parseMuscles } from '../../lib/splitUtils';
 import { useAuth } from '../../context/AuthContext';
@@ -45,7 +46,7 @@ import GymStatsView from './GymStatsView';
 import * as ImagePicker from 'expo-image-picker';
 import { submitMachineRequest } from '../../lib/db/machineRequests';
 import { Image as ExpoImage } from 'expo-image';
-import { fetchGymPhotoUrlsByUser } from '../../lib/db/gymPhotos';
+import { fetchGymPhotoUrlsByUser, registerGymPhoto } from '../../lib/db/gymPhotos';
 import { fetchWeeklyVisitors } from '../../lib/db/gymStats';
 import { fetchGymFavoriteCount } from '../../lib/db/gymFavorites';
 
@@ -365,6 +366,7 @@ interface RegisterViewProps {
   onSubmit: () => void;
   onNextStep: () => void;
   onBack: () => void;
+  onRequestLink: (gymId: string, gymName: string) => void;
   resultMode: 'registered' | 'link-requested';
 }
 
@@ -661,8 +663,50 @@ const dupStyles = StyleSheet.create({
 
 function RegisterView({
   step, setStep, regForm, onChangeField, regHours, updateRegDay,
-  regNotices, toggleRegNotice, submitting, serializeHours, onSubmit, onNextStep, onBack, resultMode,
+  regNotices, toggleRegNotice, submitting, serializeHours, onSubmit, onNextStep, onBack, onRequestLink, resultMode,
 }: RegisterViewProps) {
+  // step 0 — "새로 등록" vs "기존 헬스장에 연결 요청" 선택 + 후자의 검색 UI
+  const [linkMode, setLinkMode]   = useState(false);
+  const [linkQuery, setLinkQuery] = useState('');
+  const [allGyms, setAllGyms]     = useState<Gym[] | null>(null);
+  const [linkLoading, setLinkLoading] = useState(false);
+
+  useEffect(() => {
+    if (step === 0 && linkMode && allGyms === null) {
+      setLinkLoading(true);
+      fetchGyms()
+        .then(gs => { setAllGyms(gs); setLinkLoading(false); })
+        .catch(() => { setAllGyms([]); setLinkLoading(false); });
+    }
+  }, [step, linkMode, allGyms]);
+
+  const filteredLinkGyms = useMemo(() => {
+    if (!allGyms) return [];
+    const q = linkQuery.trim().toLowerCase();
+    if (!q) return allGyms;
+    return allGyms.filter(g => g.name.toLowerCase().includes(q) || g.location.toLowerCase().includes(q));
+  }, [allGyms, linkQuery]);
+
+  const handlePickLinkGym = useCallback((g: Gym) => {
+    // 이미 다른 매니저가 연결된 헬스장은 신청 단계에서 차단 — 어드민 승인 시
+    // 기존 매니저가 조용히 밀려나는 상황을 막기 위함
+    if (g.managerId) {
+      Alert.alert(
+        '연결할 수 없어요',
+        '이미 다른 매니저가 연결된 헬스장이에요. 매니저 변경이 필요하다면 운영자에게 문의해주세요.',
+      );
+      return;
+    }
+    Alert.alert(
+      '연결 요청을 보낼까요?',
+      `"${g.name}"의 매니저로 연결해달라고 요청해요. 운영자 승인 후 반영돼요.`,
+      [
+        { text: '취소', style: 'cancel' },
+        { text: '요청 보내기', onPress: () => onRequestLink(g.id, g.name) },
+      ],
+    );
+  }, [onRequestLink]);
+
   if (step === 4) {
     const isLinkRequested = resultMode === 'link-requested';
     return (
@@ -685,7 +729,7 @@ function RegisterView({
         )}
         <TouchableOpacity
           style={[styles.registerBtn, { marginTop: 32, width: '100%' }]}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setStep(1); onBack(); }}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setStep(0); onBack(); }}
           activeOpacity={0.88}
         >
           <Text style={styles.registerBtnText}>확인</Text>
@@ -697,7 +741,96 @@ function RegisterView({
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <StepBar current={step} labels={STEP_LABELS} />
+        {step > 0 && <StepBar current={step} labels={STEP_LABELS} />}
+        {step === 0 && !linkMode && (
+          <View style={{ gap: 14 }}>
+            <Text style={styles.groupLabel}>헬스장을 어떻게 등록할까요?</Text>
+            <TouchableOpacity
+              style={styles.regChoiceCard}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setStep(1); }}
+              activeOpacity={0.85}
+            >
+              <View style={styles.regChoiceIconWrap}>
+                <Ionicons name="add-circle-outline" size={22} color={C.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.regChoiceTitle}>새 헬스장 등록하기</Text>
+                <Text style={styles.regChoiceSub}>GymPick에 아직 없는 헬스장을 새로 등록해요</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={C.textDim} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.regChoiceCard}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setLinkMode(true); }}
+              activeOpacity={0.85}
+            >
+              <View style={styles.regChoiceIconWrap}>
+                <Ionicons name="link-outline" size={22} color={C.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.regChoiceTitle}>기존 헬스장 찾아서 연결 요청</Text>
+                <Text style={styles.regChoiceSub}>이미 등록된 헬스장의 매니저로 연결해달라고 요청해요</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={C.textDim} />
+            </TouchableOpacity>
+            <View style={styles.infoNote}>
+              <Ionicons name="information-circle-outline" size={15} color={C.textSub} style={{ marginTop: 1 }} />
+              <Text style={styles.infoNoteText}>연결 요청은 운영자 승인 후 반영돼요. 승인 결과는 알림으로 안내드릴게요.</Text>
+            </View>
+          </View>
+        )}
+        {step === 0 && linkMode && (
+          <View style={{ gap: 12 }}>
+            <TouchableOpacity
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setLinkMode(false); setLinkQuery(''); }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+            >
+              <Ionicons name="chevron-back" size={18} color={C.text} />
+              <Text style={{ fontSize: 13, fontWeight: '700', color: C.text }}>선택으로 돌아가기</Text>
+            </TouchableOpacity>
+            <Field
+              label="헬스장 이름 또는 위치로 검색"
+              value={linkQuery}
+              onChangeText={setLinkQuery}
+              placeholder="예) 아이언헙, 강남구"
+            />
+            {linkLoading ? (
+              <ActivityIndicator color={C.accent} style={{ marginTop: 12 }} />
+            ) : filteredLinkGyms.length === 0 ? (
+              <Text style={{ fontSize: 13, color: C.textDim, paddingVertical: 20, textAlign: 'center' }}>
+                {linkQuery.trim() ? '검색 결과가 없어요' : '등록된 헬스장이 없어요'}
+              </Text>
+            ) : (
+              filteredLinkGyms.slice(0, 30).map(g => {
+                const isTaken = !!g.managerId;
+                return (
+                  <TouchableOpacity
+                    key={g.id}
+                    style={[styles.linkGymResultCard, isTaken && { opacity: 0.55 }]}
+                    onPress={() => handlePickLinkGym(g)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={styles.gymCardName}>{g.name}</Text>
+                        {isTaken && (
+                          <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: R.pill, backgroundColor: C.border }}>
+                            <Text style={{ fontSize: 9, fontWeight: '700', color: C.textDim }}>매니저 연결됨</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.gymCardLocRow}>
+                        <Ionicons name="location-outline" size={11} color={C.textSub} />
+                        <Text style={styles.gymCardLoc}>{g.location}</Text>
+                      </View>
+                    </View>
+                    <Ionicons name={isTaken ? 'lock-closed-outline' : 'link-outline'} size={16} color={isTaken ? C.textDim : C.accent} />
+                  </TouchableOpacity>
+                );
+              })
+            )}
+          </View>
+        )}
         {step === 1 && (
           <SectionCard title="헬스장을 소개해 주세요">
             <Field label="헬스장 이름 *"   value={regForm.name}          onChangeText={t => onChangeField('name', t)}          placeholder="예) 아이언헙 피트니스" />
@@ -742,24 +875,24 @@ function RegisterView({
             </View>
           </View>
         )}
-        <View style={styles.stepNav}>
-          {step > 1 && (
+        {step > 0 && (
+          <View style={styles.stepNav}>
             <TouchableOpacity style={styles.stepBack} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setStep(s => s - 1); }} activeOpacity={0.8}>
               <Text style={styles.stepBackText}>이전</Text>
             </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            style={[styles.stepNext, step > 1 && { flex: 1 }, submitting && step === 3 && { opacity: 0.5 }]}
-            onPress={step < 3 ? (step === 1 ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onNextStep(); } : () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setStep(s => s + 1); }) : () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onSubmit(); }}
-            activeOpacity={0.88}
-            disabled={submitting && step === 3}
-          >
-            <Text style={styles.stepNextText}>
-              {step < 3 ? '다음' : (submitting ? '요청 중...' : '등록하기')}
-            </Text>
-            {step < 3 && <Ionicons name="arrow-forward" size={15} color={C.bg} />}
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              style={[styles.stepNext, { flex: 1 }, submitting && step === 3 && { opacity: 0.5 }]}
+              onPress={step < 3 ? (step === 1 ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onNextStep(); } : () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setStep(s => s + 1); }) : () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onSubmit(); }}
+              activeOpacity={0.88}
+              disabled={submitting && step === 3}
+            >
+              <Text style={styles.stepNextText}>
+                {step < 3 ? '다음' : (submitting ? '요청 중...' : '등록하기')}
+              </Text>
+              {step < 3 && <Ionicons name="arrow-forward" size={15} color={C.bg} />}
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -1607,7 +1740,7 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
 
   // 등록 폼 초기화 + 이전 매니저 신청 정보 자동 승계 — onRegister와 initialView 진입 경로에서 공유
   const resetRegisterForm = useCallback(() => {
-    setStep(1); setRegForm(EMPTY_GYM_FORM); setRegHours(DEFAULT_HOURS); setRegNotices([]);
+    setStep(0); setRegForm(EMPTY_GYM_FORM); setRegHours(DEFAULT_HOURS); setRegNotices([]);
     setRegisterResultMode('registered');
 
     // 이전에 제출했던 매니저 신청 정보(gymName/location)가 있으면 폼에 미리 채워준다 —
@@ -1745,13 +1878,11 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
     setPendingDuplicateGym(null);
   }, []);
 
-  const handleConfirmDuplicateGym = useCallback(async () => {
-    const gym = pendingDuplicateGym;
-    setDuplicateModalVisible(false);
-    if (!gym) return;
-
+  // 기존 헬스장에 매니저 연결을 요청 — 중복 감지 확인 모달과 "기존 헬스장 찾아서 연결
+  // 요청" 검색 화면 양쪽에서 공용으로 사용
+  const requestLinkToGym = useCallback(async (gymId: string, gymName: string) => {
     setSubmitting(true);
-    const linkResult = await submitGymManagerLinkRequest(user?.id ?? '', gym.id, gym.name);
+    const linkResult = await submitGymManagerLinkRequest(user?.id ?? '', gymId, gymName);
     setSubmitting(false);
     if (!linkResult.success) {
       Alert.alert('요청 실패', linkResult.error ?? '잠시 후 다시 시도해주세요.');
@@ -1759,7 +1890,14 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
     }
     setRegisterResultMode('link-requested');
     setStep(4);
-  }, [pendingDuplicateGym, user]);
+  }, [user]);
+
+  const handleConfirmDuplicateGym = useCallback(async () => {
+    const gym = pendingDuplicateGym;
+    setDuplicateModalVisible(false);
+    if (!gym) return;
+    await requestLinkToGym(gym.id, gym.name);
+  }, [pendingDuplicateGym, requestLinkToGym]);
 
   // ─── Routine tab helpers ──────────────────────────────────────────────────
 
@@ -1912,6 +2050,15 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
           if (__DEV__) console.warn('[handleAddPhoto] 업로드 실패:', errText);
           Alert.alert('업로드 실패', '사진 업로드에 실패했습니다.');
           return;
+        }
+
+        // 업로드된 파일이 "이 헬스장 것"임을 gym_photos 표에 기록 — 이게 있어야
+        // fetchGymPhotoUrls()가 storage 버킷 전체를 뒤지지 않고 이 헬스장 사진만
+        // 바로 찾아낼 수 있다. 실패해도 파일 자체는 이미 올라갔으니 업로드는
+        // 성공으로 처리하고 경고만 남긴다.
+        const registered = await registerGymPhoto(selectedGym.id, user.id, fileName);
+        if ('error' in registered && __DEV__) {
+          console.warn('[handleAddPhoto] registerGymPhoto 실패:', registered.error);
         }
 
         const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/gym-photos/${fileName}`;
@@ -2071,6 +2218,7 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
           onSubmit={submitRegistration}
           onNextStep={handleNextStep}
           onBack={pop}
+          onRequestLink={requestLinkToGym}
           resultMode={registerResultMode}
         />
       )}
@@ -2245,6 +2393,23 @@ const styles = StyleSheet.create({
 
   registerBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: C.accent, paddingVertical: 15, borderRadius: R.btn, marginTop: 4, marginBottom: 14 },
   registerBtnText: { fontSize: 15, fontWeight: '800', color: C.bg },
+
+  // 헬스장 등록 방식 선택 (신규 등록 / 기존 헬스장 연결 요청)
+  regChoiceCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: C.surface, borderRadius: R.card, borderWidth: 1, borderColor: C.border, padding: 16,
+  },
+  regChoiceIconWrap: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: C.accentBg,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  regChoiceTitle: { fontSize: 15, fontWeight: '700', color: C.text, marginBottom: 2 },
+  regChoiceSub:   { fontSize: 12, color: C.textSub, lineHeight: 16 },
+
+  linkGymResultCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: C.surface, borderRadius: R.card, borderWidth: 1, borderColor: C.border, padding: 14,
+  },
 
   saveBtn:     { backgroundColor: C.accent, paddingVertical: 15, borderRadius: R.btn, alignItems: 'center', marginTop: 8 },
   saveBtnText: { fontSize: 15, fontWeight: '800', color: C.bg },

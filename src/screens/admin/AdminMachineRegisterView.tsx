@@ -18,8 +18,11 @@ import type { MachineWithGyms, ExerciseKind } from '../../data/types';
 import { insertMachine, updateMachine } from '../../lib/db/machines';
 import { parseMuscles } from '../../lib/splitUtils';
 
-// 짐픽 고유명사 규칙(프로젝트 지침)의 타겟부위 7종 고정.
-const TARGET_MUSCLES = ['CHEST', 'BACK', 'LEGS', 'SHOULDERS', 'ARMS', 'GLUTES', 'OTHER'];
+// 타겟부위 7종 — Supabase machines 테이블에 실제로 쓰이고 있는 표기(Title
+// Case, Leg/Shoulder는 단수)와 맞춘다. 프로젝트 문서의 "CHEST, BACK, LEGS..."
+// 표기는 화면(부위 이름) 전용이고, DB target_muscle 컬럼은 이 표기를 쓰지
+// 않아서 그대로 저장하면 기존 데이터와 값이 어긋난다.
+const TARGET_MUSCLES = ['Chest', 'Back', 'Leg', 'Shoulder', 'Arms', 'Glutes', 'Other'];
 
 const EXERCISE_KINDS: { value: ExerciseKind; label: string }[] = [
   { value: 'machine',    label: '머신' },
@@ -465,14 +468,16 @@ export default function AdminMachineRegisterView({ machines, onRegistered }: Pro
           {/* 이미지 */}
           <Text style={styles.label}>머신 이미지 (선택)</Text>
           <View style={styles.imageRow}>
-            <View ref={previewRef} collapsable={false} style={styles.previewBox}>
-              {imageUri ? (
-                <Image source={{ uri: imageUri }} style={styles.previewImage} resizeMode="contain" />
-              ) : isEditing && editingMachine?.imageUrl ? (
-                <Image source={{ uri: editingMachine.imageUrl }} style={styles.previewImage} resizeMode="contain" />
-              ) : (
-                <Ionicons name="image-outline" size={28} color={C.textDim} />
-              )}
+            <View style={styles.previewBox}>
+              <View ref={previewRef} collapsable={false} style={styles.previewInner}>
+                {imageUri ? (
+                  <Image source={{ uri: imageUri }} style={styles.previewImage} resizeMode="contain" />
+                ) : isEditing && editingMachine?.imageUrl ? (
+                  <Image source={{ uri: editingMachine.imageUrl }} style={styles.previewImage} resizeMode="contain" />
+                ) : (
+                  <Ionicons name="image-outline" size={28} color={C.textDim} />
+                )}
+              </View>
             </View>
             <TouchableOpacity style={styles.imageButton} onPress={pickImage} activeOpacity={0.85}>
               <Ionicons name="camera-outline" size={16} color={C.text} />
@@ -672,6 +677,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+  },
+  // captureRef가 실제로 캡처하는 대상 — previewBox의 테두리/모서리 곡률이
+  // 캡처된 이미지 픽셀에 그대로 구워지는 걸 막기 위해 테두리 없는 순수 흰
+  // 배경만 가진 내부 View를 따로 둔다(화면에는 previewBox의 테두리가 여전히
+  // 보이지만, 저장되는 이미지에는 포함되지 않는다).
+  previewInner: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   previewImage: {
     width: '100%',
