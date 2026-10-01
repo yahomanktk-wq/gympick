@@ -403,16 +403,20 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
           </TouchableOpacity>
           <Text style={s.navTitle} numberOfLines={1}>{gym.name}</Text>
           <View style={{ flexDirection: 'row' }}>
-            <TouchableOpacity
-              style={s.navBtn}
-              activeOpacity={0.7}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                shareGym(gym.name, gym.id);
-              }}
-            >
-              <Ionicons name="share-outline" size={20} color={C.textSub} />
-            </TouchableOpacity>
+            {/* 보유 머신 웹페이지는 매니저가 연결된 헬스장에서만 실제로 열람 가능하므로,
+                공유 버튼도 매니저 연결 헬스장에서만 노출한다. */}
+            {gym.managerId && (
+              <TouchableOpacity
+                style={s.navBtn}
+                activeOpacity={0.7}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  shareGym(gym.name, gym.id);
+                }}
+              >
+                <Ionicons name="share-outline" size={20} color={C.textSub} />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={s.navBtn}
               activeOpacity={0.7}
