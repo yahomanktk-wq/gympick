@@ -249,6 +249,30 @@ export default function ManagerRequestModal({ visible, userId, onClose }: Props)
                 매니저 신청을 위한 참고 정보입니다. 승인 후 매니저 대시보드에서 헬스장을 직접 등록할 수 있어요.
               </Text>
 
+              <View style={s.benefitsCard}>
+                <Text style={s.benefitsTitle}>매니저가 되면 이런 걸 할 수 있어요</Text>
+                {[
+                  { icon: 'business-outline' as const,     text: '헬스장 정보 직접 관리 (주소 · 운영시간 · 전화번호)' },
+                  { icon: 'barbell-outline' as const,       text: '보유 머신 직접 관리 (없는 브랜드는 신규 등록도 가능)' },
+                  { icon: 'megaphone-outline' as const,     text: '추천 루틴 · 공지사항 · 회원 요청사항 관리' },
+                  { icon: 'stats-chart-outline' as const,   text: '머신별 이용 통계 확인' },
+                  { icon: 'image-outline' as const,         text: '헬스장 사진 등록' },
+                  { icon: 'globe-outline' as const,         text: '보유 머신 웹페이지 기능 사용 (매니저 연결 헬스장 전용)' },
+                ].map((item, i) => (
+                  <View key={i} style={s.benefitRow}>
+                    <Ionicons name={item.icon} size={15} color={C.accent} style={s.benefitIcon} />
+                    <Text style={s.benefitText}>{item.text}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <View style={s.warnCard}>
+                <Ionicons name="warning" size={14} color="#f4a623" />
+                <Text style={s.warnText}>
+                  가품 머신을 등록할 경우 계정 제재/헬스장 노출 제한이 있을 수 있어요.
+                </Text>
+              </View>
+
               {blockReason && (
                 <View style={s.blockBanner}>
                   <Ionicons name="warning" size={14} color="#f4a623" />
@@ -413,6 +437,37 @@ const s = StyleSheet.create({
     borderColor: '#5a3d00',
   },
   blockBannerText: { flex: 1, fontSize: 13, color: '#f4a623', lineHeight: 18 },
+
+  benefitsCard: {
+    backgroundColor: C.surface,
+    borderRadius: R.inner,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  benefitsTitle: {
+    fontSize: 13, fontWeight: '800', color: C.text,
+    marginBottom: 12,
+  },
+  benefitRow: {
+    flexDirection: 'row', alignItems: 'flex-start',
+    gap: 8, marginBottom: 8,
+  },
+  benefitIcon: { marginTop: 1 },
+  benefitText: { flex: 1, fontSize: 13, color: C.textSub, lineHeight: 19 },
+
+  warnCard: {
+    flexDirection: 'row',
+    gap: 8,
+    backgroundColor: '#2a2000',
+    borderRadius: R.inner,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#5a3d00',
+  },
+  warnText: { flex: 1, fontSize: 12, color: '#f4a623', lineHeight: 18 },
 
   noteCard: {
     flexDirection: 'row',

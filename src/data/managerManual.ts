@@ -33,6 +33,11 @@ export const MANAGER_ONBOARDING_SLIDES: OnboardingSlide[] = [
     showManagedBadge: true,
   },
   {
+    icon: 'warning-outline',
+    title: '가품 머신은 꼭 확인해주세요',
+    body: '실제 브랜드가 아닌 가품 머신을\n정품으로 등록하면 안 돼요.\n\n적발 시 계정 제재나\n헬스장 노출 제한이 있을 수 있어요.',
+  },
+  {
     icon: 'options-outline',
     image: require('../assets/onboarding/manage.png'),
     title: '이렇게 관리해요',
@@ -43,6 +48,11 @@ export const MANAGER_ONBOARDING_SLIDES: OnboardingSlide[] = [
     image: require('../assets/onboarding/data.png'),
     title: '데이터로 확인해요',
     body: '어떤 머신이 많이 쓰이는지,\n언제 붐비는지,\n회원이 다시 오는지\n한눈에 볼 수 있어요.',
+  },
+  {
+    icon: 'checkmark-done-outline',
+    title: '매니저가 되면 이런 걸 할 수 있어요',
+    body: '· 헬스장 정보 직접 관리\n· 보유 머신 직접 관리(신규 브랜드 등록 포함)\n· 추천 루틴 · 공지사항 · 요청사항 관리\n· 머신별 이용 통계 확인\n· 헬스장 사진 등록\n· 보유 머신 웹페이지 기능 사용',
   },
   {
     icon: 'rocket-outline',
@@ -57,7 +67,13 @@ export const MANAGER_MANUAL_SECTIONS: ManualSection[] = [
     icon: 'person-circle-outline',
     iconColor: '#C6FF00',
     title: '매니저로 할 수 있는 일',
-    body: '헬스장 정보 관리, 보유 머신 등록, 추천 루틴 작성, 공지·요청 관리, 이용 통계 확인까지 직접 할 수 있어요.',
+    body: '헬스장 정보 관리, 보유 머신 등록(신규 브랜드 포함), 추천 루틴 작성, 공지·요청 관리, 이용 통계 확인, 헬스장 사진 등록, 보유 머신 웹페이지 기능까지 직접 할 수 있어요.',
+  },
+  {
+    icon: 'warning-outline',
+    iconColor: '#f4a623',
+    title: '가품 머신 등록 주의',
+    body: '실제 브랜드가 아닌 가품 머신을 정품으로 등록하면 안 돼요. 적발 시 계정 제재나 헬스장 노출 제한이 있을 수 있어요.',
   },
   {
     icon: 'business-outline',
