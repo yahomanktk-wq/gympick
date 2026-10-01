@@ -265,15 +265,10 @@ export default function RoutineReferenceScreen({
 
   useEffect(() => {
     if (!onboardingActive) return;
-    const measure = (key: OnboardingPointKey, ref: React.RefObject<View | null>) => {
-      requestAnimationFrame(() => {
-        ref.current?.measureInWindow((x, y, width, height) => {
-          onRegisterRect?.(key, { x, y, width, height });
-        });
-      });
-    };
-    if (onboardingKey === 'routine-new')  measure('routine-new', startFreshRef);
-    if (onboardingKey === 'routine-past') measure('routine-past', pastSessionsRef);
+    // 'routine-new'/'routine-past'는 각 섹션 View의 onLayout에서 측정한다 —
+    // 여기서 requestAnimationFrame으로 한 번 더 측정하면 NavHeader/StepBar가
+    // 아직 완전히 자리잡기 전의 트랜지언트 레이아웃을 잡아 스포트라이트가
+    // 엉뚱하게(StepBar~gymLabel까지 포함해서) 커지는 문제가 있어 제거했다.
     if (onboardingKey === 'routine-recommended') {
       // 1) 현재 화면 기준 위치 측정
       gymRoutinesRef.current?.measureInWindow((mx, my, mw, mh) => {
@@ -452,16 +447,10 @@ export default function RoutineReferenceScreen({
         </View>
 
         {/* ── Section 3: Gym recommended routines ───────────── */}
-        <View
-          ref={gymRoutinesRef}
-          onLayout={() => {
-            if (onboardingActive) {
-              gymRoutinesRef.current?.measureInWindow((x, y, width, height) => {
-                onRegisterRect?.('routine-recommended', { x, y, width, height });
-              });
-            }
-          }}
-        >
+        {/* 'routine-recommended' 측정은 위 useEffect에서 스크롤 보정까지
+            포함해 전담한다 — 여기서 onLayout으로 또 측정하면 스크롤 보정 전
+            값으로 덮어써질 수 있어 등록하지 않는다. */}
+        <View ref={gymRoutinesRef}>
           <SectionHeader icon="medal-outline" label="헬스장 추천 루틴" />
           {gymRoutines.length === 0 ? (
             <View style={s.emptyBox}>

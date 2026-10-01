@@ -102,7 +102,9 @@ export default function OnboardingTooltip({
       <View style={[styles.dim, { top: spot.y, left: 0, width: Math.max(spot.x, 0), height: spot.height }]} pointerEvents="auto" />
       {/* 오른쪽 */}
       <View style={[styles.dim, { top: spot.y, left: spot.x + spot.width, right: 0, height: spot.height }]} pointerEvents="auto" />
-      {/* 스포트라이트 구멍도 터치 차단 */}
+      {/* 스포트라이트 구멍은 터치 통과 — 하이라이트된 실제 UI를 직접 탭해서
+          진행해야 하는 스텝(예: 사진 촬영 탭)이 있어서, 여기만은 막으면 안 된다.
+          주변 4분할 dim 뷰만 pointerEvents="auto"로 바깥 영역 터치를 차단한다. */}
       <View
         style={{
           position: 'absolute',
@@ -111,7 +113,7 @@ export default function OnboardingTooltip({
           width: spot.width,
           height: spot.height,
         }}
-        pointerEvents="auto"
+        pointerEvents="none"
       />
 
       {/* 스포트라이트 테두리 강조 */}
