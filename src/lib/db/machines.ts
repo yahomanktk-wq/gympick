@@ -37,6 +37,31 @@ type MachineRow = {
 // 그대로 불러와 편집하려면 display_name까지 항상 함께 조회돼야 한다.
 const MACHINE_SELECT_COLUMNS = 'id, name, display_name, brand, target_muscle, category, exercise_kind, image_url, line';
 
+// PostgREST(Supabase)는 한 번의 조회당 반환 행 수에 상한이 있어서, 테이블이
+// 이 상한을 넘기면 뒤쪽 행이 응답에서 조용히 잘려나간다(에러 없이 누락됨).
+// 테이블이 계속 커지는 걸 고려해 하드코딩된 상한 대신 끝까지 페이지를 돌며
+// 전부 가져온다.
+const FETCH_PAGE_SIZE = 1000;
+
+async function fetchAllRows<T>(
+  query: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: any }>,
+): Promise<{ data: T[] | null; error: any }> {
+  const allRows: T[] = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await query(from, from + FETCH_PAGE_SIZE - 1);
+    if (error) return { data: null, error };
+    if (!data || data.length === 0) break;
+
+    allRows.push(...data);
+    if (data.length < FETCH_PAGE_SIZE) break; // 마지막 페이지
+    from += FETCH_PAGE_SIZE;
+  }
+
+  return { data: allRows, error: null };
+}
+
 function rowToMachine(row: MachineRow): Machine {
   return {
     id:           row.id,
@@ -65,15 +90,22 @@ export async function fetchMachines(): Promise<MachineWithGyms[]> {
   }
 
   // 머신 목록과 gym_machines를 동시에 한 번에 가져옴 (N+1 쿼리 방지)
+  // 두 테이블 모두 한 번의 조회 상한(PostgREST 기본/설정값)을 넘길 수 있는
+  // 규모라 fetchAllRows로 페이지를 끝까지 돌며 전부 가져온다.
   const [machinesResult, gymMachinesResult] = await Promise.all([
-    supabase
-      .from('machines')
-      .select(MACHINE_SELECT_COLUMNS)
-      .order('name')
-      .range(0, 2999),
-    supabase
-      .from('gym_machines')
-      .select('machine_id, gym_id'),
+    fetchAllRows<MachineRow>((from, to) =>
+      supabase
+        .from('machines')
+        .select(MACHINE_SELECT_COLUMNS)
+        .order('name')
+        .range(from, to),
+    ),
+    fetchAllRows<{ machine_id: string; gym_id: string }>((from, to) =>
+      supabase
+        .from('gym_machines')
+        .select('machine_id, gym_id')
+        .range(from, to),
+    ),
   ]);
 
   if (machinesResult.error || !machinesResult.data?.length) {
