@@ -49,6 +49,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { fetchGymPhotoUrlsByUser, registerGymPhoto } from '../../lib/db/gymPhotos';
 import { fetchWeeklyVisitors } from '../../lib/db/gymStats';
 import { fetchGymFavoriteCount } from '../../lib/db/gymFavorites';
+import { shareGym } from '../../lib/share';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -497,6 +498,16 @@ function HomeView({ gyms, weeklyVisitors, gymFavCount, machineCount, onOpenEdit,
             <Ionicons name="bar-chart-outline" size={14} color={C.accent} />
             <Text style={[styles.gymActionBtnText, { color: C.accent }]}>이용 통계</Text>
           </TouchableOpacity>
+          {gym.status === 'approved' && (
+            <TouchableOpacity
+              style={[styles.gymActionBtn, { marginTop: 8 }]}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); shareGym(gym.name, gym.id); }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="share-outline" size={14} color={C.accent} />
+              <Text style={styles.gymActionBtnText}>보유머신 웹페이지 공유</Text>
+            </TouchableOpacity>
+          )}
         </View>
       ))}
 
