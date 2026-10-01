@@ -34,6 +34,7 @@ export const MANAGER_ONBOARDING_SLIDES: OnboardingSlide[] = [
   },
   {
     icon: 'warning-outline',
+    image: require('../assets/onboarding/thumb-down-dynamic-color.png'),
     title: '가품 머신은 꼭 확인해주세요',
     body: '실제 브랜드가 아닌 가품 머신을\n정품으로 등록하면 안 돼요.\n\n적발 시 계정 제재나\n헬스장 노출 제한이 있을 수 있어요.',
   },
@@ -51,6 +52,7 @@ export const MANAGER_ONBOARDING_SLIDES: OnboardingSlide[] = [
   },
   {
     icon: 'checkmark-done-outline',
+    image: require('../assets/onboarding/thumb-up-dynamic-color.png'),
     title: '매니저가 되면 이런 걸 할 수 있어요',
     body: '· 헬스장 정보 직접 관리\n· 보유 머신 직접 관리(신규 브랜드 등록 포함)\n· 추천 루틴 · 공지사항 · 요청사항 관리\n· 머신별 이용 통계 확인\n· 헬스장 사진 등록\n· 보유 머신 웹페이지 기능 사용',
   },
