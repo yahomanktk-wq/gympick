@@ -46,6 +46,7 @@ import {
 } from '../../lib/db/adminGyms';
 import MachineCard from '../../components/MachineCard';
 import { getMachineImageUrl } from '../../lib/machineImageUrl';
+import { shareGym } from '../../lib/share';
 import {
   fetchGymRegistrationRequests,
   updateGymRequestStatus,
@@ -1487,6 +1488,11 @@ function RegisterGymAdminView({ machines, registeredGyms, onSave, onUpdate, onOf
               </View>
               <View style={{ flexDirection: 'row', gap: 14 }}>
                 {gym.managerId && (
+                  <TouchableOpacity onPress={() => shareGym(gym.name, gym.id)} activeOpacity={0.7}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#5ba4ff' }}>공유</Text>
+                  </TouchableOpacity>
+                )}
+                {gym.managerId && (
                   <TouchableOpacity onPress={() => onUnlinkManager(gym.id, gym.managerId)} activeOpacity={0.7}>
                     <Text style={{ fontSize: 12, fontWeight: '700', color: C.textSub }}>연결 해제</Text>
                   </TouchableOpacity>
@@ -1512,11 +1518,13 @@ function RegisterGymAdminView({ machines, registeredGyms, onSave, onUpdate, onOf
 function ManagerRequestsSupabaseView({
   requests,
   loading,
+  profiles,
   onApprove,
   onReject,
 }: {
   requests:  ManagerRequest[];
   loading:   boolean;
+  profiles:  Record<string, { email: string | null; nickname: string | null }>;
   onApprove: (id: string, comment?: string) => void;
   onReject:  (id: string, comment?: string) => void;
 }) {
@@ -1573,8 +1581,12 @@ function ManagerRequestsSupabaseView({
             </View>
           </View>
           <View style={styles.submittedRow}>
-            <Ionicons name="person-outline" size={11} color={C.textSub} />
-            <Text style={styles.submittedText}>신청자 ID: {r.userId.slice(0, 8)}... · {r.createdAt.slice(0, 10)}</Text>
+            <Ionicons name="mail-outline" size={11} color={C.textSub} />
+            <Text style={styles.submittedText}>{profiles[r.userId]?.email ?? '이메일 정보 없음'}</Text>
+          </View>
+          <View style={styles.submittedRow}>
+            <Ionicons name="at-outline" size={11} color={C.textSub} />
+            <Text style={styles.submittedText}>{profiles[r.userId]?.nickname ?? '닉네임 정보 없음'} · {r.createdAt.slice(0, 10)}</Text>
           </View>
           {r.phone.length > 0 && (
             <View style={styles.submittedRow}>
@@ -1582,6 +1594,10 @@ function ManagerRequestsSupabaseView({
               <Text style={styles.submittedText}>{r.phone}</Text>
             </View>
           )}
+          <View style={styles.submittedRow}>
+            <Ionicons name="person-outline" size={11} color={C.textSub} />
+            <Text style={styles.submittedText} selectable>신청자 ID: {r.userId}</Text>
+          </View>
           {r.message.length > 0 && (
             <Text style={[styles.pendingDesc, { marginTop: 6 }]} numberOfLines={3}>{r.message}</Text>
           )}
@@ -1868,7 +1884,7 @@ function GymManagerLinkView({
       </TouchableOpacity>
 
       <Text style={{ fontSize: 12, fontWeight: '700', color: C.textDim, letterSpacing: 1 }}>
-        이메일 또는 닉네임으로 검색
+        이메일 · 닉네임 · 이름 · 연락처로 검색
       </Text>
 
       <View style={styles.catSearchRow}>
@@ -1877,7 +1893,7 @@ function GymManagerLinkView({
           value={draft}
           onChangeText={setDraft}
           onSubmitEditing={() => onSearch(draft)}
-          placeholder="이메일 또는 닉네임 입력..."
+          placeholder="이메일, 닉네임, 이름 또는 연락처 입력..."
           placeholderTextColor={C.textDim}
           style={styles.catSearchInput}
           autoCorrect={false}
@@ -1927,6 +1943,11 @@ function GymManagerLinkView({
                 </View>
               </View>
               <Text style={{ fontSize: 12, color: C.textSub, marginTop: 2 }}>{profile.email ?? ''}</Text>
+              {(profile.name || profile.phone) && (
+                <Text style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>
+                  {[profile.name, profile.phone].filter(Boolean).join(' · ')}
+                </Text>
+              )}
             </View>
             <Ionicons name="link-outline" size={18} color={C.textSub} />
           </TouchableOpacity>
@@ -2110,12 +2131,33 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
 
   const [managerRequests,        setManagerRequests]        = useState<ManagerRequest[]>([]);
   const [managerRequestsLoading, setManagerRequestsLoading] = useState(false);
+  const [managerRequestProfiles, setManagerRequestProfiles] = useState<Record<string, { email: string | null; nickname: string | null }>>({});
 
   const loadManagerRequests = useCallback(async () => {
     setManagerRequestsLoading(true);
     const data = await fetchManagerRequests();
     setManagerRequests(data);
     setManagerRequestsLoading(false);
+
+    // manager_requests엔 이메일/닉네임이 없어서, 신청자 프로필을 별도로
+    // 배치 조회해서 화면에 같이 보여준다 (매니저 신청관리 화면 요구사항).
+    const userIds = Array.from(new Set(data.map(r => r.userId).filter(Boolean)));
+    if (userIds.length === 0) {
+      setManagerRequestProfiles({});
+      return;
+    }
+    const { supabase } = await import('../../lib/supabase');
+    const { data: profileRows, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, email, nickname')
+      .in('id', userIds);
+    if (profileError) {
+      if (__DEV__) console.warn('[AdminDashboard] 매니저 신청자 프로필 조회 실패:', profileError.message);
+      return;
+    }
+    const map: Record<string, { email: string | null; nickname: string | null }> = {};
+    (profileRows ?? []).forEach((p: any) => { map[p.id] = { email: p.email ?? null, nickname: p.nickname ?? null }; });
+    setManagerRequestProfiles(map);
   }, []);
 
   useEffect(() => {
@@ -2723,6 +2765,7 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
         <ManagerRequestsSupabaseView
           requests={managerRequests}
           loading={managerRequestsLoading}
+          profiles={managerRequestProfiles}
           onApprove={async (id, comment) => {
             const req = managerRequests.find(r => r.id === id);
             // 1. 매니저 승인 처리 (profiles.role 변경 + status/admin_comment 반영 + 로컬 상태 즉시 갱신, 행은 보존)

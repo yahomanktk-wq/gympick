@@ -63,27 +63,70 @@ export async function fetchAdminGyms(): Promise<AdminGym[]> {
   });
 }
 
-// 이메일/닉네임으로 프로필 검색 (매니저 연결용)
+// 이메일/닉네임/이름/연락처로 프로필 검색 (매니저 연결용)
+// profiles 테이블엔 연락처(전화번호) 컬럼이 없어서, 연락처 검색은 매니저 신청
+// (manager_requests)에 남아있는 전화번호로만 가능하다 — 매니저 연결 대상은
+// 전부 매니저 신청을 거쳐 role='manager'가 된 유저라, 이 테이블에 신청 당시
+// 연락처가 남아있다. 매칭된 모든 결과에 대해 연락처/이름을 함께 채워서
+// 어드민이 동명이인 등을 구분할 수 있게 한다.
 export interface ProfileSearchResult {
   id:       string;
   email:    string | null;
   nickname: string | null;
+  name:     string | null;
+  phone:    string | null;
   role:     string | null;
 }
 
 export async function searchProfilesByEmailOrNickname(query: string): Promise<ProfileSearchResult[]> {
   const q = query.trim();
   if (!q) return [];
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, email, nickname, role')
-    .or(`email.ilike.%${q}%,nickname.ilike.%${q}%`)
-    .limit(20);
-  if (error) {
-    if (__DEV__) console.warn('[db/adminGyms] searchProfilesByEmailOrNickname error:', error.message);
+
+  // 1차: profiles 자체(이메일/닉네임/이름) + manager_requests(연락처)에서
+  //      각각 매칭되는 id를 모은다.
+  const [{ data: profileHits, error: profileError }, { data: phoneHits, error: phoneError }] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('id')
+      .or(`email.ilike.%${q}%,nickname.ilike.%${q}%,name.ilike.%${q}%`)
+      .limit(20),
+    supabase
+      .from('manager_requests')
+      .select('user_id')
+      .ilike('phone', `%${q}%`)
+      .limit(20),
+  ]);
+  if (profileError && __DEV__) console.warn('[db/adminGyms] searchProfiles profile 조회 오류:', profileError.message);
+  if (phoneError && __DEV__)   console.warn('[db/adminGyms] searchProfiles 연락처 조회 오류:', phoneError.message);
+
+  const idSet = new Set<string>((profileHits ?? []).map((r: any) => r.id));
+  (phoneHits ?? []).forEach((r: any) => { if (r.user_id) idSet.add(r.user_id); });
+  const allIds = Array.from(idSet).slice(0, 20);
+  if (allIds.length === 0) return [];
+
+  // 2차: 매칭된 모든 id에 대해 프로필 + 연락처를 함께 채운다.
+  const [{ data: profiles, error: profilesError }, { data: phoneRows }] = await Promise.all([
+    supabase.from('profiles').select('id, email, nickname, name, role').in('id', allIds),
+    supabase.from('manager_requests').select('user_id, phone, created_at').in('user_id', allIds).order('created_at', { ascending: false }),
+  ]);
+  if (profilesError) {
+    if (__DEV__) console.warn('[db/adminGyms] searchProfiles 상세 조회 오류:', profilesError.message);
     return [];
   }
-  return data ?? [];
+
+  const phoneByUser: Record<string, string> = {};
+  (phoneRows ?? []).forEach((r: any) => {
+    if (r.user_id && r.phone && !phoneByUser[r.user_id]) phoneByUser[r.user_id] = r.phone; // 최신 신청 기준 1건
+  });
+
+  return (profiles ?? []).map((p: any) => ({
+    id:       p.id,
+    email:    p.email ?? null,
+    nickname: p.nickname ?? null,
+    name:     p.name ?? null,
+    role:     p.role ?? null,
+    phone:    phoneByUser[p.id] ?? null,
+  }));
 }
 
 // 헬스장에 매니저 연결/해제 (managerId=null이면 해제).
