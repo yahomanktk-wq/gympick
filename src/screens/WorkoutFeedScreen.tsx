@@ -137,6 +137,8 @@ function FeedGridCard({
         style={{ width, height: CARD_H }}
         contentFit="cover"
         cachePolicy="memory-disk"
+        placeholder={post.blurhash ? { blurhash: post.blurhash } : undefined}
+        transition={200}
       />
       {post.isMyPost && (
         <View style={{
@@ -274,6 +276,8 @@ function FeedDetailModal({
             source={{ uri: displayUri }}
             style={{ width: MODAL_W, aspectRatio: 3 / 4 }}
             contentFit="cover"
+            placeholder={post.blurhash ? { blurhash: post.blurhash } : undefined}
+            transition={200}
           />
 
           {/* 이모지 리액션 */}

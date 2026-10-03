@@ -54,6 +54,7 @@ export interface Machine {
   exerciseKind: ExerciseKind;
   copyright?:   string;
   imageUrl?:    string;
+  blurhash?:    string;      // 이미지 로딩 중 보여줄 흐릿한 placeholder (DB 트리거가 자동 계산)
   line?:        string;      // 제품 라인명 (optional, filled in gradually by project owner)
   isCustom?:    boolean;     // true면 노브랜드(매니저 직접등록) 범용 카탈로그 항목 — brand는 'STANDARD' 고정, 실제 제품 사진/브랜드 없음
 }
@@ -258,6 +259,7 @@ export type WorkoutFeedPost = {
   photoUri:     string;           // 오운완 사진 URI (원본)
   compositeUri?: string;          // 오버레이 합성 사진 URI (있으면 우선 표시)
   thumbnailUri?: string;          // 그리드/카드용 축소 변형 URI (홈/피드 썸네일 전용, 원본과 별개)
+  blurhash?:    string;           // 썸네일 로딩 중 보여줄 흐릿한 placeholder (업로드 시 기기에서 자동 계산)
   routineCardUri?: string;        // 루틴카드 이미지 URI
   sessionId?:  string;            // 연결된 workout_session id
   muscles:     string[];         // 운동 부위 (예: ['CHEST', 'BACK'])

@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { generatePhotoBlurhash } from './blurhash';
 
 const BUCKET = 'workout-photos';
 
@@ -13,6 +14,7 @@ const THUMB_QUALITY   = 0.8;
 export interface UploadWorkoutPhotoResult {
   url:           string;
   thumbnailUrl?: string;
+  blurhash?:     string;
 }
 
 async function uploadToBucket(
@@ -42,12 +44,17 @@ async function uploadToBucket(
   return urlData.publicUrl;
 }
 
+interface ThumbnailResult {
+  url:       string | undefined;
+  blurhash?: string;
+}
+
 /** 원본은 건드리지 않고, 그리드 썸네일 전용의 작은 별도 변형만 생성해 업로드한다. */
 async function uploadThumbnail(
   localUri: string,
   userId: string,
   sessionId: string,
-): Promise<string | undefined> {
+): Promise<ThumbnailResult> {
   try {
     const context  = ImageManipulator.manipulate(localUri);
     const rendered = await context.resize({ height: THUMB_LONG_EDGE }).renderAsync();
@@ -55,12 +62,19 @@ async function uploadThumbnail(
     // (JPEG는 알파를 지원하지 않아 저장 시 모서리가 불투명 색상으로 채워짐 — iOS는 흰색으로 채움)
     const result   = await rendered.saveAsync({ compress: THUMB_QUALITY, format: SaveFormat.WEBP });
 
-    const thumbFileName = `${userId}/${sessionId}_${Date.now()}_thumb.webp`;
-    const url = await uploadToBucket(result.uri, thumbFileName, 'image/webp');
-    return url ?? undefined;
+    // blurhash는 이미 리사이즈된 작은 썸네일 로컬 파일에서 바로 계산 — 네트워크
+    // 왕복 없이 기기에서 즉시 생성되고, 실패해도(undefined) 업로드는 계속 진행된다.
+    const [url, blurhash] = await Promise.all([
+      (async () => {
+        const thumbFileName = `${userId}/${sessionId}_${Date.now()}_thumb.webp`;
+        return uploadToBucket(result.uri, thumbFileName, 'image/webp');
+      })(),
+      generatePhotoBlurhash(result.uri),
+    ]);
+    return { url: url ?? undefined, blurhash };
   } catch (err) {
     console.warn('[photoStorage] thumbnail generation failed:', err);
-    return undefined;
+    return { url: undefined };
   }
 }
 
@@ -90,9 +104,9 @@ export async function uploadWorkoutPhoto(
         photo_uri:     isComposite ? null : publicUrl,
       });
 
-    const thumbnailUrl = await uploadThumbnail(localUri, userId, sessionId);
+    const thumbnail = await uploadThumbnail(localUri, userId, sessionId);
 
-    return { url: publicUrl, thumbnailUrl };
+    return { url: publicUrl, thumbnailUrl: thumbnail.url, blurhash: thumbnail.blurhash };
   } catch (err) {
     console.warn('[photoStorage] upload error:', err);
     return { url: localUri };

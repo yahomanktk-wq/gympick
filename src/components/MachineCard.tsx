@@ -20,6 +20,7 @@ export interface MachineCardMachine {
   category:     string;
   copyright?:   string;
   imageUrl?:    string;
+  blurhash?:    string;
   line?:        string;
 }
 
@@ -116,6 +117,8 @@ export default function MachineCard({ machine, width, variant = 'detail', autopl
             contentFit="contain"
             cachePolicy="memory-disk"
             autoplay={autoplay}
+            placeholder={machine.blurhash ? { blurhash: machine.blurhash } : undefined}
+            transition={200}
           />
         </View>
       </View>

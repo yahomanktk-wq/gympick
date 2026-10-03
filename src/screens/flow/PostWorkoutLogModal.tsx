@@ -5438,14 +5438,17 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     // 사진 업로드 (Supabase Storage)
     let finalPhotoUrl: string | undefined;
     let finalThumbnailUrl: string | undefined;
+    let finalBlurhash: string | undefined;
     if (effectiveCompositeUri && user && supabaseConfigured) {
       const uploaded = await uploadWorkoutPhoto(effectiveCompositeUri, user.id, sessionId, true);
       finalPhotoUrl     = uploaded.url;
       finalThumbnailUrl = uploaded.thumbnailUrl;
+      finalBlurhash     = uploaded.blurhash;
     } else if (photoUri && user && supabaseConfigured) {
       const uploaded = await uploadWorkoutPhoto(photoUri, user.id, sessionId, false);
       finalPhotoUrl     = uploaded.url;
       finalThumbnailUrl = uploaded.thumbnailUrl;
+      finalBlurhash     = uploaded.blurhash;
     }
 
     const sessionMuscles = Array.from(selectedMuscles).map(toCanonMuscle);
@@ -5567,6 +5570,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
           photoUri:       finalPhotoUrl ?? photoUri ?? effectiveCompositeUri ?? '',
           compositeUri:   finalPhotoUrl ?? effectiveCompositeUri ?? undefined,
           thumbnailUri:   finalThumbnailUrl ?? undefined,
+          blurhash:       finalBlurhash ?? undefined,
           routineCardUri: passedRoutineCardUri ?? routineCardUri ?? undefined,
           sessionId:      dbSessionId ?? sessionId,
           muscles:        Array.from(selectedMuscles).map(toCanonMuscle),

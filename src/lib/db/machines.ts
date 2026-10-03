@@ -30,12 +30,13 @@ type MachineRow = {
   category:      string;
   exercise_kind: string;
   image_url:     string | null;
+  blurhash:      string | null;
   line:          string | null;
 };
 
 // 모든 조회 함수가 공유하는 select 컬럼 목록 — 어드민 수정 화면이 기존 값을
 // 그대로 불러와 편집하려면 display_name까지 항상 함께 조회돼야 한다.
-const MACHINE_SELECT_COLUMNS = 'id, name, display_name, brand, target_muscle, category, exercise_kind, image_url, line';
+const MACHINE_SELECT_COLUMNS = 'id, name, display_name, brand, target_muscle, category, exercise_kind, image_url, blurhash, line';
 
 // PostgREST(Supabase)는 한 번의 조회당 반환 행 수에 상한이 있어서, 테이블이
 // 이 상한을 넘기면 뒤쪽 행이 응답에서 조용히 잘려나간다(에러 없이 누락됨).
@@ -43,20 +44,42 @@ const MACHINE_SELECT_COLUMNS = 'id, name, display_name, brand, target_muscle, ca
 // 전부 가져온다.
 const FETCH_PAGE_SIZE = 1000;
 
+// 2026-10-03: 순차(while) 페이지네이션 → "1페이지째에 count까지 같이 받고,
+// 나머지 페이지는 병렬로 동시 요청"하는 방식으로 변경.
+// 이전 방식은 테이블이 커질수록(1000행 페이지 기준 4페이지 이상) 왕복이
+// 그만큼 순차로 누적돼서, 캐시가 비어있는 콜드 상태(앱 첫 기동 등)에서
+// 체감 지연의 원인이 됐다. count를 별도 요청 없이 1페이지 응답에 얹어
+// 받아오면(Supabase의 `{ count: 'exact' }` 옵션) 왕복 횟수를 테이블 크기와
+// 무관하게 "1번 + 나머지 전부 동시 1번" 수준으로 유지할 수 있다.
 async function fetchAllRows<T>(
-  query: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: any }>,
+  queryPage: (
+    from: number,
+    to: number,
+    withCount: boolean,
+  ) => PromiseLike<{ data: T[] | null; count: number | null; error: any }>,
 ): Promise<{ data: T[] | null; error: any }> {
-  const allRows: T[] = [];
-  let from = 0;
+  const first = await queryPage(0, FETCH_PAGE_SIZE - 1, true);
+  if (first.error) return { data: null, error: first.error };
 
-  while (true) {
-    const { data, error } = await query(from, from + FETCH_PAGE_SIZE - 1);
+  const firstPage = first.data ?? [];
+  const total     = first.count ?? firstPage.length;
+
+  if (total <= FETCH_PAGE_SIZE) {
+    return { data: firstPage, error: null };
+  }
+
+  const remainingPageCount = Math.ceil(total / FETCH_PAGE_SIZE) - 1;
+  const remainingPromises  = Array.from({ length: remainingPageCount }, (_, i) => {
+    const from = (i + 1) * FETCH_PAGE_SIZE;
+    const to   = from + FETCH_PAGE_SIZE - 1;
+    return queryPage(from, to, false);
+  });
+
+  const remainingResults = await Promise.all(remainingPromises);
+  const allRows: T[] = [...firstPage];
+  for (const { data, error } of remainingResults) {
     if (error) return { data: null, error };
-    if (!data || data.length === 0) break;
-
-    allRows.push(...data);
-    if (data.length < FETCH_PAGE_SIZE) break; // 마지막 페이지
-    from += FETCH_PAGE_SIZE;
+    allRows.push(...(data ?? []));
   }
 
   return { data: allRows, error: null };
@@ -72,6 +95,7 @@ function rowToMachine(row: MachineRow): Machine {
     category:     row.category,
     exerciseKind: row.exercise_kind as ExerciseKind,
     imageUrl:     row.image_url ?? undefined,
+    blurhash:     row.blurhash ?? undefined,
     line:         row.line ?? undefined,
     // machines 테이블엔 별도 is_custom 컬럼이 없어서 brand로 판별한다 — 노브랜드
     // 카탈로그는 항상 brand='NONE'으로 시딩되는 규칙(src/data/customMachines.ts).
@@ -91,19 +115,20 @@ export async function fetchMachines(): Promise<MachineWithGyms[]> {
 
   // 머신 목록과 gym_machines를 동시에 한 번에 가져옴 (N+1 쿼리 방지)
   // 두 테이블 모두 한 번의 조회 상한(PostgREST 기본/설정값)을 넘길 수 있는
-  // 규모라 fetchAllRows로 페이지를 끝까지 돌며 전부 가져온다.
+  // 규모라 fetchAllRows로 페이지를 끝까지 돌며 전부 가져온다(1페이지 응답에
+  // 실린 count로 필요한 나머지 페이지를 병렬 요청).
   const [machinesResult, gymMachinesResult] = await Promise.all([
-    fetchAllRows<MachineRow>((from, to) =>
+    fetchAllRows<MachineRow>((from, to, withCount) =>
       supabase
         .from('machines')
-        .select(MACHINE_SELECT_COLUMNS)
+        .select(MACHINE_SELECT_COLUMNS, withCount ? { count: 'exact' } : undefined)
         .order('name')
         .range(from, to),
     ),
-    fetchAllRows<{ machine_id: string; gym_id: string }>((from, to) =>
+    fetchAllRows<{ machine_id: string; gym_id: string }>((from, to, withCount) =>
       supabase
         .from('gym_machines')
-        .select('machine_id, gym_id')
+        .select('machine_id, gym_id', withCount ? { count: 'exact' } : undefined)
         .range(from, to),
     ),
   ]);
@@ -254,12 +279,15 @@ export async function insertMachine(
     const id = await generateMachineId(input.brand, input.targetMuscle);
 
     let imageUrl: string | undefined;
+    let blurhash: string | undefined;
     if (input.squareImageLocalUri) {
       // upsert:true — 이전 시도에서 이미지 업로드까진 성공했지만(그 다음 단계인
       // machines insert가 실패해) id가 재사용되는 재시도 케이스에서, 파일이
       // 이미 있다는 이유로 재업로드가 조용히 실패해 image_url이 null로 저장되는
       // 걸 막는다.
-      imageUrl = (await uploadMachineImage(input.squareImageLocalUri, id, { upsert: true })) ?? undefined;
+      const uploaded = await uploadMachineImage(input.squareImageLocalUri, id, { upsert: true });
+      imageUrl = uploaded.url ?? undefined;
+      blurhash = uploaded.blurhash;
     }
 
     const { error } = await supabase.from('machines').insert({
@@ -272,6 +300,10 @@ export async function insertMachine(
       line:          input.line?.trim() || null,
       exercise_kind: input.exerciseKind ?? 'machine',
       image_url:     imageUrl ?? null,
+      // blurhash를 여기서 같이 채우면 DB 트리거(AFTER INSERT WHEN blurhash is
+      // null)가 이 행에는 발동하지 않는다 — SQL 벌크 insert 등 이 함수를 거치지
+      // 않는 경로만 트리거가 커버하게 되어 중복 계산 없이 자연스럽게 역할이 나뉜다.
+      blurhash:      blurhash ?? null,
     });
 
     if (!error) {
@@ -321,11 +353,15 @@ export async function updateMachine(
   };
 
   if (input.squareImageLocalUri) {
-    const imageUrl = await uploadMachineImage(input.squareImageLocalUri, input.id, { upsert: true });
-    if (!imageUrl) {
+    const uploaded = await uploadMachineImage(input.squareImageLocalUri, input.id, { upsert: true });
+    if (!uploaded.url) {
       return { error: '이미지 업로드에 실패했습니다. 다른 값은 저장되지 않았어요 — 다시 시도해주세요.' };
     }
-    patch.image_url = imageUrl;
+    patch.image_url = uploaded.url;
+    // 이미지를 교체하면 이전 blurhash는 새 이미지와 맞지 않게 되므로 함께 갱신한다.
+    // (참고: 기존 DB 트리거는 INSERT에만 반응해 UPDATE로 이미지를 바꾸는 경로는
+    // 커버하지 못했음 — 클라이언트에서 직접 채워 이 틈도 같이 메운다)
+    patch.blurhash = uploaded.blurhash ?? null;
   }
 
   const { error } = await supabase.from('machines').update(patch).eq('id', input.id);

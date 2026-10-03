@@ -181,6 +181,8 @@ const OunwanCard = React.memo(({ post, onPress }: {
             style={StyleSheet.absoluteFill}
             contentFit="cover"
             cachePolicy="memory-disk"
+            placeholder={post.blurhash ? { blurhash: post.blurhash } : undefined}
+            transition={200}
           />
         ) : (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: C.surfaceHigh }]} />

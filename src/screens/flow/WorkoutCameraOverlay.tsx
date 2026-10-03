@@ -14,7 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { C, R } from '../../theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import GymPickLogo from '../../components/GymPickLogo';
-import { LeftColOverlayB, ClassicOverlay, GridOverlayC, GridOverlayD, GridOverlayE, getFontSet, getLayoutType } from './PostWorkoutLogModal';
+import { LeftColOverlayB, ClassicOverlay, GridOverlayC, GridOverlayD, GridOverlayE, getFontSet, getLayoutType, type OverlayStyle } from './PostWorkoutLogModal';
 import { useFonts } from 'expo-font';
 
 const LOGO_STRIP_H = 14;
@@ -34,7 +34,7 @@ interface Props {
   nickname?: string;
   textColor: string;
   muscleLabel: string;
-  overlayStyle?: 's1a' | 's1b' | 's1c' | 's1d' | 's1e' | 's2a' | 's2b' | 's2c' | 's2d' | 's2e' | 's6a' | 's6b' | 's6c' | 's6d' | 's6e';
+  overlayStyle?: OverlayStyle;
   onCaptureDone: (uri: string) => void;
   onCancel: () => void;
 }
