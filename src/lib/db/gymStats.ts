@@ -1,4 +1,5 @@
 import { supabase } from '../supabase';
+import { parseMuscles } from '../splitUtils';
 import {
   kstAddDays,
   kstDayStartUtcIso,
@@ -101,6 +102,25 @@ export async function fetchDailyUsageStats(
   }
 }
 
+// 2026-10-19 (F5-4b): 부위별 그룹 키 = 주 부위(parseMuscles의 첫 번째).
+// 'Chest, Shoulder' 같은 복합 부위는 CHEST로 묶는다. 대소문자·복수형 표기를
+// 머신 탭의 MUSCLE_ORDER(Chest/Back/Leg/Shoulder/Arms/Glutes/Other) 표기로 여기서 한 번만 맞춘다.
+const PRIMARY_MUSCLE_CANON: Record<string, string> = {
+  chest: 'Chest',
+  back: 'Back',
+  leg: 'Leg', legs: 'Leg',
+  shoulder: 'Shoulder', shoulders: 'Shoulder',
+  arm: 'Arms', arms: 'Arms',
+  glute: 'Glutes', glutes: 'Glutes', 'hip (glutes)': 'Glutes',
+  other: 'Other',
+};
+
+function primaryMuscleKey(targetMuscle: string | null | undefined): string {
+  const first = parseMuscles(targetMuscle)[0];
+  if (!first) return 'Other';
+  return PRIMARY_MUSCLE_CANON[first.toLowerCase()] ?? first;
+}
+
 export async function fetchTopMachinesByMuscle(
   gymId:     string,
   startDate: string,
@@ -110,7 +130,7 @@ export async function fetchTopMachinesByMuscle(
 
   const byMuscle: Record<string, MachineStat[]> = {};
   for (const stat of all) {
-    const muscle = stat.targetMuscle || 'Other';
+    const muscle = primaryMuscleKey(stat.targetMuscle);
     if (!byMuscle[muscle]) byMuscle[muscle] = [];
     if (byMuscle[muscle].length < 10) {
       byMuscle[muscle].push(stat);
@@ -411,5 +431,49 @@ export async function fetchGymInsights(
   } catch (e) {
     if (__DEV__) console.warn('[gymStats] fetchGymInsights exception:', e);
     return { ...EMPTY_INSIGHTS, missingMachines: [] };
+  }
+}
+
+// ── 미사용 머신 (F5-4b) ────────────────────────────────────────────────────────
+
+export interface OwnedMachineInfo { machineId: string; machineName: string; machineBrand: string; targetMuscle: string; }
+
+const IN_CHUNK = 200;
+
+/** 보유 머신 중 기간 내 한 번도 기록되지 않은 머신 (이름순). 실패 → null */
+export async function fetchUnusedMachines(
+  gymId:    string,
+  ownedIds: string[],
+  usedIds:  string[],
+): Promise<OwnedMachineInfo[] | null> {
+  const used   = new Set(usedIds);
+  const unused = Array.from(new Set(ownedIds)).filter(id => !used.has(id));
+  if (unused.length === 0) return [];
+
+  try {
+    const rows: any[] = [];
+    for (let i = 0; i < unused.length; i += IN_CHUNK) {
+      const { data, error } = await supabase
+        .from('machines')
+        .select('id, name, display_name, brand, target_muscle')
+        .in('id', unused.slice(i, i + IN_CHUNK));
+      if (error || !data) {
+        if (__DEV__) console.warn('[gymStats] fetchUnusedMachines error:', gymId, error?.message);
+        return null;
+      }
+      rows.push(...data);
+    }
+
+    return rows
+      .map(r => ({
+        machineId:    r.id as string,
+        machineName:  (r.display_name ?? r.name ?? '') as string,
+        machineBrand: (r.brand ?? '') as string,
+        targetMuscle: (r.target_muscle ?? '') as string,
+      }))
+      .sort((a, b) => a.machineName.localeCompare(b.machineName));
+  } catch (e) {
+    if (__DEV__) console.warn('[gymStats] fetchUnusedMachines exception:', e);
+    return null;
   }
 }

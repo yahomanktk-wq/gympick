@@ -16,7 +16,9 @@ import {
   fetchMachineAvgStats,
   fetchMemberCount,
   fetchGymInsights,
+  fetchUnusedMachines,
   GymInsights,
+  OwnedMachineInfo,
   emptyPeakGrid,
   MachineStat,
   DailyUsage,
@@ -84,6 +86,8 @@ export default function GymStatsView({ gymId }: GymStatsViewProps) {
   const [avgStats,        setAvgStats]        = useState<MachineAvgStats[]>([]);
   const [ownedLoadFailed, setOwnedLoadFailed] = useState(false);
   const [memberCount,     setMemberCount]     = useState(0);
+  const [unusedMachines,  setUnusedMachines]  = useState<OwnedMachineInfo[] | null>([]);
+  const [ownedCount,      setOwnedCount]      = useState(0);
   const [insights,        setInsights]        = useState<GymInsights>({ pageViews: 0, searchAppearances: 0, missingMachines: [] });
   // 실제로 불러온 기간 (개요 '기간 요약' 제목 표시용)
   const [loadedRange,     setLoadedRange]     = useState<{ start: string; end: string } | null>(null);
@@ -94,12 +98,15 @@ export default function GymStatsView({ gymId }: GymStatsViewProps) {
     setLoading(true);
     const { start: s1, end: e1 } =
       period === 'custom' && customRange ? customRange : getPeriodDates(period);
+    // 가동률 계산용으로 이미 불러오는 보유 머신 ID를 미사용 머신 계산에도 재사용 (추가 조회 없음)
+    let ownedIds: string[] | null = null;
     const [machine, daily, top, peak, activation, avg, members, insightData] = await Promise.all([
       fetchMachineUsageStats(gymId, s1, e1),
       fetchDailyUsageStats(gymId, s1, e1),
       fetchTopMachinesByMuscle(gymId, s1, e1),
       fetchPeakTimeStats(gymId, s1, e1),
       fetchOwnedMachineIds(gymId).then(async owned => {
+        ownedIds = owned;
         setOwnedLoadFailed(owned === null);
         return fetchMachineActivationRate(gymId, owned ?? [], s1, e1);
       }),
@@ -115,6 +122,9 @@ export default function GymStatsView({ gymId }: GymStatsViewProps) {
     setAvgStats(avg);
     setMemberCount(members);
     setInsights(insightData);
+    const owned = ownedIds as string[] | null;
+    setOwnedCount(owned?.length ?? 0);
+    setUnusedMachines(owned === null ? null : await fetchUnusedMachines(gymId, owned, machine.map(m => m.machineId)));
     setLoadedRange({ start: s1, end: e1 });
 
     const retention = await fetchRetentionStats(gymId);
@@ -241,6 +251,10 @@ export default function GymStatsView({ gymId }: GymStatsViewProps) {
               machineStats={machineStats}
               topByMuscle={topByMuscle}
               avgStats={avgStats}
+              totalUsage={machineStats.reduce((sum, m) => sum + m.usageCount, 0)}
+              unusedMachines={unusedMachines}
+              ownedCount={ownedCount}
+              ownedLoadFailed={ownedLoadFailed}
             />
           )}
 

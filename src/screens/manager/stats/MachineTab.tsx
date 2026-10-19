@@ -2,34 +2,51 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C } from '../../../theme';
-import { MachineStat, MachineAvgStats } from '../../../lib/db/gymStats';
+import { MachineStat, MachineAvgStats, OwnedMachineInfo } from '../../../lib/db/gymStats';
 import { getMachineImageUrl } from '../../../lib/machineImageUrl';
 import { s } from './statsStyles';
+import UnusedMachinesSection from './UnusedMachinesSection';
 
-// 매니저 이용 통계 — 머신 탭 (F5-2). 이용 순위 / 부위별 / 평균 분석 — 기존 탭 내용을 그대로 이동.
+// 매니저 이용 통계 — 머신 탭. 이용 순위 / 부위별 / 평균 분석(F5-2에서 이동) + 미사용(F5-4b).
+// F5-4b: 기록이 적을 때 안내 문구, 평균 분석은 2회 이상 이용된 머신만.
 
 const MACHINE_IMG_URL = (id: string) => getMachineImageUrl(id, { width: 96 });
 
 const MUSCLE_ORDER = ['Chest', 'Back', 'Leg', 'Shoulder', 'Arms', 'Glutes', 'Other'];
 
-type Section = 'usage' | 'muscle' | 'avg';
+// 기간 내 총 이용(운동 기록) 수가 이보다 적으면 순위가 부정확하다는 안내를 붙인다
+const MIN_USAGE_FOR_RANKING = 5;
+// 평균 분석은 이 횟수 이상 이용된 머신만 보여준다
+const MIN_USAGE_FOR_AVG = 2;
+
+type Section = 'usage' | 'muscle' | 'avg' | 'unused';
 
 const SECTIONS: { key: Section; label: string }[] = [
   { key: 'usage',  label: '이용 순위' },
   { key: 'muscle', label: '부위별' },
   { key: 'avg',    label: '평균 분석' },
+  { key: 'unused', label: '미사용' },
 ];
+
+function ThinDataNote({ text }: { text: string }) {
+  return <Text style={{ fontSize: 11, color: C.textDim, marginBottom: 8 }}>{text}</Text>;
+}
 
 interface Props {
   machineStats: MachineStat[];
   topByMuscle:  Record<string, MachineStat[]>;
   avgStats:     MachineAvgStats[];
+  totalUsage:      number;
+  unusedMachines:  OwnedMachineInfo[] | null;
+  ownedCount:      number;
+  ownedLoadFailed: boolean;
 }
 
-export default function MachineTab({ machineStats, topByMuscle, avgStats }: Props) {
+export default function MachineTab({ machineStats, topByMuscle, avgStats, totalUsage, unusedMachines, ownedCount, ownedLoadFailed }: Props) {
   const [section, setSection] = useState<Section>('usage');
 
-  const totalUsage = machineStats.reduce((sum, m) => sum + m.usageCount, 0);
+  const isThinData = totalUsage > 0 && totalUsage < MIN_USAGE_FOR_RANKING;
+  const avgShown   = avgStats.filter(m => m.usageCount >= MIN_USAGE_FOR_AVG);
   const maxUsage   = machineStats.length > 0 ? machineStats[0].usageCount : 1;
 
   const muscleKeys = Object.keys(topByMuscle).sort((a, b) => {
@@ -40,7 +57,7 @@ export default function MachineTab({ machineStats, topByMuscle, avgStats }: Prop
 
   return (
     <View style={{ gap: 16 }}>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {SECTIONS.map(sec => (
           <TouchableOpacity
             key={sec.key}
@@ -66,6 +83,8 @@ export default function MachineTab({ machineStats, topByMuscle, avgStats }: Prop
               <Text style={s.emptyText}>해당 기간에 운동 기록이 없어요</Text>
             </View>
           ) : (
+            <>
+            {isThinData && <ThinDataNote text="회원 기록이 더 쌓이면 순위가 더 정확해져요" />}
             <View style={s.card}>
               {machineStats.map((m, i) => (
                 <View key={m.machineId} style={[s.machineRow, i > 0 && s.divider]}>
@@ -90,6 +109,7 @@ export default function MachineTab({ machineStats, topByMuscle, avgStats }: Prop
                 </View>
               ))}
             </View>
+            </>
           )}
         </View>
       )}
@@ -103,7 +123,9 @@ export default function MachineTab({ machineStats, topByMuscle, avgStats }: Prop
               <Text style={s.emptyText}>해당 기간에 운동 기록이 없어요</Text>
             </View>
           ) : (
-            muscleKeys.map(muscle => (
+            <>
+            {isThinData && <ThinDataNote text="회원 기록이 더 쌓이면 순위가 더 정확해져요" />}
+            {muscleKeys.map(muscle => (
               <View key={muscle}>
                 <Text style={s.muscleHeader}>{muscle.toUpperCase()}</Text>
                 <View style={s.card}>
@@ -126,7 +148,8 @@ export default function MachineTab({ machineStats, topByMuscle, avgStats }: Prop
                   ))}
                 </View>
               </View>
-            ))
+            ))}
+            </>
           )}
         </View>
       )}
@@ -142,9 +165,16 @@ export default function MachineTab({ machineStats, topByMuscle, avgStats }: Prop
               <Ionicons name="analytics-outline" size={36} color={C.textDim} />
               <Text style={s.emptyText}>해당 기간에 데이터가 없어요</Text>
             </View>
+          ) : avgShown.length === 0 ? (
+            <View style={s.emptyWrap}>
+              <Ionicons name="analytics-outline" size={36} color={C.textDim} />
+              <Text style={s.emptyText}>회원 기록이 더 쌓이면 평균이 보여요</Text>
+            </View>
           ) : (
+            <>
+            <ThinDataNote text="2회 이상 이용된 머신만 보여요" />
             <View style={s.card}>
-              {avgStats.map((m, i) => (
+              {avgShown.map((m, i) => (
                 <View key={m.machineId} style={[s.machineRow, i > 0 && s.divider]}>
                   <Image
                     source={{ uri: MACHINE_IMG_URL(m.machineId) }}
@@ -165,8 +195,18 @@ export default function MachineTab({ machineStats, topByMuscle, avgStats }: Prop
                 </View>
               ))}
             </View>
+            </>
           )}
         </View>
+      )}
+
+      {/* ── 미사용 머신 (F5-4b) ── */}
+      {section === 'unused' && (
+        <UnusedMachinesSection
+          unusedMachines={unusedMachines}
+          ownedCount={ownedCount}
+          ownedLoadFailed={ownedLoadFailed}
+        />
       )}
     </View>
   );
