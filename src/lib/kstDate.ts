@@ -63,6 +63,11 @@ export function kstHourAndWeekday(isoTimestamp: string): { hour: number; weekday
   return { hour: d.getUTCHours(), weekday: d.getUTCDay() };
 }
 
+/** 지금 KST 기준 요일 (0=일 .. 6=토). 렌더 시점마다 호출해서 자정 넘김도 반영된다. */
+export function kstWeekdayNow(): number {
+  return kstHourAndWeekday(new Date().toISOString()).weekday;
+}
+
 /** KST month ranges as 'YYYY-MM-DD': this month 1st → today, last month 1st → last day */
 export function kstMonthRanges(): { thisStart: string; thisEnd: string; lastStart: string; lastEnd: string } {
   const today = kstToday();

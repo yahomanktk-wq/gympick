@@ -19,6 +19,9 @@ import {
   Alert,
   Image,
   ActivityIndicator,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
+  LayoutChangeEvent,
 } from 'react-native';
 import { brandLogos } from '../../constants/brandLogos';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,7 +34,7 @@ import { useNavigation } from '@react-navigation/native';
 import { C, R, T } from '../../theme';
 import { fetchGymWithMachines } from '../../lib/db/gyms';
 import { GymWithMachines } from '../../data/types';
-import { GYM_DETAILS, DayHours } from '../../data/gymDetails';
+import { GYM_DETAILS } from '../../data/gymDetails';
 import MachineDetailModal from './MachineDetailModal';
 import { isGymFavorite, toggleGymFavorite } from '../../data/gymFavoriteStore';
 import { addGymFavoriteDB, removeGymFavoriteDB } from '../../lib/db/gymFavorites';
@@ -42,13 +45,10 @@ import { getMachineImageUrl } from '../../lib/machineImageUrl';
 import { containsBannedWord } from '../../lib/bannedWords';
 import { shareGym } from '../../lib/share';
 import GymOunwanStrip from '../../components/gym/GymOunwanStrip';
+import GymHoursRow from '../../components/gym/GymHoursRow';
 
 const SCREEN_W = Dimensions.get('window').width;
 const CARD_W   = (SCREEN_W - 32 - 8) / 2;
-
-// --- Today's day name
-
-const TODAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()];
 
 // --- Sub-components
 
@@ -177,30 +177,6 @@ const PhotoViewer = React.memo(({
   );
 });
 
-function HoursTable({ hours }: { hours: DayHours[] }) {
-  return (
-    <View style={s.hoursTable}>
-      {hours.map((row, i) => {
-        const isToday  = row.day === TODAY;
-        const isClosed = !!row.closed;
-        return (
-          <View key={row.day} style={[s.hoursRow, i > 0 && s.hoursRowBorder]}>
-            <View style={s.hoursDayWrap}>
-              {isToday && <View style={s.todayDot} />}
-              <Text style={[s.hoursDay, isToday && s.hoursDayToday]}>{row.day}</Text>
-            </View>
-            {isClosed ? (
-              <Text style={s.hoursClosed}>휴무</Text>
-            ) : (
-              <Text style={[s.hoursTime, isToday && s.hoursTimeToday]}>{row.hours}</Text>
-            )}
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
 const GymMachineItem = React.memo(({
   machine,
   cardWidth,
@@ -224,63 +200,6 @@ const GymMachineItem = React.memo(({
   </TouchableOpacity>
 ));
 
-function HoursText({ hours }: { hours: string }) {
-  // "월 09:00~22:00, 화 09:00~22:00" 형식을 줄바꿈으로 분리
-  const lines = hours.split(',').map(s => s.trim()).filter(Boolean);
-  return (
-    <View style={{ padding: 16, gap: 8 }}>
-      {lines.map((line, i) => (
-        <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={[s.infoText, { fontWeight: '600', minWidth: 20 }]}>
-            {line.slice(0, 1)}
-          </Text>
-          <Text style={s.infoText}>{line.slice(1).trim()}</Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-
-// DB hours 문자열("월 09:00~22:00, 화 ...")을 월~일 7요일로 전개.
-// 문자열에 없는 요일은 '휴무'로 표시. (enabled 요일만 저장되는 형식을 보완)
-const HANGUL_DAYS = ['월', '화', '수', '목', '금', '토', '일'] as const;
-const TODAY_KO = ['일', '월', '화', '수', '목', '금', '토'][new Date().getDay()];
-
-function HoursTextAllDays({ hours }: { hours: string }) {
-  // "월 09:00~22:00" → { '월': '09:00~22:00', ... }
-  const map: Record<string, string> = {};
-  hours.split(',').map(s => s.trim()).filter(Boolean).forEach(seg => {
-    const sp = seg.indexOf(' ');
-    if (sp < 0) return;
-    const label = seg.slice(0, sp).trim();
-    const time  = seg.slice(sp + 1).trim();
-    if (label) map[label] = time;
-  });
-
-  return (
-    <View style={s.hoursTable}>
-      {HANGUL_DAYS.map((d, i) => {
-        const isToday  = d === TODAY_KO;
-        const time     = map[d];
-        const isClosed = !time;
-        return (
-          <View key={d} style={[s.hoursRow, i > 0 && s.hoursRowBorder]}>
-            <View style={s.hoursDayWrap}>
-              {isToday && <View style={s.todayDot} />}
-              <Text style={[s.hoursDay, isToday && s.hoursDayToday]}>{d}</Text>
-            </View>
-            {isClosed ? (
-              <Text style={s.hoursClosed}>휴무</Text>
-            ) : (
-              <Text style={[s.hoursTime, isToday && s.hoursTimeToday]}>{time}</Text>
-            )}
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
 // --- Props
 
 interface Props {
@@ -294,6 +213,8 @@ interface Props {
 // --- Tab type
 
 type GymTab = '머신' | '정보' | '커뮤니티';
+// 탭 순서 = 좌우 스와이프 페이지 순서 (2026-10-20)
+const TAB_ORDER: GymTab[] = ['머신', '정보', '커뮤니티'];
 
 // --- Component
 
@@ -310,6 +231,60 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
   const [selectedMachineId,   setSelectedMachineId]   = useState<string | null>(null);
   const [isFav,               setIsFav]               = useState(false);
   const [activeTab,           setActiveTab]           = useState<GymTab>('정보');
+  // ── 좌우 스와이프 탭 (2026-10-20) ──
+  // 가로 페이지 ScrollView 하나에 탭 3개를 나란히 두고, 탭 버튼과 스와이프가 같은 상태를 쓴다.
+  // 처음 들어간 탭만 렌더한다(머신 그리드가 무거워서 미리 그리지 않음).
+  const pagerRef = useRef<ScrollView>(null);
+  const [pageSize,    setPageSize]    = useState<{ w: number; h: number }>({ w: 0, h: 0 });
+  const [visitedTabs, setVisitedTabs] = useState<Set<GymTab>>(() => new Set<GymTab>(['정보']));
+  const activeTabRef = useRef<GymTab>('정보');
+  activeTabRef.current = activeTab;
+
+  function markVisited(tab: GymTab) {
+    setVisitedTabs(prev => (prev.has(tab) ? prev : new Set(prev).add(tab)));
+  }
+
+  function goToTab(tab: GymTab, animated = true) {
+    setActiveTab(tab);
+    markVisited(tab);
+    const w = pageSize.w;
+    if (w > 0) pagerRef.current?.scrollTo({ x: TAB_ORDER.indexOf(tab) * w, animated });
+  }
+
+  // 페이저가 (다시) 그려질 때마다 현재 탭 위치로 맞춘다. 페이지 너비가 state로 반영된 뒤에
+  // 스크롤해야 Android에서 0으로 잘리지 않으므로 effect에서 처리하고, 맞추기 전에는 숨겨 둔다.
+  const [pagerReady,  setPagerReady]  = useState(false);
+  const [layoutTick,  setLayoutTick]  = useState(0);
+
+  function handlePagerLayout(e: LayoutChangeEvent) {
+    const { width, height } = e.nativeEvent.layout;
+    if (width !== pageSize.w || height !== pageSize.h) setPageSize({ w: width, h: height });
+    setLayoutTick(t => t + 1);
+  }
+
+  useEffect(() => {
+    if (pageSize.w <= 0) return;
+    const id = requestAnimationFrame(() => {
+      pagerRef.current?.scrollTo({ x: TAB_ORDER.indexOf(activeTabRef.current) * pageSize.w, animated: false });
+      setPagerReady(true);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [layoutTick, pageSize.w]);
+
+  // 모달이 닫히면 페이저가 언마운트되므로, 다시 열릴 때 위치를 맞추기 전까지 숨긴다
+  useEffect(() => { if (!visible) setPagerReady(false); }, [visible]);
+
+  function handlePagerMomentumEnd(e: NativeSyntheticEvent<NativeScrollEvent>) {
+    const w = pageSize.w;
+    if (w <= 0) return;
+    const idx = Math.max(0, Math.min(TAB_ORDER.length - 1, Math.round(e.nativeEvent.contentOffset.x / w)));
+    const tab = TAB_ORDER[idx];
+    if (tab !== activeTabRef.current) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setActiveTab(tab);
+      markVisited(tab);
+    }
+  }
   const [showAllMachines,     setShowAllMachines]     = useState(false);
   const [machineMuscleFilter, setMachineMuscleFilter] = useState('전체');
   const [machineBrandFilter,  setMachineBrandFilter]  = useState('전체');
@@ -331,6 +306,8 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
   useEffect(() => {
     setIsFav(gymId ? isGymFavorite(gymId) : false);
     setActiveTab('정보');
+    setVisitedTabs(new Set<GymTab>(['정보']));
+    if (pageSize.w > 0) pagerRef.current?.scrollTo({ x: TAB_ORDER.indexOf('정보') * pageSize.w, animated: false });
     setMachineMuscleFilter('전체');
     setMachineBrandFilter('전체');
   }, [gymId]);
@@ -480,11 +457,11 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
 
         {/* ── Tab bar ── */}
         <View style={s.tabBar}>
-          {(['머신', '정보', '커뮤니티'] as GymTab[]).map((tab) => (
+          {TAB_ORDER.map((tab) => (
             <TouchableOpacity
               key={tab}
               style={[s.tabBtn, activeTab === tab && s.tabBtnActive]}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveTab(tab); }}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); goToTab(tab); }}
               activeOpacity={0.8}
             >
               <Text style={[s.tabBtnText, activeTab === tab && s.tabBtnTextActive]}>
@@ -494,14 +471,23 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
           ))}
         </View>
 
-        {/* ── 커뮤니티 tab ── */}
-        {activeTab === '커뮤니티' && (
-          <GymCommunityTab gymId={gymId} gymName={gym.name} onPressMachine={setSelectedMachineId} />
-        )}
-
+        {/* ── 탭 본문: 좌우 스와이프 페이지 (머신 | 정보 | 커뮤니티) ── */}
+        <ScrollView
+          ref={pagerRef}
+          horizontal
+          pagingEnabled
+          bounces={false}
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          style={{ flex: 1, opacity: pagerReady ? 1 : 0 }}
+          onLayout={handlePagerLayout}
+          onMomentumScrollEnd={handlePagerMomentumEnd}
+        >
         {/* ── 머신 tab ── */}
-        {activeTab === '머신' && (
+        <View style={{ width: pageSize.w, height: pageSize.h }}>
+        {visitedTabs.has('머신') && (
           <FlatList
+            nestedScrollEnabled
             data={filteredMachines}
             keyExtractor={(m) => m.id}
             numColumns={2}
@@ -524,6 +510,7 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
                 {/* 타겟부위 필터 */}
                 <ScrollView
                   horizontal
+                  nestedScrollEnabled
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={s.filterRow}
                 >
@@ -544,6 +531,7 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
                 {/* 브랜드 필터 */}
                 <ScrollView
                   horizontal
+                  nestedScrollEnabled
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={s.filterRow}
                 >
@@ -570,10 +558,12 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
             }
           />
         )}
+        </View>
 
         {/* ── 정보 tab ── */}
-        {activeTab === '정보' && (
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.content}>
+        <View style={{ width: pageSize.w, height: pageSize.h }}>
+        {visitedTabs.has('정보') && (
+          <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} contentContainerStyle={s.content}>
 
             {/* ── 헬스장 사진 ── */}
             <GymPhotoStrip gymId={gymId} onPressPhoto={openPhotoViewer} />
@@ -619,32 +609,17 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
                 </View>
                 <Text style={s.infoText}>{gym.location}</Text>
               </View>
+              {/* 영업시간: 오늘만 보여주고 탭하면 월~일 + 메모 펼침 (2026-10-20) */}
+              <GymHoursRow hours={gym.hours} legacyHours={details?.hours} note={gym.hoursNote} />
             </View>
 
             {/* ── 오운완 (최근 5개) ── */}
             <GymOunwanStrip
               gymId={gymId}
               titleStyle={s.sectionTitle}
-              onPressMore={() => setActiveTab('커뮤니티')}
+              onPressMore={() => goToTab('커뮤니티')}
               onPressMachine={setSelectedMachineId}
             />
-
-            {/* ── Operating hours ── */}
-            <Text style={s.sectionTitle}>영업 시간</Text>
-            <View style={s.card}>
-              {gym.hours ? (
-                <HoursTextAllDays hours={gym.hours} />
-              ) : details?.hours ? (
-                <HoursTable hours={details.hours} />
-              ) : (
-                <Text style={[s.infoText, { padding: 16 }]}>운영시간 정보 없음</Text>
-              )}
-            </View>
-            {gym.hoursNote ? (
-              <View style={[s.card, { marginTop: 8, padding: 14 }]}>
-                <Text style={[s.infoText, { color: C.textSub }]}>{gym.hoursNote}</Text>
-              </View>
-            ) : null}
 
             {/* ── Notices ── */}
             {details?.notices && details.notices.length > 0 && (
@@ -739,6 +714,15 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
             <View style={{ height: 40 }} />
           </ScrollView>
         )}
+        </View>
+
+        {/* ── 커뮤니티 tab ── */}
+        <View style={{ width: pageSize.w, height: pageSize.h }}>
+        {visitedTabs.has('커뮤니티') && (
+          <GymCommunityTab gymId={gymId} gymName={gym.name} onPressMachine={setSelectedMachineId} />
+        )}
+        </View>
+        </ScrollView>
       </SafeAreaView>
 
       <MachineDetailModal
