@@ -105,7 +105,9 @@ export default function GymStatsView({ gymId }: GymStatsViewProps) {
   const [topByMuscle,     setTopByMuscle]     = useState<Record<string, MachineStat[]>>({});
   const [peakStats,       setPeakStats]       = useState<PeakTimeStats>({ byHour: {}, byDayOfWeek: {} });
   const [activationStats, setActivationStats] = useState({ activatedCount: 0, totalCount: 0, rate: 0 });
-  const [retentionStats,  setRetentionStats]  = useState({ thisMonth: 0, lastMonth: 0, retentionRate: 0 });
+  const [retentionStats,  setRetentionStats]  = useState<{ thisMonth: number; lastMonth: number; retentionRate: number | null; failed: boolean }>(
+    { thisMonth: 0, lastMonth: 0, retentionRate: null, failed: false },
+  );
   const [avgStats,        setAvgStats]        = useState<MachineAvgStats[]>([]);
   const [ownedLoadFailed, setOwnedLoadFailed] = useState(false);
 
@@ -428,7 +430,9 @@ export default function GymStatsView({ gymId }: GymStatsViewProps) {
                 <Text style={s.chartTitle}>회원 재방문율 (이번 달 기준)</Text>
                 <View style={s.kpiRow}>
                   <View style={s.kpiCell}>
-                    <Text style={s.kpiValue}>{retentionStats.retentionRate}%</Text>
+                    {retentionStats.retentionRate === null
+                      ? <Text style={[s.kpiValue, { fontSize: 15 }]}>데이터 부족</Text>
+                      : <Text style={s.kpiValue}>{retentionStats.retentionRate}%</Text>}
                     <Text style={s.kpiLabel}>재방문율</Text>
                   </View>
                   <View style={s.kpiCell}>
@@ -441,7 +445,11 @@ export default function GymStatsView({ gymId }: GymStatsViewProps) {
                   </View>
                 </View>
                 <Text style={[s.machineBrand, { paddingHorizontal: 16, paddingBottom: 14 }]}>
-                  저번 달 회원 중 {retentionStats.retentionRate}%가 이번 달에도 방문했습니다
+                  {retentionStats.failed
+                    ? '재방문 데이터를 불러오지 못했어요.'
+                    : retentionStats.retentionRate === null
+                      ? '저번 달 방문 기록이 없어 아직 재방문율을 계산할 수 없어요.'
+                      : `저번 달 회원 중 ${retentionStats.retentionRate}%가 이번 달에도 방문했습니다`}
                 </Text>
               </View>
             </View>

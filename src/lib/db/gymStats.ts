@@ -210,7 +210,7 @@ export async function fetchMachineActivationRate(
 
 export async function fetchRetentionStats(
   gymId: string,
-): Promise<{ thisMonth: number; lastMonth: number; retentionRate: number }> {
+): Promise<{ thisMonth: number; lastMonth: number; retentionRate: number | null; failed: boolean }> {
   try {
     const now       = new Date();
     const thisStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
@@ -225,6 +225,10 @@ export async function fetchRetentionStats(
         .gte('date', lastStart).lte('date', lastEnd + 'T23:59:59'),
     ]);
 
+    if (thisData.error || lastData.error) {
+      return { thisMonth: 0, lastMonth: 0, retentionRate: null, failed: true };
+    }
+
     const thisUsers = new Set((thisData.data ?? []).map(r => r.user_id));
     const lastUsers = new Set((lastData.data ?? []).map(r => r.user_id));
 
@@ -235,12 +239,12 @@ export async function fetchRetentionStats(
 
     const retentionRate = lastUsers.size > 0
       ? Math.round((returnedCount / lastUsers.size) * 100)
-      : 0;
+      : null;
 
-    return { thisMonth: thisUsers.size, lastMonth: lastUsers.size, retentionRate };
+    return { thisMonth: thisUsers.size, lastMonth: lastUsers.size, retentionRate, failed: false };
   } catch (e) {
     if (__DEV__) console.warn('[gymStats] fetchRetentionStats:', e);
-    return { thisMonth: 0, lastMonth: 0, retentionRate: 0 };
+    return { thisMonth: 0, lastMonth: 0, retentionRate: null, failed: true };
   }
 }
 
