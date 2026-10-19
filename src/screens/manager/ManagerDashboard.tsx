@@ -50,6 +50,7 @@ import { fetchGymPhotoUrlsByUser, registerGymPhoto } from '../../lib/db/gymPhoto
 import { fetchWeeklyVisitors } from '../../lib/db/gymStats';
 import { fetchGymFavoriteCount } from '../../lib/db/gymFavorites';
 import { shareGym } from '../../lib/share';
+import GymQrPosterModal from '../../components/manager/GymQrPosterModal';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -350,6 +351,7 @@ interface HomeViewProps {
   onOpenMachines: (gym: ManagedGym) => void;
   onOpenManage: (gym: ManagedGym, tab?: ManagerTab) => void;
   onOpenStats: (gym: ManagedGym) => void;
+  onOpenQr: (gym: ManagedGym) => void;
   onRegister: () => void;
 }
 
@@ -442,7 +444,7 @@ interface ManageViewProps {
 
 const STEP_LABELS = ['기본 정보', '연락처 정보', '검토'];
 
-function HomeView({ gyms, weeklyVisitors, gymFavCount, machineCount, onOpenEdit, onOpenMachines, onOpenManage, onOpenStats, onRegister }: HomeViewProps) {
+function HomeView({ gyms, weeklyVisitors, gymFavCount, machineCount, onOpenEdit, onOpenMachines, onOpenManage, onOpenStats, onOpenQr, onRegister }: HomeViewProps) {
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
       <View style={styles.homeSummary}>
@@ -506,6 +508,16 @@ function HomeView({ gyms, weeklyVisitors, gymFavCount, machineCount, onOpenEdit,
             >
               <Ionicons name="share-outline" size={14} color={C.accent} />
               <Text style={styles.gymActionBtnText}>보유머신 웹페이지 공유</Text>
+            </TouchableOpacity>
+          )}
+          {gym.status === 'approved' && (
+            <TouchableOpacity
+              style={[styles.gymActionBtn, { marginTop: 8 }]}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpenQr(gym); }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="qr-code-outline" size={14} color={C.accent} />
+              <Text style={styles.gymActionBtnText}>QR 포스터 받기</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -1487,6 +1499,8 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
     loadApprovedGyms();
   }, [user?.id]);
   const [selectedGym, setSelectedGym] = useState<ManagedGym | null>(null);
+  // QR 포스터 모달 대상 헬스장 (F6-1)
+  const [qrGym, setQrGym] = useState<ManagedGym | null>(null);
   const [machineReqVisible, setMachineReqVisible] = useState(false);
 
   const [weeklyVisitors, setWeeklyVisitors] = useState<number | null>(null);
@@ -2217,6 +2231,7 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
           onOpenMachines={openMachines}
           onOpenManage={openManage}
           onOpenStats={openStats}
+          onOpenQr={setQrGym}
           onRegister={onRegister}
         />
       )}
@@ -2361,6 +2376,13 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
           }}
         />
       )}
+
+      <GymQrPosterModal
+        visible={!!qrGym}
+        gymId={qrGym?.id ?? ''}
+        gymName={qrGym?.name ?? ''}
+        onClose={() => setQrGym(null)}
+      />
     </SafeAreaView>
   );
 }
