@@ -709,6 +709,7 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
         visible={selectedMachineId !== null}
         machine={machineForDetail}
         onClose={() => setSelectedMachineId(null)}
+        gymId={gym.id}
       />
 
       {/* ── 사진 전체화면 뷰어 ── */}

@@ -34,6 +34,7 @@ import { containsBannedWord } from '../../lib/bannedWords';
 import { track } from '../../lib/analytics';
 import { perfStart, perfEnd } from '../../lib/perf';
 import MachinePRSection from '../../components/machine/MachinePRSection';
+import GymMachineRankingSection from '../../components/machine/GymMachineRankingSection';
 
 // --- Star rating
 
@@ -127,11 +128,13 @@ interface Props {
   // 때만 reverse_search류 이벤트를 쏘기 위한 플래그. 넘기지 않으면 기존과
   // 동일하게 동작(이벤트 없음).
   isSearchEntry?:    boolean;
+  // 2026-10-19 (F3-3): 헬스장 상세에서 열렸을 때만 전달 → 이 헬스장 랭킹 표시
+  gymId?:            string;
 }
 
 // --- Component
 
-export default function MachineDetailModal({ visible, machine, onClose, onToggleFavorite, onSelectGym, isSearchEntry }: Props) {
+export default function MachineDetailModal({ visible, machine, onClose, onToggleFavorite, onSelectGym, isSearchEntry, gymId }: Props) {
   const { user } = useAuth();
   const nav = useNavigation<any>();
   const [isFav,             setIsFav]             = useState(false);
@@ -450,6 +453,11 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
             {/* ── 내 PR (F3-1, 로그인 유저만) ── */}
             {user && (
               <MachinePRSection userId={user.id} machineId={machine.id} titleStyle={s.sectionTitle} />
+            )}
+
+            {/* ── 이 헬스장 랭킹 (F3-3, 헬스장 상세에서 열렸을 때 + 로그인 유저만) ── */}
+            {user && gymId && (
+              <GymMachineRankingSection gymId={gymId} machineId={machine.id} titleStyle={s.sectionTitle} />
             )}
 
             {/* ── About ── */}
