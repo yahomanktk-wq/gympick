@@ -2303,13 +2303,13 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
 
       // 신청자 role을 manager로 업데이트
       if (gym.managerId) {
-        console.log('[AdminDashboard] role 업데이트 시도 - managerId:', gym.managerId);
+        if (__DEV__) console.log('[AdminDashboard] role 업데이트 시도 - managerId:', gym.managerId);
         const { data: updateData, error: updateError } = await supabase
           .from('profiles')
           .update({ role: 'manager' })
           .eq('id', gym.managerId)
           .select();
-        console.log('[AdminDashboard] role 업데이트 결과:', updateData, updateError?.message);
+        if (__DEV__) console.log('[AdminDashboard] role 업데이트 결과:', updateData, updateError?.message);
 
         if (updateError) {
           console.warn('[AdminDashboard] role 업데이트 실패:', updateError.message);

@@ -38,8 +38,8 @@ export default function ForgotPasswordScreen({ onBack }: Props) {
     const { error: err } = await supabase.auth.resetPasswordForEmail(e, {
       redirectTo: 'gympick://reset-password',
     });
-    console.log('[ForgotPassword] error:', JSON.stringify(err));
-    console.log('[ForgotPassword] email:', e);
+    if (__DEV__) console.log('[ForgotPassword] error:', JSON.stringify(err));
+    if (__DEV__) console.log('[ForgotPassword] email:', e);
     setLoading(false);
     if (err) {
       setError('재설정 이메일 발송에 실패했어요. 잠시 후 다시 시도해주세요.');

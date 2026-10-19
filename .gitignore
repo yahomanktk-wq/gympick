@@ -64,3 +64,10 @@ standard-machine-gifs/
 # 아니라서 git에는 안 올림 (2026-09-09)
 Claude outputs/
 
+# Claude 지시서 / 조사 파일
+feat_*.txt
+refactor_*.txt
+chore_*.txt
+investigate_*.txt
+PROMPT_*.txt
+*_investigation*.txt

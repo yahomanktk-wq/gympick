@@ -36,8 +36,8 @@ export async function deleteAccount(): Promise<{ error: string | null }> {
 
     if (!response.ok) {
       const err = await response.json();
-      console.log('[deleteAccount] response status:', response.status);
-      console.log('[deleteAccount] error:', JSON.stringify(err));
+      if (__DEV__) console.log('[deleteAccount] response status:', response.status);
+      if (__DEV__) console.log('[deleteAccount] error:', JSON.stringify(err));
       return { error: err.error ?? '계정 삭제에 실패했습니다.' };
     }
 

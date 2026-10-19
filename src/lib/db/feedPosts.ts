@@ -184,9 +184,9 @@ export async function fetchWorkoutSessionById(sessionId: string): Promise<any | 
       .eq('id', sessionId)
       .single();
 
-    console.log('[fetchWorkoutSessionById] sessionId:', sessionId);
-    console.log('[fetchWorkoutSessionById] data:', JSON.stringify(data));
-    console.log('[fetchWorkoutSessionById] error:', error);
+    if (__DEV__) console.log('[fetchWorkoutSessionById] sessionId:', sessionId);
+    if (__DEV__) console.log('[fetchWorkoutSessionById] data:', JSON.stringify(data));
+    if (__DEV__) console.log('[fetchWorkoutSessionById] error:', error);
 
     if (error || !data) return null;
 

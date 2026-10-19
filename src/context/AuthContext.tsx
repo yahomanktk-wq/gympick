@@ -113,36 +113,36 @@ async function fetchProfileData(userId: string): Promise<ProfileData> {
 
 async function ensureProfileExists(sbUser: SupabaseUser): Promise<void> {
   try {
-    console.log('[ensureProfile] 시작 userId:', sbUser.id);
+    if (__DEV__) console.log('[ensureProfile] 시작 userId:', sbUser.id);
     const { data, error: selectError } = await supabase
       .from('profiles')
       .select('id')
       .eq('id', sbUser.id)
       .single();
 
-    console.log('[ensureProfile] select 결과:', data, selectError?.message);
+    if (__DEV__) console.log('[ensureProfile] select 결과:', data, selectError?.message);
 
     if (!data) {
-      console.log('[ensureProfile] row 없음 → insert 시도');
+      if (__DEV__) console.log('[ensureProfile] row 없음 → insert 시도');
       const { error: insertError } = await supabase.from('profiles').insert({
         id:    sbUser.id,
         email: sbUser.email ?? '',
         name:  sbUser.user_metadata?.name ?? sbUser.email?.split('@')[0] ?? 'User',
         role:  'user',
       });
-      console.log('[ensureProfile] insert 결과:', insertError?.message ?? 'OK');
+      if (__DEV__) console.log('[ensureProfile] insert 결과:', insertError?.message ?? 'OK');
     } else {
-      console.log('[ensureProfile] row 이미 존재');
+      if (__DEV__) console.log('[ensureProfile] row 이미 존재');
     }
   } catch (e: any) {
-    console.log('[ensureProfile] catch → upsert 시도, 에러:', e.message);
+    if (__DEV__) console.log('[ensureProfile] catch → upsert 시도, 에러:', e.message);
     const { error: upsertError } = await supabase.from('profiles').upsert({
       id:    sbUser.id,
       email: sbUser.email ?? '',
       name:  sbUser.user_metadata?.name ?? sbUser.email?.split('@')[0] ?? 'User',
       role:  'user',
     });
-    console.log('[ensureProfile] upsert 결과:', upsertError?.message ?? 'OK');
+    if (__DEV__) console.log('[ensureProfile] upsert 결과:', upsertError?.message ?? 'OK');
   }
 }
 
