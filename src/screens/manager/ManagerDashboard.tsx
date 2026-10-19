@@ -2203,7 +2203,7 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 if (!selectedGym) return;
                 updateGymMachines(selectedGym.id, gymMachineIds);
-                const { error } = await saveGymMachineIds(selectedGym.id, gymMachineIds);
+                const { error } = await saveGymMachineIds(selectedGym.id, gymMachineIds, { notifyNewMachines: true });
                 if (error) {
                   Alert.alert('저장 실패', 'Supabase 저장 중 오류가 발생했습니다.\n' + error);
                   return;
@@ -2314,7 +2314,7 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                       if (!selectedGym) return;
                       updateGymMachines(selectedGym.id, gymMachineIds);
-                      const { error } = await saveGymMachineIds(selectedGym.id, gymMachineIds);
+                      const { error } = await saveGymMachineIds(selectedGym.id, gymMachineIds, { notifyNewMachines: true });
                       if (error) {
                         Alert.alert('저장 실패', 'Supabase 저장 중 오류가 발생했습니다.\n' + error);
                         return;
