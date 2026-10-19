@@ -145,6 +145,30 @@ export async function fetchGymOunwanPosts(
   return data.map(rowToPost);
 }
 
+/** 여러 헬스장의 오운완 (주변 5km 탭). 공개 + 헬스장 노출만, 기간 제한 없음, 최신순, before 커서 페이징. gymIds가 비면 []. */
+export async function fetchOunwanPostsByGymIds(
+  gymIds: string[],
+  options: { limit?: number; before?: string } = {},
+): Promise<WorkoutFeedPost[]> {
+  if (gymIds.length === 0) return [];
+  const { limit = 30, before } = options;
+  let query = supabase
+    .from('workout_feed_posts')
+    .select('*')
+    .in('gym_id', gymIds)
+    .eq('is_public', true)
+    .eq('show_on_gym', true);
+  if (before) query = query.lt('created_at', before);
+  const { data, error } = await query
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error || !data?.length) {
+    if (__DEV__ && error) console.warn('[feedPosts] fetchOunwanPostsByGymIds 오류:', error.message);
+    return [];
+  }
+  return data.map(rowToPost);
+}
+
 /** session_id로 운동 세션 전체 데이터 fetch */
 export async function fetchWorkoutSessionById(sessionId: string): Promise<any | null> {
   try {

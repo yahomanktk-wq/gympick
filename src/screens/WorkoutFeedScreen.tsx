@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { C, R } from '../theme';
 import { WorkoutFeedPost, WorkoutLog } from '../data/types';
 const MOCK_FEED_POSTS: WorkoutFeedPost[] = [];
-import { filterActivePosts, filterByDistance, toggleReaction, convertSessionToFeedPost } from '../lib/feedUtils';
+import { filterActivePosts, toggleReaction, convertSessionToFeedPost } from '../lib/feedUtils';
 import { fetchMyLatestGymId, fetchFeedPostsByGym } from '../lib/db/feedPosts';
 import { getActiveFeedPostsCached } from '../data/feedPostsCache';
 import { fetchActiveFeedPosts } from '../lib/db/feedPosts';
@@ -35,6 +35,8 @@ import HomeGymRow from '../components/feed/HomeGymRow';
 import HomeGymPickerModal from '../components/feed/HomeGymPickerModal';
 import { setManualHomeGym } from '../lib/homeGym';
 import { useHomeGymFeed } from '../hooks/useHomeGymFeed';
+import { useNearbyFeed } from '../hooks/useNearbyFeed';
+import LocationPermissionPrompt from '../components/feed/LocationPermissionPrompt';
 import { MACHINES } from '../data';
 import { getTransformedImageUrl } from '../lib/photoImageUrl';
 
@@ -204,6 +206,10 @@ export default function WorkoutFeedScreen() {
   // activeTab/reload는 ref로 읽어서, 탭을 바꿀 때마다 focus 콜백이 다시 돌며
   // 훅의 로딩과 중복 호출되지 않게 한다.
   const homeFeed = useHomeGymFeed(user?.id, activeTab === '내 헬스장');
+  // 2026-10-19 (F2-4): '주변 5km' 탭 — 현재 위치 기준 5km 안 헬스장의 오운완(기간 제한 없음)
+  const nearby   = useNearbyFeed(activeTab === '주변 5km', user?.id);
+  const nearbyReloadRef = useRef(nearby.reload);
+  nearbyReloadRef.current = nearby.reload;
   const [homeGymPickerVisible, setHomeGymPickerVisible] = useState(false);
   const activeTabRef      = useRef(activeTab);
   const homeFeedReloadRef = useRef(homeFeed.reload);
@@ -215,6 +221,7 @@ export default function WorkoutFeedScreen() {
       // 첫 포커스(마운트)는 훅의 enabled 로딩이 담당
       if (isFirstFocusRef.current) { isFirstFocusRef.current = false; return; }
       if (activeTabRef.current === '내 헬스장') homeFeedReloadRef.current();
+      if (activeTabRef.current === '주변 5km') nearbyReloadRef.current();
     }, [])
   );
 
@@ -357,7 +364,8 @@ export default function WorkoutFeedScreen() {
       // 홈짐 오운완 (서버에서 이미 최신순)
       base = homeFeed.posts;
     } else if (activeTab === '주변 5km') {
-      base = filterWithMyPosts(posts, filterByDistance(posts, 5));
+      // 5km 안 헬스장 오운완 (서버에서 이미 최신순)
+      base = nearby.posts;
     } else {
       base = sortByLatest(posts);
     }
@@ -366,7 +374,7 @@ export default function WorkoutFeedScreen() {
     if (muscleFilter === '전체') return base;
     const targetEn = toEnMuscle(muscleFilter);
     return base.filter(p => p.muscles.some(m => m === targetEn));
-  }, [posts, homeFeed.posts, activeTab, muscleFilter]);
+  }, [posts, homeFeed.posts, nearby.posts, activeTab, muscleFilter]);
 
   const handleReact = useCallback((postId: string, key: keyof WorkoutFeedPost['reactions']) => {
     setPosts(prev => prev.map(p => p.id === postId ? toggleReaction(p, key) : p));
@@ -420,11 +428,16 @@ export default function WorkoutFeedScreen() {
         />
       )}
 
-      {activeTab === '내 헬스장' && homeFeed.loading ? null : filtered.length === 0 ? (
+      {activeTab === '내 헬스장' && homeFeed.loading ? null
+        : activeTab === '주변 5km' && (nearby.permission === 'checking' || (nearby.permission === 'granted' && nearby.loading)) ? null
+        : activeTab === '주변 5km' && nearby.permission === 'denied' ? (
+        <LocationPermissionPrompt onPress={nearby.requestPermission} />
+      ) : filtered.length === 0 ? (
         <EmptyState
           tab={activeTab}
           isFallback={isFeedFallback}
           message={
+            activeTab === '주변 5km' ? '주변 5km 안에 올라온 오운완이 없어요' :
             activeTab !== '내 헬스장' ? undefined :
             homeFeed.homeGym ? `아직 ${homeFeed.homeGym.gymName}의 오운완이 없어요` :
             '운동일지를 기록하면 우리 헬스장 오운완이 보여요'
@@ -435,7 +448,11 @@ export default function WorkoutFeedScreen() {
       ) : (
         <FlatList
           data={filtered}
-          onEndReached={activeTab === '내 헬스장' ? homeFeed.loadMore : undefined}
+          onEndReached={
+            activeTab === '내 헬스장' ? homeFeed.loadMore :
+            activeTab === '주변 5km'  ? nearby.loadMore :
+            undefined
+          }
           onEndReachedThreshold={0.5}
           keyExtractor={item => item.id}
           numColumns={2}
