@@ -10,7 +10,9 @@ import {
   ScrollView,
   Dimensions,
   PixelRatio,
+  Alert,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,6 +32,8 @@ import GymDetailModal from './flow/GymDetailModal';
 import MachineDetailModal from './flow/MachineDetailModal';
 import FeedDetailModal from '../components/feed/FeedDetailModal';
 import HomeGymRow from '../components/feed/HomeGymRow';
+import HomeGymPickerModal from '../components/feed/HomeGymPickerModal';
+import { setManualHomeGym } from '../lib/homeGym';
 import { useHomeGymFeed } from '../hooks/useHomeGymFeed';
 import { MACHINES } from '../data';
 import { getTransformedImageUrl } from '../lib/photoImageUrl';
@@ -93,7 +97,10 @@ function TabSegment({
   );
 }
 
-function EmptyState({ tab, isFallback, message }: { tab: FeedTab; isFallback?: boolean; message?: string }) {
+function EmptyState({ tab, isFallback, message, actionLabel, onAction }: {
+  tab: FeedTab; isFallback?: boolean; message?: string;
+  actionLabel?: string; onAction?: () => void;
+}) {
   const msg =
     message             ? message :
     tab === '내 헬스장' ? '최근 방문한 헬스장의 오운완이 없어요' :
@@ -104,6 +111,11 @@ function EmptyState({ tab, isFallback, message }: { tab: FeedTab; isFallback?: b
     <View style={s.empty}>
       <Ionicons name="image-outline" size={44} color={C.textDim} />
       <Text style={s.emptyText}>{msg}</Text>
+      {actionLabel && onAction && (
+        <TouchableOpacity onPress={onAction} hitSlop={8} activeOpacity={0.7} style={{ marginTop: 12 }}>
+          <Text style={{ fontSize: 13, color: C.accent }}>{actionLabel}</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -192,6 +204,7 @@ export default function WorkoutFeedScreen() {
   // activeTab/reload는 ref로 읽어서, 탭을 바꿀 때마다 focus 콜백이 다시 돌며
   // 훅의 로딩과 중복 호출되지 않게 한다.
   const homeFeed = useHomeGymFeed(user?.id, activeTab === '내 헬스장');
+  const [homeGymPickerVisible, setHomeGymPickerVisible] = useState(false);
   const activeTabRef      = useRef(activeTab);
   const homeFeedReloadRef = useRef(homeFeed.reload);
   activeTabRef.current      = activeTab;
@@ -401,7 +414,10 @@ export default function WorkoutFeedScreen() {
       </ScrollView>
 
       {activeTab === '내 헬스장' && homeFeed.homeGym && (
-        <HomeGymRow gymName={homeFeed.homeGym.gymName} />
+        <HomeGymRow
+          gymName={homeFeed.homeGym.gymName}
+          onPressChange={user?.id ? () => setHomeGymPickerVisible(true) : undefined}
+        />
       )}
 
       {activeTab === '내 헬스장' && homeFeed.loading ? null : filtered.length === 0 ? (
@@ -413,6 +429,8 @@ export default function WorkoutFeedScreen() {
             homeFeed.homeGym ? `아직 ${homeFeed.homeGym.gymName}의 오운완이 없어요` :
             '운동일지를 기록하면 우리 헬스장 오운완이 보여요'
           }
+          actionLabel={activeTab === '내 헬스장' && !homeFeed.homeGym && user?.id ? '헬스장 직접 선택' : undefined}
+          onAction={() => setHomeGymPickerVisible(true)}
         />
       ) : (
         <FlatList
@@ -477,6 +495,26 @@ export default function WorkoutFeedScreen() {
             if (machine) {
               setDetailPost(null);
               setTimeout(() => setMachineDetailItem(machine), 350);
+            }
+          }}
+        />
+      )}
+
+      {/* 내 헬스장 직접 선택 (F2-3, 로그인 유저만) */}
+      {user?.id && (
+        <HomeGymPickerModal
+          visible={homeGymPickerVisible}
+          currentGymId={homeFeed.homeGym?.gymId ?? null}
+          isManual={homeFeed.homeGym?.source === 'manual'}
+          onClose={() => setHomeGymPickerVisible(false)}
+          onSelect={async (gymId) => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            try {
+              await setManualHomeGym(user.id, gymId);
+              setHomeGymPickerVisible(false);
+              homeFeed.reload();
+            } catch {
+              Alert.alert('오류', '내 헬스장 변경에 실패했어요.');
             }
           }}
         />
