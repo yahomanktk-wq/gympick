@@ -1,4 +1,12 @@
 import { supabase } from '../supabase';
+import {
+  kstAddDays,
+  kstDayStartUtcIso,
+  kstDayEndExclusiveUtcIso,
+  kstDateKey,
+  kstHourAndWeekday,
+  kstMonthRanges,
+} from '../kstDate';
 
 export type PeriodType = 'week' | 'month' | 'custom';
 
@@ -31,8 +39,8 @@ export async function fetchMachineUsageStats(
         workout_sessions!inner(gym_id, date)
       `)
       .eq('workout_sessions.gym_id', gymId)
-      .gte('workout_sessions.date', startDate)
-      .lte('workout_sessions.date', endDate + 'T23:59:59');
+      .gte('workout_sessions.date', kstDayStartUtcIso(startDate))
+      .lt('workout_sessions.date', kstDayEndExclusiveUtcIso(endDate));
 
     if (error || !data) {
       if (__DEV__) console.warn('[gymStats] fetchMachineUsageStats error:', error?.message);
@@ -71,24 +79,20 @@ export async function fetchDailyUsageStats(
       .from('workout_sessions')
       .select('date')
       .eq('gym_id', gymId)
-      .gte('date', startDate)
-      .lte('date', endDate + 'T23:59:59');
+      .gte('date', kstDayStartUtcIso(startDate))
+      .lt('date', kstDayEndExclusiveUtcIso(endDate));
 
     if (error || !data) return [];
 
     const map: Record<string, number> = {};
     for (const row of data) {
-      const dateKey = row.date.slice(0, 10);
+      const dateKey = kstDateKey(row.date);
       map[dateKey] = (map[dateKey] ?? 0) + 1;
     }
 
     const result: DailyUsage[] = [];
-    const cur = new Date(startDate);
-    const end = new Date(endDate);
-    while (cur <= end) {
-      const key = cur.toISOString().slice(0, 10);
+    for (let key = startDate; key <= endDate; key = kstAddDays(key, 1)) {
       result.push({ date: key, count: map[key] ?? 0 });
-      cur.setDate(cur.getDate() + 1);
     }
     return result;
   } catch (e) {
@@ -140,8 +144,8 @@ export async function fetchPeakTimeStats(
       .from('workout_sessions')
       .select('date')
       .eq('gym_id', gymId)
-      .gte('date', startDate)
-      .lte('date', endDate + 'T23:59:59');
+      .gte('date', kstDayStartUtcIso(startDate))
+      .lt('date', kstDayEndExclusiveUtcIso(endDate));
 
     if (error || !data) return { byHour: {}, byDayOfWeek: {} };
 
@@ -149,9 +153,7 @@ export async function fetchPeakTimeStats(
     const byDayOfWeek: Record<number, number> = {};
 
     for (const row of data) {
-      const d   = new Date(row.date);
-      const h   = d.getHours();
-      const dow = d.getDay();
+      const { hour: h, weekday: dow } = kstHourAndWeekday(row.date);
       byHour[h]        = (byHour[h]        ?? 0) + 1;
       byDayOfWeek[dow] = (byDayOfWeek[dow] ?? 0) + 1;
     }
@@ -191,8 +193,8 @@ export async function fetchMachineActivationRate(
       .from('workout_entries')
       .select('machine_id, workout_sessions!inner(gym_id, date)')
       .eq('workout_sessions.gym_id', gymId)
-      .gte('workout_sessions.date', startDate)
-      .lte('workout_sessions.date', endDate + 'T23:59:59');
+      .gte('workout_sessions.date', kstDayStartUtcIso(startDate))
+      .lt('workout_sessions.date', kstDayEndExclusiveUtcIso(endDate));
 
     if (error || !data) return { activatedCount: 0, totalCount, rate: 0 };
 
@@ -212,17 +214,13 @@ export async function fetchRetentionStats(
   gymId: string,
 ): Promise<{ thisMonth: number; lastMonth: number; retentionRate: number | null; failed: boolean }> {
   try {
-    const now       = new Date();
-    const thisStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-    const thisEnd   = now.toISOString().slice(0, 10);
-    const lastStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10);
-    const lastEnd   = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10);
+    const { thisStart, thisEnd, lastStart, lastEnd } = kstMonthRanges();
 
     const [thisData, lastData] = await Promise.all([
       supabase.from('workout_sessions').select('user_id').eq('gym_id', gymId)
-        .gte('date', thisStart).lte('date', thisEnd + 'T23:59:59'),
+        .gte('date', kstDayStartUtcIso(thisStart)).lt('date', kstDayEndExclusiveUtcIso(thisEnd)),
       supabase.from('workout_sessions').select('user_id').eq('gym_id', gymId)
-        .gte('date', lastStart).lte('date', lastEnd + 'T23:59:59'),
+        .gte('date', kstDayStartUtcIso(lastStart)).lt('date', kstDayEndExclusiveUtcIso(lastEnd)),
     ]);
 
     if (thisData.error || lastData.error) {
@@ -265,8 +263,8 @@ export async function fetchMachineAvgStats(
         workout_sets(weight, reps)
       `)
       .eq('workout_sessions.gym_id', gymId)
-      .gte('workout_sessions.date', startDate)
-      .lte('workout_sessions.date', endDate + 'T23:59:59');
+      .gte('workout_sessions.date', kstDayStartUtcIso(startDate))
+      .lt('workout_sessions.date', kstDayEndExclusiveUtcIso(endDate));
 
     if (error || !data) return [];
 
@@ -330,8 +328,8 @@ export async function fetchWeeklyVisitors(
       .from('workout_sessions')
       .select('user_id')
       .eq('gym_id', gymId)
-      .gte('date', weekStartISO)
-      .lte('date', weekEndISO + 'T23:59:59');
+      .gte('date', kstDayStartUtcIso(weekStartISO))
+      .lt('date', kstDayEndExclusiveUtcIso(weekEndISO));
     if (error || !data) return 0;
     return new Set(data.map((r: any) => r.user_id)).size;
   } catch {

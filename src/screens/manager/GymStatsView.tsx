@@ -21,6 +21,7 @@ import {
   PeriodType,
 } from '../../lib/db/gymStats';
 import { getMachineImageUrl } from '../../lib/machineImageUrl';
+import { kstToday, kstAddDays } from '../../lib/kstDate';
 
 const SCREEN_W = Dimensions.get('window').width;
 const CHART_W  = SCREEN_W - 32;
@@ -29,18 +30,13 @@ const CHART_H  = 160;
 const MACHINE_IMG_URL = (id: string) => getMachineImageUrl(id, { width: 96 });
 
 function getPeriodDates(period: PeriodType): { start: string; end: string } {
-  const now   = new Date();
-  const today = now.toISOString().slice(0, 10);
+  const today = kstToday();
 
   if (period === 'week') {
-    const start = new Date(now);
-    start.setDate(now.getDate() - 6);
-    return { start: start.toISOString().slice(0, 10), end: today };
+    return { start: kstAddDays(today, -6), end: today };
   }
   if (period === 'month') {
-    const start = new Date(now);
-    start.setDate(now.getDate() - 29);
-    return { start: start.toISOString().slice(0, 10), end: today };
+    return { start: kstAddDays(today, -29), end: today };
   }
   return { start: today, end: today };
 }
