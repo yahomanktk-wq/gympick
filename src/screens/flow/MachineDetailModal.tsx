@@ -33,6 +33,7 @@ import { GymWithMachines } from '../../data/types';
 import { containsBannedWord } from '../../lib/bannedWords';
 import { track } from '../../lib/analytics';
 import { perfStart, perfEnd } from '../../lib/perf';
+import MachinePRSection from '../../components/machine/MachinePRSection';
 
 // --- Star rating
 
@@ -444,6 +445,11 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
                 <Ionicons name="bar-chart-outline" size={16} color={C.bg} />
                 <Text style={s.historyBtnTxt}>기록 분석</Text>
               </TouchableOpacity>
+            )}
+
+            {/* ── 내 PR (F3-1, 로그인 유저만) ── */}
+            {user && (
+              <MachinePRSection userId={user.id} machineId={machine.id} titleStyle={s.sectionTitle} />
             )}
 
             {/* ── About ── */}
