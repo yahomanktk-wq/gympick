@@ -122,6 +122,13 @@ export async function fetchTopMachinesByMuscle(
 export interface PeakTimeStats {
   byHour:      Record<number, number>;
   byDayOfWeek: Record<number, number>;
+  /** [weekday 0=일..6=토][hour 0..23] 세션 수 (KST) — 요일×시간 히트맵용 (F5-3) */
+  grid:        number[][];
+}
+
+/** 7(요일) × 24(시간) 0으로 채운 그리드 */
+export function emptyPeakGrid(): number[][] {
+  return Array.from({ length: 7 }, () => new Array(24).fill(0));
 }
 
 export interface MachineAvgStats {
@@ -147,21 +154,23 @@ export async function fetchPeakTimeStats(
       .gte('date', kstDayStartUtcIso(startDate))
       .lt('date', kstDayEndExclusiveUtcIso(endDate));
 
-    if (error || !data) return { byHour: {}, byDayOfWeek: {} };
+    if (error || !data) return { byHour: {}, byDayOfWeek: {}, grid: emptyPeakGrid() };
 
     const byHour:      Record<number, number> = {};
     const byDayOfWeek: Record<number, number> = {};
+    const grid = emptyPeakGrid();
 
     for (const row of data) {
       const { hour: h, weekday: dow } = kstHourAndWeekday(row.date);
       byHour[h]        = (byHour[h]        ?? 0) + 1;
       byDayOfWeek[dow] = (byDayOfWeek[dow] ?? 0) + 1;
+      grid[dow][h] += 1;
     }
 
-    return { byHour, byDayOfWeek };
+    return { byHour, byDayOfWeek, grid };
   } catch (e) {
     if (__DEV__) console.warn('[gymStats] fetchPeakTimeStats:', e);
-    return { byHour: {}, byDayOfWeek: {} };
+    return { byHour: {}, byDayOfWeek: {}, grid: emptyPeakGrid() };
   }
 }
 

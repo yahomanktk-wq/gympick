@@ -15,6 +15,7 @@ import {
   fetchRetentionStats,
   fetchMachineAvgStats,
   fetchMemberCount,
+  emptyPeakGrid,
   MachineStat,
   DailyUsage,
   PeakTimeStats,
@@ -67,7 +68,7 @@ export default function GymStatsView({ gymId }: GymStatsViewProps) {
   const [machineStats,    setMachineStats]    = useState<MachineStat[]>([]);
   const [dailyStats,      setDailyStats]      = useState<DailyUsage[]>([]);
   const [topByMuscle,     setTopByMuscle]     = useState<Record<string, MachineStat[]>>({});
-  const [peakStats,       setPeakStats]       = useState<PeakTimeStats>({ byHour: {}, byDayOfWeek: {} });
+  const [peakStats,       setPeakStats]       = useState<PeakTimeStats>({ byHour: {}, byDayOfWeek: {}, grid: emptyPeakGrid() });
   const [activationStats, setActivationStats] = useState({ activatedCount: 0, totalCount: 0, rate: 0 });
   const [retentionStats,  setRetentionStats]  = useState<{ thisMonth: number; lastMonth: number; retentionRate: number | null; failed: boolean }>(
     { thisMonth: 0, lastMonth: 0, retentionRate: null, failed: false },
