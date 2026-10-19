@@ -48,6 +48,7 @@ import WorkoutBadgeComponent from '../components/WorkoutBadge';
 import WorkoutSplitSetupScreen from './flow/WorkoutSplitSetupScreen';
 import TermsConsentScreen from './auth/TermsConsentScreen';
 import * as Haptics from 'expo-haptics';
+import Constants from 'expo-constants';
 
 // --- Types
 
@@ -1142,7 +1143,7 @@ export default function ProfileScreen() {
           </>
         )}
 
-        <Text style={styles.version}>GymPick v1.2.4</Text>
+        <Text style={styles.version}>GymPick v{Constants.expoConfig?.version ?? ''}</Text>
       </ScrollView>
 
       {/* ── Modals ── */}
