@@ -2316,7 +2316,6 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
         <GymStatsView
           gymId={selectedGym.id}
           gymName={selectedGym.name}
-          totalMachines={gymMachineIds.length}
         />
       )}
       {currentView === 'manage' && (

@@ -11,6 +11,7 @@ import {
   fetchTopMachinesByMuscle,
   fetchPeakTimeStats,
   fetchMachineActivationRate,
+  fetchOwnedMachineIds,
   fetchRetentionStats,
   fetchMachineAvgStats,
   MachineStat,
@@ -88,12 +89,11 @@ const bc = StyleSheet.create({
 interface GymStatsViewProps {
   gymId:         string;
   gymName:       string;
-  totalMachines: number;
 }
 
 type TabType = 'usage' | 'trend' | 'top' | 'peak' | 'activation' | 'avg';
 
-export default function GymStatsView({ gymId, totalMachines }: GymStatsViewProps) {
+export default function GymStatsView({ gymId }: GymStatsViewProps) {
   const [activeTab,       setActiveTab]       = useState<TabType>('usage');
   const [period,          setPeriod]          = useState<PeriodType>('month');
   const [showCustom,      setShowCustom]      = useState(false);
@@ -107,6 +107,7 @@ export default function GymStatsView({ gymId, totalMachines }: GymStatsViewProps
   const [activationStats, setActivationStats] = useState({ activatedCount: 0, totalCount: 0, rate: 0 });
   const [retentionStats,  setRetentionStats]  = useState({ thisMonth: 0, lastMonth: 0, retentionRate: 0 });
   const [avgStats,        setAvgStats]        = useState<MachineAvgStats[]>([]);
+  const [ownedLoadFailed, setOwnedLoadFailed] = useState(false);
 
   const loadStats = useCallback(async (overrideStart?: string, overrideEnd?: string) => {
     setLoading(true);
@@ -118,7 +119,10 @@ export default function GymStatsView({ gymId, totalMachines }: GymStatsViewProps
       fetchDailyUsageStats(gymId, s1, e1),
       fetchTopMachinesByMuscle(gymId, s1, e1),
       fetchPeakTimeStats(gymId, s1, e1),
-      fetchMachineActivationRate(gymId, totalMachines, s1, e1),
+      fetchOwnedMachineIds(gymId).then(async owned => {
+        setOwnedLoadFailed(owned === null);
+        return fetchMachineActivationRate(gymId, owned ?? [], s1, e1);
+      }),
       fetchMachineAvgStats(gymId, s1, e1),
     ]);
     setMachineStats(machine);
@@ -131,7 +135,7 @@ export default function GymStatsView({ gymId, totalMachines }: GymStatsViewProps
     const retention = await fetchRetentionStats(gymId);
     setRetentionStats(retention);
     setLoading(false);
-  }, [gymId, period, totalMachines]);
+  }, [gymId, period]);
 
   useEffect(() => { loadStats(); }, [loadStats]);
 
@@ -411,7 +415,11 @@ export default function GymStatsView({ gymId, totalMachines }: GymStatsViewProps
                   <View style={[s.usageBarFill, { width: `${activationStats.rate}%`, height: 8 }]} />
                 </View>
                 <Text style={[s.machineBrand, { paddingHorizontal: 16, paddingBottom: 14 }]}>
-                  {activationStats.totalCount - activationStats.activatedCount}개 머신이 미사용 중입니다
+                  {ownedLoadFailed
+                    ? '보유 머신 정보를 불러오지 못했어요.'
+                    : activationStats.totalCount === 0
+                      ? '보유 머신이 등록되지 않았어요. 머신 관리에서 먼저 머신을 추가하세요.'
+                      : `${Math.max(0, activationStats.totalCount - activationStats.activatedCount)}개 머신이 미사용 중입니다`}
                 </Text>
               </View>
 

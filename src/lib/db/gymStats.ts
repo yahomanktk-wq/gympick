@@ -163,12 +163,29 @@ export async function fetchPeakTimeStats(
   }
 }
 
+/** 헬스장 보유 머신 ID 목록 (통계용 — mock 폴백 없음, 실패 시 null) */
+export async function fetchOwnedMachineIds(gymId: string): Promise<string[] | null> {
+  try {
+    const { data, error } = await supabase
+      .from('gym_machines')
+      .select('machine_id')
+      .eq('gym_id', gymId);
+
+    if (error || !data) return null;
+    return data.map(r => r.machine_id as string);
+  } catch (e) {
+    if (__DEV__) console.warn('[gymStats] fetchOwnedMachineIds:', e);
+    return null;
+  }
+}
+
 export async function fetchMachineActivationRate(
-  gymId:         string,
-  totalMachines: number,
-  startDate:     string,
-  endDate:       string,
+  gymId:           string,
+  ownedMachineIds: string[],
+  startDate:       string,
+  endDate:         string,
 ): Promise<{ activatedCount: number; totalCount: number; rate: number }> {
+  const totalCount = ownedMachineIds.length;
   try {
     const { data, error } = await supabase
       .from('workout_entries')
@@ -177,16 +194,17 @@ export async function fetchMachineActivationRate(
       .gte('workout_sessions.date', startDate)
       .lte('workout_sessions.date', endDate + 'T23:59:59');
 
-    if (error || !data) return { activatedCount: 0, totalCount: totalMachines, rate: 0 };
+    if (error || !data) return { activatedCount: 0, totalCount, rate: 0 };
 
-    const uniqueIds      = new Set(data.map(r => r.machine_id));
-    const activatedCount = uniqueIds.size;
-    const rate           = totalMachines > 0 ? Math.round((activatedCount / totalMachines) * 100) : 0;
+    const owned          = new Set(ownedMachineIds);
+    const usedOwned      = new Set(data.map(r => r.machine_id).filter(id => owned.has(id)));
+    const activatedCount = usedOwned.size;
+    const rate           = totalCount > 0 ? Math.round((activatedCount / totalCount) * 100) : 0;
 
-    return { activatedCount, totalCount: totalMachines, rate };
+    return { activatedCount, totalCount, rate };
   } catch (e) {
     if (__DEV__) console.warn('[gymStats] fetchMachineActivationRate:', e);
-    return { activatedCount: 0, totalCount: totalMachines, rate: 0 };
+    return { activatedCount: 0, totalCount, rate: 0 };
   }
 }
 
