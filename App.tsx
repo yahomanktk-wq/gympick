@@ -21,6 +21,8 @@ import MachineHistoryScreen   from './src/screens/MachineHistoryScreen';
 import ResetPasswordScreen from './src/screens/auth/ResetPasswordScreen';
 import OnboardingScreen from './src/screens/onboarding/OnboardingScreen';
 import { initAnalytics, track } from './src/lib/analytics';
+import { parseGymLink, type GymLinkTarget } from './src/lib/deepLink';
+import GymDetailModal from './src/screens/flow/GymDetailModal';
 import { perfStart, perfEnd } from './src/lib/perf';
 
 const Stack = createNativeStackNavigator();
@@ -39,6 +41,8 @@ export default function App() {
   }, []);
 
   const [showResetPassword, setShowResetPassword] = useState(false);
+  // 2026-10-19 (F6-2a): 헬스장/머신 링크로 열린 대상 — 최상위 GymDetailModal로 표시
+  const [linkTarget, setLinkTarget] = useState<GymLinkTarget | null>(null);
   const [appReady, setAppReady] = useState(false);
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
 
@@ -143,6 +147,14 @@ export default function App() {
   async function handleDeepLink({ url }: { url: string }) {
     if (!url) return;
 
+    // 헬스장/머신 링크: https://gympick.app/gym/{id}[#machine={id}], gympick://gym/{id}
+    const target = parseGymLink(url);
+    if (target) {
+      track('open_gym_link', { gym_id: target.gymId, has_machine: !!target.machineId });
+      setLinkTarget(target);
+      return;
+    }
+
     // gympick://reset-password?... 형태 처리
     if (!url.includes('reset-password')) return;
 
@@ -183,6 +195,14 @@ export default function App() {
             <Stack.Screen name="MachineRanking"   component={MachineRankingScreen}    options={{ gestureEnabled: true, fullScreenGestureEnabled: true }} />
             <Stack.Screen name="MachineHistory"   component={MachineHistoryScreen}    options={{ gestureEnabled: true, fullScreenGestureEnabled: true }} />
           </Stack.Navigator>
+
+          {/* 헬스장/머신 링크로 열기 (F6-2a) — GymDetailModal이 useNavigation을 쓰므로 NavigationContainer 안에 둔다 */}
+          <GymDetailModal
+            visible={!!linkTarget}
+            gymId={linkTarget?.gymId ?? null}
+            initialMachineId={linkTarget?.machineId}
+            onClose={() => setLinkTarget(null)}
+          />
         </NavigationContainer>
 
         {/* 비밀번호 재설정 화면 (딥링크로 진입 시) */}

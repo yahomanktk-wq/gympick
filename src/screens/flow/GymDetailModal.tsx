@@ -287,6 +287,8 @@ interface Props {
   visible: boolean;
   gymId:   string | null;
   onClose: () => void;
+  // 2026-10-19 (F6-2a): 링크(#machine=)로 열렸을 때 — 이 헬스장이 보유한 머신이면 머신 상세를 바로 띄운다
+  initialMachineId?: string;
 }
 
 // --- Tab type
@@ -295,7 +297,7 @@ type GymTab = '머신' | '정보' | '커뮤니티';
 
 // --- Component
 
-export default function GymDetailModal({ visible, gymId, onClose }: Props) {
+export default function GymDetailModal({ visible, gymId, onClose, initialMachineId }: Props) {
   const [gym, setGym] = React.useState<GymWithMachines | undefined>(undefined);
   React.useEffect(() => {
     if (!gymId) return;
@@ -348,6 +350,23 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
     if (gym.managerId && gym.managerId === user?.id) return;
     track('view_gym', { gym_id: gymId });
   }, [visible, gymId, gym, user?.id]);
+
+  // 링크로 받은 머신을 열림당 한 번만 띄운다(사용자가 머신 상세를 닫아도 다시 열리지 않게).
+  // 보유하지 않은 머신이면 헬스장만 보여준다. 모달이 닫히면 초기화.
+  const openedInitialMachineRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!visible) {
+      openedInitialMachineRef.current = null;
+      return;
+    }
+    if (!initialMachineId || !gymId || !gym || gym.id !== gymId) return;
+    const key = `${gymId}|${initialMachineId}`;
+    if (openedInitialMachineRef.current === key) return;
+    openedInitialMachineRef.current = key;
+    if (gym.machines.some(m => m.id === initialMachineId)) {
+      setSelectedMachineId(initialMachineId);
+    }
+  }, [visible, gymId, gym, initialMachineId]);
 
   const gymMachines = gym?.machines ?? [];
 
