@@ -49,7 +49,7 @@ export async function setManagerOnboarded(userId: string): Promise<void> {
     .eq('id', userId);
 }
 
-/** 전역 설정 '헬스장 페이지 노출 끄기' 값. 실패/없음 → false(노출) */
+/** (미사용 — 2026-10-20 공개 방식 통합 후 호출처 없음) 전역 설정 '헬스장 페이지 노출 끄기' 값. 실패/없음 → false(노출) */
 export async function fetchHideOunwanOnGym(userId: string): Promise<boolean> {
   try {
     const { data } = await supabase
@@ -82,30 +82,6 @@ export async function setHideFromRankings(userId: string, hide: boolean): Promis
   const { error } = await supabase
     .from('profiles')
     .update({ hide_from_rankings: hide })
-    .eq('id', userId);
-  if (error) throw error;
-}
-
-/** '새 머신 입고 알림' 설정 값 (F4-3). 실패/없음 → true (기본 켜짐) */
-export async function fetchNotifyNewMachine(userId: string): Promise<boolean> {
-  try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('notify_new_machine')
-      .eq('id', userId)
-      .maybeSingle();
-    if (error || !data) return true;
-    return data.notify_new_machine !== false;
-  } catch {
-    return true;
-  }
-}
-
-/** '새 머신 입고 알림' 켜기/끄기. 실패 시 throw. */
-export async function setNotifyNewMachine(userId: string, on: boolean): Promise<void> {
-  const { error } = await supabase
-    .from('profiles')
-    .update({ notify_new_machine: on })
     .eq('id', userId);
   if (error) throw error;
 }

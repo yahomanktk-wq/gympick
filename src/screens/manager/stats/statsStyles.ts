@@ -46,6 +46,7 @@ export const s = StyleSheet.create({
     alignItems:        'center',
     justifyContent:    'center',
   },
+  tabEven: { flex: 1 },
   tabActive: {
     borderBottomWidth: 2,
     borderBottomColor: C.accent,

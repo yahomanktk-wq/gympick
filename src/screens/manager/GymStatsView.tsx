@@ -206,24 +206,20 @@ export default function GymStatsView({ gymId }: GymStatsViewProps) {
         </View>
       )}
 
-      {/* 탭 — 수평 스크롤 */}
+      {/* 탭 — 3개를 같은 너비로 나눠 가운데 정렬 (2026-10-20: 6탭 시절 수평 스크롤 제거) */}
       <View style={{ backgroundColor: C.bg, borderBottomWidth: 1, borderBottomColor: C.border }}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ flexDirection: 'row', paddingHorizontal: 16 }}
-        >
+        <View style={{ flexDirection: 'row', paddingHorizontal: 16 }}>
           {TABS.map(t => (
             <TouchableOpacity
               key={t.key}
-              style={[s.tab, activeTab === t.key && s.tabActive]}
+              style={[s.tab, s.tabEven, activeTab === t.key && s.tabActive]}
               onPress={() => setActiveTab(t.key)}
               activeOpacity={0.8}
             >
               <Text style={[s.tabText, activeTab === t.key && s.tabTextActive]}>{t.label}</Text>
             </TouchableOpacity>
           ))}
-        </ScrollView>
+        </View>
       </View>
 
       {loading ? (

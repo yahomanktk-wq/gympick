@@ -5,7 +5,7 @@ import { GymInsights } from '../../../lib/db/gymStats';
 import { getMachineImageUrl } from '../../../lib/machineImageUrl';
 import { s } from './statsStyles';
 
-// 매니저 이용 통계 — 개요 탭 '주변에서 찾았지만 우리 헬스장엔 없는 머신' (F5-4a).
+// 매니저 이용 통계 — 개요 탭 '주변에서 찾고 있는 머신' (F5-4a, 2026-10-20 문구 변경).
 // 근처 헬스장의 머신→보유 헬스장 검색 결과에 나왔지만 이 헬스장은 보유하지 않은 머신.
 
 const MACHINE_IMG_URL = (id: string) => getMachineImageUrl(id, { width: 96 });
@@ -32,9 +32,9 @@ function MissingMachineRow({ machine, showDivider }: { machine: MissingMachine; 
 export default function MissingMachinesCard({ machines }: { machines: MissingMachine[] }) {
   return (
     <View style={s.card}>
-      <Text style={s.chartTitle}>주변에서 찾았지만 우리 헬스장엔 없는 머신</Text>
+      <Text style={s.chartTitle}>주변에서 찾고 있는 머신</Text>
       <Text style={{ fontSize: 11, color: C.textSub, paddingHorizontal: 14 }}>
-        근처 헬스장 검색 결과에 나온 머신이에요
+        근처 헬스장에서 찾았지만 우리 헬스장엔 없는 머신이에요
       </Text>
       {machines.length === 0 ? (
         <Text style={[s.emptyText, { padding: 16 }]}>아직 주변 검색 데이터가 없어요</Text>

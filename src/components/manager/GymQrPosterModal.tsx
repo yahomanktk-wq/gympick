@@ -20,7 +20,7 @@ const POSTER_H = 424;            // A4 비율 (1 : 1.414)
 const CAPTURE_W = 1240;          // A4 @150dpi
 const CAPTURE_H = 1754;
 // GymPickLogo viewBox 2805 x 279
-const LOGO_W = 120;
+const LOGO_W = 96;              // 2026-10-20: 120 → 96 (20% 축소)
 const LOGO_H = Math.round(LOGO_W * 279 / 2805);
 
 interface Props {
@@ -62,7 +62,7 @@ const QrPoster = forwardRef<View, QrPosterProps>(({ gymId, gymName }, ref) => (
       ecl="M"
     />
     <Text style={{ fontSize: 13, color: '#333333', textAlign: 'center' }}>
-      QR을 찍으면 이 헬스장의 보유 머신을 볼 수 있어요
+      헬스장의 보유 머신을 확인해 보세요
     </Text>
     <Text style={{ fontSize: 11, color: '#777777' }}>gympick.app</Text>
   </View>

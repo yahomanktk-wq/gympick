@@ -6,7 +6,7 @@ import { s } from './statsStyles';
 import MissingMachinesCard from './MissingMachinesCard';
 
 // 매니저 이용 통계 — 개요 탭. 기간 요약 KPI(페이지 조회·검색 노출·운동 세션·짐픽 회원, F5-4a)
-// + 주변에서 찾았지만 없는 머신(F5-4a) + 머신 가동률·회원 재방문율 카드(F5-2에서 그대로 이동).
+// + 주변에서 찾고 있는 머신(F5-4a) + 머신 가동률·회원 재방문율 카드(F5-2에서 그대로 이동).
 
 interface Props {
   dailyStats:      DailyUsage[];
@@ -50,7 +50,7 @@ export default function OverviewTab({ dailyStats, memberCount, insights, rangeLa
         </Text>
       </View>
 
-      {/* 주변에서 찾았지만 없는 머신 (F5-4a) */}
+      {/* 주변에서 찾고 있는 머신 (F5-4a) */}
       <MissingMachinesCard machines={insights.missingMachines} />
 
       {/* 머신 가동률 */}
