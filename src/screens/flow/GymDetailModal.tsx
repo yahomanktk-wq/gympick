@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Image as ExpoImage } from 'expo-image';
 import { fetchGymPhotoUrls } from '../../lib/db/gymPhotos';
 import { parseMuscles } from '../../lib/splitUtils';
@@ -26,6 +26,7 @@ import * as Haptics from 'expo-haptics';
 import { GymReportType } from '../../lib/db/gymReports';
 import { submitGymInfoReport } from '../../lib/db/gymInfoReports';
 import { useAuth } from '../../context/AuthContext';
+import { track } from '../../lib/analytics';
 import { useNavigation } from '@react-navigation/native';
 import { C, R, T } from '../../theme';
 import { fetchGymWithMachines } from '../../lib/db/gyms';
@@ -331,6 +332,22 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
     setMachineMuscleFilter('전체');
     setMachineBrandFilter('전체');
   }, [gymId]);
+
+  // 매니저 통계 '헬스장 페이지 조회수' 집계용 (F5). 본인 헬스장 매니저 조회는 제외.
+  // 모달이 열린 동안 헬스장당 1회만 보낸다(탭 전환·리렌더로 중복 X). 닫히면
+  // 초기화해서, 다시 열면 새 조회로 집계된다.
+  const trackedViewGymIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!visible) {
+      trackedViewGymIdRef.current = null;
+      return;
+    }
+    if (!gymId || !gym || gym.id !== gymId) return;       // 해당 헬스장 데이터 로딩 후에만
+    if (trackedViewGymIdRef.current === gymId) return;   // 이번 열림에서 이미 집계함
+    trackedViewGymIdRef.current = gymId;
+    if (gym.managerId && gym.managerId === user?.id) return;
+    track('view_gym', { gym_id: gymId });
+  }, [visible, gymId, gym, user?.id]);
 
   const gymMachines = gym?.machines ?? [];
 

@@ -191,8 +191,9 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
             // isSearchEntry=true로 들어왔을 때만(FindGymScreen/FavoritesScreen)
             // 발생시켜, 헬스장 상세의 머신 탭 등 다른 진입 경로와 섞이지
             // 않게 한다. result_count는 0건(검색 결과 없음)도 그대로 기록됨.
+            // gym_ids: 매니저 통계 '기구 검색 노출 횟수' 집계용 (F5)
             if (isSearchEntry) {
-              track('reverse_search', { machine_id: machineId, result_count: filtered.length });
+              track('reverse_search', { machine_id: machineId, result_count: filtered.length, gym_ids: filtered.map(g => g.id) });
             }
           } catch {}
         })(),
