@@ -35,7 +35,7 @@ import { getSessionPRMachines } from '../data/workoutSessions';
 import { fetchWorkoutLogs } from '../lib/db';
 import { deleteWorkoutSession } from '../lib/db/workouts';
 import { removeSession } from '../data/sessionStore';
-import { deleteFeedPostBySession, fetchFeedPostPublicStatusBatch, updateFeedPostPublic } from '../lib/db/feedPosts';
+import { deleteFeedPostBySession, fetchFeedPostPublicStatusBatch, updateFeedPostPublic, updateFeedPostShowOnGym } from '../lib/db/feedPosts';
 import { useFetch } from '../lib/useFetch';
 import { perfStart, perfEnd } from '../lib/perf';
 import { useAuth } from '../context/AuthContext';
@@ -422,7 +422,7 @@ function SessionDetailModal({
   const RC_ITEMS_PER_PAGE = Math.max(1, Math.floor((ROUTINE_CARD_H_J - 70 - 36) / 90));
   const routinePageRefs   = useRef<Record<string, (View | null)[]>>({});
   const [publicStatusMap, setPublicStatusMap] = useState<
-    Record<string, { postId: string; isPublic: boolean } | null>
+    Record<string, { postId: string; isPublic: boolean; showOnGym: boolean } | null>
   >({});
   const [localPhotoUriMap,   setLocalPhotoUriMap]   = useState<Record<string, string>>({});
   const [localMachineImgMap, setLocalMachineImgMap] = useState<Record<string, string>>({});
@@ -438,7 +438,7 @@ function SessionDetailModal({
         userId,
         sessions.map(session => session.date),
       );
-      const nextMap: Record<string, { postId: string; isPublic: boolean } | null> = {};
+      const nextMap: Record<string, { postId: string; isPublic: boolean; showOnGym: boolean } | null> = {};
       sessions.forEach(session => {
         nextMap[session.id] = statusByDate[session.date] ?? null;
       });
@@ -735,6 +735,21 @@ function SessionDetailModal({
     }
   }
 
+  async function handleToggleShowOnGym(session: WorkoutLog) {
+    const status = publicStatusMap[session.id];
+    if (!status) return;
+    try {
+      const newShowOnGym = !status.showOnGym;
+      await updateFeedPostShowOnGym(status.postId, newShowOnGym);
+      setPublicStatusMap(prev => ({
+        ...prev,
+        [session.id]: { ...status, showOnGym: newShowOnGym },
+      }));
+    } catch {
+      Alert.alert('오류', '헬스장 공개 여부 변경에 실패했습니다.');
+    }
+  }
+
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }} edges={['top']}>
@@ -914,6 +929,39 @@ function SessionDetailModal({
                     <Text style={[det.photoActionTxt, { color: C.danger }]}>삭제</Text>
                   </TouchableOpacity>
                 </View>
+
+                {/* 헬스장 페이지 공개/비공개 (F1-6) */}
+                {publicStatusMap[session.id] !== undefined && publicStatusMap[session.id] !== null && (
+                  <View style={{ paddingBottom: 12 }}>
+                    <TouchableOpacity
+                      style={[
+                        det.photoActionBtn,
+                        publicStatusMap[session.id]?.showOnGym
+                          ? { borderColor: C.accent + '60', backgroundColor: C.accentBg }
+                          : { borderColor: C.border },
+                      ]}
+                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); handleToggleShowOnGym(session); }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons
+                        name="business-outline"
+                        size={16}
+                        color={publicStatusMap[session.id]?.showOnGym ? C.accent : C.textSub}
+                      />
+                      <Text style={[
+                        det.photoActionTxt,
+                        { color: publicStatusMap[session.id]?.showOnGym ? C.accent : C.textSub },
+                      ]}>
+                        {publicStatusMap[session.id]?.showOnGym ? '헬스장 페이지 공개중' : '헬스장 페이지 비공개'}
+                      </Text>
+                    </TouchableOpacity>
+                    {publicStatusMap[session.id]?.isPublic === false && (
+                      <Text style={{ fontSize: 11, color: C.textDim, marginTop: 6, textAlign: 'center' }}>
+                        피드 비공개 상태라 헬스장 페이지에도 보이지 않아요
+                      </Text>
+                    )}
+                  </View>
+                )}
 
                 {/* 운동일지 요약 보기 */}
                 <TouchableOpacity

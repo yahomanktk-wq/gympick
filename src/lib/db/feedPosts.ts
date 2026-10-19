@@ -261,7 +261,7 @@ export async function fetchWorkoutSessionByUserAndDate(
 export async function fetchFeedPostPublicStatus(
   userId: string,
   sessionDate: string,
-): Promise<{ postId: string; isPublic: boolean } | null> {
+): Promise<{ postId: string; isPublic: boolean; showOnGym: boolean } | null> {
   try {
     const dayStart = new Date(sessionDate);
     dayStart.setHours(0, 0, 0, 0);
@@ -270,7 +270,7 @@ export async function fetchFeedPostPublicStatus(
 
     const { data, error } = await supabase
       .from('workout_feed_posts')
-      .select('id, is_public')
+      .select('id, is_public, show_on_gym')
       .eq('user_id', userId)
       .gte('created_at', dayStart.toISOString())
       .lte('created_at', dayEnd.toISOString())
@@ -279,7 +279,7 @@ export async function fetchFeedPostPublicStatus(
       .single();
 
     if (error || !data) return null;
-    return { postId: data.id, isPublic: data.is_public };
+    return { postId: data.id, isPublic: data.is_public, showOnGym: data.show_on_gym ?? true };
   } catch {
     return null;
   }
@@ -296,8 +296,8 @@ export async function fetchFeedPostPublicStatus(
 export async function fetchFeedPostPublicStatusBatch(
   userId: string,
   sessionDates: string[],
-): Promise<Record<string, { postId: string; isPublic: boolean } | null>> {
-  const result: Record<string, { postId: string; isPublic: boolean } | null> = {};
+): Promise<Record<string, { postId: string; isPublic: boolean; showOnGym: boolean } | null>> {
+  const result: Record<string, { postId: string; isPublic: boolean; showOnGym: boolean } | null> = {};
   if (sessionDates.length === 0) return result;
 
   const times = sessionDates.map(d => new Date(d).getTime());
@@ -309,7 +309,7 @@ export async function fetchFeedPostPublicStatusBatch(
   try {
     const { data, error } = await supabase
       .from('workout_feed_posts')
-      .select('id, is_public, created_at')
+      .select('id, is_public, show_on_gym, created_at')
       .eq('user_id', userId)
       .gte('created_at', rangeStart.toISOString())
       .lte('created_at', rangeEnd.toISOString())
@@ -330,7 +330,9 @@ export async function fetchFeedPostPublicStatusBatch(
         const t = new Date(row.created_at).getTime();
         return t >= dayStart.getTime() && t <= dayEnd.getTime();
       });
-      result[sessionDate] = match ? { postId: match.id, isPublic: match.is_public } : null;
+      result[sessionDate] = match
+        ? { postId: match.id, isPublic: match.is_public, showOnGym: match.show_on_gym ?? true }
+        : null;
     });
   } catch {
     sessionDates.forEach(d => { result[d] = null; });
@@ -352,6 +354,21 @@ export async function updateFeedPostPublic(
   } catch (e) {
     if (__DEV__) console.warn('[feedPosts] updateFeedPostPublic 오류:', e);
     throw e;
+  }
+}
+
+/** 피드 게시물의 헬스장 페이지 노출 여부 업데이트 */
+export async function updateFeedPostShowOnGym(
+  postId: string,
+  showOnGym: boolean,
+): Promise<void> {
+  const { error } = await supabase
+    .from('workout_feed_posts')
+    .update({ show_on_gym: showOnGym })
+    .eq('id', postId);
+  if (error) {
+    if (__DEV__) console.warn('[feedPosts] updateFeedPostShowOnGym 오류:', error.message);
+    throw error;
   }
 }
 
