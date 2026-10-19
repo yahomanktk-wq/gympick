@@ -265,6 +265,7 @@ export type WorkoutFeedPost = {
   muscles:     string[];         // 운동 부위 (예: ['CHEST', 'BACK'])
   createdAt:   string;           // ISO 8601
   isPublic:    boolean;
+  showOnGym?: boolean;           // 헬스장 페이지(상세/우리 헬스장 탭) 노출 여부 — DB show_on_gym, 기본 true
   reactions: {
     muscle: number;              // 💪
     fire:   number;              // 🔥

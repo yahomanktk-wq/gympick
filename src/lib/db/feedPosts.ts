@@ -17,6 +17,7 @@ function rowToPost(r: any): WorkoutFeedPost {
     muscles:        r.muscles ?? [],
     createdAt:      r.created_at,
     isPublic:       r.is_public,
+    showOnGym:      r.show_on_gym ?? true,
     reactions:      r.reactions ?? { muscle: 0, fire: 0, clap: 0, trophy: 0, flex: 0 },
     myReaction:     null,
   };
@@ -97,6 +98,7 @@ export async function fetchMyLatestGymId(userId: string): Promise<string | null>
   }
 }
 
+// (미사용) 24시간 제한 버전 — 헬스장 페이지/우리 헬스장 탭은 fetchGymOunwanPosts 사용
 /** 특정 헬스장의 24시간 이내 공개 피드 조회 */
 export async function fetchFeedPostsByGym(gymId: string): Promise<WorkoutFeedPost[]> {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -109,6 +111,34 @@ export async function fetchFeedPostsByGym(gymId: string): Promise<WorkoutFeedPos
     .order('created_at', { ascending: false });
   if (error || !data?.length) {
     if (__DEV__ && error) console.warn('[feedPosts] fetchFeedPostsByGym 오류:', error.message);
+    return [];
+  }
+  return data.map(rowToPost);
+}
+
+/**
+ * 헬스장별 오운완 (F1 헬스장 상세 그리드·썸네일 / F2 '내 헬스장' 탭 공용).
+ * - 공개(is_public) + 헬스장 페이지 노출(show_on_gym) 글만, 기간 제한 없음, 최신순.
+ * - before(ISO created_at)를 넘기면 그보다 오래된 글만 → '더 불러오기' 커서 페이지네이션.
+ * - 실패 시 빈 배열.
+ */
+export async function fetchGymOunwanPosts(
+  gymId: string,
+  options: { limit?: number; before?: string } = {},
+): Promise<WorkoutFeedPost[]> {
+  const { limit = 30, before } = options;
+  let query = supabase
+    .from('workout_feed_posts')
+    .select('*')
+    .eq('gym_id', gymId)
+    .eq('is_public', true)
+    .eq('show_on_gym', true);
+  if (before) query = query.lt('created_at', before);
+  const { data, error } = await query
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error || !data?.length) {
+    if (__DEV__ && error) console.warn('[feedPosts] fetchGymOunwanPosts 오류:', error.message);
     return [];
   }
   return data.map(rowToPost);
