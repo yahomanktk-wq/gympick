@@ -210,6 +210,31 @@ export async function fetchMachineActivationRate(
   }
 }
 
+/**
+ * 기간 내 이 헬스장 회원 수 (F5-2) — workout_sessions의 고유 user_id 수.
+ * 다른 통계와 같은 KST 범위 헬퍼를 사용. 오류 시 0.
+ */
+export async function fetchMemberCount(
+  gymId:     string,
+  startDate: string,
+  endDate:   string,
+): Promise<number> {
+  try {
+    const { data, error } = await supabase
+      .from('workout_sessions')
+      .select('user_id')
+      .eq('gym_id', gymId)
+      .gte('date', kstDayStartUtcIso(startDate))
+      .lt('date', kstDayEndExclusiveUtcIso(endDate));
+
+    if (error || !data) return 0;
+    return new Set(data.map(r => r.user_id)).size;
+  } catch (e) {
+    if (__DEV__) console.warn('[gymStats] fetchMemberCount exception:', e);
+    return 0;
+  }
+}
+
 export async function fetchRetentionStats(
   gymId: string,
 ): Promise<{ thisMonth: number; lastMonth: number; retentionRate: number | null; failed: boolean }> {
