@@ -7,7 +7,7 @@ import { DayHours } from '../../data/gymDetails';
 import { kstWeekdayNow } from '../../lib/kstDate';
 
 // 헬스장 상세 정보 카드의 '오늘 영업시간' 줄 (2026-10-20).
-// 접힌 상태: 시계 아이콘 + "오늘(화) 09:00~22:00" + 펼치기 아이콘.
+// 접힌 상태: 시계 아이콘 + "화 09:00~22:00"(오늘 요일) + 펼치기 아이콘.
 // 펼치면 월~일 전체와 운영시간 메모를 같은 카드 안에 보여준다.
 // '오늘'은 렌더할 때마다 한국시간 기준으로 계산한다(앱을 켠 채 자정을 넘겨도 맞게).
 
@@ -67,11 +67,11 @@ export default function GymHoursRow({ hours, legacyHours, note }: Props) {
   } else if (!todayRow || !todayRow.time) {
     summary = (
       <Text style={st.summary}>
-        오늘({todayKo}) <Text style={st.closed}>휴무</Text>
+        {todayKo} <Text style={st.closed}>휴무</Text>
       </Text>
     );
   } else {
-    summary = <Text style={st.summary}>오늘({todayKo}) {todayRow.time}</Text>;
+    summary = <Text style={st.summary}>{todayKo} {todayRow.time}</Text>;
   }
 
   return (
