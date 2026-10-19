@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -25,6 +25,7 @@ import { fetchSplitConfig } from '../lib/db/splitRoutine';
 import { getTodayTarget, toEnMuscle } from '../lib/splitUtils';
 import { fetchWorkoutLogs } from '../lib/db/workouts';
 import { useAuth } from '../context/AuthContext';
+import { perfStart, perfEnd } from '../lib/perf';
 import GymDetailModal from './flow/GymDetailModal';
 import MachineDetailModal from './flow/MachineDetailModal';
 import FeedDetailModal from '../components/feed/FeedDetailModal';
@@ -182,44 +183,12 @@ export default function WorkoutFeedScreen() {
   const [gymDetailId,      setGymDetailId]      = useState<string | null>(null);
   const [machineDetailItem, setMachineDetailItem] = useState<any>(null);
 
-  useEffect(() => {
-    if (!user?.id) return;
-
-    const loadFilter = async () => {
-      const [config, logs] = await Promise.all([
-        fetchSplitConfig(user.id).catch(() => null),
-        fetchWorkoutLogs(user.id).catch(() => []),
-      ]);
-
-      // 오늘 운동일지 확인
-      const todayStr  = new Date().toDateString();
-      const todayLogs = logs.filter((l: any) =>
-        new Date(l.date).toDateString() === todayStr
-      );
-
-      let targetKo: string | null = null;
-
-      if (todayLogs.length > 0) {
-        // 오늘 일지 있음 → 일지 타겟 부위(영어)를 한글로 변환
-        const { toKoMuscle } = await import('../lib/splitUtils');
-        const todayMuscleEn  = todayLogs[0].targetMuscles?.[0] ?? null;
-        targetKo = todayMuscleEn ? toKoMuscle(todayMuscleEn) : null;
-      } else if (config) {
-        // 오늘 일지 없음 → 현재 인덱스 타겟 부위
-        targetKo = getTodayTarget(config.splitType, config.workoutSplit, config.splitCurrentIndex);
-      }
-
-      if (
-        targetKo &&
-        targetKo !== '휴식' &&
-        (MUSCLE_FILTERS as readonly string[]).includes(targetKo)
-      ) {
-        setMuscleFilter(targetKo as MuscleFilter);
-      }
-    };
-
-    loadFilter();
-  }, [user?.id]);
+  // 2026-10-13: 기존에는 이 화면이 "오늘의 타겟 부위 자동 필터"를 위한
+  // loadFilter effect와, 피드 게시물을 불러오는 loadPosts(useFocusEffect)가
+  // 각각 독립적으로 fetchWorkoutLogs(user.id)를 호출하고 있었음 — 같은
+  // 사용자의 운동기록을 화면 하나에서 두 번 요청하는 중복 호출. 아래
+  // useFocusEffect의 loadPosts 안에서 이미 가져오는 mySessions를 재사용해
+  // 타겟 부위 계산까지 함께 처리하도록 통합하고, 이 effect는 제거함.
 
   useFocusEffect(
     useCallback(() => {
@@ -242,13 +211,44 @@ export default function WorkoutFeedScreen() {
         }
         const myUserId = user.id;
 
-        // 운동기록 / 최근 헬스장 ID / 피드 게시물 조회는 서로 결과를 필요로 하지 않는
-        // 독립적인 조회이므로 동시에 시작한다 (순서대로 기다리던 것을 병렬화).
-        const [mySessions, fetchedGymId, initialServerPosts]: [WorkoutLog[], string | null, WorkoutFeedPost[]] = await Promise.all([
+        // 운동기록 / 최근 헬스장 ID / 피드 게시물 / 분할 루틴 설정 조회는 서로
+        // 결과를 필요로 하지 않는 독립적인 조회이므로 동시에 시작한다
+        // (순서대로 기다리던 것을 병렬화). fetchSplitConfig는 기존에 별도의
+        // loadFilter effect에서 fetchWorkoutLogs와 함께 다시 호출되던 것을
+        // 여기로 합쳐, 같은 화면에서 운동기록을 두 번 요청하지 않도록 함.
+        const [mySessions, fetchedGymId, initialServerPosts, splitConfig]: [WorkoutLog[], string | null, WorkoutFeedPost[], Awaited<ReturnType<typeof fetchSplitConfig>> | null] = await Promise.all([
           fetchWorkoutLogs(user.id).catch(() => [] as WorkoutLog[]),
           fetchMyLatestGymId(user.id),
           getActiveFeedPostsCached().catch(() => [] as WorkoutFeedPost[]),
+          fetchSplitConfig(user.id).catch(() => null),
         ]);
+
+        // 오늘의 타겟 부위 자동 필터 (기존 loadFilter effect 로직을 이식 —
+        // mySessions를 그대로 재사용하므로 추가 네트워크 호출 없음)
+        const todayStr  = new Date().toDateString();
+        const todayLogs = mySessions.filter(
+          s => new Date(s.date).toDateString() === todayStr
+        );
+
+        let targetKo: string | null = null;
+        if (todayLogs.length > 0) {
+          // 오늘 일지 있음 → 일지 타겟 부위(영어)를 한글로 변환
+          const { toKoMuscle } = await import('../lib/splitUtils');
+          const todayMuscleEn  = todayLogs[0].targetMuscles?.[0] ?? null;
+          targetKo = todayMuscleEn ? toKoMuscle(todayMuscleEn) : null;
+        } else if (splitConfig) {
+          // 오늘 일지 없음 → 현재 인덱스 타겟 부위
+          targetKo = getTodayTarget(splitConfig.splitType, splitConfig.workoutSplit, splitConfig.splitCurrentIndex);
+        }
+
+        if (
+          active &&
+          targetKo &&
+          targetKo !== '휴식' &&
+          (MUSCLE_FILTERS as readonly string[]).includes(targetKo)
+        ) {
+          setMuscleFilter(targetKo as MuscleFilter);
+        }
 
         // 24시간 이내 세션만 필터링
         const cutoff = Date.now() - 24 * 60 * 60 * 1000;
@@ -309,7 +309,8 @@ export default function WorkoutFeedScreen() {
         if (active) setPosts(sortByLatest(unique));
       }
 
-      loadPosts();
+      perfStart('WorkoutFeedScreen:loadPosts');
+      loadPosts().finally(() => perfEnd('WorkoutFeedScreen:loadPosts'));
       return () => { active = false; };
     }, [user])
   );

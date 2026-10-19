@@ -254,6 +254,60 @@ export async function fetchFeedPostPublicStatus(
   }
 }
 
+/**
+ * 유저의 여러 운동일지 날짜에 대한 오운완 피드 공개 여부를 한 번에 조회.
+ * 2026-10-13: JournalScreen에서 세션 개수만큼 fetchFeedPostPublicStatus를
+ * 반복 호출(N+1)하던 것을 하나의 쿼리로 합치기 위해 추가 — 조회 범위를
+ * 가장 이른 날짜 ~ 가장 늦은 날짜로 한 번에 가져온 뒤, 날짜별로 매칭한다.
+ * created_at 내림차순으로 가져오므로 같은 날 여러 게시물이 있어도
+ * 기존(limit 1, 최신순)과 동일하게 가장 최근 게시물이 선택된다.
+ */
+export async function fetchFeedPostPublicStatusBatch(
+  userId: string,
+  sessionDates: string[],
+): Promise<Record<string, { postId: string; isPublic: boolean } | null>> {
+  const result: Record<string, { postId: string; isPublic: boolean } | null> = {};
+  if (sessionDates.length === 0) return result;
+
+  const times = sessionDates.map(d => new Date(d).getTime());
+  const rangeStart = new Date(Math.min(...times));
+  rangeStart.setHours(0, 0, 0, 0);
+  const rangeEnd = new Date(Math.max(...times));
+  rangeEnd.setHours(23, 59, 59, 999);
+
+  try {
+    const { data, error } = await supabase
+      .from('workout_feed_posts')
+      .select('id, is_public, created_at')
+      .eq('user_id', userId)
+      .gte('created_at', rangeStart.toISOString())
+      .lte('created_at', rangeEnd.toISOString())
+      .order('created_at', { ascending: false });
+
+    if (error || !data) {
+      sessionDates.forEach(d => { result[d] = null; });
+      return result;
+    }
+
+    sessionDates.forEach(sessionDate => {
+      const dayStart = new Date(sessionDate);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(sessionDate);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      const match = data.find(row => {
+        const t = new Date(row.created_at).getTime();
+        return t >= dayStart.getTime() && t <= dayEnd.getTime();
+      });
+      result[sessionDate] = match ? { postId: match.id, isPublic: match.is_public } : null;
+    });
+  } catch {
+    sessionDates.forEach(d => { result[d] = null; });
+  }
+
+  return result;
+}
+
 /** 피드 게시물 공개 여부 업데이트 */
 export async function updateFeedPostPublic(
   postId: string,

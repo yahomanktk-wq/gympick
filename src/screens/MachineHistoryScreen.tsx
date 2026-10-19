@@ -16,6 +16,7 @@ import { C, R, T } from '../theme';
 import { WorkoutLog } from '../data/types';
 import { fetchWorkoutLogs } from '../lib/db';
 import { useAuth } from '../context/AuthContext';
+import { perfStart, perfEnd } from '../lib/perf';
 import { MOCK_SESSIONS } from '../data/workoutSessions';
 import { getNewSessions } from '../data/sessionStore';
 import {
@@ -126,11 +127,14 @@ export default function MachineHistoryScreen() {
   useFocusEffect(useCallback(() => {
     let active = true;
     async function load() {
+      perfStart('MachineHistoryScreen:fetchWorkoutLogs');
       try {
         const logs = await fetchWorkoutLogs(user?.id ?? '');
         if (active) setSessions(logs.length > 0 ? logs : [...getNewSessions(user?.id ?? ''), ...MOCK_SESSIONS]);
       } catch {
         if (active) setSessions([...getNewSessions(user?.id ?? ''), ...MOCK_SESSIONS]);
+      } finally {
+        perfEnd('MachineHistoryScreen:fetchWorkoutLogs');
       }
     }
     load();

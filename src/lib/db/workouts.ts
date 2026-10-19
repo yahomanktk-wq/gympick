@@ -527,6 +527,59 @@ export async function insertWorkoutSet(
   return rowToSet(data);
 }
 
+// 2026-10-07: 운동일지 저장 시 운동(entry)마다, 세트(set)마다 insertWorkoutEntry/
+// insertWorkoutSet을 한 건씩 순차 await하면 운동 6개×세트 3개만 돼도 최대
+// 20회 넘는 네트워크 왕복이 발생해 저장이 눈에 띄게 느려진다. 아래 두
+// 배치(batch) 버전은 저장되는 컬럼/값/관계는 단건 버전과 완전히 동일하게
+// 유지하면서, 여러 행을 한 번의 insert 호출로 모아 보내 왕복 횟수만
+// 줄인다(PostWorkoutLogModal의 handleSaveWorkout에서 사용).
+
+/** Insert multiple workout entries in a single round trip. Returns inserted rows or throws. */
+export async function insertWorkoutEntries(
+  entries: (Omit<WorkoutEntry, 'id'> & { id?: string })[],
+): Promise<WorkoutEntry[]> {
+  if (!entries.length) return [];
+  const { data, error } = await supabase
+    .from('workout_entries')
+    .insert(entries.map(entry => ({
+      id:            entry.id,
+      session_id:    entry.sessionId,
+      machine_id:    entry.machineId,
+      machine_name:  entry.machineName,
+      machine_brand: entry.machineBrand,
+      target_muscle: entry.targetMuscle,
+      sort_order:    entry.order,
+    })))
+    .select();
+
+  if (error || !data) throw new Error(error?.message ?? 'insertWorkoutEntries failed');
+  invalidateWorkoutLogsCache();
+  return data.map(rowToEntry);
+}
+
+/** Insert multiple workout sets in a single round trip. Returns inserted rows or throws. */
+export async function insertWorkoutSets(
+  sets: (Omit<WorkoutSet, 'id'> & { id?: string; entryId: string })[],
+): Promise<WorkoutSet[]> {
+  if (!sets.length) return [];
+  const { data, error } = await supabase
+    .from('workout_sets')
+    .insert(sets.map(set => ({
+      id:         set.id,
+      entry_id:   set.entryId,
+      set_number: set.setNumber,
+      weight:     set.weight,
+      reps:       set.reps,
+      is_pr:      set.isPR ?? null,
+    })))
+    .select();
+
+  if (error || !data) throw new Error(error?.message ?? 'insertWorkoutSets failed');
+  sets.forEach(set => track('log_set', { entry_id: set.entryId, weight: set.weight, reps: set.reps }));
+  invalidateWorkoutLogsCache();
+  return data.map(rowToSet);
+}
+
 /** Insert a new workout photo. Returns the inserted row or throws. */
 export async function insertWorkoutPhoto(
   photo: Pick<WorkoutPhoto, 'sessionId' | 'userId' | 'capturedAt' | 'textColor' | 'aspectRatio' | 'thumbnailUri'>,

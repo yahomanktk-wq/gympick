@@ -303,6 +303,7 @@ export default function FavoritesScreen({ onClose }: { onClose: () => void }) {
         visible={!!selectedMachine}
         machine={selectedMachine}
         onClose={() => setSelectedMachine(null)}
+        isSearchEntry
         onSelectGym={(gymId) => {
           setSelectedMachine(null);
           setTimeout(() => {

@@ -2386,13 +2386,25 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
     ));
     try {
       await answerUserInquiry(id, answer);
+      // DB 반영이 실제로 성공했을 때만 알림을 보낸다 — 다른 관리자 액션(제보 확인,
+      // 매니저 승인/거절 등)과 동일한 패턴.
+      const inquiry = userInquiries.find(i => i.id === id);
+      if (inquiry) {
+        await sendNotification(
+          inquiry.userId,
+          'inquiry_answered',
+          '문의하신 내용에 답변이 등록됐어요',
+          `"${inquiry.title}" 문의에 답변이 등록됐어요: ${answer}`,
+          id,
+        );
+      }
     } catch (e: any) {
       if (__DEV__) console.warn('[AdminDashboard] 문의 답변 등록 오류:', e);
       Alert.alert('처리 오류', '답변 등록 중 문제가 발생했습니다.');
     }
     // 정합성을 위한 백그라운드 재조회
     fetchAllUserInquiries().then(setUserInquiries).catch(() => {});
-  }, []);
+  }, [userInquiries]);
 
   const handleApproveApplication = useCallback(async (id: string, comment?: string): Promise<boolean> => {
     try {

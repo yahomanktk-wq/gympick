@@ -75,7 +75,14 @@ type Props = {
 
 export default function WorkoutFeedCard({ post, onReact }: Props) {
   const [imgRatio, setImgRatio] = useState(3 / 4); // default 4:3 → height/width = 3/4 → wait, 4:3 means w:h=4:3 so h/w = 3/4
-  const displayUri = post.compositeUri ?? post.photoUri;
+  // 2026-10-13: 피드 카드는 그리드/카드 크기로만 보여지는데, 업로드 시 이미
+  // 만들어두는 작은 썸네일(thumbnailUri)이 아니라 원본/합성 풀해상도
+  // (compositeUri/photoUri)를 그대로 디코딩하고 있었음 — 카드 크기엔
+  // 과도하게 큰 이미지라 로딩이 불필요하게 느려짐. 썸네일을 우선 쓰고,
+  // 썸네일이 없는 과거 게시물만 기존처럼 원본으로 폴백한다. 썸네일은
+  // 세로 비율을 유지한 채 리사이즈되므로(photoStorage.ts) 비율 계산에는
+  // 영향 없음.
+  const displayUri = post.thumbnailUri ?? post.compositeUri ?? post.photoUri;
 
   return (
     <View style={s.card}>
@@ -86,6 +93,8 @@ export default function WorkoutFeedCard({ post, onReact }: Props) {
           source={{ uri: displayUri }}
           style={s.photo}
           contentFit="cover"
+          cachePolicy="memory-disk"
+          placeholder={post.blurhash ? { blurhash: post.blurhash } : undefined}
           onLoad={(e) => {
             const { width, height } = e.source;
             if (width && height) setImgRatio(height / width);

@@ -35,8 +35,9 @@ import { getSessionPRMachines } from '../data/workoutSessions';
 import { fetchWorkoutLogs } from '../lib/db';
 import { deleteWorkoutSession } from '../lib/db/workouts';
 import { removeSession } from '../data/sessionStore';
-import { deleteFeedPostBySession, fetchFeedPostPublicStatus, updateFeedPostPublic } from '../lib/db/feedPosts';
+import { deleteFeedPostBySession, fetchFeedPostPublicStatusBatch, updateFeedPostPublic } from '../lib/db/feedPosts';
 import { useFetch } from '../lib/useFetch';
+import { perfStart, perfEnd } from '../lib/perf';
 import { useAuth } from '../context/AuthContext';
 import PostWorkoutLogModal, {
   ClassicOverlay, LeftColOverlayB, GridOverlayC, GridOverlayD, GridOverlayE, PosterOverlay, RosterOverlay,
@@ -429,11 +430,20 @@ function SessionDetailModal({
   useEffect(() => {
     if (!userId) return;
     // 모달 열릴 때마다 초기화 후 재fetch
+    // 2026-10-13: 세션 개수만큼 fetchFeedPostPublicStatus를 각각 호출하던
+    // N+1 패턴을 하나의 배치 쿼리(fetchFeedPostPublicStatusBatch)로 합침.
     setPublicStatusMap({});
-    sessions.forEach(async (session) => {
-      const status = await fetchFeedPostPublicStatus(userId, session.date);
-      setPublicStatusMap(prev => ({ ...prev, [session.id]: status }));
-    });
+    (async () => {
+      const statusByDate = await fetchFeedPostPublicStatusBatch(
+        userId,
+        sessions.map(session => session.date),
+      );
+      const nextMap: Record<string, { postId: string; isPublic: boolean } | null> = {};
+      sessions.forEach(session => {
+        nextMap[session.id] = statusByDate[session.date] ?? null;
+      });
+      setPublicStatusMap(nextMap);
+    })();
   }, [sessions.map(s => s.id).join(','), userId]);
 
   if (sessions.length === 0) return null;
@@ -1172,7 +1182,10 @@ export default function JournalScreen() {
   const userId = user?.id ?? '';
 
   const { data: fetchedSessions, loading, refetch } = useFetch(
-    () => fetchWorkoutLogs(userId),
+    () => {
+      perfStart('JournalScreen:fetchWorkoutLogs');
+      return fetchWorkoutLogs(userId).finally(() => perfEnd('JournalScreen:fetchWorkoutLogs'));
+    },
     [userId],
   );
 

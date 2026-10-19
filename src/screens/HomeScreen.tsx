@@ -17,6 +17,13 @@ import { C, R, T } from '../theme';
 import { btnHeight, cardPadH, cardPadV, iconSize, screenPad } from '../theme/responsive';
 import GymDetailModal from './flow/GymDetailModal';
 import HomeRankingSections from '../components/HomeRankingSections';
+import RecentWorkoutSummaryPopup from '../components/RecentWorkoutSummaryPopup';
+import {
+  pickRecentWorkoutForPopup,
+  hasSeenRecentWorkoutPopupToday,
+  markRecentWorkoutPopupSeenToday,
+  type RecentWorkoutPopupPick,
+} from '../lib/recentWorkoutPopup';
 import { useAuth } from '../context/AuthContext';
 
 import { WorkoutLog, WorkoutFeedPost, UserSplitConfig, WeekdaySplit } from '../data/types';
@@ -27,6 +34,7 @@ import { fetchSplitConfig } from '../lib/db/splitRoutine';
 import { getTodayTarget, getTodayTargets, toEnMuscle, toKoMuscle } from '../lib/splitUtils';
 import { getTransformedImageUrl } from '../lib/photoImageUrl';
 import { track } from '../lib/analytics';
+import { perfStart, perfEnd } from '../lib/perf';
 import * as Haptics from 'expo-haptics';
 
 // --- Helpers
@@ -335,6 +343,8 @@ export default function HomeScreen() {
   const [weekTargetMap,      setWeekTargetMap]       = useState<Record<string, string | null>>({});
   const [ounwanDisplayTarget, setOunwanDisplayTarget] = useState<string | null>(null);
   const [ounwanIsFallback, setOunwanIsFallback] = useState(false);
+  const [recentWorkoutPick,    setRecentWorkoutPick]    = useState<RecentWorkoutPopupPick | null>(null);
+  const [showRecentWorkoutPopup, setShowRecentWorkoutPopup] = useState(false);
 
   // 홈 화면 focus마다 최신 role/managerOnboarded를 확인 — 매니저 승인 알림을
   // 직접 탭하지 않아도 홈에 들어올 때마다 승인 여부가 반영되도록 한다.
@@ -428,10 +438,32 @@ export default function HomeScreen() {
           setOunwanPosts(posts);
         }
       }
-      load();
+      perfStart('HomeScreen:load');
+      load().finally(() => perfEnd('HomeScreen:load'));
       return () => { active = false; };
     }, [user?.id])
   );
+
+  // 2026-10-16: 로그인 + 운동일지 작성 경험이 있는 유저에게, 오늘 타겟부위와
+  // 겹치는(없으면 가장 최근) 운동일지를 홈 화면 팝업으로 하루 1번만 보여준다.
+  // sessions/todayTarget은 위 load()가 이미 불러온 값을 그대로 쓰므로 여기서
+  // 추가 네트워크 호출은 하지 않는다.
+  useEffect(() => {
+    if (!user?.id) return;
+    if (sessions.length === 0) return; // 이전에 작성한 운동일지가 없는 유저는 대상 아님
+
+    let cancelled = false;
+    (async () => {
+      const seen = await hasSeenRecentWorkoutPopupToday(user.id);
+      if (cancelled || seen) return;
+      const pick = pickRecentWorkoutForPopup(sessions, todayTarget);
+      if (!pick || cancelled) return;
+      setRecentWorkoutPick(pick);
+      setShowRecentWorkoutPopup(true);
+      markRecentWorkoutPopupSeenToday(user.id);
+    })();
+    return () => { cancelled = true; };
+  }, [sessions, todayTarget, user?.id]);
 
   const streak = useMemo(() => computeStreak(sessions), [sessions]);
 
@@ -653,6 +685,18 @@ export default function HomeScreen() {
         visible={gymDetailVisible}
         gymId={gymDetailId}
         onClose={() => setGymDetailVisible(false)}
+      />
+
+      <RecentWorkoutSummaryPopup
+        visible={showRecentWorkoutPopup}
+        session={recentWorkoutPick?.session ?? null}
+        matchedMuscle={recentWorkoutPick?.matchedMuscle ?? false}
+        todayTarget={todayTarget}
+        onClose={() => setShowRecentWorkoutPopup(false)}
+        onViewDetail={(sessionId) => {
+          setShowRecentWorkoutPopup(false);
+          nav.navigate('Journal', { openSessionId: sessionId });
+        }}
       />
     </SafeAreaView>
   );

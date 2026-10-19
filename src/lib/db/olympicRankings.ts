@@ -23,48 +23,63 @@ export async function saveVoteToSupabase(params: {
   gymId:      string | null;
 }): Promise<void> {
   try {
-    // 1. 투표 기록 저장
-    await supabase.from('olympic_votes').insert({
-      user_id:     params.userId,
-      machine_id:  params.machineId,
-      opponent_id: params.opponentId,
-      body_part:   params.bodyPart,
-      category:    params.category,
-      round:       params.round,
-      gym_id:      params.gymId,
-    });
+    // 2026-10-13: 기존에는 투표기록 저장 → 승자 select → 승자 upsert →
+    // 패자 select → 패자 upsert를 순차로 5번 왕복했음. 투표기록 저장과
+    // 승자/패자 조회는 서로 결과가 필요 없는 독립적인 작업이라 동시에
+    // 시작하고, 승자/패자 upsert도 서로 독립적이라 동시에 실행해 왕복을
+    // 5회 → 2회(조회 묶음 1회 + upsert 묶음 1회)로 줄인다.
+    // (count를 읽은 뒤 +1해서 다시 쓰는 read-then-write 방식 자체는 동시
+    // 투표 시 카운트가 누락될 수 있는 레이스 컨디션 소지가 있음 — 이건
+    // 병렬화와는 별개의 정합성 이슈라 별도로 안내함)
 
-    // 2. 승자 랭킹 upsert (win_count +1)
-    const { data: winner } = await supabase
-      .from('olympic_rankings')
-      .select('win_count, lose_count')
-      .eq('machine_id', params.machineId)
-      .single();
+    const [, winnerResult, loserResult] = await Promise.all([
+      // 1. 투표 기록 저장
+      supabase.from('olympic_votes').insert({
+        user_id:     params.userId,
+        machine_id:  params.machineId,
+        opponent_id: params.opponentId,
+        body_part:   params.bodyPart,
+        category:    params.category,
+        round:       params.round,
+        gym_id:      params.gymId,
+      }),
+      // 2. 승자 현재 카운트 조회
+      supabase
+        .from('olympic_rankings')
+        .select('win_count, lose_count')
+        .eq('machine_id', params.machineId)
+        .single(),
+      // 3. 패자 현재 카운트 조회
+      supabase
+        .from('olympic_rankings')
+        .select('win_count, lose_count')
+        .eq('machine_id', params.opponentId)
+        .single(),
+    ]);
 
-    await supabase.from('olympic_rankings').upsert({
-      machine_id:  params.machineId,
-      body_part:   params.bodyPart,
-      category:    params.category || null,
-      win_count:   (winner?.win_count ?? 0) + 1,
-      lose_count:  winner?.lose_count ?? 0,
-      updated_at:  new Date().toISOString(),
-    }, { onConflict: 'machine_id' });
+    const winner = winnerResult.data;
+    const loser  = loserResult.data;
 
-    // 3. 패자 랭킹 upsert (lose_count +1)
-    const { data: loser } = await supabase
-      .from('olympic_rankings')
-      .select('win_count, lose_count')
-      .eq('machine_id', params.opponentId)
-      .single();
-
-    await supabase.from('olympic_rankings').upsert({
-      machine_id:  params.opponentId,
-      body_part:   params.bodyPart,
-      category:    params.category || null,
-      win_count:   loser?.win_count ?? 0,
-      lose_count:  (loser?.lose_count ?? 0) + 1,
-      updated_at:  new Date().toISOString(),
-    }, { onConflict: 'machine_id' });
+    await Promise.all([
+      // 승자 랭킹 upsert (win_count +1)
+      supabase.from('olympic_rankings').upsert({
+        machine_id:  params.machineId,
+        body_part:   params.bodyPart,
+        category:    params.category || null,
+        win_count:   (winner?.win_count ?? 0) + 1,
+        lose_count:  winner?.lose_count ?? 0,
+        updated_at:  new Date().toISOString(),
+      }, { onConflict: 'machine_id' }),
+      // 패자 랭킹 upsert (lose_count +1)
+      supabase.from('olympic_rankings').upsert({
+        machine_id:  params.opponentId,
+        body_part:   params.bodyPart,
+        category:    params.category || null,
+        win_count:   loser?.win_count ?? 0,
+        lose_count:  (loser?.lose_count ?? 0) + 1,
+        updated_at:  new Date().toISOString(),
+      }, { onConflict: 'machine_id' }),
+    ]);
 
   } catch (e) {
     if (__DEV__) console.warn('[olympicRankings] saveVoteToSupabase 오류:', e);

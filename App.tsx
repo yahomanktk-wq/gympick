@@ -21,11 +21,17 @@ import MachineHistoryScreen   from './src/screens/MachineHistoryScreen';
 import ResetPasswordScreen from './src/screens/auth/ResetPasswordScreen';
 import OnboardingScreen from './src/screens/onboarding/OnboardingScreen';
 import { initAnalytics, track } from './src/lib/analytics';
+import { perfStart, perfEnd } from './src/lib/perf';
 
 const Stack = createNativeStackNavigator();
 initAnalytics();
 
 SplashScreen.preventAutoHideAsync();
+
+// 2026-10-16: 모듈이 처음 평가되는 시점(JS 번들 로드 직후)을 콜드스타트
+// 측정 시작점으로 잡는다 — 스플래시가 실제로 사라지는 시점까지의 총
+// 소요시간을 보기 위함.
+perfStart('App:coldstart_total');
 
 export default function App() {
   React.useEffect(() => {
@@ -43,7 +49,9 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
+      perfStart('App:fetchAppUpdateConfig');
       const config = await fetchAppUpdateConfig();
+      perfEnd('App:fetchAppUpdateConfig');
       if (!config) return; // 설정 없음/네트워크 오류 → 조용히 체크 스킵
       const currentVersion = Constants.expoConfig?.version ?? '0.0.0';
       setUpdateStatus(getUpdateStatus(currentVersion, config));
@@ -82,6 +90,7 @@ export default function App() {
 
   useEffect(() => {
     const prepare = async () => {
+      perfStart('App:onboarding_check');
       try {
         // AsyncStorage 읽기에 최대 3초 timeout 적용
         const val = await Promise.race([
@@ -93,8 +102,11 @@ export default function App() {
         // 읽기 실패 시 온보딩 완료로 처리 (기존 유저 보호)
         setOnboardingDone(true);
       } finally {
+        perfEnd('App:onboarding_check');
         // 최소 1초 스플래시 유지 보장
+        perfStart('App:min_splash_wait');
         await new Promise(resolve => setTimeout(resolve, 1000));
+        perfEnd('App:min_splash_wait');
         setAppReady(true);
         try {
           await SplashScreen.hideAsync();
@@ -103,6 +115,18 @@ export default function App() {
     };
     prepare();
   }, []);
+
+  // 2026-10-16: appReady/onboardingDone/fontsLoaded 셋 다 갖춰져 실제로
+  // 스플래시가 사라지는(아래 return null 가드를 벗어나는) 시점에 콜드스타트
+  // 총 소요시간을 1회만 찍는다.
+  const coldstartLogged = React.useRef(false);
+  useEffect(() => {
+    if (coldstartLogged.current) return;
+    if (appReady && onboardingDone !== null && fontsLoaded) {
+      coldstartLogged.current = true;
+      perfEnd('App:coldstart_total');
+    }
+  }, [appReady, onboardingDone, fontsLoaded]);
 
   useEffect(() => {
     // 앱이 열려있는 상태에서 딥링크 수신

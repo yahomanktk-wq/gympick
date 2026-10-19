@@ -27,6 +27,7 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import GymMapView from '../components/GymMapView';
 import { C, R, T } from '../theme';
 import { useAuth } from '../context/AuthContext';
+import { perfStart, perfEnd } from '../lib/perf';
 import { submitGymRegistrationRequest } from '../lib/db/gymRegistrationRequests';
 import { fetchMachines, fetchGymsWithMachines, getGymsCacheSync, getMachinesCacheSync } from '../lib/db';
 import { MachineWithGyms, GymWithMachines } from '../data/types';
@@ -345,9 +346,12 @@ export default function FindGymScreen() {
 
   useEffect(() => {
     let cancelled = false;
+    perfStart('FindGymScreen:fetchMachines');
     fetchMachines().then(data => {
+      perfEnd('FindGymScreen:fetchMachines');
       if (!cancelled) { setMachinesData(data); setMachinesLoading(false); }
     }).catch(() => {
+      perfEnd('FindGymScreen:fetchMachines');
       if (!cancelled) setMachinesLoading(false);
     });
     return () => { cancelled = true; };
@@ -355,9 +359,12 @@ export default function FindGymScreen() {
 
   useEffect(() => {
     let cancelled = false;
+    perfStart('FindGymScreen:fetchGymsWithMachines');
     fetchGymsWithMachines().then(data => {
+      perfEnd('FindGymScreen:fetchGymsWithMachines');
       if (!cancelled) { setGymsData(data); setGymsLoading(false); }
     }).catch(() => {
+      perfEnd('FindGymScreen:fetchGymsWithMachines');
       if (!cancelled) setGymsLoading(false);
     });
     return () => { cancelled = true; };
@@ -370,10 +377,20 @@ export default function FindGymScreen() {
   const allMachines = (machinesData ?? []).filter(m => m.exerciseKind !== 'freeweight' && !m.isCustom);
 
   const [shuffleTick, setShuffleTick] = useState(0);
+  const lastShuffleAtRef = useRef(0);
+  // 2026-10-13: 기존에는 화면이 포커스될 때마다(탭을 잠깐 왔다갔다만 해도)
+  // 머신 배열(~1,900개) 전체를 다시 섞었음 — 셔플 결과는 한동안 떠나있다가
+  // 다시 들어왔을 때나 체감되는 변화라, 매 포커스마다 대형 배열을 재셔플하는
+  // 건 낭비. 마지막 셔플 이후 일정 시간이 지났을 때만 다시 섞도록 스로틀.
+  const SHUFFLE_INTERVAL_MS = 5 * 60 * 1000;
 
   useFocusEffect(
     useCallback(() => {
-      setShuffleTick(t => t + 1);
+      const now = Date.now();
+      if (now - lastShuffleAtRef.current > SHUFFLE_INTERVAL_MS) {
+        lastShuffleAtRef.current = now;
+        setShuffleTick(t => t + 1);
+      }
     }, [])
   );
 
@@ -966,6 +983,7 @@ export default function FindGymScreen() {
         onClose={() => setDetailMachine(null)}
         favorites={favorites}
         onToggleFavorite={toggleFavorite}
+        isSearchEntry
         onSelectGym={(gymId) => {
           setDetailMachine(null);
           setTimeout(() => {

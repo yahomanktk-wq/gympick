@@ -28,6 +28,7 @@ import * as Haptics from 'expo-haptics';
 import { C, R, T } from '../../theme';
 import { Machine } from '../../data/types';
 import { MACHINES } from '../../data';
+import { perfStart, perfEnd } from '../../lib/perf';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -259,6 +260,7 @@ export default function TodayWorkoutListScreen({
   // Supabase에서 전체 머신(프리웨이트 포함) 로드 → fw37 등 처리
   useEffect(() => {
     async function load() {
+      perfStart('TodayWorkoutListScreen:fetchMachines');
       try {
         const { fetchMachines } = await import('../../lib/db/machines');
         const all = await fetchMachines();
@@ -267,6 +269,8 @@ export default function TodayWorkoutListScreen({
         }
       } catch (e) {
         if (__DEV__) console.warn('[TodayWorkoutListScreen] fetchMachines error:', e);
+      } finally {
+        perfEnd('TodayWorkoutListScreen:fetchMachines');
       }
     }
     load();

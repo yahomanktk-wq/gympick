@@ -46,7 +46,7 @@ import { recordPR } from '../../data/prStore';
 import { useAuth } from '../../context/AuthContext';
 import { track } from '../../lib/analytics';
 import { submitGymRegistrationRequest } from '../../lib/db/gymRegistrationRequests';
-import { insertWorkoutSession, insertWorkoutEntry, insertWorkoutSet, insertWorkoutPhoto, fetchWorkoutEntriesForSessions, fetchWorkoutSetsForEntries } from '../../lib/db/workouts';
+import { insertWorkoutSession, insertWorkoutEntries, insertWorkoutSets, insertWorkoutPhoto, fetchWorkoutEntriesForSessions, fetchWorkoutSetsForEntries } from '../../lib/db/workouts';
 import { uploadWorkoutPhoto } from '../../lib/photoStorage';
 import { androidFauxBold } from '../../lib/photoOverlayUtils';
 import { containsBannedWord } from '../../lib/bannedWords';
@@ -859,13 +859,14 @@ function ViewModeToggleButton({
   );
 }
 
-function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, routineExtraInfo, templates, onSelectExercise, onLoadTemplate, onDeleteTemplate, onFinish, onBack, onClose, onRegisterRect, onboardingActive, onboardingKey }: {
+function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, routineExtraInfo, templates, dbFreeWeights, onSelectExercise, onLoadTemplate, onDeleteTemplate, onFinish, onBack, onClose, onRegisterRect, onboardingActive, onboardingKey }: {
   gym: GymWithMachines;
   selectedMuscles: Set<string>;
   loggedIds: Set<string>;
   preloadedIds: Set<string>;
   routineExtraInfo?: MachineExtraInfo;
   templates: WorkoutTemplate[];
+  dbFreeWeights: typeof FREE_WEIGHTS;
   onSelectExercise: (id: string) => void;
   onLoadTemplate: (tpl: WorkoutTemplate) => void;
   onDeleteTemplate: (id: string) => void;
@@ -878,7 +879,6 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
 }) {
   const [localSelectedId, setLocalSelectedId] = useState<string | null>(null);
   const [showTplList,     setShowTplList]     = useState(false);
-  const [dbFreeWeights,   setDbFreeWeights]   = useState<typeof FREE_WEIGHTS>([]);
   const [allMachinesMap,  setAllMachinesMap]  = useState<Record<string, Machine>>(() => buildAllMachinesMap());
   const [viewMode,        setViewMode]        = useState<'routine' | 'all'>('routine');
   const [viewCategory,    setViewCategory]    = useState<'machine' | 'freeweight'>('machine');
@@ -899,18 +899,12 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
     }
   }, [onboardingActive, onboardingKey]);
 
-  useEffect(() => {
-    fetchFreeWeights().then(data => {
-      setDbFreeWeights(data.map(m => ({
-        id:           m.id,
-        name:         m.name,
-        brand:        m.brand,
-        targetMuscle: m.targetMuscle,
-      })));
-    }).catch(() => {
-      setDbFreeWeights(FREE_WEIGHTS);
-    });
-  }, []);
+  // 2026-10-13: 프리웨이트 목록은 부모(PostWorkoutLogModal)가 이미 fetchFreeWeights()로
+  // 가져와 dbFreeWeights state로 들고 있다. 여기서 또 fetchFreeWeights()를 호출하면
+  // 이 스텝이 보일 때마다 같은 네트워크 요청이 중복으로 나가고, 두 호출의 응답
+  // 시점이 다르면 부모/자식이 잠깐 서로 다른 목록을 보여줄 수도 있었다. 그래서
+  // 자체 조회 없이 부모가 넘겨주는 dbFreeWeights prop을 그대로 사용한다
+  // (fallback 포함 계산은 호출 쪽에서 이미 처리해 넘겨준다).
 
   // Supabase 캐시가 채워진 뒤(또는 이미 채워져 있으면 즉시) 전역 머신 맵을 다시
   // 계산 — 로컬 정적 배열엔 없는, Supabase에만 있는 새 항목도 반영되게 한다.
@@ -2886,19 +2880,33 @@ export function PosterOverlay({ exercises, logs, nickname, timestamp, muscleLabe
   const titleText = `${pureLabel} DAY`;
   const shownExercises = exercises.slice(0, 6);
 
-  // 타이틀 20% 확대, 겹침 5%로 축소, 머신 목록 폰트 20% 축소·행간 50% 축소.
+  // 타이틀 20% 확대, 머신 목록 폰트 20% 축소·행간 50% 축소.
   const TITLE_FONT_SIZE = Math.round(photoW * 0.145 * 1.2);
-  const TITLE_BLOCK_H   = Math.round(TITLE_FONT_SIZE * 1.05);
-  const TITLE_OVERLAP   = Math.round(TITLE_BLOCK_H * 0.05);
   const ITEM_FONT_SIZE  = Math.round(photoW * 0.032 * 0.8);
   const ROW_GAP         = 5; // 기존 10의 50%
   const ITEM_GAP_H      = Math.round(ITEM_FONT_SIZE * 1.3);
 
+  // 2026-10-07 (22차, "타겟부위"-루틴 겹침 버그 수정): 기존엔 겹침 여백을
+  // "TITLE_FONT_SIZE * 1.05"라는 폰트 크기 기반 추정치로 미리 계산해뒀었는데,
+  // 이 추정치는 표준 시스템 폰트 기준이라 My_handwriting처럼 어센더/디센더가
+  // 큰 손글씨 폰트에서는 실제 렌더링 높이보다 훨씬 작게 나와, 의도했던
+  // "살짝 겹침"이 아니라 머신목록 첫 줄 전체를 가려버리는 버그로 나타남
+  // (실기기 스크린샷에서 확인). 폰트마다 실제 줄 높이가 달라 비율을 추정하는
+  // 방식 자체가 근본 원인이므로, onLayout으로 타이틀 텍스트의 실제 렌더링
+  // 높이를 측정해 그 값을 기준으로 겹침량을 계산하도록 변경 — 폰트가 또
+  // 바뀌어도 매번 비율을 다시 추측할 필요가 없어짐. 최초 렌더(측정 전)만
+  // 과거 추정치로 잠깐 자리를 잡고, onLayout 콜백 이후 실제 측정값으로
+  // 다시 그려짐(한 프레임 내 반영이라 거의 눈에 띄지 않음).
+  const [titleH, setTitleH] = useState(0);
+  const TITLE_BLOCK_H_FALLBACK = Math.round(TITLE_FONT_SIZE * 1.05);
+  const effectiveTitleH = titleH > 0 ? titleH : TITLE_BLOCK_H_FALLBACK;
+  const TITLE_OVERLAP   = Math.round(effectiveTitleH * 0.05);
+
   return (
     <View style={{ position: 'absolute', top: 0, bottom: 0, left: OVERLAY_PAD, right: OVERLAY_PAD, justifyContent: 'center', alignItems: 'center' }}>
       <View style={{ width: '100%' }}>
-        {/* 머신 목록 — 타이틀이 겹칠 만큼 위쪽에 미리 여백을 비워둔다 */}
-        <View style={{ paddingTop: TITLE_BLOCK_H - TITLE_OVERLAP }}>
+        {/* 머신 목록 — 타이틀의 실제 측정 높이만큼 위쪽에 미리 여백을 비워둔다 */}
+        <View style={{ paddingTop: effectiveTitleH - TITLE_OVERLAP }}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', rowGap: ROW_GAP, columnGap: ITEM_GAP_H }}>
             {shownExercises.map((ex, i) => (
               <Text key={ex.id} style={{ fontSize: ITEM_FONT_SIZE, color: tc, fontFamily: fontSet.routine }}>
@@ -2913,8 +2921,12 @@ export function PosterOverlay({ exercises, logs, nickname, timestamp, muscleLabe
           )}
         </View>
 
-        {/* "[타겟부위] DAY" — 머신 목록 위로 15% 겹쳐서 오버레이(최상위 레이어) */}
+        {/* "[타겟부위] DAY" — 머신 목록 위로 5% 겹쳐서 오버레이(최상위 레이어) */}
         <Text
+          onLayout={(e) => {
+            const h = Math.round(e.nativeEvent.layout.height);
+            if (h > 0 && h !== titleH) setTitleH(h);
+          }}
           style={{
             position: 'absolute',
             top: 0,
@@ -5434,22 +5446,88 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     const effectiveCompositeUri = passedCompositeUri ?? compositeUri;
     const sessionId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const supabaseConfigured = !!(process.env.EXPO_PUBLIC_SUPABASE_URL);
+    const nowIso = new Date().toISOString();
 
-    // 사진 업로드 (Supabase Storage)
-    let finalPhotoUrl: string | undefined;
-    let finalThumbnailUrl: string | undefined;
-    let finalBlurhash: string | undefined;
-    if (effectiveCompositeUri && user && supabaseConfigured) {
-      const uploaded = await uploadWorkoutPhoto(effectiveCompositeUri, user.id, sessionId, true);
-      finalPhotoUrl     = uploaded.url;
-      finalThumbnailUrl = uploaded.thumbnailUrl;
-      finalBlurhash     = uploaded.blurhash;
-    } else if (photoUri && user && supabaseConfigured) {
-      const uploaded = await uploadWorkoutPhoto(photoUri, user.id, sessionId, false);
-      finalPhotoUrl     = uploaded.url;
-      finalThumbnailUrl = uploaded.thumbnailUrl;
-      finalBlurhash     = uploaded.blurhash;
-    }
+    // 2026-10-07 (저장 지연 개선, 1/2): 사진 업로드와 DB 저장(세션/운동/세트)은
+    // 서로 데이터를 주고받지 않는 독립된 작업인데, 기존엔 사진 업로드가 끝나야
+    // DB 저장을 시작해서 두 작업의 네트워크 왕복 시간이 그대로 더해졌다.
+    // Promise.all로 동시에 실행해 전체 저장 시간을 줄인다 — 최종적으로
+    // 저장되는 데이터/조건은 기존과 동일하고, 두 작업이 모두 끝나야 다음
+    // 단계로 넘어가는 흐름도 그대로 유지된다.
+    const [photoUpload, dbWrite] = await Promise.all([
+      (async () => {
+        // 사진 업로드 (Supabase Storage)
+        let finalPhotoUrl: string | undefined;
+        let finalThumbnailUrl: string | undefined;
+        let finalBlurhash: string | undefined;
+        if (effectiveCompositeUri && user && supabaseConfigured) {
+          const uploaded = await uploadWorkoutPhoto(effectiveCompositeUri, user.id, sessionId, true);
+          finalPhotoUrl     = uploaded.url;
+          finalThumbnailUrl = uploaded.thumbnailUrl;
+          finalBlurhash     = uploaded.blurhash;
+        } else if (photoUri && user && supabaseConfigured) {
+          const uploaded = await uploadWorkoutPhoto(photoUri, user.id, sessionId, false);
+          finalPhotoUrl     = uploaded.url;
+          finalThumbnailUrl = uploaded.thumbnailUrl;
+          finalBlurhash     = uploaded.blurhash;
+        }
+        return { finalPhotoUrl, finalThumbnailUrl, finalBlurhash };
+      })(),
+      (async () => {
+        // Supabase DB에 저장 (실패해도 로컬 저장은 유지)
+        if (!(user && supabaseConfigured)) return { dbSessionId: undefined as string | undefined };
+        try {
+          const savedSession = await insertWorkoutSession({
+            id:               sessionId,
+            userId:           user.id,
+            gymId:            gym.id,
+            date:             nowIso,
+            overlayTextColor: selectedColor,
+            targetMuscles:    Array.from(selectedMuscles).map(toCanonMuscle),
+          });
+
+          // 2026-10-07 (저장 지연 개선, 2/2): 운동(entry)마다, 세트(set)마다
+          // 한 건씩 await하며 순차로 insert하던 것을(운동 6개×세트 3개면
+          // 최대 24회 네트워크 왕복) entries 전체를 한 번, sets 전체를 한
+          // 번, 총 2회의 배치 insert로 모아 보내도록 변경 — 저장되는
+          // 행/컬럼/값은 기존과 완전히 동일하고 왕복 횟수만 줄어든다.
+          const entryIds = selectedExercises.map((_, i) => `entry-${Date.now()}-${i}`);
+          await insertWorkoutEntries(selectedExercises.map((ex, i) => {
+            const mid = machineIdFromKey(ex.id);
+            return {
+              id:           entryIds[i],
+              sessionId,
+              machineId:    mid,
+              machineName:  ex.name,
+              machineBrand: ex.brand,
+              targetMuscle: ex.targetMuscle,
+              exerciseKind: isFreeWeightId(mid, dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS) ? 'freeweight' : 'machine',
+              order:        i,
+            };
+          }));
+
+          const setPayloads = selectedExercises.flatMap((ex, i) => {
+            const exSets = logs[ex.id] ?? [];
+            return exSets.map((s, j) => ({
+              id:        `set-${Date.now()}-${i}-${j}`,
+              entryId:   entryIds[i],
+              setNumber: j + 1,
+              weight:    s.weight,
+              reps:      s.reps,
+            }));
+          });
+          if (setPayloads.length) await insertWorkoutSets(setPayloads);
+
+          return { dbSessionId: savedSession?.id };
+        } catch (err) {
+          if (__DEV__) console.warn('[PostWorkoutLog] Supabase write failed:', err);
+          return { dbSessionId: undefined as string | undefined };
+        }
+      })(),
+    ]);
+
+    const { finalPhotoUrl, finalThumbnailUrl, finalBlurhash } = photoUpload;
+    const { dbSessionId } = dbWrite;
 
     const sessionMuscles = Array.from(selectedMuscles).map(toCanonMuscle);
 
@@ -5458,7 +5536,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
       gymId:            gym.id,
       gymName:          gym.name,
       gymLocation:      gym.location,
-      date:             new Date().toISOString(),
+      date:             nowIso,
       overlayTextColor: selectedColor,
       overlayStyle:     overlayStyle,
       targetMuscles:    sessionMuscles,
@@ -5486,50 +5564,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
     };
     addNewSession(user?.id ?? 'guest', workoutLog);
 
-    // Supabase DB에 저장 (실패해도 로컬 저장은 유지)
-    let dbSessionId: string | undefined;
     if (user && supabaseConfigured) {
-      try {
-        const savedSession = await insertWorkoutSession({
-          id:               sessionId,
-          userId:           user.id,
-          gymId:            gym.id,
-          date:             workoutLog.date,
-          overlayTextColor: selectedColor,
-          targetMuscles:    sessionMuscles,
-        });
-        dbSessionId = savedSession?.id;
-
-        for (let i = 0; i < selectedExercises.length; i++) {
-          const ex = selectedExercises[i];
-          const mid = machineIdFromKey(ex.id);
-          const entryId = `entry-${Date.now()}-${i}`;
-          await insertWorkoutEntry({
-            id:           entryId,
-            sessionId,
-            machineId:    mid,
-            machineName:  ex.name,
-            machineBrand: ex.brand,
-            targetMuscle: ex.targetMuscle,
-            exerciseKind: isFreeWeightId(mid, dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS) ? 'freeweight' : 'machine',
-            order:        i,
-          });
-
-          const exSets = logs[ex.id] ?? [];
-          for (let j = 0; j < exSets.length; j++) {
-            await insertWorkoutSet({
-              id:        `set-${Date.now()}-${i}-${j}`,
-              entryId,
-              setNumber: j + 1,
-              weight:    exSets[j].weight,
-              reps:      exSets[j].reps,
-            });
-          }
-        }
-      } catch (err) {
-        if (__DEV__) console.warn('[PostWorkoutLog] Supabase write failed:', err);
-      }
-
       // 오운완 사진 DB 저장
       if (finalPhotoUrl && user) {
         try {
@@ -5738,6 +5773,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             preloadedIds={preloadedIds}
             routineExtraInfo={routineExtraInfo}
             templates={templates}
+            dbFreeWeights={dbFreeWeights.length > 0 ? dbFreeWeights : FREE_WEIGHTS}
             onSelectExercise={handleSelectExercise}
             onLoadTemplate={handleLoadTemplate}
             onDeleteTemplate={handleDeleteTemplate}

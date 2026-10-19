@@ -24,6 +24,7 @@ const TYPE_META: Record<string, { icon: React.ComponentProps<typeof Ionicons>['n
   gym_request_reviewed: { icon: 'checkmark-circle',  color: '#3dd68c' },
   gym_request_resolved: { icon: 'close-circle',       color: C.danger  },
   gym_report_reviewed:  { icon: 'flag',                color: '#ff7eb3' },
+  inquiry_answered:     { icon: 'chatbox-ellipses',     color: '#5ba4ff' },
   announcement:         { icon: 'megaphone',           color: '#ffb547' },
   general:              { icon: 'notifications',       color: '#5ba4ff' },
   default:              { icon: 'notifications',       color: C.accent  },

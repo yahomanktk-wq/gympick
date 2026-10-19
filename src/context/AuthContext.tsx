@@ -10,6 +10,7 @@ import { initGymFavorites } from '../data/gymFavoriteStore';
 import { fetchFavoriteMachines } from '../lib/db/machineFavorites';
 import { initFavoriteMachines } from '../data/favoritesStore';
 import { containsBannedWord } from '../lib/bannedWords';
+import { perfStart, perfEnd } from '../lib/perf';
 
 // --- Types
 
@@ -191,11 +192,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }, 5000);
 
+    perfStart('AuthContext:getSession');
     supabase.auth.getSession().then(async ({ data: { session } }) => {
+      perfEnd('AuthContext:getSession');
       clearTimeout(sessionTimeout);
       try {
         if (session?.user) {
+          perfStart('AuthContext:fetchProfileData');
           const profileData = await fetchProfileData(session.user.id);
+          perfEnd('AuthContext:fetchProfileData');
           setUser(mapSupabaseUser(session.user, profileData));
           fetchGymFavorites(session.user.id).then(ids => initGymFavorites(ids));
           fetchFavoriteMachines(session.user.id).then(ids => initFavoriteMachines(ids));
@@ -213,7 +218,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // 2026-10-07 (자동 로그인 지연 개선): onAuthStateChange는 구독을 시작하는
+      // 순간 현재 세션을 "INITIAL_SESSION" 이벤트로 즉시 한 번 더 통지하는데,
+      // 앱 재기동 시 바로 위 getSession() 호출이 이미 같은 세션으로
+      // fetchProfileData/즐겨찾기 조회를 수행하고 있어 똑같은 네트워크
+      // 요청이 동시에 중복으로 나가고 있었음(대역폭·연결을 서로 나눠 써서
+      // 결과적으로 로그인 복원이 더 늦게 끝남). 콜드 스타트 처리는
+      // getSession() 쪽에서 이미 끝나므로, 여기서는 그 이후 실제 변화
+      // (로그인/로그아웃/토큰 갱신 등)만 처리한다.
+      if (event === 'INITIAL_SESSION') return;
+
       if (session?.user) {
         fetchProfileData(session.user!.id).then(profileData => {
           setUser(mapSupabaseUser(session.user!, profileData));

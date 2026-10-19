@@ -18,13 +18,17 @@ export function getGymShareUrl(gymId: string) {
 export async function shareGym(gymName: string, gymId: string) {
   const title = `${gymName} 보유머신 목록 확인하기`;
   const description = "'짐픽'을 통해 보유머신을 확인하세요.";
+  // 주소(URL) 바로 앞에 노출되는 라벨 — OS 공유 시트는 URL 자체를 가리거나
+  // 대체 텍스트로 바꿔주지 않으므로(안티피싱 제약), 대신 주소 바로 앞줄에
+  // 짧은 안내 문구를 둬서 받는 사람이 무슨 링크인지 바로 알 수 있게 한다.
+  const linkLabel = '보유머신 확인';
   const url = getGymShareUrl(gymId);
 
   try {
     await Share.share(
       Platform.OS === 'ios'
-        ? { message: `${title}\n${description}`, url }
-        : { message: `${title}\n${description}\n${url}` }
+        ? { message: `${title}\n${description}\n${linkLabel}`, url }
+        : { message: `${title}\n${description}\n${linkLabel}\n${url}` }
     );
   } catch (e) {
     if (__DEV__) console.warn('[share] shareGym error:', e);
