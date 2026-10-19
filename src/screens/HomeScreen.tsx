@@ -18,6 +18,7 @@ import { btnHeight, cardPadH, cardPadV, iconSize, screenPad } from '../theme/res
 import GymDetailModal from './flow/GymDetailModal';
 import HomeRankingSections from '../components/HomeRankingSections';
 import RecentWorkoutSummaryPopup from '../components/RecentWorkoutSummaryPopup';
+import WorkoutLogSummaryModal from './flow/WorkoutLogSummaryModal';
 import {
   pickRecentWorkoutForPopup,
   hasSeenRecentWorkoutPopupToday,
@@ -345,6 +346,8 @@ export default function HomeScreen() {
   const [ounwanIsFallback, setOunwanIsFallback] = useState(false);
   const [recentWorkoutPick,    setRecentWorkoutPick]    = useState<RecentWorkoutPopupPick | null>(null);
   const [showRecentWorkoutPopup, setShowRecentWorkoutPopup] = useState(false);
+  // 2026-10-20: 팝업 '요약 보기' → 운동일지 요약 화면
+  const [summarySession,       setSummarySession]       = useState<WorkoutLog | null>(null);
 
   // 홈 화면 focus마다 최신 role/managerOnboarded를 확인 — 매니저 승인 알림을
   // 직접 탭하지 않아도 홈에 들어올 때마다 승인 여부가 반영되도록 한다.
@@ -693,11 +696,20 @@ export default function HomeScreen() {
         matchedMuscle={recentWorkoutPick?.matchedMuscle ?? false}
         todayTarget={todayTarget}
         onClose={() => setShowRecentWorkoutPopup(false)}
-        onViewDetail={(sessionId) => {
+        onOpenSummary={(session) => {
           setShowRecentWorkoutPopup(false);
-          nav.navigate('Journal', { openSessionId: sessionId });
+          // iOS는 모달 두 개를 동시에 띄울 수 없어서, 팝업이 닫힌 뒤에 연다
+          setTimeout(() => setSummarySession(session), 350);
         }}
       />
+
+      {summarySession && (
+        <WorkoutLogSummaryModal
+          session={summarySession}
+          allSessions={sessions}
+          onClose={() => setSummarySession(null)}
+        />
+      )}
     </SafeAreaView>
   );
 }

@@ -11,6 +11,8 @@ import { extractCompletedTargets } from '../lib/splitUtils';
 // 팝업으로 보여주는 컴포넌트. 어떤 세션을 고를지는 src/lib/recentWorkoutPopup.ts의
 // pickRecentWorkoutForPopup이 미리 정해서 넘겨준다 — 이 컴포넌트는 순수하게
 // 받은 세션을 보여주는 역할만 한다.
+// 2026-10-20: 제목을 한 줄로 짧게('지난 하체 운동 기록' / '최근 운동 기록') 바꾸고,
+// 부위가 제목에 들어가면 배지는 숨긴다. CTA '요약 보기' → 운동일지 요약 화면.
 
 const MAX_MACHINES_SHOWN = 5;
 
@@ -20,7 +22,8 @@ interface Props {
   matchedMuscle: boolean;
   todayTarget:   string | null; // 한글 부위명 (매칭된 경우 타이틀에 사용)
   onClose:       () => void;
-  onViewDetail:  (sessionId: string) => void;
+  /** '요약 보기' — 홈에서 운동일지 요약 화면(WorkoutLogSummaryModal)을 연다 */
+  onOpenSummary: (session: WorkoutLog) => void;
 }
 
 function formatRelativeDate(iso: string): string {
@@ -36,12 +39,15 @@ function formatRelativeDate(iso: string): string {
 }
 
 export default function RecentWorkoutSummaryPopup({
-  visible, session, matchedMuscle, todayTarget, onClose, onViewDetail,
+  visible, session, matchedMuscle, todayTarget, onClose, onOpenSummary,
 }: Props) {
   if (!session) return null;
 
-  const muscles = matchedMuscle && todayTarget
-    ? [todayTarget]
+  const titleMatched = matchedMuscle && !!todayTarget;
+  const title = titleMatched ? `지난 ${todayTarget} 운동 기록` : '최근 운동 기록';
+  // 부위가 제목에 이미 들어가 있으면 배지는 생략 (중복 방지)
+  const muscles = titleMatched
+    ? []
     : [...new Set(extractCompletedTargets(session.machines))];
 
   const shown    = session.machines.slice(0, MAX_MACHINES_SHOWN);
@@ -60,11 +66,7 @@ export default function RecentWorkoutSummaryPopup({
               <Ionicons name="barbell-outline" size={20} color={C.accent} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={s.title} numberOfLines={2}>
-                {matchedMuscle
-                  ? `오늘 '${todayTarget}' 운동, 저번엔 이렇게 했어요`
-                  : '가장 최근 운동일지를 참고해보세요'}
-              </Text>
+              <Text style={s.title} numberOfLines={1}>{title}</Text>
               <Text style={s.subLine} numberOfLines={1}>
                 {session.gymName} · {formatRelativeDate(session.date)}
               </Text>
@@ -107,9 +109,9 @@ export default function RecentWorkoutSummaryPopup({
           <TouchableOpacity
             style={s.cta}
             activeOpacity={0.85}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onViewDetail(session.id); }}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onOpenSummary(session); }}
           >
-            <Text style={s.ctaText}>자세히 보기</Text>
+            <Text style={s.ctaText}>요약 보기</Text>
             <Ionicons name="chevron-forward" size={16} color={C.bg} />
           </TouchableOpacity>
         </View>
@@ -137,7 +139,7 @@ const s = StyleSheet.create({
     gap: 12,
   },
 
-  header: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerIconWrap: {
     width: 36, height: 36, borderRadius: 18,
     backgroundColor: C.accentBg,
@@ -165,8 +167,8 @@ const s = StyleSheet.create({
     paddingVertical: 9, gap: 10,
   },
   machineRowBorder: { borderTopWidth: 1, borderTopColor: C.borderSub },
-  machineName: { flex: 1, fontSize: 13, fontWeight: '600', color: C.text },
-  machineStat: { fontSize: 12, color: C.textSub },
+  machineName: { flex: 1, flexShrink: 1, fontSize: 13, fontWeight: '600', color: C.text },
+  machineStat: { flexShrink: 0, fontSize: 12, color: C.textSub },
   moreText: { fontSize: 12, color: C.textDim, paddingTop: 6, paddingBottom: 2 },
 
   cta: {
