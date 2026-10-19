@@ -13,6 +13,7 @@ import {
   markAllNotificationsRead,
   type AppNotification,
 } from '../lib/db/notifications';
+import GymDetailModal from './flow/GymDetailModal';
 
 interface Props {
   onClose: () => void;
@@ -25,6 +26,7 @@ const TYPE_META: Record<string, { icon: React.ComponentProps<typeof Ionicons>['n
   gym_request_resolved: { icon: 'close-circle',       color: C.danger  },
   gym_report_reviewed:  { icon: 'flag',                color: '#ff7eb3' },
   inquiry_answered:     { icon: 'chatbox-ellipses',     color: '#5ba4ff' },
+  new_machine:          { icon: 'barbell',             color: C.accent  },
   announcement:         { icon: 'megaphone',           color: '#ffb547' },
   general:              { icon: 'notifications',       color: '#5ba4ff' },
   default:              { icon: 'notifications',       color: C.accent  },
@@ -48,6 +50,8 @@ export default function NotificationsScreen({ onClose }: Props) {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // '새 머신 입고' 알림 탭 시 열 헬스장 상세 (F4-3)
+  const [gymDetailId, setGymDetailId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -67,6 +71,11 @@ export default function NotificationsScreen({ onClose }: Props) {
     }
     if (n.type === 'manager_approved') {
       await refreshUser();
+    }
+    // 새 머신 입고 → 해당 헬스장 상세(정보 탭)를 연다. 펼침/접힘은 하지 않음.
+    if (n.type === 'new_machine' && n.relatedId) {
+      setGymDetailId(n.relatedId);
+      return;
     }
     // 본문이 2줄 넘게 잘리는 경우가 많아(관리자 코멘트가 뒤에 붙는 경우 등) 탭하면
     // 전체 텍스트를 펼쳐서 보여준다 — 다시 탭하면 접힘.
@@ -131,7 +140,9 @@ export default function NotificationsScreen({ onClose }: Props) {
                 <View style={{ flex: 1, gap: 3 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <Text style={[s.itemTitle, !item.read && s.itemTitleUnread, { flex: 1 }]}>{item.title}</Text>
-                    {item.body.length > 0 && (
+                    {item.type === 'new_machine' && item.relatedId ? (
+                      <Ionicons name="chevron-forward" size={14} color={C.textDim} />
+                    ) : item.body.length > 0 && (
                       <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={14} color={C.textDim} />
                     )}
                   </View>
@@ -147,6 +158,12 @@ export default function NotificationsScreen({ onClose }: Props) {
           ListFooterComponent={<View style={{ height: 32 }} />}
         />
       )}
+
+      <GymDetailModal
+        visible={!!gymDetailId}
+        gymId={gymDetailId}
+        onClose={() => setGymDetailId(null)}
+      />
     </SafeAreaView>
   );
 }

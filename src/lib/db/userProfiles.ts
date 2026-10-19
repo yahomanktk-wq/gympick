@@ -85,3 +85,27 @@ export async function setHideFromRankings(userId: string, hide: boolean): Promis
     .eq('id', userId);
   if (error) throw error;
 }
+
+/** '새 머신 입고 알림' 설정 값 (F4-3). 실패/없음 → true (기본 켜짐) */
+export async function fetchNotifyNewMachine(userId: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('notify_new_machine')
+      .eq('id', userId)
+      .maybeSingle();
+    if (error || !data) return true;
+    return data.notify_new_machine !== false;
+  } catch {
+    return true;
+  }
+}
+
+/** '새 머신 입고 알림' 켜기/끄기. 실패 시 throw. */
+export async function setNotifyNewMachine(userId: string, on: boolean): Promise<void> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ notify_new_machine: on })
+    .eq('id', userId);
+  if (error) throw error;
+}

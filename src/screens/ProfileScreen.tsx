@@ -31,6 +31,7 @@ import FavoritesScreen from './FavoritesScreen';
 import PrivacyPolicyScreen from './PrivacyPolicyScreen';
 import AuthFlow from './auth/AuthFlow';
 import NotificationsScreen from './NotificationsScreen';
+import NewMachineAlertSetting from '../components/profile/NewMachineAlertSetting';
 import ManagerRequestModal from './flow/ManagerRequestModal';
 import ManagerManualScreen from './manager/ManagerManualScreen';
 import ManagerOnboardingModal from './manager/ManagerOnboardingModal';
@@ -1066,6 +1067,13 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={15} color={C.textDim} />
           </TouchableOpacity>
         </View>
+
+        {/* ── 알림 설정 (F4-3) ── */}
+        <SectionLabel text="알림" />
+        <View style={{ marginHorizontal: screenPad }}>
+          <NewMachineAlertSetting userId={user.id} />
+        </View>
+        <View style={{ height: 24 }} />
 
         {/* ── Settings ── */}
         <SectionLabel text="설정" />
