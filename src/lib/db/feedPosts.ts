@@ -53,7 +53,7 @@ export async function fetchActiveFeedPosts(hoursWindow: number | null = 24): Pro
 export async function insertFeedPost(
   post: Pick<WorkoutFeedPost,
     'id' | 'userId' | 'nickname' | 'gymId' | 'gymName' |
-    'photoUri' | 'compositeUri' | 'thumbnailUri' | 'blurhash' | 'routineCardUri' | 'sessionId' | 'muscles' | 'isPublic'
+    'photoUri' | 'compositeUri' | 'thumbnailUri' | 'blurhash' | 'routineCardUri' | 'sessionId' | 'muscles' | 'isPublic' | 'showOnGym'
   >,
 ): Promise<void> {
   const { error } = await supabase
@@ -72,6 +72,7 @@ export async function insertFeedPost(
       session_id:       post.sessionId ?? null,
       muscles:          post.muscles,
       is_public:        post.isPublic,
+      show_on_gym:      post.showOnGym ?? true,
     });
 
   if (error && __DEV__) {

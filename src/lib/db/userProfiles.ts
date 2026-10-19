@@ -48,3 +48,17 @@ export async function setManagerOnboarded(userId: string): Promise<void> {
     .update({ manager_onboarded: true })
     .eq('id', userId);
 }
+
+/** 전역 설정 '헬스장 페이지 노출 끄기' 값. 실패/없음 → false(노출) */
+export async function fetchHideOunwanOnGym(userId: string): Promise<boolean> {
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('hide_ounwan_on_gym')
+      .eq('id', userId)
+      .maybeSingle();
+    return data?.hide_ounwan_on_gym === true;
+  } catch {
+    return false;
+  }
+}
