@@ -17,6 +17,8 @@ export function useHomeGymFeed(userId: string | null | undefined, enabled: boole
   hasMore:  boolean;
   loadMore: () => void;
   reload:   () => void;
+  /** 목록에서 글 하나 제거 (내 오운완을 비공개로 바꿨을 때) */
+  removePost: (postId: string) => void;
 } {
   const [homeGym, setHomeGym] = useState<HomeGym | null>(null);
   const [posts,   setPosts]   = useState<WorkoutFeedPost[]>([]);
@@ -91,5 +93,9 @@ export function useHomeGymFeed(userId: string | null | undefined, enabled: boole
 
   const reload = useCallback(() => { load(); }, [load]);
 
-  return { homeGym, posts, loading, hasMore, loadMore, reload };
+  const removePost = useCallback((postId: string) => {
+    setPosts(prev => prev.filter(p => p.id !== postId));
+  }, []);
+
+  return { homeGym, posts, loading, hasMore, loadMore, reload, removePost };
 }

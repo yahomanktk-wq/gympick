@@ -130,6 +130,10 @@ export default function GymOunwanGrid({ gymId, onPressMachine }: Props) {
           onReact={handleReact}
           onPressGym={() => setSelectedPost(null)}
           onPressMachine={handlePressMachine}
+          onVisibilityChanged={(postId, isPublic) => {
+            // 2026-10-20: 내 오운완을 비공개로 바꾸면 이 목록에서 바로 뺀다
+            if (!isPublic) setPosts(prev => prev.filter(p => p.id !== postId));
+          }}
         />
       )}
     </View>

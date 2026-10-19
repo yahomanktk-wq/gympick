@@ -20,6 +20,8 @@ import { brandLogos } from '../../constants/brandLogos';
 import { getMachineImageUrl } from '../../lib/machineImageUrl';
 import { getTransformedImageUrl } from '../../lib/photoImageUrl';
 import GymPickLogo from '../GymPickLogo';
+import OwnerVisibilityButton from './OwnerVisibilityButton';
+import { useAuth } from '../../context/AuthContext';
 
 const IMAGE_PIXEL_RATIO = PixelRatio.get();
 
@@ -40,6 +42,8 @@ export interface FeedDetailModalProps {
   onReact:        (postId: string, key: keyof WorkoutFeedPost['reactions']) => void;
   onPressGym:     (gymId: string) => void;
   onPressMachine: (machineId: string) => void;
+  /** 내 글을 비공개로 바꿨을 때 (목록에서 제거용). 넘기지 않으면 '공개중' 버튼을 숨긴다 */
+  onVisibilityChanged?: (postId: string, isPublic: boolean) => void;
 }
 
 export default function FeedDetailModal({
@@ -48,7 +52,11 @@ export default function FeedDetailModal({
   onReact,
   onPressGym,
   onPressMachine,
+  onVisibilityChanged,
 }: FeedDetailModalProps) {
+  const { user } = useAuth();
+  // 헬스장 페이지 목록은 isMyPost를 표시하지 않으므로 로그인 유저 id로도 판단한다
+  const isMine = post.isMyPost === true || (!!user?.id && user.id === post.userId);
   const rawUri  = post.compositeUri ?? post.photoUri;
   const MODAL_W = Dimensions.get('window').width;
   // 화면에 보여줄 수 있는 실제 픽셀 수(화면 너비 × 기기 배율)로만 리사이즈 —
@@ -133,6 +141,14 @@ export default function FeedDetailModal({
             placeholder={post.blurhash ? { blurhash: post.blurhash } : undefined}
             transition={200}
           />
+
+          {/* 내 오운완: 공개중 → 비공개 전환 (2026-10-20) */}
+          {isMine && onVisibilityChanged && (
+            <OwnerVisibilityButton
+              postId={post.id}
+              onChanged={(isPublic) => { onVisibilityChanged(post.id, isPublic); onClose(); }}
+            />
+          )}
 
           {/* 이모지 리액션 */}
           <View style={{

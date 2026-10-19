@@ -365,7 +365,23 @@ export async function fetchFeedPostPublicStatusBatch(
   return result;
 }
 
-/** 피드 게시물 공개 여부 업데이트 */
+/**
+ * 오운완 공개/비공개 (2026-10-20 통합).
+ * 공개 = 오늘의 오운완 + 헬스장 페이지 모두 노출, 비공개 = 둘 다 숨김.
+ * is_public 과 show_on_gym 을 항상 같은 값으로 함께 저장한다. 실패 시 throw.
+ */
+export async function setFeedPostVisibility(postId: string, isPublic: boolean): Promise<void> {
+  const { error } = await supabase
+    .from('workout_feed_posts')
+    .update({ is_public: isPublic, show_on_gym: isPublic })
+    .eq('id', postId);
+  if (error) {
+    if (__DEV__) console.warn('[feedPosts] setFeedPostVisibility 오류:', error.message);
+    throw error;
+  }
+}
+
+/** (미사용 — 2026-10-20부터 setFeedPostVisibility 사용) 피드 게시물 공개 여부 업데이트 */
 export async function updateFeedPostPublic(
   postId: string,
   isPublic: boolean,
@@ -381,7 +397,7 @@ export async function updateFeedPostPublic(
   }
 }
 
-/** 피드 게시물의 헬스장 페이지 노출 여부 업데이트 */
+/** (미사용 — 2026-10-20부터 setFeedPostVisibility 사용) 피드 게시물의 헬스장 페이지 노출 여부 업데이트 */
 export async function updateFeedPostShowOnGym(
   postId: string,
   showOnGym: boolean,

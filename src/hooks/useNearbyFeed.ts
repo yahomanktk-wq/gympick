@@ -25,6 +25,8 @@ export function useNearbyFeed(enabled: boolean, myUserId?: string | null): {
   loadMore: () => void;
   requestPermission: () => Promise<void>;
   reload: () => void;
+  /** 목록에서 글 하나 제거 (내 오운완을 비공개로 바꿨을 때) */
+  removePost: (postId: string) => void;
 } {
   const [permission,  setPermission]  = useState<NearbyPermission>('checking');
   const [canAskAgain, setCanAskAgain] = useState(true);
@@ -183,5 +185,9 @@ export function useNearbyFeed(enabled: boolean, myUserId?: string | null): {
     if (permissionRef.current === 'granted') loadPosts();
   }, [loadPosts]);
 
-  return { permission, canAskAgain, posts, loading, hasMore, loadMore, requestPermission, reload };
+  const removePost = useCallback((postId: string) => {
+    setPosts(prev => prev.filter(p => p.id !== postId));
+  }, []);
+
+  return { permission, canAskAgain, posts, loading, hasMore, loadMore, requestPermission, reload, removePost };
 }

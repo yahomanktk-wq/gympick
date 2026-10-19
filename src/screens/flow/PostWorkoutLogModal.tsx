@@ -51,9 +51,7 @@ import { uploadWorkoutPhoto } from '../../lib/photoStorage';
 import { androidFauxBold } from '../../lib/photoOverlayUtils';
 import { containsBannedWord } from '../../lib/bannedWords';
 import { insertFeedPost } from '../../lib/db/feedPosts';
-import { fetchHideOunwanOnGym } from '../../lib/db/userProfiles';
-import { hasSeenOunwanGymNotice, markOunwanGymNoticeSeen } from '../../lib/ounwanGymNotice';
-import GymExposureToggleRow from '../../components/feed/GymExposureToggleRow';
+import OunwanVisibilityNote from '../../components/feed/OunwanVisibilityNote';
 import { getMachineImageUrl } from '../../lib/machineImageUrl';
 import { invalidateActiveFeedPostsCache } from '../../data/feedPostsCache';
 import GymPickLogo from '../../components/GymPickLogo';
@@ -3388,7 +3386,7 @@ export function RosterOverlay({ exercises, logs, nickname, timestamp, muscleLabe
 
 // --- Step 5: Photo
 
-function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, photoUri, nickname, fontsLoaded, onColorChange, onStyleChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera, onRegisterRect, onboardingActive, onboardingKey, onOnboardingNext, onOnboardingJump, showOnGym, onShowOnGymChange, showGymNotice }: {
+function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, photoUri, nickname, fontsLoaded, onColorChange, onStyleChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera, onRegisterRect, onboardingActive, onboardingKey, onOnboardingNext, onOnboardingJump }: {
   gym: GymWithMachines;
   exercises: ExerciseInfo[];
   selectedMuscles: string[];
@@ -3419,11 +3417,6 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
   onboardingKey?: OnboardingPointKey | null;
   onOnboardingNext?: () => void;
   onOnboardingJump?: (key: OnboardingPointKey) => void;
-  /** '헬스장 페이지에 공개' 토글 값 (부모 state 미러 — handleSaveWorkout에서 show_on_gym으로 저장) */
-  showOnGym: boolean;
-  onShowOnGymChange: (v: boolean) => void;
-  /** 이 버전 첫 오운완 업로드 전이면 토글 아래 1회 안내 표시 */
-  showGymNotice: boolean;
 }) {
   const [textColor,     setTextColor]     = useState('#ffffff');
   const [saveSuccess,   setSaveSuccess]   = useState(false);
@@ -4489,12 +4482,8 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
           </TouchableOpacity>
         </View>
 
-        <GymExposureToggleRow
-          gymName={gym.name}
-          value={showOnGym}
-          onChange={onShowOnGymChange}
-          showNotice={showGymNotice}
-        />
+        {/* 2026-10-20: 공개 여부 토글 제거 — 기본 공개, 운동일지에서 비공개 전환 */}
+        <OunwanVisibilityNote />
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -5074,9 +5063,6 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   // WorkoutPhotoStep의 기본값('s1a')과 동일하게 초기화해서, 사용자가 스타일을
   // 한 번도 안 바꿔도 기본 스타일 값이 저장되게 한다.
   const [overlayStyle,       setOverlayStyle]       = useState<OverlayStyle>('s1a');
-  // '헬스장 페이지에 공개' 토글(F1-5) — WorkoutPhotoStep에서 바꾼 값을 미러링해 handleSaveWorkout에서 show_on_gym으로 저장
-  const [showOnGym,          setShowOnGym]          = useState(true);
-  const [showGymNotice,      setShowGymNotice]      = useState(false);
   const [isSaving,           setIsSaving]           = useState(false);
   const [savingProgress,     setSavingProgress]     = useState(0);
   const savingAnim = useRef(new Animated.Value(0)).current;
@@ -5184,19 +5170,6 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
         if (en.length > 0) setSelectedMuscles(new Set(en));
       }
     }).catch(() => {});
-  }, [visible, user?.id]);
-
-  // 2026-10-19 (F1-5): 새 운동일지를 시작할 때마다 '헬스장 페이지에 공개' 토글
-  // 초기값(전역 설정 hide_ounwan_on_gym)과 첫 업로드 1회 안내 여부를 불러온다.
-  React.useEffect(() => {
-    if (!visible) return;
-    setShowOnGym(true);
-    setShowGymNotice(false);
-    if (!user?.id) return; // 게스트: 토글 ON, 안내 없음
-    let alive = true;
-    fetchHideOunwanOnGym(user.id).then(hide => { if (alive) setShowOnGym(!hide); });
-    hasSeenOunwanGymNotice(user.id).then(seen => { if (alive) setShowGymNotice(!seen); });
-    return () => { alive = false; };
   }, [visible, user?.id]);
 
   function toggleMuscle(m: string) {
@@ -5640,14 +5613,11 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
           routineCardUri: passedRoutineCardUri ?? routineCardUri ?? undefined,
           sessionId:      dbSessionId ?? sessionId,
           muscles:        Array.from(selectedMuscles).map(toCanonMuscle),
+          // 2026-10-20: 오운완은 기본 공개 — 오늘의 오운완 + 헬스장 페이지 모두 노출
           isPublic:       true,
-          showOnGym:      showOnGym,
+          showOnGym:      true,
         }).then(() => {
           invalidateActiveFeedPostsCache();
-          if (showGymNotice) {
-            markOunwanGymNoticeSeen(user.id);
-            setShowGymNotice(false);
-          }
         }).catch(err => {
           if (__DEV__) console.warn('[feed] insertFeedPost failed:', err);
         });
@@ -5875,9 +5845,6 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             onboardingKey={onboarding.currentKey}
             onOnboardingNext={onboarding.next}
             onOnboardingJump={onboarding.jumpTo}
-            showOnGym={showOnGym}
-            onShowOnGymChange={setShowOnGym}
-            showGymNotice={showGymNotice}
           />
         );
       case 'done':

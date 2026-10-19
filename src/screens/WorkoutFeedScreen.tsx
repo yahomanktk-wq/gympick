@@ -21,7 +21,7 @@ import { WorkoutFeedPost, WorkoutLog } from '../data/types';
 const MOCK_FEED_POSTS: WorkoutFeedPost[] = [];
 import { filterActivePosts, toggleReaction, convertSessionToFeedPost } from '../lib/feedUtils';
 import { fetchMyLatestGymId } from '../lib/db/feedPosts';
-import { getActiveFeedPostsCached } from '../data/feedPostsCache';
+import { getActiveFeedPostsCached, invalidateActiveFeedPostsCache } from '../data/feedPostsCache';
 import { fetchActiveFeedPosts } from '../lib/db/feedPosts';
 import { fetchSplitConfig } from '../lib/db/splitRoutine';
 import { getTodayTarget, toEnMuscle } from '../lib/splitUtils';
@@ -493,6 +493,14 @@ export default function WorkoutFeedScreen() {
               setDetailPost(null);
               setTimeout(() => setMachineDetailItem(machine), 350);
             }
+          }}
+          onVisibilityChanged={(postId, isPublic) => {
+            // 2026-10-20: 내 오운완을 비공개로 바꾸면 모든 탭 목록에서 바로 뺀다
+            if (isPublic) return;
+            setPosts(prev => prev.filter(p => p.id !== postId));
+            homeFeed.removePost(postId);
+            nearby.removePost(postId);
+            invalidateActiveFeedPostsCache();
           }}
         />
       )}
