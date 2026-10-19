@@ -1,36 +1,57 @@
 import React from 'react';
 import { View, Text } from 'react-native';
-import { DailyUsage } from '../../../lib/db/gymStats';
+import { C } from '../../../theme';
+import { DailyUsage, GymInsights } from '../../../lib/db/gymStats';
 import { s } from './statsStyles';
+import MissingMachinesCard from './MissingMachinesCard';
 
-// 매니저 이용 통계 — 개요 탭 (F5-2). 기간 요약 KPI + 기존 머신 가동률·회원 재방문율 카드(그대로 이동).
+// 매니저 이용 통계 — 개요 탭. 기간 요약 KPI(페이지 조회·검색 노출·운동 세션·짐픽 회원, F5-4a)
+// + 주변에서 찾았지만 없는 머신(F5-4a) + 머신 가동률·회원 재방문율 카드(F5-2에서 그대로 이동).
 
 interface Props {
   dailyStats:      DailyUsage[];
   memberCount:     number;
+  insights:        GymInsights;
+  rangeLabel:      string;   // 'MM.DD ~ MM.DD'
   activationStats: { activatedCount: number; totalCount: number; rate: number };
   ownedLoadFailed: boolean;
   retentionStats:  { thisMonth: number; lastMonth: number; retentionRate: number | null; failed: boolean };
 }
 
-export default function OverviewTab({ dailyStats, memberCount, activationStats, ownedLoadFailed, retentionStats }: Props) {
+export default function OverviewTab({ dailyStats, memberCount, insights, rangeLabel, activationStats, ownedLoadFailed, retentionStats }: Props) {
   const sessionCount = dailyStats.reduce((sum, d) => sum + d.count, 0);
   return (
     <View style={{ gap: 16 }}>
       {/* 기간 요약 */}
       <View style={s.card}>
-        <Text style={s.chartTitle}>기간 요약</Text>
+        <Text style={s.chartTitle}>{rangeLabel ? `기간 요약 · ${rangeLabel}` : '기간 요약'}</Text>
         <View style={s.kpiRow}>
+          <View style={s.kpiCell}>
+            <Text style={s.kpiValue}>{insights.pageViews}회</Text>
+            <Text style={s.kpiLabel}>페이지 조회</Text>
+          </View>
+          <View style={s.kpiCell}>
+            <Text style={s.kpiValue}>{insights.searchAppearances}회</Text>
+            <Text style={s.kpiLabel}>검색 노출</Text>
+          </View>
+        </View>
+        <View style={[s.kpiRow, { paddingTop: 0 }]}>
           <View style={s.kpiCell}>
             <Text style={s.kpiValue}>{sessionCount}회</Text>
             <Text style={s.kpiLabel}>운동 세션</Text>
           </View>
           <View style={s.kpiCell}>
             <Text style={s.kpiValue}>{memberCount}명</Text>
-            <Text style={s.kpiLabel}>회원</Text>
+            <Text style={s.kpiLabel}>짐픽 회원</Text>
           </View>
         </View>
+        <Text style={{ fontSize: 11, color: C.textDim, paddingHorizontal: 16, paddingBottom: 12 }}>
+          조회·검색 노출은 짐픽 로그인 회원 기준이며, 10월 업데이트 이후부터 집계돼요.
+        </Text>
       </View>
+
+      {/* 주변에서 찾았지만 없는 머신 (F5-4a) */}
+      <MissingMachinesCard machines={insights.missingMachines} />
 
       {/* 머신 가동률 */}
       <View style={s.card}>

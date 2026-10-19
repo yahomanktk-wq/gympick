@@ -370,3 +370,46 @@ export async function fetchWeeklyVisitors(
     return 0;
   }
 }
+
+// ── 매니저 인사이트 (F5-4a) ───────────────────────────────────────────────────
+// get_gym_manager_insights RPC: 페이지 조회수(view_gym), 검색 노출(reverse_search.gym_ids),
+// 주변에서 검색됐지만 이 헬스장엔 없는 머신. 매니저/관리자가 아니면 forbidden + 0.
+
+export interface GymInsights {
+  pageViews: number;
+  searchAppearances: number;
+  missingMachines: { machineId: string; name: string; brand: string; searchCount: number }[];
+}
+
+const EMPTY_INSIGHTS: GymInsights = { pageViews: 0, searchAppearances: 0, missingMachines: [] };
+
+export async function fetchGymInsights(
+  gymId:     string,
+  startDate: string,
+  endDate:   string,
+): Promise<GymInsights> {
+  try {
+    const { data, error } = await supabase.rpc('get_gym_manager_insights', {
+      p_gym_id: gymId,
+      p_start:  kstDayStartUtcIso(startDate),
+      p_end:    kstDayEndExclusiveUtcIso(endDate),
+    });
+    if (error || !data) return { ...EMPTY_INSIGHTS, missingMachines: [] };
+
+    return {
+      pageViews:         Number(data.page_views ?? 0),
+      searchAppearances: Number(data.search_appearances ?? 0),
+      missingMachines:   Array.isArray(data.missing_machines)
+        ? data.missing_machines.map((m: any) => ({
+            machineId:   String(m.machine_id),
+            name:        m.name ?? '',
+            brand:       m.brand ?? '',
+            searchCount: Number(m.search_count ?? 0),
+          }))
+        : [],
+    };
+  } catch (e) {
+    if (__DEV__) console.warn('[gymStats] fetchGymInsights exception:', e);
+    return { ...EMPTY_INSIGHTS, missingMachines: [] };
+  }
+}

@@ -15,6 +15,8 @@ import {
   fetchRetentionStats,
   fetchMachineAvgStats,
   fetchMemberCount,
+  fetchGymInsights,
+  GymInsights,
   emptyPeakGrid,
   MachineStat,
   DailyUsage,
@@ -30,6 +32,12 @@ import TimeTab from './stats/TimeTab';
 
 // 2026-10-19 (F5-2): 6탭 → 3탭(개요 / 머신 / 시간) 재구성. 각 탭 본문은 ./stats/ 로 이동했고,
 // 이 파일은 기간 선택 + 데이터 로딩 + 탭 전환만 담당하는 컨테이너.
+
+// 'YYYY-MM-DD' 두 개 → 'MM.DD ~ MM.DD' (하루면 'MM.DD')
+function formatRangeLabel(start: string, end: string): string {
+  const md = (d: string) => d.slice(5).replace('-', '.');
+  return start === end ? md(start) : `${md(start)} ~ ${md(end)}`;
+}
 
 function getPeriodDates(period: PeriodType): { start: string; end: string } {
   const today = kstToday();
@@ -76,6 +84,9 @@ export default function GymStatsView({ gymId }: GymStatsViewProps) {
   const [avgStats,        setAvgStats]        = useState<MachineAvgStats[]>([]);
   const [ownedLoadFailed, setOwnedLoadFailed] = useState(false);
   const [memberCount,     setMemberCount]     = useState(0);
+  const [insights,        setInsights]        = useState<GymInsights>({ pageViews: 0, searchAppearances: 0, missingMachines: [] });
+  // 실제로 불러온 기간 (개요 '기간 요약' 제목 표시용)
+  const [loadedRange,     setLoadedRange]     = useState<{ start: string; end: string } | null>(null);
 
   // 기간은 period + customRange에서만 계산 — '조회' 시 직접 loadStats를 부르지 않으므로,
   // effect가 올바른 범위로 정확히 한 번만 로드한다 (예전엔 today..today 로드와 경쟁해 덮어써짐).
@@ -83,7 +94,7 @@ export default function GymStatsView({ gymId }: GymStatsViewProps) {
     setLoading(true);
     const { start: s1, end: e1 } =
       period === 'custom' && customRange ? customRange : getPeriodDates(period);
-    const [machine, daily, top, peak, activation, avg, members] = await Promise.all([
+    const [machine, daily, top, peak, activation, avg, members, insightData] = await Promise.all([
       fetchMachineUsageStats(gymId, s1, e1),
       fetchDailyUsageStats(gymId, s1, e1),
       fetchTopMachinesByMuscle(gymId, s1, e1),
@@ -94,6 +105,7 @@ export default function GymStatsView({ gymId }: GymStatsViewProps) {
       }),
       fetchMachineAvgStats(gymId, s1, e1),
       fetchMemberCount(gymId, s1, e1),
+      fetchGymInsights(gymId, s1, e1),
     ]);
     setMachineStats(machine);
     setDailyStats(daily);
@@ -102,6 +114,8 @@ export default function GymStatsView({ gymId }: GymStatsViewProps) {
     setActivationStats(activation);
     setAvgStats(avg);
     setMemberCount(members);
+    setInsights(insightData);
+    setLoadedRange({ start: s1, end: e1 });
 
     const retention = await fetchRetentionStats(gymId);
     setRetentionStats(retention);
@@ -214,6 +228,8 @@ export default function GymStatsView({ gymId }: GymStatsViewProps) {
             <OverviewTab
               dailyStats={dailyStats}
               memberCount={memberCount}
+              insights={insights}
+              rangeLabel={loadedRange ? formatRangeLabel(loadedRange.start, loadedRange.end) : ''}
               activationStats={activationStats}
               ownedLoadFailed={ownedLoadFailed}
               retentionStats={retentionStats}
