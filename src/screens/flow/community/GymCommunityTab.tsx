@@ -19,6 +19,7 @@ import { C, R, T } from '../../../theme';
 import { useAuth } from '../../../context/AuthContext';
 import AnnouncementsSection from './AnnouncementsSection';
 import SendRequestSection from './SendRequestSection';
+import GymOunwanGrid from '../../../components/gym/GymOunwanGrid';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Props
@@ -27,13 +28,14 @@ import SendRequestSection from './SendRequestSection';
 interface Props {
   gymId: string;
   gymName: string;
+  onPressMachine?: (machineId: string) => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function GymCommunityTab({ gymId, gymName }: Props) {
+export default function GymCommunityTab({ gymId, gymName, onPressMachine }: Props) {
   const { user } = useAuth();
   const [requestKey, setRequestKey] = useState(0);
 
@@ -52,6 +54,9 @@ export default function GymCommunityTab({ gymId, gymName }: Props) {
         <Text style={s.tabHeaderText}>Community</Text>
         <Text style={s.tabHeaderSub}>{gymName}</Text>
       </View>
+
+      {/* ── 오운완 그리드 (0건이면 렌더 안 함) ── */}
+      <GymOunwanGrid gymId={gymId} onPressMachine={onPressMachine} />
 
       {/* ── Announcements ── */}
       <AnnouncementsSection gymId={gymId} />

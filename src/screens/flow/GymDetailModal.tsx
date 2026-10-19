@@ -459,7 +459,7 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
 
         {/* ── 커뮤니티 tab ── */}
         {activeTab === '커뮤니티' && (
-          <GymCommunityTab gymId={gymId} gymName={gym.name} />
+          <GymCommunityTab gymId={gymId} gymName={gym.name} onPressMachine={setSelectedMachineId} />
         )}
 
         {/* ── 머신 tab ── */}
