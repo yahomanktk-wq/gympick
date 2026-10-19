@@ -20,7 +20,7 @@ import { C, R } from '../theme';
 import { WorkoutFeedPost, WorkoutLog } from '../data/types';
 const MOCK_FEED_POSTS: WorkoutFeedPost[] = [];
 import { filterActivePosts, toggleReaction, convertSessionToFeedPost } from '../lib/feedUtils';
-import { fetchMyLatestGymId, fetchFeedPostsByGym } from '../lib/db/feedPosts';
+import { fetchMyLatestGymId } from '../lib/db/feedPosts';
 import { getActiveFeedPostsCached } from '../data/feedPostsCache';
 import { fetchActiveFeedPosts } from '../lib/db/feedPosts';
 import { fetchSplitConfig } from '../lib/db/splitRoutine';
@@ -57,18 +57,6 @@ function sortByLatest(posts: WorkoutFeedPost[]): WorkoutFeedPost[] {
   return [...posts].sort((a, b) =>
     new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
-}
-
-// ── 내 포스트 항상 포함 헬퍼 ──────────────────────────────────────────────────
-
-function filterWithMyPosts(
-  allPosts: WorkoutFeedPost[],
-  filtered: WorkoutFeedPost[],
-): WorkoutFeedPost[] {
-  const myPosts  = allPosts.filter(p => p.isMyPost);
-  const combined = [...myPosts, ...filtered.filter(p => !p.isMyPost)];
-  const unique   = combined.filter((p, i, arr) => arr.findIndex(x => x.id === p.id) === i);
-  return sortByLatest(unique);
 }
 
 // ── 탭 정의 ──────────────────────────────────────────────────────────────────
@@ -192,8 +180,6 @@ export default function WorkoutFeedScreen() {
   const { user } = useAuth();
   const [activeTab,    setActiveTab]    = useState<FeedTab>('전국');
   const [posts,        setPosts]        = useState<WorkoutFeedPost[]>([]);
-  const [myGymId,      setMyGymId]      = useState<string | null>(null);
-  const [myGymName,    setMyGymName]    = useState<string>('내 헬스장');
   const [muscleFilter, setMuscleFilter] = useState<MuscleFilter>('전체');
   const [isFeedFallback, setIsFeedFallback] = useState(false);
   const [detailPost,       setDetailPost]       = useState<WorkoutFeedPost | null>(null);
@@ -305,12 +291,6 @@ export default function WorkoutFeedScreen() {
             (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
           );
           latestGymId = sorted[0].gymId ?? null;
-        }
-        if (active) setMyGymId(latestGymId);
-
-        if (latestGymId && mySessions.length > 0) {
-          const recent = mySessions.find(s => s.gymId === latestGymId);
-          if (recent?.gymName && active) setMyGymName(recent.gymName);
         }
 
         let serverPosts = initialServerPosts;
