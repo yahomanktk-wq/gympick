@@ -15,11 +15,9 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R } from '../../theme';
 import { WorkoutFeedPost } from '../../data/types';
-import { fetchWorkoutSessionById, fetchWorkoutSessionByUserAndDate } from '../../lib/db/feedPosts';
-import { brandLogos } from '../../constants/brandLogos';
-import { getMachineImageUrl } from '../../lib/machineImageUrl';
+import { fetchOunwanRoutine, OunwanRoutine } from '../../lib/db/ounwanRoutine';
+import OunwanRoutineSection from './OunwanRoutineSection';
 import { getTransformedImageUrl } from '../../lib/photoImageUrl';
-import GymPickLogo from '../GymPickLogo';
 import OwnerVisibilityButton from './OwnerVisibilityButton';
 import { useAuth } from '../../context/AuthContext';
 
@@ -68,35 +66,19 @@ export default function FeedDetailModal({
     height: Math.round(MODAL_W * (4 / 3) * IMAGE_PIXEL_RATIO),
     quality: 95,
   });
-  const [sessionData,    setSessionData]    = useState<any>(null);
+  // 2026-10-20: 다른 사람의 오운완도 루틴이 보이도록 get_ounwan_routine RPC로 불러온다
+  const [routine,        setRoutine]        = useState<OunwanRoutine | null>(null);
   const [sessionLoading, setSessionLoading] = useState(false);
 
   useEffect(() => {
-    if (__DEV__) console.log('[FeedDetailModal] mount - sessionId:', post.sessionId, 'userId:', post.userId, 'createdAt:', post.createdAt);
+    let alive = true;
     setSessionLoading(true);
-
-    const load = async () => {
-      try {
-        if (post.sessionId) {
-          const data = await fetchWorkoutSessionById(post.sessionId);
-          setSessionData(data);
-        } else {
-          const data = await fetchWorkoutSessionByUserAndDate(
-            post.userId,
-            post.createdAt,
-          );
-          setSessionData(data);
-        }
-      } catch (e) {
-        if (__DEV__) console.warn('[FeedDetailModal] session load error:', e);
-        setSessionData(null);
-      } finally {
-        setSessionLoading(false);
-      }
-    };
-
-    load();
-  }, [post.sessionId, post.userId, post.createdAt]);
+    setRoutine(null);
+    fetchOunwanRoutine(post.id, post.sessionId, post.muscles ?? [])
+      .then(r => { if (alive) setRoutine(r); })
+      .finally(() => { if (alive) setSessionLoading(false); });
+    return () => { alive = false; };
+  }, [post.id, post.sessionId]);
 
   return (
     <Modal
@@ -181,132 +163,32 @@ export default function FeedDetailModal({
             })}
           </View>
 
-          {/* 운동 루틴 섹션 */}
-          <View style={{ paddingTop: 16 }}>
-            <Text style={{
-              fontSize: 12, fontWeight: '700', color: C.textDim,
-              letterSpacing: 0.8, marginBottom: 10, paddingHorizontal: 16,
-            }}>운동 루틴</Text>
-
-            {sessionLoading ? (
-              <View style={{ paddingVertical: 24, alignItems: 'center' }}>
-                <ActivityIndicator size="small" color={C.accent} />
-              </View>
-            ) : sessionData ? (
-              <View style={{
-                marginHorizontal: 16,
-                backgroundColor: '#FFFFFF',
-                borderRadius: R.card,
-                borderWidth: 2,
-                borderColor: C.border,
-                overflow: 'hidden',
-              }}>
-                {/* 헬스장 헤더 */}
-                <TouchableOpacity
-                  style={{
-                    paddingHorizontal: 16, paddingVertical: 12,
-                    borderBottomWidth: StyleSheet.hairlineWidth,
-                    borderBottomColor: '#E5E5E5',
-                    flexDirection: 'row', alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                  onPress={() => onPressGym(post.gymId)}
-                  activeOpacity={0.75}
-                >
-                  <View>
-                    <Text style={{ fontSize: 15, fontWeight: '900', color: '#111111', marginBottom: 2 }}>
-                      {sessionData.gymName}
-                    </Text>
-                    <Text style={{ fontSize: 11, color: '#888888' }}>
-                      {new Date(sessionData.date).toLocaleString('ko-KR', {
-                        year: 'numeric', month: '2-digit', day: '2-digit',
-                        hour: '2-digit', minute: '2-digit',
-                      })}
-                    </Text>
+          {/* 운동 루틴 섹션 — 운동일지 상세와 같은 레이아웃 (2026-10-20) */}
+          {sessionLoading ? (
+            <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+              <ActivityIndicator size="small" color={C.accent} />
+            </View>
+          ) : routine ? (
+            <OunwanRoutineSection
+              routine={routine}
+              fallbackMuscles={post.muscles ?? []}
+              onPressGym={() => onPressGym(post.gymId)}
+              onPressMachine={onPressMachine}
+            />
+          ) : (
+            <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {[...new Set(post.muscles)].map((m, idx) => (
+                  <View key={`${m}-${idx}`} style={{
+                    backgroundColor: C.accentBg, borderRadius: R.pill,
+                    paddingHorizontal: 10, paddingVertical: 4,
+                  }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: C.accent }}>{m}</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={16} color="#000000" />
-                </TouchableOpacity>
-
-                {/* 머신 목록 */}
-                {sessionData.machines.map((m: any, idx: number) => {
-                  const imageUrl   = getMachineImageUrl(m.machineId, { width: 112 });
-                  const allSets    = m.allSets ?? [];
-                  const brandKey   = (m.machineBrand ?? '').toUpperCase().replace(/\s+/g, '_');
-                  const brandLogo  = brandLogos[brandKey];
-                  return (
-                    <TouchableOpacity
-                      key={`${m.machineId}-${idx}`}
-                      style={{
-                        flexDirection: 'row', alignItems: 'flex-start',
-                        padding: 12, gap: 10,
-                        borderTopWidth: idx > 0 ? StyleSheet.hairlineWidth : 0,
-                        borderTopColor: '#E5E5E5',
-                      }}
-                      onPress={() => onPressMachine(m.machineId)}
-                      activeOpacity={0.75}
-                    >
-                      {/* 머신 이미지 */}
-                      <View style={{
-                        width: 56, height: 56, borderRadius: 8,
-                        overflow: 'hidden', backgroundColor: '#F5F5F5',
-                        borderWidth: 1, borderColor: '#E5E5E5',
-                        flexShrink: 0,
-                      }}>
-                        <Image
-                          source={{ uri: imageUrl }}
-                          style={{ width: '100%', height: '100%' }}
-                          contentFit="contain"
-                        />
-                      </View>
-
-                      {/* 머신명 + 브랜드 로고 */}
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#111111', marginBottom: 6 }} numberOfLines={2}>
-                          {m.machineName.toUpperCase()}
-                        </Text>
-                        {brandLogo ? (
-                          <Image
-                            source={brandLogo}
-                            style={{ width: 56, height: 18 }}
-                            contentFit="contain"
-                          />
-                        ) : (
-                          <Text style={{ fontSize: 10, color: '#666666' }}>{m.machineBrand}</Text>
-                        )}
-                      </View>
-
-                      {/* 세트 목록 — 상단 정렬 */}
-                      <View style={{ alignItems: 'flex-end', justifyContent: 'flex-start' }}>
-                        {allSets.map((s: any, si: number) => (
-                          <Text key={si} style={{ fontSize: 11, fontWeight: '600', color: '#111111', lineHeight: 18 }}>
-                            {Number(s.weight) > 0 ? `${s.weight}kg` : '--'} × {s.reps}
-                          </Text>
-                        ))}
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-
-                {/* 푸터 — GymPick 로고 */}
-                <View style={{ paddingHorizontal: 16, paddingVertical: 8, alignItems: 'flex-end', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E5E5E5' }}>
-                  <GymPickLogo color="#000000" width={60} height={12} />
-                </View>
+                ))}
               </View>
-            ) : (
-              <View style={{ paddingHorizontal: 16 }}>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                  {[...new Set(post.muscles)].map((m, idx) => (
-                    <View key={`${m}-${idx}`} style={{
-                      backgroundColor: C.accentBg, borderRadius: R.pill,
-                      paddingHorizontal: 10, paddingVertical: 4,
-                    }}>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: C.accent }}>{m}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-          </View>
+            </View>
+          )}
 
         </ScrollView>
       </SafeAreaView>
