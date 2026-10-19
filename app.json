@@ -21,6 +21,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.gympick.app",
       "usesAppleSignIn": true,
+      "associatedDomains": ["applinks:gympick.app"],
       "buildNumber": "49",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "주변 헬스장을 찾기 위해 현재 위치가 필요합니다. 위치 정보는 헬스장 검색 목적으로만 사용됩니다.",
@@ -54,6 +55,16 @@
         "CAMERA",
         "WRITE_EXTERNAL_STORAGE",
         "READ_EXTERNAL_STORAGE"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            { "scheme": "https", "host": "gympick.app", "pathPrefix": "/gym/" }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
       ]
     },
     "web": {
