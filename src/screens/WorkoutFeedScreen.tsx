@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { C, R } from '../theme';
 import { WorkoutFeedPost, WorkoutLog } from '../data/types';
 const MOCK_FEED_POSTS: WorkoutFeedPost[] = [];
-import { filterActivePosts, filterByGym, filterByDistance, toggleReaction, convertSessionToFeedPost } from '../lib/feedUtils';
+import { filterActivePosts, filterByDistance, toggleReaction, convertSessionToFeedPost } from '../lib/feedUtils';
 import { fetchMyLatestGymId, fetchFeedPostsByGym } from '../lib/db/feedPosts';
 import { getActiveFeedPostsCached } from '../data/feedPostsCache';
 import { fetchActiveFeedPosts } from '../lib/db/feedPosts';
@@ -29,6 +29,8 @@ import { perfStart, perfEnd } from '../lib/perf';
 import GymDetailModal from './flow/GymDetailModal';
 import MachineDetailModal from './flow/MachineDetailModal';
 import FeedDetailModal from '../components/feed/FeedDetailModal';
+import HomeGymRow from '../components/feed/HomeGymRow';
+import { useHomeGymFeed } from '../hooks/useHomeGymFeed';
 import { MACHINES } from '../data';
 import { getTransformedImageUrl } from '../lib/photoImageUrl';
 
@@ -91,8 +93,9 @@ function TabSegment({
   );
 }
 
-function EmptyState({ tab, isFallback }: { tab: FeedTab; isFallback?: boolean }) {
+function EmptyState({ tab, isFallback, message }: { tab: FeedTab; isFallback?: boolean; message?: string }) {
   const msg =
+    message             ? message :
     tab === '내 헬스장' ? '최근 방문한 헬스장의 오운완이 없어요' :
     tab === '주변 5km'  ? '주변 5km 내 오운완이 없어요' :
     isFallback          ? '최근 등록된 오운완이 없어요' :
@@ -182,6 +185,25 @@ export default function WorkoutFeedScreen() {
   const [detailPost,       setDetailPost]       = useState<WorkoutFeedPost | null>(null);
   const [gymDetailId,      setGymDetailId]      = useState<string | null>(null);
   const [machineDetailItem, setMachineDetailItem] = useState<any>(null);
+
+  // 2026-10-19 (F2-2): '내 헬스장' 탭은 홈짐(수동 지정 → 30일 최빈) 오운완을
+  // 기간 제한 없이 보여준다. 탭이 활성화될 때 훅이 직접 불러오고, 화면에 다시
+  // 포커스될 때(새 업로드 반영)만 아래 useFocusEffect에서 reload한다.
+  // activeTab/reload는 ref로 읽어서, 탭을 바꿀 때마다 focus 콜백이 다시 돌며
+  // 훅의 로딩과 중복 호출되지 않게 한다.
+  const homeFeed = useHomeGymFeed(user?.id, activeTab === '내 헬스장');
+  const activeTabRef      = useRef(activeTab);
+  const homeFeedReloadRef = useRef(homeFeed.reload);
+  activeTabRef.current      = activeTab;
+  homeFeedReloadRef.current = homeFeed.reload;
+  const isFirstFocusRef = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      // 첫 포커스(마운트)는 훅의 enabled 로딩이 담당
+      if (isFirstFocusRef.current) { isFirstFocusRef.current = false; return; }
+      if (activeTabRef.current === '내 헬스장') homeFeedReloadRef.current();
+    }, [])
+  );
 
   // 2026-10-13: 기존에는 이 화면이 "오늘의 타겟 부위 자동 필터"를 위한
   // loadFilter effect와, 피드 게시물을 불러오는 loadPosts(useFocusEffect)가
@@ -319,9 +341,8 @@ export default function WorkoutFeedScreen() {
     // 탭 필터
     let base: WorkoutFeedPost[];
     if (activeTab === '내 헬스장') {
-      base = !myGymId
-        ? posts.filter(p => p.isMyPost)
-        : filterWithMyPosts(posts, filterByGym(posts, myGymId));
+      // 홈짐 오운완 (서버에서 이미 최신순)
+      base = homeFeed.posts;
     } else if (activeTab === '주변 5km') {
       base = filterWithMyPosts(posts, filterByDistance(posts, 5));
     } else {
@@ -332,7 +353,7 @@ export default function WorkoutFeedScreen() {
     if (muscleFilter === '전체') return base;
     const targetEn = toEnMuscle(muscleFilter);
     return base.filter(p => p.muscles.some(m => m === targetEn));
-  }, [posts, activeTab, myGymId, muscleFilter]);
+  }, [posts, homeFeed.posts, activeTab, muscleFilter]);
 
   const handleReact = useCallback((postId: string, key: keyof WorkoutFeedPost['reactions']) => {
     setPosts(prev => prev.map(p => p.id === postId ? toggleReaction(p, key) : p));
@@ -379,11 +400,25 @@ export default function WorkoutFeedScreen() {
         ))}
       </ScrollView>
 
-      {filtered.length === 0 ? (
-        <EmptyState tab={activeTab} isFallback={isFeedFallback} />
+      {activeTab === '내 헬스장' && homeFeed.homeGym && (
+        <HomeGymRow gymName={homeFeed.homeGym.gymName} />
+      )}
+
+      {activeTab === '내 헬스장' && homeFeed.loading ? null : filtered.length === 0 ? (
+        <EmptyState
+          tab={activeTab}
+          isFallback={isFeedFallback}
+          message={
+            activeTab !== '내 헬스장' ? undefined :
+            homeFeed.homeGym ? `아직 ${homeFeed.homeGym.gymName}의 오운완이 없어요` :
+            '운동일지를 기록하면 우리 헬스장 오운완이 보여요'
+          }
+        />
       ) : (
         <FlatList
           data={filtered}
+          onEndReached={activeTab === '내 헬스장' ? homeFeed.loadMore : undefined}
+          onEndReachedThreshold={0.5}
           keyExtractor={item => item.id}
           numColumns={2}
           columnWrapperStyle={{ gap: GRID_GAP, paddingHorizontal: GRID_PAD }}
