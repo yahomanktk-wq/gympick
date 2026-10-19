@@ -1735,6 +1735,11 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
   const toggleMachine = useCallback((id: string) =>
     setGymMachineIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]), []);
 
+  const applySavedMachineIds = useCallback((gymId: string, ids: string[]) => {
+    setGyms(prev => prev.map(g => g.id === gymId ? { ...g, machineIds: [...ids] } : g));
+    setSelectedGym(prev => (prev && prev.id === gymId ? { ...prev, machineIds: [...ids] } : prev));
+  }, []);
+
   const handleMachinesBack = useCallback(() => {
     if (viewStack.length <= 1) { onClose(); return; }
     const orig = originalMachineIds.current;
@@ -2189,6 +2194,7 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
                   Alert.alert('저장 실패', 'Supabase 저장 중 오류가 발생했습니다.\n' + error);
                   return;
                 }
+                applySavedMachineIds(selectedGym.id, gymMachineIds);
                 originalMachineIds.current = [...gymMachineIds];
                 setShowSaveConfirm(false);
                 Alert.alert('저장 완료', '머신 목록이 저장되었습니다.');
@@ -2298,6 +2304,7 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
                         Alert.alert('저장 실패', 'Supabase 저장 중 오류가 발생했습니다.\n' + error);
                         return;
                       }
+                      applySavedMachineIds(selectedGym.id, gymMachineIds);
                       originalMachineIds.current = [...gymMachineIds];
                       setShowSaveConfirm(false);
                       pop();
