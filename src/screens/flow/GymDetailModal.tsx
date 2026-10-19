@@ -40,6 +40,7 @@ import MachineCardBorder from '../../components/MachineCardBorder';
 import { getMachineImageUrl } from '../../lib/machineImageUrl';
 import { containsBannedWord } from '../../lib/bannedWords';
 import { shareGym } from '../../lib/share';
+import GymOunwanStrip from '../../components/gym/GymOunwanStrip';
 
 const SCREEN_W = Dimensions.get('window').width;
 const CARD_W   = (SCREEN_W - 32 - 8) / 2;
@@ -583,6 +584,14 @@ export default function GymDetailModal({ visible, gymId, onClose }: Props) {
                 <Text style={s.infoText}>{gym.location}</Text>
               </View>
             </View>
+
+            {/* ── 오운완 (최근 5개) ── */}
+            <GymOunwanStrip
+              gymId={gymId}
+              titleStyle={s.sectionTitle}
+              onPressMore={() => setActiveTab('커뮤니티')}
+              onPressMachine={setSelectedMachineId}
+            />
 
             {/* ── Operating hours ── */}
             <Text style={s.sectionTitle}>영업 시간</Text>
