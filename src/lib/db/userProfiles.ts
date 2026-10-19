@@ -62,3 +62,26 @@ export async function fetchHideOunwanOnGym(userId: string): Promise<boolean> {
     return false;
   }
 }
+
+/** 랭킹에서 내 기록 숨기기 설정 값 (F3-4). 실패/없음 → false(노출) */
+export async function fetchHideFromRankings(userId: string): Promise<boolean> {
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('hide_from_rankings')
+      .eq('id', userId)
+      .maybeSingle();
+    return data?.hide_from_rankings === true;
+  } catch {
+    return false;
+  }
+}
+
+/** 랭킹에서 내 기록 숨기기 설정 (모든 헬스장·머신 공통). 실패 시 throw. */
+export async function setHideFromRankings(userId: string, hide: boolean): Promise<void> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ hide_from_rankings: hide })
+    .eq('id', userId);
+  if (error) throw error;
+}

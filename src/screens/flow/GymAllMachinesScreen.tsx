@@ -129,6 +129,7 @@ export default function GymAllMachinesScreen({ visible, gymId, gymName, machines
           visible={selectedMachine !== null}
           machine={selectedMachine as any}
           onClose={() => setSelectedMachine(null)}
+          gymId={gymId}
         />
       </SafeAreaView>
     </Modal>
