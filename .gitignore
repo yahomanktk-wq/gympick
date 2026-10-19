@@ -71,3 +71,15 @@ chore_*.txt
 investigate_*.txt
 PROMPT_*.txt
 *_investigation*.txt
+
+# 루트 지시서·작업 파일 (2026-10-19, 추적 해제 후 다시 untracked로 안 나오게 — 루트에만 적용)
+/*task*.txt
+/*Task*.txt
+/*태스크*.txt
+/*prompt*.txt
+/*fix*.txt
+/*feature*.txt
+/commit_*.txt
+/INVESTIGATION*.txt
+/gympick_*.txt
+/*.patch
