@@ -42,14 +42,13 @@ export async function removeGymFavoriteDB(userId: string, gymId: string): Promis
 }
 
 // 이 헬스장을 즐겨찾기한 유저 수
+// gym_favorites RLS는 본인 행만 노출하므로 직접 count하면 매니저에게 0/1만 보인다.
+// 집계 RPC(get_gym_favorite_count, SECURITY DEFINER)는 개수만 반환하고 누가 즐겨찾기했는지는 노출하지 않는다.
 export async function fetchGymFavoriteCount(gymId: string): Promise<number> {
   try {
-    const { count, error } = await supabase
-      .from('gym_favorites')
-      .select('user_id', { count: 'exact', head: true })
-      .eq('gym_id', gymId);
-    if (error) return 0;
-    return count ?? 0;
+    const { data, error } = await supabase.rpc('get_gym_favorite_count', { p_gym_id: gymId });
+    if (error) { if (__DEV__) console.warn('[gymFavorites] fetchGymFavoriteCount 오류:', error.message); return 0; }
+    return typeof data === 'number' ? data : Number(data ?? 0) || 0;
   } catch {
     return 0;
   }
