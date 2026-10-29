@@ -1487,11 +1487,11 @@ function RegisterGymAdminView({ machines, registeredGyms, onSave, onUpdate, onOf
                 </Text>
               </View>
               <View style={{ flexDirection: 'row', gap: 14 }}>
-                {gym.managerId && (
-                  <TouchableOpacity onPress={() => shareGym(gym.name, gym.id)} activeOpacity={0.7}>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#5ba4ff' }}>공유</Text>
-                  </TouchableOpacity>
-                )}
+                {/* 2026-10-26: 보유 머신 웹페이지는 매니저 연결 여부와 무관하게 모든
+                    헬스장에서 조회 가능하므로, 공유 버튼도 모든 헬스장에서 노출한다. */}
+                <TouchableOpacity onPress={() => shareGym(gym.name, gym.id)} activeOpacity={0.7}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#5ba4ff' }}>공유</Text>
+                </TouchableOpacity>
                 {gym.managerId && (
                   <TouchableOpacity onPress={() => onUnlinkManager(gym.id, gym.managerId)} activeOpacity={0.7}>
                     <Text style={{ fontSize: 12, fontWeight: '700', color: C.textSub }}>연결 해제</Text>
