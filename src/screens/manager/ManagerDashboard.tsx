@@ -51,6 +51,7 @@ import { fetchWeeklyVisitors } from '../../lib/db/gymStats';
 import { fetchGymFavoriteCount } from '../../lib/db/gymFavorites';
 import { shareGym } from '../../lib/share';
 import GymQrPosterModal from '../../components/manager/GymQrPosterModal';
+import GymSlugEditor from '../../components/GymSlugEditor';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -384,6 +385,8 @@ interface EditViewProps {
   setPhotos: React.Dispatch<React.SetStateAction<string[]>>;
   onSave: () => void;
   onAddPhoto: () => void;
+  gym: ManagedGym | null;
+  onSlugSaved: (slug: string | null) => void;
 }
 
 interface MachinesViewProps {
@@ -923,7 +926,7 @@ function RegisterView({
 
 function EditView({
   editForm, onChangeEditField, editHours, updateEditDay,
-  editNotices, toggleEditNotice, photos, setPhotos, onSave, onAddPhoto,
+  editNotices, toggleEditNotice, photos, setPhotos, onSave, onAddPhoto, gym, onSlugSaved,
 }: EditViewProps) {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -938,6 +941,9 @@ function EditView({
           <Field label="웹사이트" value={editForm.website} onChangeText={t => onChangeEditField('website', t)} />
           <OperatingHoursEditor hours={editHours} updateDay={updateEditDay} notices={editNotices} toggleNotice={toggleEditNotice} hoursNote={editForm.hoursNote} setHoursNote={(v) => onChangeEditField('hoursNote', v)} />
         </SectionCard>
+        {gym?.short_code && (
+          <GymSlugEditor gymId={gym.id} currentSlug={gym.slug} shortCode={gym.short_code} onSaved={onSlugSaved} />
+        )}
         <View style={styles.sectionCard}>
           <View style={styles.photoSectionHeader}>
             <Text style={styles.sectionCardTitle}>사진</Text>
@@ -2274,6 +2280,12 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
           setPhotos={setPhotos}
           onSave={saveEdits}
           onAddPhoto={handleAddPhoto}
+          gym={selectedGym}
+          onSlugSaved={slug => {
+            const id = selectedGym?.id;
+            setSelectedGym(prev => prev && { ...prev, slug });
+            setGyms(prev => prev.map(g => g.id === id ? { ...g, slug } : g));
+          }}
         />
       )}
       {currentView === 'machines' && (

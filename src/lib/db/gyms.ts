@@ -1,5 +1,8 @@
 import { supabase } from '../supabase';
 import { Gym, GymWithMachines } from '../../data/types';
+import {
+  validateGymSlug, GYM_SLUG_FORMAT_MESSAGE, GYM_SLUG_RESERVED_MESSAGE, GYM_SLUG_TAKEN_MESSAGE,
+} from '../gymSlug';
 
 // ── 메모리 캐시 ──────────────────────────────────────────────
 let _gymsCache:     GymWithMachines[] | null = null;
@@ -165,4 +168,47 @@ export async function fetchGymWithMachines(id: string): Promise<GymWithMachines 
     if (__DEV__) console.warn('[db/gyms] fetchGymWithMachines error:', e);
     return undefined;
   }
+}
+
+// --- 영어 이름(slug) — 검증 규칙은 src/lib/gymSlug.ts
+
+/** 다른 헬스장이 이 slug를 쓰고 있지 않으면 true. 조회 실패 시 throw. */
+export async function checkGymSlugAvailable(slug: string, currentGymId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('gyms')
+    .select('id')
+    .eq('slug', slug)
+    .neq('id', currentGymId)
+    .limit(1);
+  if (error) throw error;
+  return (data ?? []).length === 0;
+}
+
+export type UpdateGymSlugResult =
+  | { ok: true }
+  | { ok: false; reason: 'taken' | 'invalid' | 'error'; message: string };
+
+/** slug 저장 (null이면 해제). DB 제약(unique 23505 / check 23514)이 최종 판정. */
+export async function updateGymSlug(gymId: string, slug: string | null): Promise<UpdateGymSlugResult> {
+  const { data, error } = await supabase
+    .from('gyms')
+    .update({ slug })
+    .eq('id', gymId)
+    .select('id');
+
+  if (error) {
+    if (error.code === '23505') return { ok: false, reason: 'taken', message: GYM_SLUG_TAKEN_MESSAGE };
+    if (error.code === '23514') {
+      const reserved = slug ? validateGymSlug(slug) === 'reserved' || error.message.includes('reserved') : false;
+      return { ok: false, reason: 'invalid', message: reserved ? GYM_SLUG_RESERVED_MESSAGE : GYM_SLUG_FORMAT_MESSAGE };
+    }
+    if (__DEV__) console.warn('[db/gyms] updateGymSlug error:', error.message);
+    return { ok: false, reason: 'error', message: '저장하지 못했어요. 잠시 후 다시 시도해 주세요.' };
+  }
+  // RLS로 막히면 에러 없이 0행이 반환된다
+  if (!data?.length) {
+    return { ok: false, reason: 'error', message: '이 헬스장을 수정할 권한이 없어요.' };
+  }
+  invalidateGymsCache();
+  return { ok: true };
 }

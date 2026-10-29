@@ -91,6 +91,7 @@ import {
   type UserOverviewStats,
 } from '../../lib/db/userStats';
 import { fetchAllReviews } from '../../lib/db/reviews';
+import GymSlugEditor from '../../components/GymSlugEditor';
 import type { MachineReview } from '../../data/types';
 
 const SCREEN_W     = Dimensions.get('window').width;
@@ -1182,9 +1183,10 @@ interface RegisterGymAdminViewProps {
   onManagerLink: (gymId: string, gymName: string) => void;
   onUnlinkManager: (gymId: string, managerId: string | null) => void | Promise<void>;
   onDeleteGym: (gymId: string, gymName: string) => void;
+  onSlugSaved: (gymId: string, slug: string | null) => void;
 }
 
-function RegisterGymAdminView({ machines, registeredGyms, onSave, onUpdate, onOfficialBrands, onManagerLink, onUnlinkManager, onDeleteGym }: RegisterGymAdminViewProps) {
+function RegisterGymAdminView({ machines, registeredGyms, onSave, onUpdate, onOfficialBrands, onManagerLink, onUnlinkManager, onDeleteGym, onSlugSaved }: RegisterGymAdminViewProps) {
   const [showForm,         setShowForm]         = useState(false);
   const [editingGym,       setEditingGym]       = useState<AdminGym | null>(null);
   const [gymName,          setGymName]          = useState('');
@@ -1299,6 +1301,11 @@ function RegisterGymAdminView({ machines, registeredGyms, onSave, onUpdate, onOf
             />
           </View>
         </View>
+
+        {editingGym && (
+          <GymSlugEditor gymId={editingGym.id} currentSlug={editingGym.slug} shortCode={editingGym.short_code}
+            onSaved={slug => { setEditingGym(g => g && { ...g, slug }); onSlugSaved(editingGym.id, slug); }} />
+        )}
 
         {/* ── 보유 머신 선택 ── */}
         <Text style={[styles.sectionTitle, { marginTop: 24 }]}>보유 머신 선택</Text>
@@ -2833,6 +2840,7 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
           onManagerLink={openManagerLink}
           onUnlinkManager={handleUnlinkManager}
           onDeleteGym={handleDeleteGym}
+          onSlugSaved={(id, slug) => setRegisteredGyms(prev => prev.map(g => g.id === id ? { ...g, slug } : g))}
         />
       )}
       {currentView === 'gym-manager-link' && (
