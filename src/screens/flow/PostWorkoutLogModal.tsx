@@ -4277,23 +4277,8 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
               }}
             >
               {renderStyleOverlay()}
-              {/* 21차: 사진 오버레이의 NO_BORDER_LAYOUTS 조건과 동일 — POSTER/ROSTER도
-                  이 '오버레이만 저장' 캡처본에서 테두리선 없이 저장됨 */}
-              {!NO_BORDER_LAYOUTS.includes(currentLayoutType) && (
-                <View
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    borderRadius: 20,
-                    borderWidth: 2,
-                    borderColor: tc,
-                  }}
-                  pointerEvents="none"
-                />
-              )}
+              {/* 2026-10-21: '오버레이만 저장'은 테두리선 없이 저장한다 (레이아웃 종류와 무관).
+                  오운완 저장·인스타그램 공유는 overlayRef 캡처라 기존대로 테두리 포함. */}
             </View>
           </View>
         )}
