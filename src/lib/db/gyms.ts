@@ -30,6 +30,8 @@ type GymRow = {
   phone?:         string | null;
   website?:       string | null;
   manager_id?:    string | null;
+  slug?:          string | null;
+  short_code?:    string | null;
 };
 
 function rowToGym(row: GymRow): Gym {
@@ -46,6 +48,8 @@ function rowToGym(row: GymRow): Gym {
     phone:         row.phone      ?? null,
     website:       row.website    ?? null,
     managerId:     row.manager_id ?? null,
+    slug:          row.slug       ?? null,
+    short_code:    row.short_code ?? null,
   };
 }
 
@@ -54,7 +58,7 @@ function rowToGym(row: GymRow): Gym {
 export async function fetchGyms(): Promise<Gym[]> {
   const { data, error } = await supabase
     .from('gyms')
-    .select('id, name, location, address_detail, description, latitude, longitude, hours, hours_note, phone, website, manager_id')
+    .select('id, name, location, address_detail, description, latitude, longitude, hours, hours_note, phone, website, manager_id, slug, short_code')
     .order('name');
 
   if (error || !data?.length) {
@@ -67,7 +71,7 @@ export async function fetchGyms(): Promise<Gym[]> {
 export async function fetchGym(id: string): Promise<Gym | undefined> {
   const { data, error } = await supabase
     .from('gyms')
-    .select('id, name, location, address_detail, description, latitude, longitude, hours, hours_note, phone, website')
+    .select('id, name, location, address_detail, description, latitude, longitude, hours, hours_note, phone, website, slug, short_code')
     .eq('id', id)
     .single();
 
@@ -92,7 +96,7 @@ export async function fetchGymsWithMachines(): Promise<GymWithMachines[]> {
       .select(`
         id, name, location, address_detail, description,
         latitude, longitude, hours, hours_note, phone, website,
-        manager_id,
+        manager_id, slug, short_code,
         gym_machines ( machine_id ),
         gym_official_brands ( brand )
       `)
@@ -121,6 +125,8 @@ export async function fetchGymsWithMachines(): Promise<GymWithMachines[]> {
         phone:         row.phone      ?? null,
         website:       row.website    ?? null,
         managerId:      row.manager_id ?? null,
+        slug:           row.slug       ?? null,
+        short_code:     row.short_code ?? null,
         officialBrands: (row.gym_official_brands ?? []).map((ob: any) => ob.brand),
         machineIds,
         machines: allMachines.filter(m => machineIds.includes(m.id)),

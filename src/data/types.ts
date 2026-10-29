@@ -38,6 +38,8 @@ export interface Gym {
   phone?:         string | null;
   website?:       string | null;
   managerId?:     string | null;
+  slug?:          string | null;   // 영문 이름 → gympick.kr/{slug}
+  short_code?:    string | null;   // 자동 생성 6자리 → gympick.kr/g/{short_code}
 }
 
 // --- machines
@@ -301,6 +303,8 @@ export interface ManagedGym {
   submittedAt: string;
   photoCount:  number;
   machineIds:  string[];
+  slug?:       string | null;
+  short_code?: string | null;
 }
 
 // --- Admin review queue

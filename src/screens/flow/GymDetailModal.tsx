@@ -424,7 +424,7 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
               activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                shareGym(gym.name, gym.id);
+                shareGym(gym.name, gym);
               }}
             >
               <Ionicons name="share-outline" size={20} color={C.textSub} />

@@ -15,6 +15,8 @@ export interface AdminGym {
   managerId:       string | null;
   managerNickname: string | null;
   managerEmail:    string | null;
+  slug:            string | null;
+  short_code:      string | null;
 }
 
 // 전체 헬스장 목록 조회 (manager_id 유무 무관 + 보유 머신 + 연결된 매니저 정보)
@@ -23,7 +25,7 @@ export async function fetchAdminGyms(): Promise<AdminGym[]> {
     .from('gyms')
     .select(`
       id, name, location, phone, hours, hours_note, created_at,
-      manager_id,
+      manager_id, slug, short_code,
       gym_machines ( machine_id )
     `)
     .order('created_at', { ascending: false });
@@ -59,6 +61,8 @@ export async function fetchAdminGyms(): Promise<AdminGym[]> {
       managerId:       row.manager_id ?? null,
       managerNickname: manager?.nickname ?? null,
       managerEmail:    manager?.email ?? null,
+      slug:            row.slug ?? null,
+      short_code:      row.short_code ?? null,
     };
   });
 }

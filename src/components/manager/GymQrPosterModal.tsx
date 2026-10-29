@@ -8,10 +8,10 @@ import { captureRef } from 'react-native-view-shot';
 import QRCode from 'react-native-qrcode-svg';
 import { C, R } from '../../theme';
 import GymPickLogo from '../GymPickLogo';
-import { getGymShareUrl } from '../../lib/share';
+import { getGymShareUrl, type GymShareTarget } from '../../lib/share';
 
 // 2026-10-19 (F6-1): 매니저용 'QR 포스터' — 헬스장 보유머신 웹페이지
-// (https://gympick.app/gym/{gymId}) QR을 담은 A4 비율 포스터를 미리 보고
+// (gympick.kr 짧은 주소 — share.ts getGymShareUrl) QR을 담은 A4 비율 포스터를 미리 보고
 // 사진첩에 저장한다. QR은 앱에서 즉석 생성하며 서버에 저장하지 않는다.
 // 포스터 자체는 인쇄물이라 흰 배경/검정 글씨를 리터럴 색으로 쓴다.
 
@@ -25,17 +25,17 @@ const LOGO_H = Math.round(LOGO_W * 279 / 2805);
 
 interface Props {
   visible: boolean;
-  gymId: string;
+  gym: GymShareTarget;
   gymName: string;
   onClose: () => void;
 }
 
 interface QrPosterProps {
-  gymId: string;
+  gym: GymShareTarget;
   gymName: string;
 }
 
-const QrPoster = forwardRef<View, QrPosterProps>(({ gymId, gymName }, ref) => (
+const QrPoster = forwardRef<View, QrPosterProps>(({ gym, gymName }, ref) => (
   <View
     ref={ref}
     collapsable={false}
@@ -55,7 +55,7 @@ const QrPoster = forwardRef<View, QrPosterProps>(({ gymId, gymName }, ref) => (
       {gymName}
     </Text>
     <QRCode
-      value={getGymShareUrl(gymId)}
+      value={getGymShareUrl(gym)}
       size={190}
       color="#000000"
       backgroundColor="#FFFFFF"
@@ -64,11 +64,11 @@ const QrPoster = forwardRef<View, QrPosterProps>(({ gymId, gymName }, ref) => (
     <Text style={{ fontSize: 13, color: '#333333', textAlign: 'center' }}>
       헬스장의 보유 머신을 확인해 보세요
     </Text>
-    <Text style={{ fontSize: 11, color: '#777777' }}>gympick.app</Text>
+    <Text style={{ fontSize: 11, color: '#777777' }}>gympick.kr</Text>
   </View>
 ));
 
-export default function GymQrPosterModal({ visible, gymId, gymName, onClose }: Props) {
+export default function GymQrPosterModal({ visible, gym, gymName, onClose }: Props) {
   const posterRef = useRef<View>(null);
   const [saving, setSaving] = useState(false);
 
@@ -116,7 +116,7 @@ export default function GymQrPosterModal({ visible, gymId, gymName, onClose }: P
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 }}>
           {/* 종이처럼 보이도록 얇은 테두리 */}
           <View style={{ borderWidth: 1, borderColor: C.border }}>
-            <QrPoster ref={posterRef} gymId={gymId} gymName={gymName} />
+            <QrPoster ref={posterRef} gym={gym} gymName={gymName} />
           </View>
         </View>
 

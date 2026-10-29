@@ -503,7 +503,7 @@ function HomeView({ gyms, weeklyVisitors, gymFavCount, machineCount, onOpenEdit,
           {gym.status === 'approved' && (
             <TouchableOpacity
               style={[styles.gymActionBtn, { marginTop: 8 }]}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); shareGym(gym.name, gym.id); }}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); shareGym(gym.name, gym); }}
               activeOpacity={0.8}
             >
               <Ionicons name="share-outline" size={14} color={C.accent} />
@@ -1485,6 +1485,8 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
           status:      'approved' as const,
           submittedAt: g.created_at?.slice(0, 10) ?? '',
           photoCount:  0,
+          slug:        g.slug ?? null,
+          short_code:  g.short_code ?? null,
         }));
 
         setGyms(prev => {
@@ -2379,7 +2381,7 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
 
       <GymQrPosterModal
         visible={!!qrGym}
-        gymId={qrGym?.id ?? ''}
+        gym={qrGym ?? { id: '' }}
         gymName={qrGym?.name ?? ''}
         onClose={() => setQrGym(null)}
       />
