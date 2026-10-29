@@ -83,3 +83,9 @@ PROMPT_*.txt
 /INVESTIGATION*.txt
 /gympick_*.txt
 /*.patch
+
+# 로컬 키·배치·작업 지시 파일 (2026-10-29)
+/gympick rest api key.env
+/commit_138b.bat
+/T*.txt
+/web_*.txt
