@@ -48,6 +48,7 @@ import * as Location from 'expo-location';
 import { calcDistanceKm, formatDistance } from '../lib/geocoding';
 import FavoriteGymRecommendation from '../components/FavoriteGymRecommendation';
 import { toEnMuscle, parseMuscles } from '../lib/splitUtils';
+import { isCardioMachine, shouldShowCardio } from '../lib/machineVisibility';
 import * as Haptics from 'expo-haptics';
 
 const CATEGORY_ORDER: Record<string, string[]> = {
@@ -502,13 +503,15 @@ export default function FindGymScreen() {
   // 결과 개수 계산 — MachineFilterSheet의 "OOO개 머신보기" 버튼에서
   // 임시(적용 전) 선택값 기준으로 실시간 계산할 때 재사용.
   const computeMachineCount = useCallback((muscle: string, category: string, brandSet: Set<string>) => {
+    const showCardio = shouldShowCardio(muscle, keyword);
     return shuffledMachines.filter(m => {
       const muscleOk   = muscle === 'All' || parseMuscles(m.targetMuscle).some(t => t.toLowerCase() === muscle.toLowerCase());
       const brandOk    = brandSet.size === 0 || [...brandSet].some(b => b.toLowerCase() === m.brand?.toLowerCase());
       const categoryOk = category === 'All' || m.category?.split(',').map(c => c.trim()).includes(category);
-      return muscleOk && brandOk && categoryOk;
+      const cardioOk   = showCardio || !isCardioMachine(m);
+      return muscleOk && brandOk && categoryOk && cardioOk;
     }).length;
-  }, [shuffledMachines]);
+  }, [shuffledMachines, keyword]);
 
   // 2026-09-09: MachineDetailModal이 이 콜백을 부를 시점엔 이미 favoritesStore(전역
   // 캐시)가 갱신되어 있으므로, 직접 뒤집는 대신 전역 캐시에서 다시 읽어와 동기화한다
@@ -575,6 +578,7 @@ export default function FindGymScreen() {
 
   // --- Filtered machines
   const filteredMachines = useMemo(() => {
+    const showCardio = shouldShowCardio(activeMuscle, keyword);
     return shuffledMachines.filter(m => {
       const muscleOk   = activeMuscle === 'All' || parseMuscles(m.targetMuscle).some(t => t.toLowerCase() === activeMuscle.toLowerCase());
       const brandOk    = activeBrands.size === 0 || [...activeBrands].some(b => b.toLowerCase() === m.brand?.toLowerCase());
@@ -585,7 +589,9 @@ export default function FindGymScreen() {
         m.name.toLowerCase().includes(kw)     ||
         m.category.toLowerCase().includes(kw) ||
         m.brand?.toLowerCase().includes(kw);
-      return muscleOk && brandOk && categoryOk && keyOk;
+      // 유산소 머신은 OTHER 필터 또는 검색 중일 때만 노출
+      const cardioOk   = showCardio || !isCardioMachine(m);
+      return muscleOk && brandOk && categoryOk && keyOk && cardioOk;
     });
   }, [keyword, activeMuscle, activeBrands, activeCategory, shuffledMachines]);
 
