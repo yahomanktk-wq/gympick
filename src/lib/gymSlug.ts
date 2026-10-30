@@ -2,7 +2,7 @@
 // DB(gyms.slug CHECK 제약 + public.is_reserved_gym_slug)와 같은 규칙을 클라이언트에서
 // 먼저 검사해 즉시 안내하고, 최종 판정은 저장 시 DB 제약이 한다.
 
-export const GYM_SLUG_REGEX = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
+export const GYM_SLUG_REGEX = /^[a-z0-9][a-z0-9_]{1,28}[a-z0-9]$/;
 
 // public.is_reserved_gym_slug(text)의 배열과 동일하게 유지할 것
 export const RESERVED_GYM_SLUGS: readonly string[] = [
@@ -16,7 +16,7 @@ export const RESERVED_GYM_SLUGS: readonly string[] = [
 
 export type GymSlugValidation = 'empty' | 'invalid_format' | 'reserved' | 'ok';
 
-export const GYM_SLUG_FORMAT_MESSAGE = '영어 소문자, 숫자, 하이픈(-)만 사용할 수 있어요 (3~30자, 하이픈으로 시작·끝 불가)';
+export const GYM_SLUG_FORMAT_MESSAGE = '영어 소문자, 숫자, 언더바(_)만 사용할 수 있어요 (3~30자, 언더바로 시작·끝 불가)';
 export const GYM_SLUG_RESERVED_MESSAGE = '사용할 수 없는 이름이에요';
 export const GYM_SLUG_TAKEN_MESSAGE = '이미 사용 중인 이름이에요';
 

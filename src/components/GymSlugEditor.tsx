@@ -119,7 +119,7 @@ export default function GymSlugEditor({ gymId, currentSlug, shortCode, onSaved }
           }}
           value={input}
           onChangeText={t => { setMessage(null); setInput(normalizeGymSlugInput(t)); }}
-          placeholder="예: gymmoot-songcheon"
+          placeholder="예: gymmoot_songcheon"
           placeholderTextColor={C.textDim}
           selectionColor={C.accent}
           onFocus={() => setFocused(true)}
