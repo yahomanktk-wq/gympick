@@ -84,8 +84,12 @@ import { sendNotification } from '../../lib/db/notifications';
 import {
   fetchAllUserInquiries,
   answerUserInquiry,
+  fetchInquirerProfiles,
   type UserInquiry,
+  type InquirerProfile,
 } from '../../lib/db/userInquiries';
+import PendingInquiryCard from './inquiry/PendingInquiryCard';
+import AnsweredInquiryCard from './inquiry/AnsweredInquiryCard';
 import {
   fetchUserOverviewStats,
   type UserOverviewStats,
@@ -977,10 +981,16 @@ function GymReportsView({ reports, onMarkReviewed, onDelete }: GymReportsViewPro
 interface UserInquiriesViewProps {
   inquiries: UserInquiry[];
   onAnswer: (id: string, answer: string) => void;
+  inquirerProfiles: Record<string, InquirerProfile>;
+  inquirerProfilesLoading: boolean;
+  managedGymNamesByUser: Record<string, string[]>;
 }
 
-function UserInquiriesView({ inquiries, onAnswer }: UserInquiriesViewProps) {
+const NO_GYMS: string[] = [];
+
+function UserInquiriesView({ inquiries, onAnswer, inquirerProfiles, inquirerProfilesLoading, managedGymNamesByUser }: UserInquiriesViewProps) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const pending  = inquiries.filter(i => i.status === 'pending');
   const answered = inquiries.filter(i => i.status !== 'pending');
@@ -1000,57 +1010,31 @@ function UserInquiriesView({ inquiries, onAnswer }: UserInquiriesViewProps) {
       {pending.length === 0 && <EmptyQueue label="답변 대기 중인 문의가 없어요" />}
 
       {pending.map(i => (
-        <View key={i.id} style={styles.flagCard}>
-          <View style={styles.flagCardTop}>
-            <View style={[styles.flagTypeIcon, { backgroundColor: '#facc1518' }]}>
-              <Ionicons name="chatbubble-outline" size={16} color="#facc15" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.flagGymName}>{i.title}</Text>
-              <View style={styles.submittedRow}>
-                <Ionicons name="time-outline" size={11} color={C.textSub} />
-                <Text style={styles.submittedText}>{i.createdAt.slice(0, 10)}</Text>
-              </View>
-            </View>
-          </View>
-          <Text style={styles.flagDesc}>{i.content}</Text>
-          <TextInput
-            style={styles.adminInput}
-            value={drafts[i.id] ?? ''}
-            onChangeText={v => setDrafts(prev => ({ ...prev, [i.id]: v }))}
-            placeholder="답변을 입력해주세요"
-            placeholderTextColor={C.textDim}
-            multiline
-          />
-          <View style={styles.flagActions}>
-            <TouchableOpacity
-              style={[styles.flagActionBtn, styles.flagResolveBtn, { opacity: (drafts[i.id] ?? '').trim() ? 1 : 0.5 }]}
-              onPress={() => submitAnswer(i.id)}
-              activeOpacity={0.8}
-              disabled={!(drafts[i.id] ?? '').trim()}
-            >
-              <Ionicons name="checkmark" size={13} color={C.bg} />
-              <Text style={[styles.flagActionText, { color: C.bg }]}>답변 등록</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <PendingInquiryCard
+          key={i.id}
+          inquiry={i}
+          profile={inquirerProfiles[i.userId]}
+          profileLoading={inquirerProfilesLoading}
+          managedGymNames={managedGymNamesByUser[String(i.userId)] ?? NO_GYMS}
+          draft={drafts[i.id] ?? ''}
+          onChangeDraft={v => setDrafts(prev => ({ ...prev, [i.id]: v }))}
+          onSubmit={() => submitAnswer(i.id)}
+        />
       ))}
 
       {answered.length > 0 && (
         <>
           <Text style={[styles.sectionTitle, { marginTop: 20, fontSize: 12, color: C.textDim }]}>처리 완료</Text>
           {answered.map(i => (
-            <View key={i.id} style={[styles.flagCard, { opacity: 0.6 }]}>
-              <View style={styles.flagCardTop}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.flagGymName}>{i.title}</Text>
-                  <Text style={styles.flagDesc} numberOfLines={1}>{i.answer}</Text>
-                </View>
-                <View style={[styles.reviewedBadge, { backgroundColor: C.accentBg }]}>
-                  <Text style={[styles.reviewedBadgeText, { color: C.accent }]}>완료</Text>
-                </View>
-              </View>
-            </View>
+            <AnsweredInquiryCard
+              key={i.id}
+              inquiry={i}
+              profile={inquirerProfiles[i.userId]}
+              profileLoading={inquirerProfilesLoading}
+              managedGymNames={managedGymNamesByUser[String(i.userId)] ?? NO_GYMS}
+              expanded={expandedId === i.id}
+              onToggle={() => setExpandedId(prev => (prev === i.id ? null : i.id))}
+            />
           ))}
         </>
       )}
@@ -2065,8 +2049,23 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
   const [machineRequests, setMachineRequests] = useState<MachineRequest[]>([]);
   const [machines, setMachines] = useState<MachineWithGyms[]>(() => getMachinesCacheSync());
   const [userInquiries, setUserInquiries] = useState<UserInquiry[]>([]);
+  const [inquirerProfiles, setInquirerProfiles] = useState<Record<string, InquirerProfile>>({});
+  const [inquirerProfilesLoading, setInquirerProfilesLoading] = useState(false);
   const [linkRequests, setLinkRequests] = useState<GymManagerLinkRequest[]>([]);
   const [allReviews, setAllReviews] = useState<MachineReview[]>([]);
+
+  // 문의 작성자 프로필 — 문의 목록을 먼저 보여주고 뒤이어 채운다 (실패해도 목록에는 영향 없음)
+  const loadInquirerProfiles = useCallback(async (inquiries: UserInquiry[]) => {
+    setInquirerProfilesLoading(true);
+    try {
+      const map = await fetchInquirerProfiles(inquiries.map(i => i.userId));
+      setInquirerProfiles(map);
+    } catch (e: any) {
+      if (__DEV__) console.warn('[AdminDashboard] 문의 작성자 프로필 조회 오류:', e);
+    } finally {
+      setInquirerProfilesLoading(false);
+    }
+  }, []);
 
   const refreshQueues = useCallback(async () => {
     try {
@@ -2088,10 +2087,22 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
       setUserInquiries(inquiries);
       setLinkRequests(linkReqs);
       setAllReviews(reviews);
+      loadInquirerProfiles(inquiries);
     } catch (e: any) {
       if (__DEV__) console.warn('[AdminDashboard] 큐 새로고침 오류:', e);
     }
-  }, []);
+  }, [loadInquirerProfiles]);
+
+  // 매니저 id → 관리 헬스장 이름 목록 (gyms.manager_id는 text라 문자열로 비교)
+  const managedGymNamesByUser = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    registeredGyms.forEach(g => {
+      if (!g.managerId) return;
+      const key = String(g.managerId);
+      (map[key] ??= []).push(g.name);
+    });
+    return map;
+  }, [registeredGyms]);
 
   useEffect(() => {
     refreshQueues();
@@ -2915,6 +2926,9 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
         <UserInquiriesView
           inquiries={userInquiries}
           onAnswer={handleAnswerInquiry}
+          inquirerProfiles={inquirerProfiles}
+          inquirerProfilesLoading={inquirerProfilesLoading}
+          managedGymNamesByUser={managedGymNamesByUser}
         />
       )}
       {currentView === 'user-overview' && (

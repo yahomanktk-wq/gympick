@@ -68,6 +68,37 @@ export async function fetchAllUserInquiries(): Promise<UserInquiry[]> {
   }
 }
 
+export interface InquirerProfile {
+  id:       string;
+  nickname: string | null;
+  email:    string | null;
+  role:     'user' | 'manager' | 'admin' | null;
+}
+
+// 어드민: 문의 작성자 프로필 일괄 조회 (profiles RLS상 어드민만 다른 유저 행을 읽을 수 있음)
+export async function fetchInquirerProfiles(userIds: string[]): Promise<Record<string, InquirerProfile>> {
+  const ids = [...new Set(userIds.filter(Boolean))];
+  if (ids.length === 0) return {};
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, nickname, email, role')
+    .in('id', ids);
+  if (error || !data) {
+    console.warn('[userInquiries] fetchInquirerProfiles:', error?.message);
+    return {};
+  }
+  const map: Record<string, InquirerProfile> = {};
+  data.forEach((p: any) => {
+    map[p.id] = {
+      id:       p.id,
+      nickname: p.nickname ?? null,
+      email:    p.email ?? null,
+      role:     p.role ?? null,
+    };
+  });
+  return map;
+}
+
 // 어드민: 답변 등록 (status를 'answered'로, answered_at을 now()로 함께 반영)
 export async function answerUserInquiry(id: string, answer: string): Promise<void> {
   await supabase
