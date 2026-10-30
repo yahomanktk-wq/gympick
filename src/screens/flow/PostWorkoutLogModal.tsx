@@ -75,6 +75,7 @@ import { fetchGymsWithMachines } from '../../lib/db/gyms';
 import { brandLogos } from '../../constants/brandLogos';
 import { fetchSplitConfig } from '../../lib/db/splitRoutine';
 import { getTodayTargets, isRestToday, toEnMuscle, parseMuscles } from '../../lib/splitUtils';
+import { isCardioMachine } from '../../lib/machineVisibility';
 import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -978,7 +979,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
     : freeWeights;
 
   // "다른 머신도 보기" 모드: 루틴 머신(순번 유지) + 부위 매칭되는 헬스장 전체 머신/프리웨이트(루틴에 없는 것) 통합
-  const allModeOrderedList: Machine[] = (hasPreloaded && viewMode === 'all')
+  let allModeOrderedList: Machine[] = (hasPreloaded && viewMode === 'all')
     ? [
         ...routineOrderedAll,
         ...gym.machines.filter(m => !preloadedIds.has(m.id) && parseMuscles(m.targetMuscle).some(t => matchesMuscle(t))),
@@ -987,6 +988,12 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
             .map(fw => ({ id: fw.id, name: fw.name, brand: fw.brand, targetMuscle: fw.targetMuscle, category: 'Free Weight', exerciseKind: 'freeweight' as const } as Machine)),
       ]
     : [];
+
+  // 유산소 기록 방식(시간/거리) 지원 전까지 머신 선택에서 제외
+  // (위에서 계산한 목록 전체에 마지막으로 한 번만 적용 — 기존 정렬·순서는 그대로 유지)
+  machines           = machines.filter(m => !isCardioMachine(m));
+  routineOrderedAll  = routineOrderedAll.filter(m => !isCardioMachine(m));
+  allModeOrderedList = allModeOrderedList.filter(m => !isCardioMachine(m));
   const MACHINE_CARD_W2 = (SCREEN_W - 40) / 2;
 
   function handleCardPress(id: string) {
