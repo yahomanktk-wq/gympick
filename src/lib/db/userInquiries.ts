@@ -76,37 +76,47 @@ export interface InquirerProfile {
 }
 
 // 어드민: 문의 작성자 프로필 일괄 조회 (profiles RLS상 어드민만 다른 유저 행을 읽을 수 있음)
-export async function fetchInquirerProfiles(userIds: string[]): Promise<Record<string, InquirerProfile>> {
+// 조회 실패 시 null — 호출 측이 기존에 받아 둔 정보를 유지할 수 있도록 {}와 구분한다.
+export async function fetchInquirerProfiles(userIds: string[]): Promise<Record<string, InquirerProfile> | null> {
   const ids = [...new Set(userIds.filter(Boolean))];
   if (ids.length === 0) return {};
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, nickname, email, role')
-    .in('id', ids);
-  if (error || !data) {
-    console.warn('[userInquiries] fetchInquirerProfiles:', error?.message);
-    return {};
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, nickname, email, role')
+      .in('id', ids);
+    if (error || !data) {
+      console.warn('[userInquiries] fetchInquirerProfiles:', error?.message);
+      return null;
+    }
+    const map: Record<string, InquirerProfile> = {};
+    data.forEach((p: any) => {
+      map[p.id] = {
+        id:       p.id,
+        nickname: p.nickname ?? null,
+        email:    p.email ?? null,
+        role:     p.role ?? null,
+      };
+    });
+    return map;
+  } catch (e: any) {
+    console.warn('[userInquiries] fetchInquirerProfiles:', e?.message);
+    return null;
   }
-  const map: Record<string, InquirerProfile> = {};
-  data.forEach((p: any) => {
-    map[p.id] = {
-      id:       p.id,
-      nickname: p.nickname ?? null,
-      email:    p.email ?? null,
-      role:     p.role ?? null,
-    };
-  });
-  return map;
 }
 
 // 어드민: 답변 등록 (status를 'answered'로, answered_at을 now()로 함께 반영)
+// 실패 시 throw — RLS가 오류 없이 0행만 갱신하는 경우도 실패로 본다.
 export async function answerUserInquiry(id: string, answer: string): Promise<void> {
-  await supabase
+  const { data, error } = await supabase
     .from('user_inquiries')
     .update({
       answer,
       status:      'answered',
       answered_at: new Date().toISOString(),
     })
-    .eq('id', id);
+    .eq('id', id)
+    .select('id');
+  if (error) throw new Error(error.message);
+  if (!data || data.length === 0) throw new Error('답변이 저장되지 않았습니다 (갱신된 행 없음)');
 }

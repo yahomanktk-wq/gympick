@@ -980,7 +980,7 @@ function GymReportsView({ reports, onMarkReviewed, onDelete }: GymReportsViewPro
 
 interface UserInquiriesViewProps {
   inquiries: UserInquiry[];
-  onAnswer: (id: string, answer: string) => void;
+  onAnswer: (id: string, answer: string) => Promise<boolean>;
   inquirerProfiles: Record<string, InquirerProfile>;
   inquirerProfilesLoading: boolean;
   managedGymNamesByUser: Record<string, string[]>;
@@ -998,8 +998,10 @@ function UserInquiriesView({ inquiries, onAnswer, inquirerProfiles, inquirerProf
   function submitAnswer(id: string) {
     const answer = (drafts[id] ?? '').trim();
     if (!answer) return;
-    onAnswer(id, answer);
-    setDrafts(prev => ({ ...prev, [id]: '' }));
+    // 저장이 확인된 뒤에만 입력값을 비운다 — 실패하면 작성한 답변이 그대로 남는다
+    onAnswer(id, answer).then(ok => {
+      if (ok) setDrafts(prev => ({ ...prev, [id]: '' }));
+    });
   }
 
   return (
@@ -2059,7 +2061,13 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
     setInquirerProfilesLoading(true);
     try {
       const map = await fetchInquirerProfiles(inquiries.map(i => i.userId));
-      setInquirerProfiles(map);
+      if (map === null) {
+        // 조회 실패 — 이전에 받아 둔 작성자 정보를 그대로 유지
+        console.warn('[AdminDashboard] 문의 작성자 프로필 조회 실패 — 기존 정보 유지');
+      } else {
+        // 병합 — 이미 알고 있던 작성자 정보는 지우지 않는다
+        setInquirerProfiles(prev => ({ ...prev, ...map }));
+      }
     } catch (e: any) {
       if (__DEV__) console.warn('[AdminDashboard] 문의 작성자 프로필 조회 오류:', e);
     } finally {
@@ -2397,31 +2405,45 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
     await loadGymReports();
   }, [loadGymReports]);
 
-  const handleAnswerInquiry = useCallback(async (id: string, answer: string) => {
+  const handleAnswerInquiry = useCallback(async (id: string, answer: string): Promise<boolean> => {
+    const original = userInquiries.find(i => i.id === id);
     // 낙관적 로컬 업데이트 — 답변완료 섹션으로 즉시 이동
     setUserInquiries(prev => prev.map(i =>
       i.id === id ? { ...i, status: 'answered' as const, answer, answeredAt: new Date().toISOString() } : i
     ));
     try {
       await answerUserInquiry(id, answer);
-      // DB 반영이 실제로 성공했을 때만 알림을 보낸다 — 다른 관리자 액션(제보 확인,
-      // 매니저 승인/거절 등)과 동일한 패턴.
-      const inquiry = userInquiries.find(i => i.id === id);
-      if (inquiry) {
+    } catch (e: any) {
+      if (__DEV__) console.warn('[AdminDashboard] 문의 답변 저장 실패:', e);
+      // 낙관적 변경 되돌리기 — 답변 대기로 복귀 (알림은 보내지 않음)
+      if (original) {
+        setUserInquiries(prev => prev.map(i =>
+          i.id === id
+            ? { ...i, status: original.status, answer: original.answer, answeredAt: original.answeredAt }
+            : i
+        ));
+      }
+      Alert.alert('답변 저장 실패', '답변이 저장되지 않았어요. 잠시 후 다시 시도해 주세요.');
+      return false;
+    }
+    // DB 반영이 실제로 확인된 뒤에만 알림을 보낸다
+    try {
+      if (original) {
         await sendNotification(
-          inquiry.userId,
+          original.userId,
           'inquiry_answered',
           '문의하신 내용에 답변이 등록됐어요',
-          `"${inquiry.title}" 문의에 답변이 등록됐어요: ${answer}`,
+          `"${original.title}" 문의에 답변이 등록됐어요: ${answer}`,
           id,
         );
       }
     } catch (e: any) {
-      if (__DEV__) console.warn('[AdminDashboard] 문의 답변 등록 오류:', e);
+      if (__DEV__) console.warn('[AdminDashboard] 문의 답변 알림 오류:', e);
       Alert.alert('처리 오류', '답변 등록 중 문제가 발생했습니다.');
     }
     // 정합성을 위한 백그라운드 재조회
     fetchAllUserInquiries().then(setUserInquiries).catch(() => {});
+    return true;
   }, [userInquiries]);
 
   const handleApproveApplication = useCallback(async (id: string, comment?: string): Promise<boolean> => {
