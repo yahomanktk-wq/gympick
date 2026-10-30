@@ -2438,8 +2438,9 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
         );
       }
     } catch (e: any) {
+      // 답변은 이미 저장됨 — 되돌리지 않고 알림 실패만 안내
       if (__DEV__) console.warn('[AdminDashboard] 문의 답변 알림 오류:', e);
-      Alert.alert('처리 오류', '답변 등록 중 문제가 발생했습니다.');
+      Alert.alert('알림 발송 실패', '답변은 저장됐지만 유저 알림 발송에 실패했어요.');
     }
     // 정합성을 위한 백그라운드 재조회
     fetchAllUserInquiries().then(setUserInquiries).catch(() => {});
