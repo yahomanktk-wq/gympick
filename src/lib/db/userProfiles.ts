@@ -33,13 +33,14 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
 export async function upsertUserProfile(
   userId: string,
   updates: Partial<Pick<UserProfile, 'nickname' | 'name' | 'birthDate'>>,
-): Promise<void> {
-  await supabase.from('profiles').upsert({
+): Promise<{ error: { code?: string; message: string } | null }> {
+  const { error } = await supabase.from('profiles').upsert({
     id:         userId,
     nickname:   updates.nickname,
     name:       updates.name,
     birth_date: updates.birthDate,
   });
+  return { error: error ? { code: error.code, message: error.message } : null };
 }
 
 export async function setManagerOnboarded(userId: string): Promise<void> {

@@ -356,17 +356,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const bannedInNickname = await containsBannedWord(trimmed);
         if (bannedInNickname) return { error: '사용할 수 없는 단어가 닉네임에 포함되어 있어요.' };
 
-        // 닉네임 중복 체크 (본인 제외)
-        const { data: existingNickname } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('nickname', trimmed)
-          .neq('id', user.id)
-          .maybeSingle();
-        if (existingNickname) return { error: '이미 사용 중인 닉네임이에요. 다른 닉네임을 입력해주세요.' };
+        // 닉네임 중복 체크 (본인 제외) — profiles는 본인 행만 읽을 수 있어 RPC로 확인
+        const { data: taken, error: takenError } = await supabase
+          .rpc('is_nickname_taken', { p_nickname: trimmed });
+        if (takenError) return { error: '닉네임 확인 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.' };
+        if (taken) return { error: '이미 사용 중인 닉네임이에요. 다른 닉네임을 입력해주세요.' };
 
         const { upsertUserProfile } = await import('../lib/db/userProfiles');
-        await upsertUserProfile(user.id, { nickname: trimmed });
+        const { error: saveError } = await upsertUserProfile(user.id, { nickname: trimmed });
+        if (saveError) {
+          // 23505 = unique_violation (동시에 같은 닉네임을 저장한 경우)
+          if (saveError.code === '23505') {
+            return { error: '이미 사용 중인 닉네임이에요. 다른 닉네임을 입력해주세요.' };
+          }
+          return { error: '닉네임 변경에 실패했어요. 잠시 후 다시 시도해주세요.' };
+        }
       }
 
       // 로컬 user 상태 즉시 업데이트
