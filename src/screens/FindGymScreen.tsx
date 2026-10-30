@@ -503,7 +503,7 @@ export default function FindGymScreen() {
   // 결과 개수 계산 — MachineFilterSheet의 "OOO개 머신보기" 버튼에서
   // 임시(적용 전) 선택값 기준으로 실시간 계산할 때 재사용.
   const computeMachineCount = useCallback((muscle: string, category: string, brandSet: Set<string>) => {
-    const showCardio = shouldShowCardio(muscle, keyword);
+    const showCardio = shouldShowCardio(muscle, keyword, brandSet.size > 0);
     return shuffledMachines.filter(m => {
       const muscleOk   = muscle === 'All' || parseMuscles(m.targetMuscle).some(t => t.toLowerCase() === muscle.toLowerCase());
       const brandOk    = brandSet.size === 0 || [...brandSet].some(b => b.toLowerCase() === m.brand?.toLowerCase());
@@ -578,7 +578,7 @@ export default function FindGymScreen() {
 
   // --- Filtered machines
   const filteredMachines = useMemo(() => {
-    const showCardio = shouldShowCardio(activeMuscle, keyword);
+    const showCardio = shouldShowCardio(activeMuscle, keyword, activeBrands.size > 0);
     return shuffledMachines.filter(m => {
       const muscleOk   = activeMuscle === 'All' || parseMuscles(m.targetMuscle).some(t => t.toLowerCase() === activeMuscle.toLowerCase());
       const brandOk    = activeBrands.size === 0 || [...activeBrands].some(b => b.toLowerCase() === m.brand?.toLowerCase());
@@ -589,7 +589,7 @@ export default function FindGymScreen() {
         m.name.toLowerCase().includes(kw)     ||
         m.category.toLowerCase().includes(kw) ||
         m.brand?.toLowerCase().includes(kw);
-      // 유산소 머신은 OTHER 필터 또는 검색 중일 때만 노출
+      // 유산소 머신은 OTHER 필터·검색·브랜드 필터 중 하나가 있을 때만 노출
       const cardioOk   = showCardio || !isCardioMachine(m);
       return muscleOk && brandOk && categoryOk && keyOk && cardioOk;
     });
