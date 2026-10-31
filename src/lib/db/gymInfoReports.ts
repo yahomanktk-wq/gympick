@@ -10,6 +10,8 @@ export interface GymInfoReport {
   createdAt:       string;
   status:          'pending' | 'reviewed';
   adminComment:    string | null;
+  /** "이 머신 없어요" 제보 대상 머신 id (그 외 유형은 빈 배열) */
+  machineIds:      string[];
 }
 
 function rowTo(r: any): GymInfoReport {
@@ -23,6 +25,7 @@ function rowTo(r: any): GymInfoReport {
     createdAt:      r.created_at,
     status:         (r.status ?? 'pending') as 'pending' | 'reviewed',
     adminComment:   r.admin_comment ?? null,
+    machineIds:     Array.isArray(r.machine_ids) ? r.machine_ids : [],
   };
 }
 
@@ -62,16 +65,21 @@ export async function submitGymInfoReport(input: {
   reporterUserId?:  string;
   reportType:       string;
   content:          string;
+  /** "이 머신 없어요" 유형일 때만 전달 */
+  machineIds?:      string[];
 }): Promise<{ error: string | null }> {
   try {
-    const { error } = await supabase.from('gym_info_reports').insert({
+    const row: Record<string, unknown> = {
       gym_id:           input.gymId,
       gym_name:         input.gymName,
       reporter_user_id: input.reporterUserId ?? null,
       report_type:      input.reportType,
       content:          input.content,
       status:           'pending',
-    });
+    };
+    // 다른 유형 제보는 기존과 똑같은 컬럼만 보낸다
+    if (input.machineIds && input.machineIds.length > 0) row.machine_ids = input.machineIds;
+    const { error } = await supabase.from('gym_info_reports').insert(row);
     if (error) return { error: error.message };
     return { error: null };
   } catch (e: any) {

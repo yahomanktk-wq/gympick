@@ -28,6 +28,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { GymReportType } from '../../lib/db/gymReports';
 import { submitGymInfoReport } from '../../lib/db/gymInfoReports';
+import { MissingMachinePicker } from './report/MissingMachinePicker';
 import { useAuth } from '../../context/AuthContext';
 import { track } from '../../lib/analytics';
 import { useNavigation } from '@react-navigation/native';
@@ -294,6 +295,7 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
   const [reportMsg,           setReportMsg]           = useState('');
   const [reportSent,          setReportSent]          = useState(false);
   const [reportLoading,       setReportLoading]       = useState(false);
+  const [reportMachineIds,    setReportMachineIds]    = useState<string[]>([]);
   const [viewerUrls,          setViewerUrls]          = useState<string[]>([]);
   const [viewerIndex,         setViewerIndex]         = useState(0);
   const [viewerVisible,       setViewerVisible]       = useState(false);
@@ -700,14 +702,21 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
               </View>
             )}
 
-            {/* ── 정보 제보하기 ── */}
+            {/* ── 정보 제보하기 (2026-10-31: 눈에 띄는 카드형으로 변경) ── */}
             <TouchableOpacity
               style={s.reportBtn}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setReportSent(false); setReportMsg(''); setReportType('other'); setShowReport(true); }}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setReportSent(false); setReportMsg(''); setReportType('other'); setReportMachineIds([]); setShowReport(true); }}
               activeOpacity={0.8}
             >
-              <Ionicons name="flag-outline" size={14} color={C.textDim} />
-              <Text style={s.reportBtnText}>정보 제보하기</Text>
+              <View style={s.reportBtnIcon}>
+                <Ionicons name="flag" size={16} color={C.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.reportBtnTitle}>정보가 실제와 다른가요?</Text>
+                <Text style={s.reportBtnSub}>머신·운영시간·주소가 다르면 알려주세요</Text>
+              </View>
+              <Text style={s.reportBtnCta}>제보하기</Text>
+              <Ionicons name="chevron-forward" size={16} color={C.accent} />
             </TouchableOpacity>
 
             <View style={{ height: 40 }} />
@@ -781,6 +790,7 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
                 <Text style={s.repFieldLabel}>제보 유형</Text>
                 <View style={s.repTypeRow}>
                   {([
+                    { key: 'missing_machine', label: '이 머신 없어요' },
                     { key: 'wrong_hours',   label: '운영시간 오류' },
                     { key: 'wrong_address', label: '주소 오류' },
                     { key: 'wrong_phone',   label: '전화번호 오류' },
@@ -800,7 +810,20 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
                   ))}
                 </View>
 
-                <Text style={s.repFieldLabel}>상세 내용</Text>
+                {reportType === 'missing_machine' && (
+                  <>
+                    <Text style={s.repFieldLabel}>없는 머신 선택</Text>
+                    <MissingMachinePicker
+                      machines={gym.machines ?? []}
+                      selectedIds={reportMachineIds}
+                      onToggle={id => setReportMachineIds(prev =>
+                        prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id],
+                      )}
+                    />
+                  </>
+                )}
+
+                <Text style={s.repFieldLabel}>{reportType === 'missing_machine' ? '상세 내용 (선택)' : '상세 내용'}</Text>
                 <TextInput
                   style={s.repInput}
                   value={reportMsg}
@@ -821,10 +844,23 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
                   disabled={reportLoading}
                   onPress={async () => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    const isMissing = reportType === 'missing_machine';
+                    if (isMissing && reportMachineIds.length === 0) {
+                      Alert.alert('머신을 골라주세요', '실제로 없는 머신을 하나 이상 선택해 주세요.');
+                      return;
+                    }
                     const banned = await containsBannedWord(reportMsg);
                     if (banned) {
                       Alert.alert('사용 불가', '사용할 수 없는 단어가 포함되어 있어요.');
                       return;
+                    }
+                    // "이 머신 없어요"는 머신 이름을 내용 앞에 붙여 어드민 목록에서 바로 보이게 한다
+                    let content = reportMsg.trim() || reportType;
+                    if (isMissing) {
+                      const names = (gym.machines ?? [])
+                        .filter(m => reportMachineIds.includes(m.id))
+                        .map(m => `${m.displayName || m.name} (${m.brand})`);
+                      content = `[없는 머신] ${names.join(', ')}` + (reportMsg.trim() ? `\n${reportMsg.trim()}` : '');
                     }
                     setReportLoading(true);
                     const { error: reportError } = await submitGymInfoReport({
@@ -832,7 +868,8 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
                       gymName: gym.name,
                       reporterUserId: user?.id,
                       reportType,
-                      content: reportMsg.trim() || reportType,
+                      content,
+                      machineIds: isMissing ? reportMachineIds : undefined,
                     });
                     setReportLoading(false);
                     if (reportError) {
@@ -862,13 +899,21 @@ const s = StyleSheet.create({
 
   // Report button
   reportBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    alignSelf: 'center', marginTop: 24, marginBottom: 4,
-    paddingHorizontal: 16, paddingVertical: 8,
-    borderRadius: R.pill,
-    borderWidth: 1, borderColor: C.border,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    marginTop: 16, marginBottom: 4,
+    paddingHorizontal: 16, paddingVertical: 14,
+    borderRadius: R.card,
+    backgroundColor: C.surface,
+    borderWidth: 1, borderColor: C.accent + '40',
   },
-  reportBtnText: { fontSize: 12, color: C.textDim, fontWeight: '600' },
+  reportBtnIcon: {
+    width: 36, height: 36, borderRadius: R.inner,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: C.accentBg,
+  },
+  reportBtnTitle: { fontSize: 14, color: C.text, fontWeight: '700' },
+  reportBtnSub:   { fontSize: 12, color: C.textSub, marginTop: 2 },
+  reportBtnCta:   { fontSize: 13, color: C.accent, fontWeight: '700' },
 
   // Report modal
   repHeader: {

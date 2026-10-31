@@ -5,6 +5,7 @@ export type GymReportType =
   | 'wrong_address'
   | 'closed'
   | 'wrong_phone'
+  | 'missing_machine'   // 2026-10-31: 보유 머신으로 등록돼 있지만 실제로 없는 머신
   | 'other';
 
 export interface GymReport {

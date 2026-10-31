@@ -907,6 +907,7 @@ function GymReportsView({ reports, onMarkReviewed, onDelete }: GymReportsViewPro
   const [drafts, setDrafts] = useState<Record<string, string>>({});
 
   const REPORT_TYPE_LABELS: Record<string, string> = {
+    missing_machine: '이 머신 없어요',
     wrong_hours:   '운영시간 오류',
     wrong_address: '주소 오류',
     wrong_phone:   '전화번호 오류',
