@@ -55,9 +55,11 @@ import {
 } from '../../lib/db/gymRegistrationRequests';
 import {
   fetchGymManagerLinkRequests,
+  fetchLinkRequestApprovalCheck,
   updateGymManagerLinkRequestStatus,
   type GymManagerLinkRequest,
 } from '../../lib/db/gymManagerLinkRequests';
+import { LinkRequestCard } from './linkRequest/LinkRequestCard';
 import { geocodeAddress } from '../../lib/geocoding';
 import AdminAnalyticsView from './AdminAnalyticsView';
 import AdminMachineRegisterView from './AdminMachineRegisterView';
@@ -279,11 +281,15 @@ function GymRequestsView({
 
 function GymManagerLinkRequestsView({
   requests,
+  gymsById,
+  requesterProfiles,
   onApprove,
   onReject,
   onBack,
 }: {
-  requests:  GymManagerLinkRequest[];
+  requests:          GymManagerLinkRequest[];
+  gymsById:          Record<string, AdminGym>;
+  requesterProfiles: Record<string, InquirerProfile>;
   onApprove: (request: GymManagerLinkRequest) => void;
   onReject:  (request: GymManagerLinkRequest) => void;
   onBack:    () => void;
@@ -303,25 +309,31 @@ function GymManagerLinkRequestsView({
         <Text style={{ fontSize: 13, color: C.textDim, paddingVertical: 12 }}>검토 대기 중인 요청이 없어요.</Text>
       )}
       {pending.map(req => (
-        <View key={req.id} style={{ backgroundColor: C.surface, borderRadius: R.card, padding: 16, gap: 8 }}>
-          <Text style={{ fontSize: 15, fontWeight: '800', color: C.text }}>{req.gymName}</Text>
-          <Text style={{ fontSize: 13, color: C.textSub }}>신청자: {req.requesterId}</Text>
-          <Text style={{ fontSize: 11, color: C.textDim }}>{new Date(req.createdAt).toLocaleDateString('ko-KR')}</Text>
+        <LinkRequestCard
+          key={req.id}
+          request={req}
+          gym={gymsById[req.gymId]}
+          requester={requesterProfiles[req.requesterId]}
+        >
           <ReviewButtons onApprove={() => onApprove(req)} onReject={() => onReject(req)} />
-        </View>
+        </LinkRequestCard>
       ))}
 
       {reviewed.length > 0 && (
         <>
           <Text style={{ fontSize: 12, fontWeight: '700', color: C.textDim, letterSpacing: 1, marginTop: 8 }}>처리된 요청 ({reviewed.length})</Text>
           {reviewed.map(req => (
-            <View key={req.id} style={{ backgroundColor: C.surface, borderRadius: R.card, padding: 16, gap: 4, opacity: 0.6 }}>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: C.text }}>{req.gymName}</Text>
-              <Text style={{ fontSize: 12, color: C.textSub }}>신청자: {req.requesterId}</Text>
+            <LinkRequestCard
+              key={req.id}
+              request={req}
+              gym={gymsById[req.gymId]}
+              requester={requesterProfiles[req.requesterId]}
+              dimmed
+            >
               <Text style={{ fontSize: 11, color: req.status === 'approved' ? C.accent : C.danger, fontWeight: '600' }}>
                 {req.status === 'approved' ? '승인됨' : '거절됨'}
               </Text>
-            </View>
+            </LinkRequestCard>
           ))}
         </>
       )}
@@ -2055,7 +2067,18 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
   const [inquirerProfiles, setInquirerProfiles] = useState<Record<string, InquirerProfile>>({});
   const [inquirerProfilesLoading, setInquirerProfilesLoading] = useState(false);
   const [linkRequests, setLinkRequests] = useState<GymManagerLinkRequest[]>([]);
+  const [linkRequesterProfiles, setLinkRequesterProfiles] = useState<Record<string, InquirerProfile>>({});
   const [allReviews, setAllReviews] = useState<MachineReview[]>([]);
+
+  // 매니저 연결 요청 신청자 프로필 — 실패하면 기존 값 유지
+  const loadLinkRequesterProfiles = useCallback(async (reqs: GymManagerLinkRequest[]) => {
+    try {
+      const map = await fetchInquirerProfiles(reqs.map(r => r.requesterId));
+      if (map) setLinkRequesterProfiles(prev => ({ ...prev, ...map }));
+    } catch (e: any) {
+      if (__DEV__) console.warn('[AdminDashboard] 연결 요청 신청자 프로필 조회 오류:', e);
+    }
+  }, []);
 
   // 문의 작성자 프로필 — 문의 목록을 먼저 보여주고 뒤이어 채운다 (실패해도 목록에는 영향 없음)
   const loadInquirerProfiles = useCallback(async (inquiries: UserInquiry[]) => {
@@ -2097,10 +2120,18 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
       setLinkRequests(linkReqs);
       setAllReviews(reviews);
       loadInquirerProfiles(inquiries);
+      loadLinkRequesterProfiles(linkReqs);
     } catch (e: any) {
       if (__DEV__) console.warn('[AdminDashboard] 큐 새로고침 오류:', e);
     }
-  }, [loadInquirerProfiles]);
+  }, [loadInquirerProfiles, loadLinkRequesterProfiles]);
+
+  // 헬스장 id → 헬스장 (매니저 연결 요청 카드에서 실제 이름·현재 매니저 표시용)
+  const gymsById = useMemo(() => {
+    const map: Record<string, AdminGym> = {};
+    registeredGyms.forEach(g => { map[g.id] = g; });
+    return map;
+  }, [registeredGyms]);
 
   // 매니저 id → 관리 헬스장 이름 목록 (gyms.manager_id는 text라 문자열로 비교)
   const managedGymNamesByUser = useMemo(() => {
@@ -2588,7 +2619,49 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
     await loadRegisteredGyms();
   }, [loadRegisteredGyms]);
 
-  const handleApproveLinkRequest = useCallback(async (request: GymManagerLinkRequest) => {
+  const handleApproveLinkRequest = useCallback(async (listed: GymManagerLinkRequest) => {
+    // 화면에 불러온 값이 아니라 승인 직전 DB 값으로 다시 확인한다
+    const { data: check, error: checkError } = await fetchLinkRequestApprovalCheck(listed.id);
+    if (!check) {
+      Alert.alert('확인 실패', checkError ?? '요청을 다시 확인하지 못했어요.');
+      return;
+    }
+    const request = check.request;
+    if (request.status !== 'pending') {
+      Alert.alert('이미 처리된 요청', '이 요청은 이미 처리됐어요. 목록을 새로고침할게요.');
+      await refreshQueues();
+      return;
+    }
+    if (!check.gym) {
+      Alert.alert('헬스장 없음', '연결할 헬스장을 찾을 수 없어요. 승인할 수 없어요.');
+      return;
+    }
+    const gym = check.gym;
+    const requester = linkRequesterProfiles[request.requesterId];
+    const requesterLabel = [requester?.nickname, requester?.email].filter(Boolean).join(' · ') || request.requesterId;
+    const currentManager = gym.managerId ? gymsById[gym.id] : undefined;
+    const currentManagerLabel = gym.managerId
+      ? ([currentManager?.managerNickname, currentManager?.managerEmail].filter(Boolean).join(' · ') || gym.managerId)
+      : '없음';
+
+    const lines = [
+      `헬스장: ${gym.name}`,
+      gym.name.trim() !== request.gymName.trim() ? `⚠ 신청서 이름: "${request.gymName}"` : null,
+      `신청자: ${requesterLabel}`,
+      `현재 매니저: ${currentManagerLabel}`,
+      gym.managerId && String(gym.managerId) !== String(request.requesterId)
+        ? '⚠ 승인하면 현재 매니저가 신청자로 바뀌어요.'
+        : null,
+    ].filter(Boolean).join('\n');
+
+    const confirmed = await new Promise<boolean>(resolve => {
+      Alert.alert('매니저 연결 승인', lines, [
+        { text: '취소', style: 'cancel', onPress: () => resolve(false) },
+        { text: '승인', onPress: () => resolve(true) },
+      ], { cancelable: true, onDismiss: () => resolve(false) });
+    });
+    if (!confirmed) return;
+
     const { error } = await setGymManager(request.gymId, request.requesterId);
     if (error) {
       Alert.alert('연결 오류', '매니저 연결에 실패했습니다. ' + error);
@@ -2605,10 +2678,10 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
       request.requesterId,
       'gym_manager_link_approved',
       '헬스장 연결 요청이 승인됐어요! 🎉',
-      `"${request.gymName}" 헬스장의 매니저로 연결됐어요.`,
+      `"${gym.name}" 헬스장의 매니저로 연결됐어요.`,
       request.id,
     );
-  }, [loadRegisteredGyms]);
+  }, [loadRegisteredGyms, refreshQueues, linkRequesterProfiles, gymsById]);
 
   const handleRejectLinkRequest = useCallback(async (request: GymManagerLinkRequest) => {
     const { success, error } = await updateGymManagerLinkRequestStatus(request.id, 'rejected');
@@ -2930,6 +3003,8 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
       {currentView === 'gym-manager-link-requests' && (
         <GymManagerLinkRequestsView
           requests={linkRequests}
+          gymsById={gymsById}
+          requesterProfiles={linkRequesterProfiles}
           onApprove={handleApproveLinkRequest}
           onReject={handleRejectLinkRequest}
           onBack={pop}

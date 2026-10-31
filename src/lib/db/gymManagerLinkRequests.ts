@@ -74,6 +74,43 @@ export async function fetchMyGymManagerLinkRequests(userId: string): Promise<Gym
   }
 }
 
+/** 승인 직전 재확인용 — 요청 행과 대상 헬스장(실제 이름·현재 매니저)을 DB에서 다시 읽는다. */
+export interface LinkRequestApprovalCheck {
+  request: GymManagerLinkRequest;
+  gym: { id: string; name: string; managerId: string | null } | null;
+}
+
+export async function fetchLinkRequestApprovalCheck(
+  id: string,
+): Promise<{ data: LinkRequestApprovalCheck | null; error?: string }> {
+  try {
+    const { data: row, error } = await supabase
+      .from('gym_manager_link_requests')
+      .select('id, gym_id, requester_id, gym_name, status, admin_comment, created_at')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) return { data: null, error: error.message };
+    if (!row) return { data: null, error: '요청을 찾을 수 없어요.' };
+
+    const request = rowToLinkRequest(row);
+    const { data: gymRow, error: gymError } = await supabase
+      .from('gyms')
+      .select('id, name, manager_id')
+      .eq('id', request.gymId)
+      .maybeSingle();
+    if (gymError) return { data: null, error: gymError.message };
+
+    return {
+      data: {
+        request,
+        gym: gymRow ? { id: gymRow.id, name: gymRow.name, managerId: gymRow.manager_id ?? null } : null,
+      },
+    };
+  } catch (e: any) {
+    return { data: null, error: e.message ?? '확인 중 오류가 발생했습니다.' };
+  }
+}
+
 /** 매니저 연결 요청 승인/거절 처리 (다음 태스크의 어드민 사이드에서 사용) */
 export async function updateGymManagerLinkRequestStatus(
   id:            string,
