@@ -43,7 +43,8 @@ import MachineCard from '../../components/MachineCard';
 import MachineCardBorder from '../../components/MachineCardBorder';
 import { getMachineImageUrl } from '../../lib/machineImageUrl';
 import { containsBannedWord } from '../../lib/bannedWords';
-import { shareGym } from '../../lib/share';
+import { getGymShareUrl } from '../../lib/share';
+import { shareGymLink } from '../../lib/shareGymLink';
 import GymOunwanStrip from '../../components/gym/GymOunwanStrip';
 import GymHoursRow from '../../components/gym/GymHoursRow';
 
@@ -424,7 +425,7 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
               activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                shareGym(gym.name, gym);
+                shareGymLink(getGymShareUrl(gym));
               }}
             >
               <Ionicons name="share-outline" size={20} color={C.textSub} />

@@ -50,7 +50,8 @@ import { Image as ExpoImage } from 'expo-image';
 import { fetchGymPhotoUrlsByUser, registerGymPhoto } from '../../lib/db/gymPhotos';
 import { fetchWeeklyVisitors } from '../../lib/db/gymStats';
 import { fetchGymFavoriteCount } from '../../lib/db/gymFavorites';
-import { shareGym } from '../../lib/share';
+import { getGymShareUrl } from '../../lib/share';
+import { shareGymLink } from '../../lib/shareGymLink';
 import GymQrPosterModal from '../../components/manager/GymQrPosterModal';
 import GymSlugEditor from '../../components/GymSlugEditor';
 
@@ -507,7 +508,7 @@ function HomeView({ gyms, weeklyVisitors, gymFavCount, machineCount, onOpenEdit,
           {gym.status === 'approved' && (
             <TouchableOpacity
               style={[styles.gymActionBtn, { marginTop: 8 }]}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); shareGym(gym.name, gym); }}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); shareGymLink(getGymShareUrl(gym)); }}
               activeOpacity={0.8}
             >
               <Ionicons name="share-outline" size={14} color={C.accent} />
