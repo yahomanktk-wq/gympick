@@ -1,5 +1,6 @@
 import { supabase } from '../supabase';
 import { track } from '../analytics';
+import { fetchAllEq, fetchAllIn } from './fetchAll';
 import type {
   WorkoutSession,
   WorkoutEntry,
@@ -145,14 +146,17 @@ function rowToPhoto(r: PhotoRow): WorkoutPhoto {
 
 /** Fetch all workout sessions for a user. Falls back to mock data on error. */
 export async function fetchWorkoutSessions(userId: string): Promise<WorkoutSession[]> {
-  const { data, error } = await supabase
-    .from('workout_sessions')
-    .select('id, user_id, gym_id, date, body_weight, notes, overlay_text_color, target_muscles')
-    .eq('user_id', userId)
-    .order('date', { ascending: false });
+  // 1,000행 상한 대응 — 페이지 단위로 끝까지 받는다
+  const { data, error } = await fetchAllEq<SessionRow>(
+    'workout_sessions',
+    'id, user_id, gym_id, date, body_weight, notes, overlay_text_color, target_muscles',
+    'user_id',
+    userId,
+    [{ column: 'date', ascending: false }],
+  );
 
   if (error || !data?.length) {
-    if (__DEV__ && error) console.warn('[db/workouts] fetchWorkoutSessions, using mock:', error.message);
+    if (__DEV__ && error) console.warn('[db/workouts] fetchWorkoutSessions, using mock:', error);
     return RAW_WORKOUT_SESSIONS.filter(s => s.userId === userId);
   }
   return data.map(rowToSession);
@@ -210,33 +214,40 @@ export async function fetchWorkoutSets(entryId: string): Promise<WorkoutSet[]> {
 /** Fetch all sets for a list of entry ids in one query. Falls back to mock. */
 export async function fetchWorkoutSetsForEntries(entryIds: string[]): Promise<WorkoutSet[]> {
   if (!entryIds.length) return [];
-  const { data, error } = await supabase
-    .from('workout_sets')
-    .select('id, entry_id, set_number, weight, reps, is_pr')
-    .in('entry_id', entryIds)
-    .order('set_number');
+  // 1,000행 상한 대응 — id를 나눠 보내고 각 묶음도 끝까지 받는다
+  const { data, error } = await fetchAllIn<SetRow>(
+    'workout_sets',
+    'id, entry_id, set_number, weight, reps, is_pr',
+    'entry_id',
+    entryIds,
+    [{ column: 'set_number' }],
+  );
 
   if (error || !data?.length) {
-    if (__DEV__ && error) console.warn('[db/workouts] fetchWorkoutSetsForEntries, using mock:', error.message);
+    if (__DEV__ && error) console.warn('[db/workouts] fetchWorkoutSetsForEntries, using mock:', error);
     return WORKOUT_SETS.filter(s => entryIds.includes(s.entryId));
   }
-  return data.map(rowToSet);
+  // 묶음별로 받아 합쳤으므로 전체 순서를 기존과 같게(set_number 순) 맞춘다
+  return data.map(rowToSet).sort((a, b) => a.setNumber - b.setNumber);
 }
 
 /** Fetch entries for multiple sessions in one query. Falls back to mock. */
 export async function fetchWorkoutEntriesForSessions(sessionIds: string[]): Promise<WorkoutEntry[]> {
   if (!sessionIds.length) return [];
-  const { data, error } = await supabase
-    .from('workout_entries')
-    .select('id, session_id, machine_id, machine_name, machine_brand, target_muscle, sort_order')
-    .in('session_id', sessionIds)
-    .order('sort_order');
+  // 1,000행 상한 대응 — id를 나눠 보내고 각 묶음도 끝까지 받는다
+  const { data, error } = await fetchAllIn<EntryRow>(
+    'workout_entries',
+    'id, session_id, machine_id, machine_name, machine_brand, target_muscle, sort_order',
+    'session_id',
+    sessionIds,
+    [{ column: 'sort_order' }],
+  );
 
   if (error || !data?.length) {
-    if (__DEV__ && error) console.warn('[db/workouts] fetchWorkoutEntriesForSessions, using mock:', error.message);
+    if (__DEV__ && error) console.warn('[db/workouts] fetchWorkoutEntriesForSessions, using mock:', error);
     return WORKOUT_ENTRIES.filter(e => sessionIds.includes(e.sessionId));
   }
-  return data.map(rowToEntry);
+  return data.map(rowToEntry).sort((a, b) => a.order - b.order);
 }
 
 /** Fetch which session ids have at least one photo. Falls back to mock. */
@@ -266,13 +277,16 @@ export async function fetchPhotosForSessions(
 ): Promise<Map<string, WorkoutPhoto>> {
   if (!sessionIds.length) return new Map();
 
-  const { data, error } = await supabase
-    .from('workout_photos')
-    .select('id, session_id, user_id, captured_at, text_color, aspect_ratio, composite_uri, photo_uri, thumbnail_uri, overlay_style')
-    .in('session_id', sessionIds);
+  // id가 많아져도 URL 길이·1,000행 상한에 걸리지 않도록 나눠서 받는다
+  const { data, error } = await fetchAllIn<PhotoRow>(
+    'workout_photos',
+    'id, session_id, user_id, captured_at, text_color, aspect_ratio, composite_uri, photo_uri, thumbnail_uri, overlay_style',
+    'session_id',
+    sessionIds,
+  );
 
   if (error || !data?.length) {
-    if (__DEV__ && error) console.warn('[db/workouts] fetchPhotosForSessions error:', error.message);
+    if (__DEV__ && error) console.warn('[db/workouts] fetchPhotosForSessions error:', error);
     return new Map();
   }
 
