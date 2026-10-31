@@ -23,6 +23,7 @@ import { C, R, T } from '../../theme';
 import { ManagedGym, Machine, GymStatus, MachineWithGyms, Gym } from '../../data/types';
 import { fetchMachines, getMachinesCacheSync } from '../../lib/db';
 import { parseMuscles } from '../../lib/splitUtils';
+import { isCardioMachine } from '../../lib/machineVisibility';
 import { useAuth } from '../../context/AuthContext';
 import MachineCard from '../../components/MachineCard';
 import {
@@ -1128,7 +1129,9 @@ function RoutineTab({
   setRoutineSelectedIds, editingRoutineId, onOpenAdd, onOpenEdit, onDelete, onSave,
 }: RoutineTabProps) {
   // Gym machines filtered by body part
-  const gymMachines = machines.filter(m => gymMachineIds.includes(m.id));
+  // 유산소 기록 방식(시간/거리) 지원 전까지 루틴 머신 선택에서 제외
+  // — 기존 루틴에 이미 들어 있는 유산소는 선택된 상태로만 보여줘서 해제는 가능하고, 새로 추가는 못 하게 한다.
+  const gymMachines = machines.filter(m => gymMachineIds.includes(m.id) && (!isCardioMachine(m) || routineSelectedIds.has(m.id)));
   const isAll = routineBodyPart === '전체';
   const filteredGymMachines = isAll
     ? gymMachines
