@@ -1,6 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WorkoutLog } from '../data/types';
-import { extractCompletedTargets } from './splitUtils';
+// 2026-10-31: 부위 판단은 sessionTargets.ts의 공통 기준(작성 때 고른 타겟 부위)을 쓴다.
+// 예전에는 머신 중 하나라도 그 부위가 섞여 있으면 일치로 봐서, 가슴 운동 날 DIP ARM 머신
+// 하나 때문에 그 가슴 세션이 "지난 팔 운동 기록"으로 뜨는 문제가 있었다.
+import { sessionMatchesTargetKo } from './sessionTargets';
 
 // 2026-10-16: 로그인 유저가 홈 화면에 들어왔을 때 "이전에 비슷한 부위를 어떻게
 // 했었는지" 참고할 수 있도록 가장 최근 운동일지 1건을 팝업으로 보여주기 위한
@@ -35,9 +38,7 @@ export function pickRecentWorkoutForPopup(
   if (candidates.length === 0) return null;
 
   if (todayTargetMuscle) {
-    const matched = candidates.find(s =>
-      extractCompletedTargets(s.machines).includes(todayTargetMuscle)
-    );
+    const matched = candidates.find(s => sessionMatchesTargetKo(s, todayTargetMuscle));
     if (matched) return { session: matched, matchedMuscle: true };
   }
 

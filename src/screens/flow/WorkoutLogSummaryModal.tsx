@@ -122,6 +122,7 @@ export default function WorkoutLogSummaryModal({ session, allSessions, onClose }
               pastSets={data.pastSets}
               realPRs={data.realPRs}
               photoUri={session.compositeUri ?? session.photoUri}
+              reviewDate={session.date}
               onClose={onClose}
             />
           </View>

@@ -74,6 +74,7 @@ import { calcDistanceKm, formatDistance } from '../../lib/geocoding';
 import { fetchGymsWithMachines } from '../../lib/db/gyms';
 import { brandLogos } from '../../constants/brandLogos';
 import { fetchSplitConfig } from '../../lib/db/splitRoutine';
+import { syncSplitProgress } from '../../lib/splitProgress';
 import { getTodayTargets, isRestToday, toEnMuscle, parseMuscles } from '../../lib/splitUtils';
 import { isCardioMachine } from '../../lib/machineVisibility';
 import { useFonts } from 'expo-font';
@@ -4758,7 +4759,7 @@ function ComparisonCard({ card, open, onToggle }: { card: CompCard; open: boolea
   );
 }
 
-export function WorkoutDoneStep({ gym, exercises, logs, detectedPRs, selectedMuscles, freeWeights, sessions, pastEntries, pastSets, realPRs, photoUri, onClose }: {
+export function WorkoutDoneStep({ gym, exercises, logs, detectedPRs, selectedMuscles, freeWeights, sessions, pastEntries, pastSets, realPRs, photoUri, reviewDate, onClose }: {
   gym: { name: string };
   exercises: ExerciseInfo[];
   logs: Record<string, SetEntry[]>;
@@ -4770,8 +4771,15 @@ export function WorkoutDoneStep({ gym, exercises, logs, detectedPRs, selectedMus
   pastSets: WorkoutSet[];
   realPRs: Record<string, { weight: number; reps: number }>;
   photoUri?: string | null;
+  /**
+   * 2026-10-31: 이미 저장된 운동일지를 다시 볼 때(WorkoutLogSummaryModal) 그 세션의 날짜.
+   * 값이 있으면 "다시 보기" 모드 — 날짜를 지금 시각이 아니라 세션 날짜로 보여주고,
+   * '저장 완료'·'오늘 PR' 같은 방금 저장한 흐름용 문구를 바꾼다.
+   */
+  reviewDate?: string;
   onClose: () => void;
 }) {
+  const isReview = !!reviewDate;
   const [tplName,  setTplName]  = useState('');
   const [tplSaved, setTplSaved] = useState(false);
   const [openIds,  setOpenIds]  = useState<Set<string>>(new Set());
@@ -4851,7 +4859,7 @@ export function WorkoutDoneStep({ gym, exercises, logs, detectedPRs, selectedMus
     };
   }, [prevMuscleSessionStats, exercises.length, totalSets, totalVol]);
 
-  const dateLabel = formatWorkoutDate(new Date());
+  const dateLabel = formatWorkoutDate(reviewDate ? new Date(reviewDate) : new Date());
 
   const cards = useMemo(
     () => exercises.map(ex => buildComparisonCard({ ex, logs, pastEntries, pastSets, sessions, realPRs, freeWeights })),
@@ -4881,7 +4889,7 @@ export function WorkoutDoneStep({ gym, exercises, logs, detectedPRs, selectedMus
             style={StyleSheet.absoluteFill}
           />
           <View style={s.sumHeaderTopRow}>
-            <Text style={s.sumHeaderTag}>운동일지 저장 완료</Text>
+            <Text style={s.sumHeaderTag}>{isReview ? '운동일지 요약' : '운동일지 저장 완료'}</Text>
           </View>
           <View style={s.sumHeaderBottom}>
             <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
@@ -4943,7 +4951,7 @@ export function WorkoutDoneStep({ gym, exercises, logs, detectedPRs, selectedMus
           <View style={s.sumPrBanner}>
             <Text style={s.sumPrCount}>{detectedPRs.length}</Text>
             <View style={{ flex: 1 }}>
-              <Text style={s.sumPrTitle}>오늘 PR {detectedPRs.length}개 달성!</Text>
+              <Text style={s.sumPrTitle}>{isReview ? '이날' : '오늘'} PR {detectedPRs.length}개 달성!</Text>
               <Text style={s.sumPrSub} numberOfLines={1}>{detectedPRs.map(pr => pr.name).join(' · ')}에서 전체 기간 최고 기록</Text>
             </View>
           </View>
@@ -4991,7 +4999,7 @@ export function WorkoutDoneStep({ gym, exercises, logs, detectedPRs, selectedMus
       <View style={s.ctaBar}>
         <TouchableOpacity style={s.ctaBtn} activeOpacity={0.85} onPress={onClose}>
           <Ionicons name="book-outline" size={18} color={C.bg} />
-          <Text style={s.ctaTxt}>운동일지로 돌아가기</Text>
+          <Text style={s.ctaTxt}>{isReview ? '닫기' : '운동일지로 돌아가기'}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -5562,6 +5570,10 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
       ...(finalThumbnailUrl ? { thumbnailUri: finalThumbnailUrl } : {}),
     };
     addNewSession(user?.id ?? 'guest', workoutLog);
+
+    // 2026-10-31: 분할 루틴 차례를 저장 시점에 바로 맞춘다 — 작성 때 고른 타겟 부위 기준.
+    // 기다리지 않음(저장 흐름을 늦추지 않도록). 실패해도 운동일지 탭에서 한 번 더 맞춘다.
+    if (user) syncSplitProgress(user.id).catch(() => {});
 
     if (user && supabaseConfigured) {
       // 오운완 사진 DB 저장
