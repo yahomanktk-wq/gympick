@@ -27,10 +27,11 @@ import { brandLogos } from '../constants/brandLogos';
 import { getMachineImageUrl } from '../lib/machineImageUrl';
 import { getTransformedImageUrl } from '../lib/photoImageUrl';
 import { C, R, T } from '../theme';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { WorkoutLog, Machine, UserSplitConfig, SequentialSplit, WeekdaySplit } from '../data/types';
-import { fetchSplitConfig, updateSplitIndex } from '../lib/db/splitRoutine';
-import { getTodayTargets, isRestToday, getNextTargets, collectRoutineMuscles, calcNextIndex, extractCompletedTargets } from '../lib/splitUtils';
+import { WorkoutLog, Machine, UserSplitConfig, WeekdaySplit } from '../data/types';
+import { fetchSplitConfig } from '../lib/db/splitRoutine';
+import { syncSplitProgress } from '../lib/splitProgress';
+import { sessionTargetsKo } from '../lib/sessionTargets';
+import { getTodayTargets, isRestToday, getNextTargets, collectRoutineMuscles } from '../lib/splitUtils';
 import { getSessionPRMachines } from '../data/workoutSessions';
 import { fetchWorkoutLogs } from '../lib/db';
 import { deleteWorkoutSession } from '../lib/db/workouts';
@@ -192,7 +193,8 @@ function getSplitBannerMessage(
       : null;
   }
 
-  const completedTargets = extractCompletedTargets(todaySessions.flatMap(s => s.machines));
+  // 2026-10-31: 머신 보조 부위가 아니라 작성 때 고른 타겟 부위 기준
+  const completedTargets = [...new Set(todaySessions.flatMap(s => sessionTargetsKo(s)))];
   const nextTargets = getNextTargets(
     splitConfig.splitType,
     split,
@@ -1226,38 +1228,19 @@ export default function JournalScreen() {
     setTodaySessions(todayList);
   }, [sessions.map(s => s.id).join(',')]);
 
+  // 2026-10-31: 분할 차례 맞추기 — 작성 때 고른 타겟 부위 기준(lib/splitProgress.ts).
+  // 저장 직후에도 실행되지만, 다른 기기에서 저장했거나 저장 직후 실패한 경우를 대비해
+  // 운동일지 탭에서도 한 번 더 맞춘다(같은 결과가 나오므로 여러 번 불러도 안전).
   useEffect(() => {
-    const cfg = splitConfigRef.current;
-    if (!cfg || cfg.splitType !== 'sequential') return;
-    if (todaySessions.length === 0) return;
     if (!user?.id) return;
-
-    const run = async () => {
-      const lastUpdateKey = `split_updated_${new Date().toDateString()}`;
-      const alreadyUpdated = await AsyncStorage.getItem(lastUpdateKey);
-      if (alreadyUpdated) return;
-
-      const completedTargets = extractCompletedTargets(
-        todaySessions.flatMap(s => s.machines)
-      );
-      if (completedTargets.length === 0) return;
-
-      const newIndex = calcNextIndex(
-        cfg.workoutSplit as SequentialSplit,
-        cfg.splitCurrentIndex,
-        completedTargets
-      );
-
-      if (newIndex !== cfg.splitCurrentIndex) {
-        await updateSplitIndex(user.id, newIndex);
-        await AsyncStorage.setItem(lastUpdateKey, 'true');
-        setSplitConfig(prev =>
-          prev ? { ...prev, splitCurrentIndex: newIndex } : prev
-        );
-      }
-    };
-
-    run();
+    if (todaySessions.length === 0) return;
+    let cancelled = false;
+    syncSplitProgress(user.id, sessions).then(idx => {
+      if (cancelled || idx === null) return;
+      setSplitConfig(prev => (prev && prev.splitCurrentIndex !== idx ? { ...prev, splitCurrentIndex: idx } : prev));
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todaySessions, user?.id]);
 
   useEffect(() => {
@@ -1415,37 +1398,12 @@ export default function JournalScreen() {
                   deletedDate.getDate()     === today.getDate();
 
                 if (isToday) {
-                  const todayRemaining = remaining.filter(s => {
-                    const d = new Date(s.date);
-                    return (
-                      d.getFullYear() === today.getFullYear() &&
-                      d.getMonth()    === today.getMonth()    &&
-                      d.getDate()     === today.getDate()
-                    );
-                  });
-
-                  if (todayRemaining.length === 0) {
-                    try {
-                      const cfg = await fetchSplitConfig(user.id);
-                      if (cfg && cfg.splitType === 'sequential') {
-                        const split = cfg.workoutSplit as string[][];
-                        const len   = split.length;
-                        if (len > 0) {
-                          const prevIndex = ((cfg.splitCurrentIndex - 1) + len) % len;
-                          await updateSplitIndex(user.id, prevIndex);
-
-                          const dateKey       = today.toISOString().slice(0, 10).replace(/-/g, '');
-                          const lastUpdateKey = `split_last_update_${user.id}_${dateKey}`;
-                          await AsyncStorage.removeItem(lastUpdateKey);
-
-                          setSplitConfig(prev =>
-                            prev ? { ...prev, splitCurrentIndex: prevIndex } : prev
-                          );
-                        }
-                      }
-                    } catch (e) {
-                      if (__DEV__) console.warn('[JournalScreen] split rollback error:', e);
-                    }
+                  // 2026-10-31: 예전엔 오늘 일지를 다 지우면 무조건 한 칸 되돌렸다(안 넘어갔던 날이나
+                  // 휴식을 건너뛴 날엔 엉뚱한 칸으로 감). 이제는 남은 오늘 일지 기준으로 다시 계산해,
+                  // 다 지우면 오늘 시작 칸으로 정확히 돌아가고 일부만 지우면 남은 부위만큼만 넘어간다.
+                  const idx = await syncSplitProgress(user.id, remaining);
+                  if (idx !== null) {
+                    setSplitConfig(prev => (prev ? { ...prev, splitCurrentIndex: idx } : prev));
                   }
                 }
               }

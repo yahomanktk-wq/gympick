@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { C, R, T } from '../theme';
 import { WorkoutLog } from '../data/types';
-import { extractCompletedTargets } from '../lib/splitUtils';
+import { sessionTargetsKo } from '../lib/sessionTargets';
 
 // 2026-10-16: 로그인 + 운동일지 작성 경험이 있는 유저가 홈 화면에 들어왔을 때,
 // "이전에 이 부위를 어떻게 했었는지" 참고할 수 있도록 가장 최근 운동일지 1건을
@@ -48,7 +48,7 @@ export default function RecentWorkoutSummaryPopup({
   // 부위가 제목에 이미 들어가 있으면 배지는 생략 (중복 방지)
   const muscles = titleMatched
     ? []
-    : [...new Set(extractCompletedTargets(session.machines))];
+    : sessionTargetsKo(session); // 2026-10-31: 머신 보조 부위가 아니라 작성 때 고른 타겟 부위
 
   const shown    = session.machines.slice(0, MAX_MACHINES_SHOWN);
   const moreCount = session.machines.length - shown.length;
