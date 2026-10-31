@@ -994,6 +994,9 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
   machines           = machines.filter(m => !isCardioMachine(m));
   routineOrderedAll  = routineOrderedAll.filter(m => !isCardioMachine(m));
   allModeOrderedList = allModeOrderedList.filter(m => !isCardioMachine(m));
+  // 루틴 순번 배지: 원본 preloadedIds 인덱스가 아니라 유산소 제외 후 목록 기준으로 1, 2, 3… 빈 번호 없이 매김
+  // (루틴 순서 자체는 그대로 — 표시 번호만 다시 계산)
+  const routineOrderNum = new Map(routineOrderedAll.map((m, i) => [m.id, i + 1] as const));
   const MACHINE_CARD_W2 = (SCREEN_W - 40) / 2;
 
   function handleCardPress(id: string) {
@@ -1148,7 +1151,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
                 <View style={s.cardOrderOverlay}>
                   <View style={s.cardOrderBadge}>
                     <Text style={s.cardOrderText}>
-                      {[...preloadedIds].indexOf(fw.id) + 1}
+                      {routineOrderNum.get(fw.id)}
                     </Text>
                   </View>
                 </View>
@@ -1216,7 +1219,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
                   {/* 루틴 순서 번호 */}
                   <View style={s.cardOrderOverlay}>
                     <View style={s.cardOrderBadge}>
-                      <Text style={s.cardOrderText}>{idx + 1}</Text>
+                      <Text style={s.cardOrderText}>{routineOrderNum.get(m.id) ?? idx + 1}</Text>
                     </View>
                   </View>
                   {localSelectedId === m.id && (
@@ -1279,7 +1282,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
                     <View style={s.cardOrderOverlay}>
                       <View style={s.cardOrderBadge}>
                         <Text style={s.cardOrderText}>
-                          {[...preloadedIds].indexOf(m.id) + 1}
+                          {routineOrderNum.get(m.id)}
                         </Text>
                       </View>
                     </View>
@@ -1334,7 +1337,7 @@ function ExerciseSelectStep({ gym, selectedMuscles, loggedIds, preloadedIds, rou
                     <View style={s.cardOrderOverlay}>
                       <View style={s.cardOrderBadge}>
                         <Text style={s.cardOrderText}>
-                          {[...preloadedIds].indexOf(m.id) + 1}
+                          {routineOrderNum.get(m.id)}
                         </Text>
                       </View>
                     </View>
