@@ -1,4 +1,5 @@
 import { supabase } from '../supabase';
+import { fetchPaged } from './fetchAll';
 import { parseMuscles } from '../splitUtils';
 import {
   kstAddDays,
@@ -30,9 +31,10 @@ export async function fetchMachineUsageStats(
   endDate:   string,
 ): Promise<MachineStat[]> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await fetchPaged<any>(() => supabase
       .from('workout_entries')
       .select(`
+        id,
         machine_id,
         machine_name,
         machine_brand,
@@ -41,10 +43,10 @@ export async function fetchMachineUsageStats(
       `)
       .eq('workout_sessions.gym_id', gymId)
       .gte('workout_sessions.date', kstDayStartUtcIso(startDate))
-      .lt('workout_sessions.date', kstDayEndExclusiveUtcIso(endDate));
+      .lt('workout_sessions.date', kstDayEndExclusiveUtcIso(endDate)), []);
 
     if (error || !data) {
-      if (__DEV__) console.warn('[gymStats] fetchMachineUsageStats error:', error?.message);
+      if (__DEV__) console.warn('[gymStats] fetchMachineUsageStats error:', error);
       return [];
     }
 
@@ -76,12 +78,12 @@ export async function fetchDailyUsageStats(
   endDate:   string,
 ): Promise<DailyUsage[]> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await fetchPaged<any>(() => supabase
       .from('workout_sessions')
-      .select('date')
+      .select('id, date')
       .eq('gym_id', gymId)
       .gte('date', kstDayStartUtcIso(startDate))
-      .lt('date', kstDayEndExclusiveUtcIso(endDate));
+      .lt('date', kstDayEndExclusiveUtcIso(endDate)), []);
 
     if (error || !data) return [];
 
@@ -167,12 +169,12 @@ export async function fetchPeakTimeStats(
   endDate:   string,
 ): Promise<PeakTimeStats> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await fetchPaged<any>(() => supabase
       .from('workout_sessions')
-      .select('date')
+      .select('id, date')
       .eq('gym_id', gymId)
       .gte('date', kstDayStartUtcIso(startDate))
-      .lt('date', kstDayEndExclusiveUtcIso(endDate));
+      .lt('date', kstDayEndExclusiveUtcIso(endDate)), []);
 
     if (error || !data) return { byHour: {}, byDayOfWeek: {}, grid: emptyPeakGrid() };
 
@@ -218,12 +220,12 @@ export async function fetchMachineActivationRate(
 ): Promise<{ activatedCount: number; totalCount: number; rate: number }> {
   const totalCount = ownedMachineIds.length;
   try {
-    const { data, error } = await supabase
+    const { data, error } = await fetchPaged<any>(() => supabase
       .from('workout_entries')
-      .select('machine_id, workout_sessions!inner(gym_id, date)')
+      .select('id, machine_id, workout_sessions!inner(gym_id, date)')
       .eq('workout_sessions.gym_id', gymId)
       .gte('workout_sessions.date', kstDayStartUtcIso(startDate))
-      .lt('workout_sessions.date', kstDayEndExclusiveUtcIso(endDate));
+      .lt('workout_sessions.date', kstDayEndExclusiveUtcIso(endDate)), []);
 
     if (error || !data) return { activatedCount: 0, totalCount, rate: 0 };
 
@@ -249,12 +251,12 @@ export async function fetchMemberCount(
   endDate:   string,
 ): Promise<number> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await fetchPaged<any>(() => supabase
       .from('workout_sessions')
-      .select('user_id')
+      .select('id, user_id')
       .eq('gym_id', gymId)
       .gte('date', kstDayStartUtcIso(startDate))
-      .lt('date', kstDayEndExclusiveUtcIso(endDate));
+      .lt('date', kstDayEndExclusiveUtcIso(endDate)), []);
 
     if (error || !data) return 0;
     return new Set(data.map(r => r.user_id)).size;
@@ -271,10 +273,10 @@ export async function fetchRetentionStats(
     const { thisStart, thisEnd, lastStart, lastEnd } = kstMonthRanges();
 
     const [thisData, lastData] = await Promise.all([
-      supabase.from('workout_sessions').select('user_id').eq('gym_id', gymId)
-        .gte('date', kstDayStartUtcIso(thisStart)).lt('date', kstDayEndExclusiveUtcIso(thisEnd)),
-      supabase.from('workout_sessions').select('user_id').eq('gym_id', gymId)
-        .gte('date', kstDayStartUtcIso(lastStart)).lt('date', kstDayEndExclusiveUtcIso(lastEnd)),
+      fetchPaged<any>(() => supabase.from('workout_sessions').select('id, user_id').eq('gym_id', gymId)
+        .gte('date', kstDayStartUtcIso(thisStart)).lt('date', kstDayEndExclusiveUtcIso(thisEnd)), []),
+      fetchPaged<any>(() => supabase.from('workout_sessions').select('id, user_id').eq('gym_id', gymId)
+        .gte('date', kstDayStartUtcIso(lastStart)).lt('date', kstDayEndExclusiveUtcIso(lastEnd)), []),
     ]);
 
     if (thisData.error || lastData.error) {
@@ -306,9 +308,10 @@ export async function fetchMachineAvgStats(
   endDate:   string,
 ): Promise<MachineAvgStats[]> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await fetchPaged<any>(() => supabase
       .from('workout_entries')
       .select(`
+        id,
         machine_id,
         machine_name,
         machine_brand,
@@ -318,7 +321,7 @@ export async function fetchMachineAvgStats(
       `)
       .eq('workout_sessions.gym_id', gymId)
       .gte('workout_sessions.date', kstDayStartUtcIso(startDate))
-      .lt('workout_sessions.date', kstDayEndExclusiveUtcIso(endDate));
+      .lt('workout_sessions.date', kstDayEndExclusiveUtcIso(endDate)), []);
 
     if (error || !data) return [];
 
@@ -378,12 +381,12 @@ export async function fetchWeeklyVisitors(
   weekEndISO:   string,  // 'YYYY-MM-DD' (일요일)
 ): Promise<number> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await fetchPaged<any>(() => supabase
       .from('workout_sessions')
-      .select('user_id')
+      .select('id, user_id')
       .eq('gym_id', gymId)
       .gte('date', kstDayStartUtcIso(weekStartISO))
-      .lt('date', kstDayEndExclusiveUtcIso(weekEndISO));
+      .lt('date', kstDayEndExclusiveUtcIso(weekEndISO)), []);
     if (error || !data) return 0;
     return new Set(data.map((r: any) => r.user_id)).size;
   } catch {

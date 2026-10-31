@@ -3,15 +3,44 @@ import { Gym, GymWithMachines } from '../../data/types';
 import {
   validateGymSlug, GYM_SLUG_FORMAT_MESSAGE, GYM_SLUG_RESERVED_MESSAGE, GYM_SLUG_TAKEN_MESSAGE,
 } from '../gymSlug';
+import { readPersistedCache, writePersistedCache, clearPersistedCache } from './persistentCache';
 
 // ── 메모리 캐시 ──────────────────────────────────────────────
 let _gymsCache:     GymWithMachines[] | null = null;
 let _gymsCacheTime: number                   = 0;
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30분
 
+// ── 기기 저장 캐시 (2026-10-31) ──────────────────────────────
+// 머신 객체까지 저장하면 같은 머신이 헬스장마다 중복 저장돼 파일이 커지므로,
+// 헬스장 정보 + 보유 머신 id만 저장하고 머신 객체는 머신 캐시에서 다시 붙인다.
+type GymCacheRow = Omit<GymWithMachines, 'machines'>;
+const PERSIST_KEY = 'gyms';
+let _skipPersisted = false;
+let _gymsInFlight: Promise<GymWithMachines[] | null> | null = null;
+let _gymsGeneration = 0;
+
 export function invalidateGymsCache() {
   _gymsCache     = null;
   _gymsCacheTime = 0;
+  _skipPersisted = true;
+  _gymsGeneration += 1;
+  _gymsInFlight  = null;
+  clearPersistedCache(PERSIST_KEY);
+}
+
+/**
+ * 헬스장 행에 머신 객체를 붙인다.
+ * 기존과 같은 순서(전체 머신 목록 순서)를 유지하면서, 배열 includes 대신
+ * Set으로 찾아 헬스장 수 × 머신 수 × 보유 머신 수만큼 돌던 비교를 줄인다.
+ */
+function attachMachines(rows: GymCacheRow[], allMachines: { id: string }[]): GymWithMachines[] {
+  return rows.map(row => {
+    const owned = new Set(row.machineIds ?? []);
+    return {
+      ...row,
+      machines: owned.size ? allMachines.filter(m => owned.has(m.id)) : [],
+    };
+  }) as GymWithMachines[];
 }
 
 export function getGymsCacheSync(): GymWithMachines[] {
@@ -92,9 +121,45 @@ export async function fetchGymsWithMachines(): Promise<GymWithMachines[]> {
     return _gymsCache;
   }
 
-  try {
-    // gyms + gym_machines를 한 번에 JOIN 조회 (N+1 → 2회 요청)
-    const { data: gymsData, error: gymsError } = await supabase
+  // 앱 첫 호출(메모리 비어 있음): 기기에 저장된 목록을 먼저 돌려주고 뒤에서 갱신
+  if (!_gymsCache && !_skipPersisted) {
+    const persisted = await readPersistedCache<GymCacheRow[]>(PERSIST_KEY);
+    if (persisted?.data?.length && !_gymsCache && !_skipPersisted) {
+      const { fetchMachines } = await import('./machines');
+      const allMachines = await fetchMachines(); // 머신도 기기 캐시에서 바로 나옴
+      const result = attachMachines(persisted.data, allMachines);
+      _gymsCache     = result;
+      _gymsCacheTime = Date.now();
+      loadGymsFromNetwork(); // 기다리지 않음
+      return result;
+    }
+  }
+
+  const fresh = await loadGymsFromNetwork();
+  if (fresh) return fresh;
+  return _gymsCache ?? [];
+}
+
+/** 서버에서 헬스장 목록을 받아 메모리·기기 캐시를 갱신한다. 실패하면 null. 동시 호출은 하나로 합친다. */
+function loadGymsFromNetwork(): Promise<GymWithMachines[] | null> {
+  if (_gymsInFlight) return _gymsInFlight;
+  const gen = _gymsGeneration;
+  const p: Promise<GymWithMachines[] | null> = fetchGymsFromServer(gen)
+    .catch(e => {
+      if (__DEV__) console.warn('[db/gyms] fetchGymsWithMachines error:', e);
+      return null;
+    })
+    .finally(() => { if (_gymsInFlight === p) _gymsInFlight = null; });
+  _gymsInFlight = p;
+  return p;
+}
+
+async function fetchGymsFromServer(gen: number): Promise<GymWithMachines[] | null> {
+  const { fetchMachines } = await import('./machines');
+
+  // gyms(+gym_machines, 오피셜 브랜드)와 머신 목록은 서로 독립이라 동시에 요청한다
+  const [gymsRes, allMachines] = await Promise.all([
+    supabase
       .from('gyms')
       .select(`
         id, name, location, address_detail, description,
@@ -103,46 +168,45 @@ export async function fetchGymsWithMachines(): Promise<GymWithMachines[]> {
         gym_machines ( machine_id ),
         gym_official_brands ( brand )
       `)
-      .order('name');
+      .order('name'),
+    fetchMachines(),
+  ]);
+  const { data: gymsData, error: gymsError } = gymsRes;
 
-    if (gymsError || !gymsData?.length) {
-      if (__DEV__ && gymsError) console.warn('[db/gyms] fetchGymsWithMachines error:', gymsError.message);
-      return _gymsCache ?? [];
-    }
-
-    const { fetchMachines } = await import('./machines');
-    const allMachines = await fetchMachines();
-
-    const result: GymWithMachines[] = gymsData.map(row => {
-      const machineIds: string[] = (row.gym_machines ?? []).map((gm: any) => gm.machine_id);
-      return {
-        id:            row.id,
-        name:          row.name,
-        location:      row.location,
-        addressDetail: row.address_detail ?? null,
-        description:   row.description,
-        latitude:      row.latitude  ?? null,
-        longitude:     row.longitude ?? null,
-        hours:         row.hours      ?? null,
-        hoursNote:     row.hours_note ?? null,
-        phone:         row.phone      ?? null,
-        website:       row.website    ?? null,
-        managerId:      row.manager_id ?? null,
-        slug:           row.slug       ?? null,
-        short_code:     row.short_code ?? null,
-        officialBrands: (row.gym_official_brands ?? []).map((ob: any) => ob.brand),
-        machineIds,
-        machines: allMachines.filter(m => machineIds.includes(m.id)),
-      } as GymWithMachines;
-    });
-
-    _gymsCache     = result;
-    _gymsCacheTime = Date.now();
-    return result;
-  } catch (e) {
-    if (__DEV__) console.warn('[db/gyms] fetchGymsWithMachines error:', e);
-    return _gymsCache ?? [];
+  if (gymsError || !gymsData?.length) {
+    if (__DEV__ && gymsError) console.warn('[db/gyms] fetchGymsWithMachines error:', gymsError.message);
+    return null;
   }
+
+  const rows: GymCacheRow[] = gymsData.map((row: any) => ({
+    id:            row.id,
+    name:          row.name,
+    location:      row.location,
+    addressDetail: row.address_detail ?? null,
+    description:   row.description,
+    latitude:      row.latitude  ?? null,
+    longitude:     row.longitude ?? null,
+    hours:         row.hours      ?? null,
+    hoursNote:     row.hours_note ?? null,
+    phone:         row.phone      ?? null,
+    website:       row.website    ?? null,
+    managerId:      row.manager_id ?? null,
+    slug:           row.slug       ?? null,
+    short_code:     row.short_code ?? null,
+    officialBrands: (row.gym_official_brands ?? []).map((ob: any) => ob.brand),
+    machineIds:     (row.gym_machines ?? []).map((gm: any) => gm.machine_id),
+  } as GymCacheRow));
+
+  const result = attachMachines(rows, allMachines);
+
+  // 요청 도중 invalidate됐다면 옛 데이터일 수 있어 캐시에 넣지 않는다
+  if (gen !== _gymsGeneration) return result;
+
+  _gymsCache     = result;
+  _gymsCacheTime = Date.now();
+  _skipPersisted = false;
+  writePersistedCache(PERSIST_KEY, rows); // 기다리지 않음
+  return result;
 }
 
 export async function fetchGymWithMachines(id: string): Promise<GymWithMachines | undefined> {

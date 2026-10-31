@@ -1,4 +1,5 @@
 import { supabase } from '../supabase';
+import { fetchPaged } from './fetchAll';
 
 const TREND_DAYS = 14;
 const ACTIVE_WINDOW_DAYS = 7;
@@ -22,11 +23,12 @@ const EMPTY_STATS: UserOverviewStats = {
 // 어드민: 유저 현황 통계 (전체 가입자 수 / 역할별 분포 / 신규가입 추이 / 활동 근사치)
 export async function fetchUserOverviewStats(): Promise<UserOverviewStats> {
   try {
-    const { data, error } = await supabase
+    // 가입자가 1,000명을 넘어도 전부 세도록 페이지 단위로 받는다
+    const { data, error } = await fetchPaged<any>(() => supabase
       .from('profiles')
-      .select('role, created_at, updated_at');
+      .select('id, role, created_at, updated_at'), []);
     if (error || !data) {
-      if (__DEV__ && error) console.warn('[db/userStats] fetchUserOverviewStats error:', error.message);
+      if (__DEV__ && error) console.warn('[db/userStats] fetchUserOverviewStats error:', error);
       return EMPTY_STATS;
     }
 

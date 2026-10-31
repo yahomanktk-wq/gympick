@@ -1,6 +1,7 @@
 import { supabase } from '../supabase';
 import { Machine, MachineWithGyms, ExerciseKind } from '../../data/types';
 import { uploadMachineImage } from '../machineImageUpload';
+import { readPersistedCache, writePersistedCache, clearPersistedCache } from './persistentCache';
 // data/machines.ts(약 330KB, 1,984개 머신 정적 데이터)는 Supabase 조회가
 // 실패했을 때만 쓰이는 폴백이라, 앱 시작 시 항상 파싱되는 top-level import
 // 대신 실제로 필요한 에러 경로에서만 동적 import로 불러온다.
@@ -10,9 +11,24 @@ let _machinesCache:     MachineWithGyms[] | null = null;
 let _machinesCacheTime: number                   = 0;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5분
 
+// ── 기기 저장 캐시 (2026-10-31) ──────────────────────────────
+// 앱을 새로 켜서 메모리 캐시가 비어 있을 때, 지난번에 받아 둔 목록을 기기
+// 파일에서 먼저 꺼내 바로 보여주고 최신 목록은 뒤에서 받아 갱신한다.
+const PERSIST_KEY = 'machines';
+// invalidate 직후에는 기기 캐시(옛 데이터)를 건너뛰고 반드시 서버에서 받는다
+let _skipPersisted = false;
+// 같은 시점에 여러 화면이 호출해도 서버 요청은 한 번만
+let _machinesInFlight: Promise<MachineWithGyms[] | null> | null = null;
+// invalidate 전에 시작된 요청이 늦게 끝나 옛 데이터로 캐시를 덮어쓰지 않도록 세대를 센다
+let _machinesGeneration = 0;
+
 export function invalidateMachinesCache() {
   _machinesCache     = null;
   _machinesCacheTime = 0;
+  _skipPersisted     = true;
+  _machinesGeneration += 1;
+  _machinesInFlight  = null;
+  clearPersistedCache(PERSIST_KEY);
 }
 
 export function getMachinesCacheSync(): MachineWithGyms[] {
@@ -113,6 +129,44 @@ export async function fetchMachines(): Promise<MachineWithGyms[]> {
     return _machinesCache;
   }
 
+  // 앱 첫 호출(메모리 비어 있음): 기기에 저장된 목록이 있으면 먼저 돌려주고,
+  // 서버 최신 목록은 뒤에서 받아 메모리·기기 캐시를 갱신한다.
+  if (!_machinesCache && !_skipPersisted) {
+    const persisted = await readPersistedCache<MachineWithGyms[]>(PERSIST_KEY);
+    if (persisted?.data?.length && !_machinesCache && !_skipPersisted) {
+      _machinesCache     = persisted.data;
+      _machinesCacheTime = Date.now();
+      loadMachinesFromNetwork(); // 기다리지 않음
+      return persisted.data;
+    }
+  }
+
+  const fresh = await loadMachinesFromNetwork();
+  if (fresh) return fresh;
+
+  // 서버 실패 → 메모리 → 기기 캐시 → 번들 데이터 순으로 대체
+  if (_machinesCache) return _machinesCache;
+  const persisted = await readPersistedCache<MachineWithGyms[]>(PERSIST_KEY);
+  if (persisted?.data?.length) return persisted.data;
+  const { MACHINES } = await import('../../data/machines');
+  return MACHINES;
+}
+
+/** 서버에서 머신 목록을 받아 메모리·기기 캐시를 갱신한다. 실패하면 null. 동시 호출은 하나로 합친다. */
+function loadMachinesFromNetwork(): Promise<MachineWithGyms[] | null> {
+  if (_machinesInFlight) return _machinesInFlight;
+  const gen = _machinesGeneration;
+  const p: Promise<MachineWithGyms[] | null> = fetchMachinesFromServer(gen)
+    .catch(e => {
+      if (__DEV__) console.warn('[db/machines] 서버 조회 예외:', e);
+      return null;
+    })
+    .finally(() => { if (_machinesInFlight === p) _machinesInFlight = null; });
+  _machinesInFlight = p;
+  return p;
+}
+
+async function fetchMachinesFromServer(gen: number): Promise<MachineWithGyms[] | null> {
   // 머신 목록과 gym_machines를 동시에 한 번에 가져옴 (N+1 쿼리 방지)
   // 두 테이블 모두 한 번의 조회 상한(PostgREST 기본/설정값)을 넘길 수 있는
   // 규모라 fetchAllRows로 페이지를 끝까지 돌며 전부 가져온다(1페이지 응답에
@@ -134,10 +188,14 @@ export async function fetchMachines(): Promise<MachineWithGyms[]> {
   ]);
 
   if (machinesResult.error || !machinesResult.data?.length) {
-    if (__DEV__ && machinesResult.error) console.warn('[db/machines] fetchMachines error, using mock:', machinesResult.error.message);
-    if (_machinesCache) return _machinesCache;
-    const { MACHINES } = await import('../../data/machines');
-    return MACHINES;
+    if (__DEV__ && machinesResult.error) console.warn('[db/machines] fetchMachines error, using fallback:', machinesResult.error.message);
+    return null;
+  }
+  // gym_machines만 실패하면 보유 헬스장 정보가 전부 비어 보이므로, 이 경우도
+  // 실패로 보고 기존 캐시를 유지한다(빈 gymIds로 캐시를 덮어쓰지 않도록)
+  if (gymMachinesResult.error) {
+    if (__DEV__) console.warn('[db/machines] gym_machines error, keeping cache:', gymMachinesResult.error.message);
+    return null;
   }
 
   // gym_machines를 machineId 기준으로 인메모리 맵핑
@@ -158,8 +216,13 @@ export async function fetchMachines(): Promise<MachineWithGyms[]> {
     gymIds: gymMap.get(row.id) ?? [],
   }));
 
+  // 요청 도중 invalidate됐다면 이 결과는 옛 데이터일 수 있어 캐시에 넣지 않는다
+  if (gen !== _machinesGeneration) return result;
+
   _machinesCache     = result;
   _machinesCacheTime = Date.now();
+  _skipPersisted     = false;
+  writePersistedCache(PERSIST_KEY, result); // 기다리지 않음
   return result;
 }
 

@@ -23,7 +23,7 @@ function chunk<T>(arr: T[], size: number): T[][] {
  * 조건 하나로 걸러진 행을 1,000행씩 끝까지 받아온다.
  * 페이지가 밀리지 않도록 마지막 정렬 기준으로 'id'를 항상 덧붙인다.
  */
-async function fetchPaged<T>(
+export async function fetchPaged<T>(
   build: () => any,   // supabase.from(...).select(...).eq/in(...) 까지 만든 쿼리를 매번 새로 반환
   order: OrderSpec[],
 ): Promise<FetchResult<T>> {
