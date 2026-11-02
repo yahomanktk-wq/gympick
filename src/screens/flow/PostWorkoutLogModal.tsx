@@ -75,7 +75,7 @@ import { fetchGymsWithMachines } from '../../lib/db/gyms';
 import { brandLogos } from '../../constants/brandLogos';
 import { fetchSplitConfig } from '../../lib/db/splitRoutine';
 import { syncSplitProgress } from '../../lib/splitProgress';
-import { DefaultOunwanBackground, COLORS_HIDDEN_ON_DEFAULT_BG, randomDefaultBgIndex } from './photo/defaultOunwanBackground';
+import { DefaultOunwanBackground, COLORS_HIDDEN_ON_DEFAULT_BG, randomDefaultBgIndex, nextAnyDefaultBgIndex, currentDefaultBgAllIndex, usesFemaleDefaultBg } from './photo/defaultOunwanBackground';
 import { getTodayTargets, isRestToday, toEnMuscle, parseMuscles } from '../../lib/splitUtils';
 import { isCardioMachine } from '../../lib/machineVisibility';
 import { useFonts } from 'expo-font';
@@ -3407,7 +3407,7 @@ export function RosterOverlay({ exercises, logs, nickname, timestamp, muscleLabe
 
 // --- Step 5: Photo
 
-function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, photoUri, nickname, fontsLoaded, initialColor, initialStyle, defaultBgIndex, onColorChange, onStyleChange, onCapture, onClearPhoto, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera, onRegisterRect, onboardingActive, onboardingKey, onOnboardingNext, onOnboardingJump }: {
+function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, photoUri, nickname, fontsLoaded, initialColor, initialStyle, defaultBgIndex, defaultBgPick, onShuffleDefaultBg, onColorChange, onStyleChange, onCapture, onClearPhoto, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera, onRegisterRect, onboardingActive, onboardingKey, onOnboardingNext, onOnboardingJump }: {
   gym: GymWithMachines;
   exercises: ExerciseInfo[];
   selectedMuscles: string[];
@@ -3424,6 +3424,10 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
   initialStyle: OverlayStyle;
   /** 사진이 없을 때 쓸 기본 일러스트 번호 (작성 1회당 무작위) */
   defaultBgIndex: number;
+  /** 배지 탭으로 고른 기본 이미지 번호(전체 목록 기준). null이면 타겟 부위 기준 처음 이미지 */
+  defaultBgPick: number | null;
+  /** 기본 이미지 안내 배지를 탭하면 다른 기본 이미지로 무작위 변경 */
+  onShuffleDefaultBg?: () => void;
   onColorChange: (color: string) => void;
   // 2026-09-03: 이 컴포넌트 로컬 state인 overlayStyle을 부모(PostWorkoutLogModal)의
   // handleSaveWorkout에서도 DB 저장용으로 알아야 해서, onColorChange와 동일한
@@ -3451,6 +3455,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
   const [saveSuccess,   setSaveSuccess]   = useState(false);
   const [overlayStyle,  setOverlayStyle]  = useState<OverlayStyle>(initialStyle);
   const addPhotoRef     = useRef<View>(null);
+  const femaleDefaultBg = usesFemaleDefaultBg(selectedMuscles ?? []);
 
   // 기본 배경(사진 없음)에서는 배경과 같은 색 글씨를 쓸 수 없다 → 사진을 지웠을 때 그 색이면 흰색으로
   const colorOptions = useMemo(
@@ -3986,8 +3991,29 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
           />
         )}
 
-        {/* Photo taken: overlay View - showCamera 중에는 숨김 */}
+        {/* 인증샷 미리보기 (= 캡처 대상 overlayRef) - showCamera 중에는 숨김.
+            2026-11-03: 바깥 View로 감싸 'AI 가상 이미지' 배지를 미리보기 위에 둔다(캡처 대상 밖이라 저장 안 됨). */}
         {!showCamera && (
+          <View style={{ alignSelf: 'center' }}>
+          {/* 2026-11-03: AI로 만든 가상 기본 이미지임을 알리고, 탭하면 다른 기본 이미지로 바꾼다.
+              미리보기 위쪽에 둔다(아래 '내 사진 넣기' 버튼과 겹치지 않게). 캡처 대상 밖이라 저장 안 됨. */}
+          {!photoTaken && (
+            <View style={s.defaultBgBadgeRow}>
+              <TouchableOpacity
+                style={s.defaultBgBadge}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onShuffleDefaultBg?.(); }}
+                activeOpacity={0.75}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel="AI 가상 이미지, 탭하면 다른 이미지로 바뀌어요"
+              >
+                <Ionicons name="sparkles" size={11} color={C.bg} />
+                <Text style={s.defaultBgBadgeTxt}>AI 가상 이미지</Text>
+                <View style={s.defaultBgBadgeDivider} />
+                <Ionicons name="shuffle" size={12} color={C.bg} />
+              </TouchableOpacity>
+            </View>
+          )}
           <View
             ref={overlayRef}
             style={[s.photoFrame, s.photoFrameActive, { height: photoH, backgroundColor: 'transparent', borderWidth: 0, borderRadius: currentLayoutType === 'e' ? 0 : 20, overflow: 'hidden' }]}
@@ -4007,7 +4033,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
               }
             }}
           >
-            {/* 배경: 고른 사진, 없으면 기본 배경(검정 / 추후 기본 일러스트) */}
+            {/* 배경: 고른 사진, 없으면 기본 이미지 (타겟 부위에 엉덩이가 있으면 여성, 아니면 남성) */}
             {photoUri ? (
               <Image
                 source={{ uri: photoUri }}
@@ -4015,7 +4041,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
                 resizeMode="cover"
               />
             ) : (
-              <DefaultOunwanBackground index={defaultBgIndex} />
+              <DefaultOunwanBackground index={defaultBgIndex} female={femaleDefaultBg} pickedAll={defaultBgPick} />
             )}
 
             {/* 스타일별 오버레이 */}
@@ -4038,6 +4064,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
                 pointerEvents="none"
               />
             )}
+          </View>
           </View>
         )}
 
@@ -4308,9 +4335,13 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
               }
             }}
           >
+            {/* 2026-11-03: 설명 문구 없이 한 줄로 간결하게 */}
             <TouchableOpacity style={s.addPhotoBtn} onPress={openPhotoPicker} activeOpacity={0.8}>
-              <Ionicons name={photoTaken ? 'camera-reverse-outline' : 'camera-outline'} size={16} color={C.accent} />
-              <Text style={s.addPhotoBtnTxt}>{photoTaken ? '배경 사진 바꾸기' : '사진 추가'}</Text>
+              <View style={s.addPhotoIcon}>
+                <Ionicons name={photoTaken ? 'images' : 'camera'} size={14} color={C.bg} />
+              </View>
+              <Text style={s.addPhotoTitle}>{photoTaken ? '사진 변경' : '내 사진 넣기'}</Text>
+              <Ionicons name="chevron-forward" size={14} color={C.textSub} />
             </TouchableOpacity>
           </View>
         )}
@@ -5049,6 +5080,8 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   const [overlayStyle,       setOverlayStyle]       = useState<OverlayStyle>('s1a');
   // 2026-11-03: 사진 없이 저장할 때 쓸 기본 일러스트 번호 (작성 1회당 무작위)
   const [defaultBgIndex,     setDefaultBgIndex]     = useState(0);
+  // 2026-11-03: 'AI 가상 이미지' 배지를 탭해 고른 기본 이미지(전체 목록 번호). null = 타겟 부위 기준 처음 이미지
+  const [defaultBgPick,      setDefaultBgPick]      = useState<number | null>(null);
   const [isSaving,           setIsSaving]           = useState(false);
   const [savingProgress,     setSavingProgress]     = useState(0);
   const savingAnim = useRef(new Animated.Value(0)).current;
@@ -5139,6 +5172,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
       ).hex);
       setOverlayStyle(randomOverlayStyle());
       setDefaultBgIndex(randomDefaultBgIndex());
+      setDefaultBgPick(null);
       setShowTemplates(false);
       setTemplates(getTemplates());
       setPreloadedIdsOrdered([]);
@@ -5837,6 +5871,10 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             initialColor={selectedColor}
             initialStyle={overlayStyle}
             defaultBgIndex={defaultBgIndex}
+            defaultBgPick={defaultBgPick}
+            onShuffleDefaultBg={() => setDefaultBgPick(prev => nextAnyDefaultBgIndex(
+              currentDefaultBgAllIndex(defaultBgIndex, usesFemaleDefaultBg(Array.from(selectedMuscles).map(toCanonMuscle)), prev),
+            ))}
             onClearPhoto={() => {
               setPhotoUri(null);
               setPhotoTaken(false);
@@ -6137,8 +6175,14 @@ const s = StyleSheet.create({
   photoCtaTitle:    { fontSize: 15, fontWeight: '700', color: C.textSub },
   photoCtaSub:      { fontSize: 12, color: C.textDim },
   retakeRow:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 16 },
-  addPhotoBtn:      { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 9, borderRadius: R.pill, borderWidth: 1, borderColor: C.accent + '60', backgroundColor: C.accentBg },
-  addPhotoBtnTxt:   { fontSize: 13, fontWeight: '700', color: C.accent },
+  addPhotoBtn:      { flexDirection: 'row', alignItems: 'center', alignSelf: 'center', gap: 8, paddingLeft: 6, paddingRight: 12, paddingVertical: 6, borderRadius: R.pill, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface },
+  addPhotoIcon:     { width: 26, height: 26, borderRadius: 13, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
+  addPhotoTitle:    { fontSize: 13, fontWeight: '700', color: C.text },
+  // 미리보기 위쪽 'AI 가상 이미지' 배지 (캡처 대상 밖)
+  defaultBgBadgeRow:  { alignItems: 'center', marginBottom: 8 },
+  defaultBgBadge:     { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: R.pill, backgroundColor: C.accent },
+  defaultBgBadgeTxt:  { fontSize: 11, fontWeight: '800', color: C.bg },
+  defaultBgBadgeDivider: { width: 1, height: 10, backgroundColor: C.bg, opacity: 0.35, marginHorizontal: 2 },
   retakeText:       { fontSize: 12, color: C.textSub },
 
   // Overlay — no dark layer, photo shows through
