@@ -75,6 +75,7 @@ import { fetchGymsWithMachines } from '../../lib/db/gyms';
 import { brandLogos } from '../../constants/brandLogos';
 import { fetchSplitConfig } from '../../lib/db/splitRoutine';
 import { syncSplitProgress } from '../../lib/splitProgress';
+import { DefaultOunwanBackground, COLORS_HIDDEN_ON_DEFAULT_BG, randomDefaultBgIndex } from './photo/defaultOunwanBackground';
 import { getTodayTargets, isRestToday, toEnMuscle, parseMuscles } from '../../lib/splitUtils';
 import { isCardioMachine } from '../../lib/machineVisibility';
 import { useFonts } from 'expo-font';
@@ -193,6 +194,15 @@ const LAYOUT_TYPE_OPTIONS: { key: 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g'; label
 // FONT_SET_NUMBERS × LAYOUT_TYPE_OPTIONS 조합은 항상 OverlayStyle 유니온의 유효한 멤버.
 function composeOverlayStyle(fontNum: number, layoutType: 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g'): OverlayStyle {
   return `s${fontNum}${layoutType}` as OverlayStyle;
+}
+
+function pickRandom<T>(arr: readonly T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// 2026-11-02: 인증샷 단계의 레이아웃·폰트를 무작위로 고른다 (운동일지 작성 1회당 처음 한 번).
+function randomOverlayStyle(): OverlayStyle {
+  return composeOverlayStyle(pickRandom(FONT_SET_NUMBERS), pickRandom(LAYOUT_TYPE_OPTIONS).key);
 }
 
 /**
@@ -3397,7 +3407,7 @@ export function RosterOverlay({ exercises, logs, nickname, timestamp, muscleLabe
 
 // --- Step 5: Photo
 
-function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, photoUri, nickname, fontsLoaded, onColorChange, onStyleChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera, onRegisterRect, onboardingActive, onboardingKey, onOnboardingNext, onOnboardingJump }: {
+function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, photoUri, nickname, fontsLoaded, initialColor, initialStyle, defaultBgIndex, onColorChange, onStyleChange, onCapture, onClearPhoto, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera, onRegisterRect, onboardingActive, onboardingKey, onOnboardingNext, onOnboardingJump }: {
   gym: GymWithMachines;
   exercises: ExerciseInfo[];
   selectedMuscles: string[];
@@ -3408,6 +3418,12 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
   /** expo-font useFonts 로딩 완료 여부 — 인증샷 캡처가 폰트 로딩보다 먼저 실행되어
    *  Android에서 시스템 폰트로 캡처되는 레이스 컨디션을 막기 위한 가드 */
   fontsLoaded: boolean;
+  /** 2026-11-02: 부모가 들고 있는 현재 글자색·스타일 (작성 1회당 처음엔 무작위).
+   *  이 단계는 들어올 때마다 새로 그려지므로, 부모 값으로 시작해야 뒤로 갔다 와도 유지된다. */
+  initialColor: string;
+  initialStyle: OverlayStyle;
+  /** 사진이 없을 때 쓸 기본 일러스트 번호 (작성 1회당 무작위) */
+  defaultBgIndex: number;
   onColorChange: (color: string) => void;
   // 2026-09-03: 이 컴포넌트 로컬 state인 overlayStyle을 부모(PostWorkoutLogModal)의
   // handleSaveWorkout에서도 DB 저장용으로 알아야 해서, onColorChange와 동일한
@@ -3415,6 +3431,8 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
   // 값을 쓴다 (부모가 직접 이 컴포넌트의 로컬 state를 참조할 수 없기 때문).
   onStyleChange: (style: OverlayStyle) => void;
   onCapture: (aspect: [number, number]) => void;
+  /** 고른 사진을 지우고 기본 배경으로 되돌린다 */
+  onClearPhoto: () => void;
   onCameraCapture: (uri: string) => void;
   onCompositeUri:    (uri: string) => void;
   onRoutineCardUri?: (uri: string) => void;
@@ -3429,9 +3447,46 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
   onOnboardingNext?: () => void;
   onOnboardingJump?: (key: OnboardingPointKey) => void;
 }) {
-  const [textColor,     setTextColor]     = useState('#ffffff');
+  const [textColor,     setTextColor]     = useState(initialColor);
   const [saveSuccess,   setSaveSuccess]   = useState(false);
-  const [overlayStyle,  setOverlayStyle]  = useState<OverlayStyle>('s1a');
+  const [overlayStyle,  setOverlayStyle]  = useState<OverlayStyle>(initialStyle);
+  const addPhotoRef     = useRef<View>(null);
+
+  // 기본 배경(사진 없음)에서는 배경과 같은 색 글씨를 쓸 수 없다 → 사진을 지웠을 때 그 색이면 흰색으로
+  const colorOptions = useMemo(
+    () => photoTaken ? TEXT_COLORS : TEXT_COLORS.filter(c => !COLORS_HIDDEN_ON_DEFAULT_BG.includes(c.hex.toLowerCase())),
+    [photoTaken],
+  );
+  useEffect(() => {
+    if (!photoTaken && COLORS_HIDDEN_ON_DEFAULT_BG.includes(textColor.toLowerCase())) {
+      setTextColor('#ffffff');
+      onColorChange('#ffffff');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoTaken]);
+
+  function openPhotoPicker() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const options: { text: string; style?: 'cancel' | 'destructive'; onPress?: () => void }[] = [
+      {
+        text: '카메라로 찍기',
+        onPress: () => {
+          if (onboardingActive && onboardingKey === 'photo-capture') onOnboardingJump?.('photo-camera-hint');
+          onSetShowCamera(true);
+        },
+      },
+      {
+        text: '사진 선택',
+        onPress: () => {
+          if (onboardingActive && onboardingKey === 'photo-capture') onOnboardingJump?.('photo-capture-done');
+          onCapture([3, 4]);
+        },
+      },
+    ];
+    if (photoTaken) options.push({ text: '사진 지우고 기본 배경으로', style: 'destructive', onPress: onClearPhoto });
+    options.push({ text: '취소', style: 'cancel' });
+    Alert.alert(photoTaken ? '배경 사진 바꾸기' : '사진 추가', '사진 없이 저장하면 기본 배경으로 저장돼요', options);
+  }
   const overlayRef = useRef<View>(null);
   /** 사진 없이 오버레이(닉네임/부위/통계 텍스트)만 투명 배경 PNG로 캡처하기 위한
    *  화면 밖 전용 뷰 참조. 영상에 직접 오버레이할 수 있도록 배경을 투명하게 유지한 채 캡처한다. */
@@ -3474,8 +3529,12 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
     };
 
     if (onboardingKey === 'photo-capture') {
-      const target = photoTaken ? overlayRef : photoFrameRef;
-      measure('photo-capture', target as React.RefObject<View>);
+      measure('photo-capture', addPhotoRef as React.RefObject<View>);
+    }
+    // 2026-11-02: 사진 없이 다음으로 넘어가면 카메라/사진 적용 안내는 건너뛰고 스타일 안내로
+    if (onboardingKey === 'photo-camera-hint' && !showCamera && !photoTaken) {
+      onOnboardingJump?.('photo-overlay');
+      return;
     }
     // 카메라 화면 진입 시 카메라 힌트 포인트로 이동
     if (onboardingKey === 'photo-camera-hint') {
@@ -3495,26 +3554,15 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
         });
       });
     }
+    // 2026-11-02: 사진이 없어도 기본 배경 미리보기와 스타일 선택이 항상 보이므로 건너뛰지 않는다
     if (onboardingKey === 'photo-overlay') {
-      if (!photoTaken && !showCamera) {
-        onOnboardingJump?.('workout-save');
-      } else {
-        scrollThenMeasure('photo-overlay', overlayStyleRef);
-      }
+      scrollThenMeasure('photo-overlay', overlayStyleRef);
     }
     if (onboardingKey === 'photo-color') {
-      if (!photoTaken && !showCamera) {
-        onOnboardingJump?.('workout-save');
-      } else {
-        scrollThenMeasure('photo-color', colorChipRef);
-      }
+      scrollThenMeasure('photo-color', colorChipRef);
     }
     if (onboardingKey === 'photo-save-share') {
-      if (!photoTaken) {
-        onOnboardingJump?.('workout-save');
-      } else {
-        scrollThenMeasure('photo-save-share', shareRowRef);
-      }
+      scrollThenMeasure('photo-save-share', shareRowRef);
     }
     if (onboardingKey === 'workout-save') {
       measure('workout-save', ctaBarRef);
@@ -3590,8 +3638,8 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
     : `${labelMuscles[0] ?? 'WORKOUT'} Day`;
 
   async function handleSaveImage() {
-    if (!photoUri || !overlayRef.current) {
-      Alert.alert('사진 없음', '먼저 사진을 찍어주세요.');
+    if (!overlayRef.current) {
+      Alert.alert('잠시만요', '미리보기를 준비하고 있어요. 다시 시도해 주세요.');
       return;
     }
     try {
@@ -3649,8 +3697,8 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
    *  루틴 카드는 포함하지 않고, 오버레이 프레임 한 장만 저장한다. 저장된 PNG는
    *  짐픽 밖에서(예: 영상 편집 앱) 유저가 직접 영상 위에 올려 쓰는 용도다. */
   async function handleSaveLayoutOnly() {
-    if (!photoTaken || !layoutOnlyRef.current) {
-      Alert.alert('사진 없음', '먼저 사진을 찍어주세요.');
+    if (!layoutOnlyRef.current) {
+      Alert.alert('잠시만요', '미리보기를 준비하고 있어요. 다시 시도해 주세요.');
       return;
     }
     try {
@@ -3679,8 +3727,8 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
   }
 
   async function handleInstagramShare() {
-    if (!photoUri || !overlayRef.current) {
-      Alert.alert('사진 없음', '먼저 사진을 찍어주세요.');
+    if (!overlayRef.current) {
+      Alert.alert('잠시만요', '미리보기를 준비하고 있어요. 다시 시도해 주세요.');
       return;
     }
     try {
@@ -3918,56 +3966,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
         onScroll={e => { photoScrollYRef.current = e.nativeEvent.contentOffset.y; }}
         scrollEventThrottle={16}
       >
-        {/* No photo: show camera CTA as TouchableOpacity */}
-        {!photoTaken && !showCamera && (
-          <TouchableOpacity
-            ref={photoFrameRef}
-            style={[s.photoFrame, { height: photoH }]}
-            activeOpacity={0.85}
-            onLayout={() => {
-              if (onboardingActive && onboardingKey === 'photo-capture') {
-                photoFrameRef.current?.measureInWindow((x, y, width, height) => {
-                  onRegisterRect?.('photo-capture', { x, y, width, height });
-                });
-              }
-            }}
-            onPress={() => {
-              Alert.alert(
-                '사진 선택',
-                '운동 사진을 추가하세요',
-                [
-                  {
-                    text: '카메라로 찍기',
-                    onPress: () => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                      if (onboardingActive && onboardingKey === 'photo-capture') {
-                        onOnboardingJump?.('photo-camera-hint');
-                      }
-                      onSetShowCamera(true);
-                    },
-                  },
-                  {
-                    text: '사진 선택',
-                    onPress: () => {
-                      if (onboardingActive && onboardingKey === 'photo-capture') {
-                        onOnboardingJump?.('photo-capture-done');
-                      }
-                      onCapture([3, 4]);
-                    },
-                  },
-                  { text: '취소', style: 'cancel' },
-                ],
-              );
-            }}
-          >
-            <View style={s.photoCta}>
-              <View style={s.photoCtaIcon}>
-                <Ionicons name="camera" size={30} color={C.textSub} />
-              </View>
-              <Text style={s.photoCtaTitle}>탭하여 사진 찍기</Text>
-            </View>
-          </TouchableOpacity>
-        )}
+        {/* 2026-11-02: 사진이 없어도 아래 미리보기가 기본 배경으로 항상 보인다 (예전 '탭하여 사진 찍기' 칸 제거) */}
 
         {/* 인앱 카메라 오버레이: showCamera가 true면 photoTaken 상태와 무관하게 표시 */}
         {showCamera && (
@@ -3988,7 +3987,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
         )}
 
         {/* Photo taken: overlay View - showCamera 중에는 숨김 */}
-        {photoTaken && !showCamera && (
+        {!showCamera && (
           <View
             ref={overlayRef}
             style={[s.photoFrame, s.photoFrameActive, { height: photoH, backgroundColor: 'transparent', borderWidth: 0, borderRadius: currentLayoutType === 'e' ? 0 : 20, overflow: 'hidden' }]}
@@ -4008,14 +4007,16 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
               }
             }}
           >
-            {/* Background photo */}
+            {/* 배경: 고른 사진, 없으면 기본 배경(검정 / 추후 기본 일러스트) */}
             {photoUri ? (
               <Image
                 source={{ uri: photoUri }}
                 style={StyleSheet.absoluteFill}
                 resizeMode="cover"
               />
-            ) : null}
+            ) : (
+              <DefaultOunwanBackground index={defaultBgIndex} />
+            )}
 
             {/* 스타일별 오버레이 */}
             {renderStyleOverlay()}
@@ -4274,7 +4275,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
         {/* 오버레이만 저장용 — 사진 없이 오버레이(닉네임/부위/통계 텍스트)만 투명 배경으로
             캡처하기 위한 화면 밖 전용 뷰. 사진 레이어를 넣지 않고 배경도 투명하게 유지해서,
             캡처한 PNG를 유저가 영상 위에 직접 오버레이할 수 있게 한다. */}
-        {photoTaken && !showCamera && (
+        {!showCamera && (
           <View style={{ position: 'absolute', top: -9999, left: -9999, backgroundColor: 'transparent' }} pointerEvents="none">
             <View
               ref={layoutOnlyRef}
@@ -4294,30 +4295,28 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
           </View>
         )}
 
-        {/* 다시 찍기 버튼: 사진이 찍혔을 때만 */}
-        {photoTaken && (
-          <TouchableOpacity
-            style={s.retakeRow}
-            onPress={() => {
-              Alert.alert(
-                '다시 찍기',
-                '사진 촬영 방법을 선택하세요',
-                [
-                  { text: '카메라로 찍기', onPress: () => onSetShowCamera(true) },
-                  { text: '사진 선택',     onPress: () => onCapture([3, 4]) },
-                  { text: '취소', style: 'cancel' },
-                ],
-              );
+        {/* 2026-11-02: 사진 추가 / 배경 사진 바꾸기 — 항상 표시 (사진 없이 저장하면 기본 배경) */}
+        {!showCamera && (
+          <View
+            ref={addPhotoRef}
+            style={{ alignSelf: 'center', marginBottom: 16 }}
+            onLayout={() => {
+              if (onboardingActive && onboardingKey === 'photo-capture') {
+                addPhotoRef.current?.measureInWindow((x, y, width, height) => {
+                  onRegisterRect?.('photo-capture', { x, y, width, height });
+                });
+              }
             }}
-            activeOpacity={0.75}
           >
-            <Ionicons name="camera-reverse-outline" size={13} color={C.textSub} />
-            <Text style={s.retakeText}>다시 찍기</Text>
-          </TouchableOpacity>
+            <TouchableOpacity style={s.addPhotoBtn} onPress={openPhotoPicker} activeOpacity={0.8}>
+              <Ionicons name={photoTaken ? 'camera-reverse-outline' : 'camera-outline'} size={16} color={C.accent} />
+              <Text style={s.addPhotoBtnTxt}>{photoTaken ? '배경 사진 바꾸기' : '사진 추가'}</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         {/* 텍스트 색상 + 레이아웃 스타일: 카메라 활성 중 또는 사진 찍힌 후 모두 표시 */}
-        {(photoTaken || showCamera) && (
+        {(
           <>
           {/* 2026-09-04: 레이아웃/폰트/색상 — 각각 독립된 세로 스크롤 휠 피커 3개를
               한 줄에 나란히 배치. 예전엔 폰트세트×레이아웃 조합 15개를 한 줄
@@ -4409,7 +4408,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
                 itemHeight={36}
                 selectedKey={textColor}
                 onChange={(hex) => { setTextColor(hex); onColorChange(hex); }}
-                items={TEXT_COLORS.map(opt => ({
+                items={colorOptions.map(opt => ({
                   key: opt.hex,
                   render: (active: boolean) => (
                     <View
@@ -4499,28 +4498,10 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
           activeOpacity={0.85}
           disabled={!fontsLoaded}
           onPress={async () => {
-          if (!photoTaken) {
-            Alert.alert(
-              '사진을 등록해주세요',
-              '운동 사진을 등록해야 저장할 수 있어요.\n카메라로 찍거나 사진을 선택해주세요.',
-              [
-                {
-                  text: '카메라로 찍기',
-                  onPress: () => onSetShowCamera(true),
-                },
-                {
-                  text: '사진 선택',
-                  onPress: () => onCapture([3, 4]),
-                },
-                { text: '취소', style: 'cancel' },
-              ],
-            );
-            return;
-          }
-
+          // 2026-11-02: 사진이 없어도 기본 배경 인증샷으로 저장한다
           let captured: string | undefined;
           let capturedRoutineUri: string | undefined;
-          if (photoTaken && overlayRef.current) {
+          if (overlayRef.current) {
             try {
               await new Promise(resolve => requestAnimationFrame(resolve));
               await new Promise<void>(resolve => InteractionManager.runAfterInteractions(() => resolve()));
@@ -5066,6 +5047,8 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   // WorkoutPhotoStep의 기본값('s1a')과 동일하게 초기화해서, 사용자가 스타일을
   // 한 번도 안 바꿔도 기본 스타일 값이 저장되게 한다.
   const [overlayStyle,       setOverlayStyle]       = useState<OverlayStyle>('s1a');
+  // 2026-11-03: 사진 없이 저장할 때 쓸 기본 일러스트 번호 (작성 1회당 무작위)
+  const [defaultBgIndex,     setDefaultBgIndex]     = useState(0);
   const [isSaving,           setIsSaving]           = useState(false);
   const [savingProgress,     setSavingProgress]     = useState(0);
   const savingAnim = useRef(new Animated.Value(0)).current;
@@ -5149,7 +5132,13 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
       setRoutineCardUri(null);
       setDetectedPRs([]);
       setPrCelebration(null);
-      setSelectedColor('#ffffff');
+      // 2026-11-02: 인증샷 레이아웃·폰트·글자색은 작성 1회당 처음 한 번 무작위로 정한다.
+      // 처음엔 사진이 없어 기본 배경이므로, 배경과 같은 색은 후보에서 뺀다.
+      setSelectedColor(pickRandom(
+        TEXT_COLORS.filter(c => !COLORS_HIDDEN_ON_DEFAULT_BG.includes(c.hex.toLowerCase())),
+      ).hex);
+      setOverlayStyle(randomOverlayStyle());
+      setDefaultBgIndex(randomDefaultBgIndex());
       setShowTemplates(false);
       setTemplates(getTemplates());
       setPreloadedIdsOrdered([]);
@@ -5564,7 +5553,8 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
           ...(note ? { note } : {}),
         };
       }),
-      hasPhoto: photoTaken,
+      // 2026-11-02: 사진 없이 저장해도 기본 배경 인증샷이 있으면 인증샷 있음으로 본다
+      hasPhoto: photoTaken || !!effectiveCompositeUri,
       ...(photoUri ? { photoUri: finalPhotoUrl ?? photoUri } : {}),
       ...(effectiveCompositeUri ? { compositeUri: finalPhotoUrl ?? effectiveCompositeUri } : {}),
       ...(finalThumbnailUrl ? { thumbnailUri: finalThumbnailUrl } : {}),
@@ -5844,6 +5834,14 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             onCompositeUri={(uri) => setCompositeUri(uri)}
             onRoutineCardUri={(uri) => setRoutineCardUri(uri)}
             fontsLoaded={fontsLoaded}
+            initialColor={selectedColor}
+            initialStyle={overlayStyle}
+            defaultBgIndex={defaultBgIndex}
+            onClearPhoto={() => {
+              setPhotoUri(null);
+              setPhotoTaken(false);
+              setCompositeUri(null);
+            }}
             onSave={requestSaveWorkout}
             onBack={goBack}
             onClose={() => onClose(false)}
@@ -6139,6 +6137,8 @@ const s = StyleSheet.create({
   photoCtaTitle:    { fontSize: 15, fontWeight: '700', color: C.textSub },
   photoCtaSub:      { fontSize: 12, color: C.textDim },
   retakeRow:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 16 },
+  addPhotoBtn:      { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 9, borderRadius: R.pill, borderWidth: 1, borderColor: C.accent + '60', backgroundColor: C.accentBg },
+  addPhotoBtnTxt:   { fontSize: 13, fontWeight: '700', color: C.accent },
   retakeText:       { fontSize: 12, color: C.textSub },
 
   // Overlay — no dark layer, photo shows through
