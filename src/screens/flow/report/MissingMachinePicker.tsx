@@ -1,8 +1,15 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, PixelRatio } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { C, R } from '../../../theme';
+import { getMachineImageUrl } from '../../../lib/machineImageUrl';
+
+// 2026-11-02: 머신 이름만으로는 헷갈리니 썸네일을 같이 보여준다.
+const THUMB = 44;
+// 기기 픽셀 비율만큼 키워서 요청해야 선명하다(가로·세로 모두 지정 — 정사각형 유지)
+const THUMB_PX = Math.round(THUMB * PixelRatio.get());
 
 /**
  * 정보 제보 > "이 머신 없어요" — 헬스장 보유 머신 중 실제로 없는 머신을 고르는 목록.
@@ -13,6 +20,7 @@ export interface PickerMachine {
   name:         string;
   displayName?: string;
   brand:        string;
+  blurhash?:    string;
 }
 
 interface Props {
@@ -78,6 +86,18 @@ export function MissingMachinePicker({ machines, selectedIds, onToggle }: Props)
                 size={20}
                 color={on ? C.accent : C.textSub}
               />
+              {/* 이미지가 없거나 못 불러오면 아래 아이콘이 그대로 보인다 */}
+              <View style={s.thumb}>
+                <Ionicons name="barbell-outline" size={18} color="#b5b5c0" />
+                <ExpoImage
+                  source={{ uri: getMachineImageUrl(m.id, { width: THUMB_PX, height: THUMB_PX }) }}
+                  placeholder={m.blurhash ? { blurhash: m.blurhash } : undefined}
+                  style={StyleSheet.absoluteFill}
+                  contentFit="contain"
+                  cachePolicy="memory-disk"
+                  transition={120}
+                />
+              </View>
               <View style={{ flex: 1 }}>
                 <Text style={[s.name, on && { color: C.accent }]} numberOfLines={1}>{labelOf(m)}</Text>
                 <Text style={s.brand} numberOfLines={1}>{m.brand}</Text>
@@ -108,6 +128,11 @@ const s = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 10,
   },
   rowOn:       { borderColor: C.accent, backgroundColor: C.accentBg },
+  // 머신 원본 이미지가 흰 배경이라 썸네일 칸도 흰색으로 맞춘다
+  thumb:       {
+    width: THUMB, height: THUMB, borderRadius: 8, overflow: 'hidden',
+    backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center',
+  },
   name:        { fontSize: 14, fontWeight: '600', color: C.text },
   brand:       { fontSize: 11, color: C.textSub, marginTop: 2 },
   empty:       { fontSize: 13, color: C.textSub, paddingVertical: 12 },
