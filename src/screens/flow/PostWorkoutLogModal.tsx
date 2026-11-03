@@ -3999,7 +3999,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
         {/* 인증샷 미리보기 (= 캡처 대상 overlayRef) - showCamera 중에는 숨김.
             2026-11-03: 바깥 View로 감싸 'AI 가상 이미지' 배지를 미리보기 위에 둔다(캡처 대상 밖이라 저장 안 됨). */}
         {!showCamera && (
-          <View style={{ alignSelf: 'center' }}>
+          <View style={{ alignSelf: 'center', marginBottom: 22 }}>
           {/* 2026-11-03: AI로 만든 가상 기본 이미지임을 알리고, 탭하면 다른 기본 이미지로 바꾼다.
               미리보기 위쪽에 둔다(아래 '내 사진 넣기' 버튼과 겹치지 않게). 캡처 대상 밖이라 저장 안 됨. */}
           {!photoTaken && (
@@ -4069,6 +4069,30 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
                 pointerEvents="none"
               />
             )}
+          </View>
+
+          {/* 2026-11-03: '사진 추가' 버튼을 미리보기 아래 테두리에 살짝 걸치게 띄운다.
+              캡처 대상(overlayRef) 밖의 형제 뷰라 저장·다운로드·공유 이미지에는 찍히지 않는다. */}
+          <View style={s.addPhotoFloat} pointerEvents="box-none">
+            <View
+              ref={addPhotoRef}
+              collapsable={false}
+              onLayout={() => {
+                if (onboardingActive && onboardingKey === 'photo-capture') {
+                  addPhotoRef.current?.measureInWindow((x, y, width, height) => {
+                    onRegisterRect?.('photo-capture', { x, y, width, height });
+                  });
+                }
+              }}
+            >
+              <TouchableOpacity style={s.addPhotoBtn} onPress={openPhotoPicker} activeOpacity={0.8}>
+                <View style={s.addPhotoIcon}>
+                  <Ionicons name={photoTaken ? 'images' : 'camera'} size={14} color={C.bg} />
+                </View>
+                <Text style={s.addPhotoTitle}>{photoTaken ? '사진 변경' : '사진 추가'}</Text>
+                <Ionicons name="chevron-forward" size={14} color={C.textSub} />
+              </TouchableOpacity>
+            </View>
           </View>
           </View>
         )}
@@ -4324,30 +4348,6 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
               {/* 2026-10-21: '오버레이만 저장'은 테두리선 없이 저장한다 (레이아웃 종류와 무관).
                   오운완 저장·인스타그램 공유는 overlayRef 캡처라 기존대로 테두리 포함. */}
             </View>
-          </View>
-        )}
-
-        {/* 2026-11-02: 사진 추가 / 배경 사진 바꾸기 — 항상 표시 (사진 없이 저장하면 기본 배경) */}
-        {!showCamera && (
-          <View
-            ref={addPhotoRef}
-            style={{ alignSelf: 'center', marginBottom: 16 }}
-            onLayout={() => {
-              if (onboardingActive && onboardingKey === 'photo-capture') {
-                addPhotoRef.current?.measureInWindow((x, y, width, height) => {
-                  onRegisterRect?.('photo-capture', { x, y, width, height });
-                });
-              }
-            }}
-          >
-            {/* 2026-11-03: 설명 문구 없이 한 줄로 간결하게 */}
-            <TouchableOpacity style={s.addPhotoBtn} onPress={openPhotoPicker} activeOpacity={0.8}>
-              <View style={s.addPhotoIcon}>
-                <Ionicons name={photoTaken ? 'images' : 'camera'} size={14} color={C.bg} />
-              </View>
-              <Text style={s.addPhotoTitle}>{photoTaken ? '사진 변경' : '내 사진 넣기'}</Text>
-              <Ionicons name="chevron-forward" size={14} color={C.textSub} />
-            </TouchableOpacity>
           </View>
         )}
 
@@ -6180,6 +6180,8 @@ const s = StyleSheet.create({
   photoCtaTitle:    { fontSize: 15, fontWeight: '700', color: C.textSub },
   photoCtaSub:      { fontSize: 12, color: C.textDim },
   retakeRow:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 16 },
+  // 미리보기 아래 테두리에 걸치는 '사진 추가' 버튼 자리 (버튼 높이 약 40 → 프레임 안쪽 16 / 바깥 24)
+  addPhotoFloat:    { position: 'absolute', left: 0, right: 0, bottom: -14, alignItems: 'center' },
   addPhotoBtn:      { flexDirection: 'row', alignItems: 'center', alignSelf: 'center', gap: 8, paddingLeft: 6, paddingRight: 12, paddingVertical: 6, borderRadius: R.pill, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface },
   addPhotoIcon:     { width: 26, height: 26, borderRadius: 13, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
   addPhotoTitle:    { fontSize: 13, fontWeight: '700', color: C.text },
