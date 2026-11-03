@@ -14,6 +14,7 @@ export const brandLogos: Record<string, number> = {
   DEFIANT_STRENGTH:  require('../assets/brand-logos/DEFIANT_STRENGTH.png'),
   DRAX:              require('../assets/brand-logos/DRAX.png'),
   DYNA_BODY:         require('../assets/brand-logos/DYNA_BODY.png'),
+  DYNA_FORCE:        require('../assets/brand-logos/Dyna force.png'),
   DYNAMIC:           require('../assets/brand-logos/DYNAMIC.png'),
   FLEX_FITNESS:      require('../assets/brand-logos/FLEX_FITNESS.png'),
   FLEX_LEVERAGE:     require('../assets/brand-logos/FLEX_LEVERAGE.png'),
