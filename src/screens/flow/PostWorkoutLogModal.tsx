@@ -729,9 +729,14 @@ function GymSelectStep({ onSelect, onClose, onRegisterRect, onboardingActive, on
       </ScrollView>
 
       <Modal visible={showGymRequestModal} transparent animationType="slide" onRequestClose={() => setShowGymRequestModal(false)}>
+        {/* 2026-11-03: Android에서 시트가 위아래로 계속 깜박이던 버그 수정.
+            Android Modal 창은 키보드가 뜨면 시스템이 이미 창 크기를 줄여준다(adjustResize).
+            여기에 KeyboardAvoidingView 'height'까지 겹쳐 높이를 한 번 더 줄이면, 입력칸이 밀려나며
+            키보드가 닫히고 → 높이 복구 → 다시 포커스·키보드 → 다시 축소… 가 무한 반복됐다.
+            앱의 다른 시트(GymDetailModal 제보, ManagerDashboard 등)처럼 Android는 시스템 처리에 맡긴다. */}
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
             <ScrollView
