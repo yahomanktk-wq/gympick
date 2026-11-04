@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GymPick 머신 등록 데이터 만들기</title>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<style>
+  :root {
+    --bg: #f6f6f4; --card: #fff; --line: #e3e3df; --text: #111; --sub: #6b6b66;
+    --accent: #c6ff00; --dark: #0a0a0a; --warn: #b45309; --warnbg: #fff7e6; --err: #c0262d; --errbg: #fdecec; --ok: #1f7a3d;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Pretendard, -apple-system, "Malgun Gothic", sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+  header { background: var(--dark); color: #fff; padding: 16px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  header h1 { font-size: 17px; margin: 0; font-weight: 800; }
+  header h1 span { color: var(--accent); }
+  header .status { font-size: 12px; color: #bbb; }
+  header .grow { flex: 1; }
+  header input { width: 280px; padding: 7px 10px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff; font-size: 12px; }
+  button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line); background: #fff; padding: 8px 14px; font-weight: 600; }
+  button.primary { background: var(--dark); color: #fff; border-color: var(--dark); }
+  button.accent { background: var(--accent); border-color: var(--accent); color: var(--dark); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  main { max-width: 1200px; margin: 0 auto; padding: 20px 24px 120px; }
+  .drop { border: 2px dashed #c9c9c3; border-radius: 14px; padding: 28px; text-align: center; color: var(--sub); background: #fff; }
+  .drop.over { border-color: var(--dark); background: #fafff0; }
+  .drop b { color: var(--text); }
+  .guide { font-size: 12px; color: var(--sub); margin: 10px 2px 18px; line-height: 1.6; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 14px; display: grid; grid-template-columns: 150px 1fr; gap: 18px; }
+  .thumb { width: 150px; height: 150px; border-radius: 10px; border: 1px solid var(--line); background: #fff center/contain no-repeat; }
+  .fname { font-size: 11px; color: var(--sub); margin-top: 6px; word-break: break-all; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 14px; }
+  .field label { display: block; font-size: 11px; font-weight: 700; color: var(--sub); margin-bottom: 4px; }
+  .field label i { font-style: normal; color: var(--err); }
+  .field input, .field select { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; background: #fff; }
+  .span2 { grid-column: span 2; } .span4 { grid-column: span 4; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; font-size: 12px; background: #fff; cursor: pointer; user-select: none; }
+  .chip.on { background: var(--dark); color: #fff; border-color: var(--dark); }
+  .chip .ord { display: inline-block; min-width: 16px; margin-right: 4px; font-weight: 800; color: var(--accent); }
+  .selected { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; min-height: 28px; }
+  .sel { background: var(--accent); border-radius: 999px; padding: 4px 6px 4px 11px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; }
+  .sel button { border: 0; background: transparent; padding: 0 4px; font-size: 14px; line-height: 1; }
+  .catpick { display: flex; gap: 6px; }
+  .catpick input { flex: 1; }
+  .more { font-size: 11px; color: var(--sub); margin-top: 6px; }
+  .idrow { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+  .id { font-family: ui-monospace, Consolas, monospace; font-size: 14px; font-weight: 800; background: #f2f2ee; padding: 5px 10px; border-radius: 6px; }
+  .msgs { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
+  .msg { font-size: 12px; padding: 3px 8px; border-radius: 6px; }
+  .msg.err { background: var(--errbg); color: var(--err); }
+  .msg.warn { background: var(--warnbg); color: var(--warn); }
+  .msg.ok { color: var(--ok); }
+  .remove { margin-left: auto; color: var(--err); border-color: transparent; background: transparent; }
+  footer { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid var(--line); padding: 12px 24px; display: flex; align-items: center; gap: 10px; }
+  footer .summary { flex: 1; color: var(--sub); font-size: 13px; }
+  .empty { text-align: center; color: var(--sub); padding: 30px; }
+  .opts { display: flex; gap: 16px; align-items: center; font-size: 12px; color: var(--sub); margin-top: 10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>GymPick <span>머신 등록 데이터 만들기</span></h1>
+  <span class="status" id="dbStatus">DB 연결 전</span>
+  <span class="grow"></span>
+  <input id="anonKey" type="password" placeholder="Supabase anon key (처음 한 번만 입력)">
+  <button id="reloadBtn">기존 데이터 불러오기</button>
+</header>
+
+<main>
+  <div class="drop" id="drop">
+    <b>이미지 파일을 여기에 끌어다 놓거나</b> <button id="pickBtn" class="primary">파일 선택</button>
+    <input type="file" id="fileInput" accept="image/*" multiple hidden>
+  </div>
+  <div class="guide">
+    미리캔버스에서 편집을 마친 이미지를 넣으세요. 이미지마다 브랜드·부위·카테고리를 고르면 ID가 자동으로 붙어요.<br>
+    · ID 규칙: <code>브랜드_부위_번호</code> (예: <code>panatta_chest_54</code>). 지금 DB에 있는 같은 접두사의 가장 큰 번호 다음부터 매겨요.<br>
+    · 타겟부위는 먼저 고른 것이 주 부위(①)예요. 카테고리도 고른 순서대로 저장돼요.<br>
+    · 다 채우면 아래 <b>CSV + 이미지(zip)</b>를 받아서 CSV는 machines 테이블에, 이미지는 machine-images 버킷에 올리세요. 이미지는 800×800 흰 배경 webp, 파일명은 ID로 바뀌어 있어요.
+  </div>
+  <div class="opts">
+    <label><input type="checkbox" id="optWebp" checked> 이미지를 800×800 흰 배경 webp로 변환해서 받기</label>
+  </div>
+  <div id="list" style="margin-top:16px"><div class="empty">아직 추가한 이미지가 없어요</div></div>
+</main>
+
+<footer>
+  <span class="summary" id="summary">0개</span>
+  <button id="csvBtn" disabled>CSV만 받기</button>
+  <button id="zipBtn" class="accent" disabled>CSV + 이미지(zip) 받기</button>
+</footer>
+
+<script>
+// 2026-11-05: GymPick 머신 등록용 CSV/이미지 생성 도구 (브라우저에서만 동작, DB는 읽기만 함)
+const SUPABASE_URL = 'https://okrouzqqvfioodfieljv.supabase.co';
+const KEY_STORAGE = 'gympick_anon_key';
+const MUSCLES = ['Chest', 'Back', 'Leg', 'Shoulder', 'Arms', 'Glutes', 'Other'];
+const MUSCLE_SLUG = { Chest: 'chest', Back: 'back', Leg: 'leg', Shoulder: 'shoulder', Arms: 'arm', Glutes: 'glute', Other: 'other' };
+const CAT_JOIN = ' , ';     // DB에 가장 많이 쓰인 카테고리 구분 형식
+const MUSCLE_JOIN = ', ';   // 기존 복합 부위 형식 ("Chest, Shoulder")
+const ID_PATTERN = /^(.*?)_(chest|back|legs?|arms?|shoulders?|glutes?|others?)_(\d+)$/;
+
+const db = {
+  loaded: false,
+  machines: [],
+  idsLower: new Set(),
+  prefixMax: new Map(),
+  brands: [],                 // [{name, key, slug, count}]
+  brandByKey: new Map(),
+  catsByMuscle: new Map(),    // muscle -> Map(cat -> count)
+  allCats: new Map(),
+  linesByBrand: new Map(),
+  namesByBrand: new Map(),    // brandKey -> Set(upper name)
+};
+let cards = [];
+let seq = 0;
+
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const keyOf = s => String(s ?? '').trim().toLowerCase();
+const slugify = s => keyOf(s).replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+const splitList = s => String(s ?? '').split(',').map(x => x.trim()).filter(Boolean);
+const bump = (map, k, n = 1) => map.set(k, (map.get(k) || 0) + n);
+
+// ── DB 읽기 ───────────────────────────────────────────────
+async function loadDb() {
+  const key = $('#anonKey').value.trim();
+  if (!key) { setStatus('anon key를 입력해주세요', true); return; }
+  try { localStorage.setItem(KEY_STORAGE, key); } catch {}
+  setStatus('기존 머신 불러오는 중...');
+  const rows = [];
+  const page = 1000;
+  for (let offset = 0; ; offset += page) {
+    const url = `${SUPABASE_URL}/rest/v1/machines?select=id,name,brand,target_muscle,category,line,exercise_kind&order=id&limit=${page}&offset=${offset}`;
+    const res = await fetch(url, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
+    if (!res.ok) { setStatus(`불러오기 실패 (${res.status}). anon key를 확인해주세요`, true); return; }
+    const part = await res.json();
+    rows.push(...part);
+    if (part.length < page) break;
+  }
+  buildIndex(rows);
+  setStatus(`기존 머신 ${rows.length.toLocaleString()}개 · 브랜드 ${db.brands.length}개 불러옴`);
+  cards.forEach(c => refreshCardOptions(c));
+  refreshAll();
+}
+
+function buildIndex(rows) {
+  db.machines = rows;
+  db.idsLower = new Set(rows.map(r => keyOf(r.id)));
+  db.prefixMax = new Map();
+  db.catsByMuscle = new Map(MUSCLES.map(m => [m, new Map()]));
+  db.allCats = new Map();
+  db.linesByBrand = new Map();
+  db.namesByBrand = new Map();
+  const brandAgg = new Map();     // key -> {names: Map, slugs: Map, count}
+
+  for (const r of rows) {
+    const idl = keyOf(r.id);
+    const m = idl.match(/^(.+)_(\d+)$/);
+    if (m) db.prefixMax.set(m[1], Math.max(db.prefixMax.get(m[1]) || 0, parseInt(m[2], 10)));
+
+    const bk = keyOf(r.brand);
+    if (bk && bk !== 'none' && bk !== 'free weight') {
+      if (!brandAgg.has(bk)) brandAgg.set(bk, { names: new Map(), slugs: new Map(), count: 0 });
+      const a = brandAgg.get(bk);
+      a.count++;
+      bump(a.names, String(r.brand).trim());
+      const sm = idl.match(ID_PATTERN);
+      if (sm) bump(a.slugs, sm[1].replace(/\s+/g, '_'));
+    }
+    if (bk) {
+      if (r.line) { if (!db.linesByBrand.has(bk)) db.linesByBrand.set(bk, new Map()); bump(db.linesByBrand.get(bk), r.line.trim()); }
+      if (!db.namesByBrand.has(bk)) db.namesByBrand.set(bk, new Set());
+      db.namesByBrand.get(bk).add(String(r.name ?? '').trim().toUpperCase());
+    }
+    const muscles = splitList(r.target_muscle);
+    for (const cat of splitList(r.category)) {
+      bump(db.allCats, cat);
+      for (const mu of muscles) if (db.catsByMuscle.has(mu)) bump(db.catsByMuscle.get(mu), cat);
+    }
+  }
+
+  const top = map => [...map.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  db.brands = [...brandAgg.entries()].map(([k, a]) => ({
+    key: k, name: top(a.names), slug: top(a.slugs) || slugify(k), count: a.count,
+  })).sort((a, b) => b.count - a.count);
+  db.brandByKey = new Map(db.brands.map(b => [b.key, b]));
+  db.loaded = true;
+
+  $('#brandList')?.remove();
+  const dl = document.createElement('datalist');
+  dl.id = 'brandList';
+  dl.innerHTML = db.brands.map(b => `<option value="${esc(b.name)}">`).join('');
+  document.body.appendChild(dl);
+  $('#catAll')?.remove();
+  const cl = document.createElement('datalist');
+  cl.id = 'catAll';
+  cl.innerHTML = [...db.allCats.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => `<option value="${esc(c)}">`).join('');
+  document.body.appendChild(cl);
+}
+
+function setStatus(text, isErr) {
+  const el = $('#dbStatus');
+  el.textContent = text;
+  el.style.color = isErr ? '#ff8a8a' : '#bbb';
+}
+
+// ── 카드(이미지 1장 = 머신 1개) ─────────────────────────────
+function defaultName(file) {
+  return file.name.replace(/\.[^.]+$/, '').replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase();
+}
+
+function addFiles(files) {
+  for (const f of files) {
+    if (!f.type.startsWith('image/')) continue;
+    cards.push({
+      uid: ++seq, file: f, url: URL.createObjectURL(f),
+      name: defaultName(f), displayName: '', brand: '', muscles: [], cats: [],
+      kind: 'machine', line: '', id: '',
+    });
+  }
+  renderList();
+}
+
+function renderList() {
+  const list = $('#list');
+  if (cards.length === 0) { list.innerHTML = '<div class="empty">아직 추가한 이미지가 없어요</div>'; refreshAll(); return; }
+  list.innerHTML = '';
+  for (const c of cards) list.appendChild(renderCard(c));
+  refreshAll();
+}
+
+function renderCard(c) {
+  const el = document.createElement('div');
+  el.className = 'card';
+  el.dataset.uid = c.uid;
+  el.innerHTML = `
+    <div>
+      <div class="thumb" style="background-image:url('${c.url}')"></div>
+      <div class="fname">${esc(c.file.name)}</div>
+    </div>
+    <div>
+      <div class="grid">
+        <div class="field span2"><label>머신명 <i>*</i></label><input data-k="name" list="names-${c.uid}" value="${esc(c.name)}"><datalist id="names-${c.uid}"></datalist></div>
+        <div class="field"><label>브랜드 <i>*</i></label><input data-k="brand" list="brandList" value="${esc(c.brand)}" placeholder="브랜드 검색"></div>
+        <div class="field"><label>라인</label><input data-k="line" list="lines-${c.uid}" value="${esc(c.line)}" placeholder="선택"><datalist id="lines-${c.uid}"></datalist></div>
+        <div class="field span2"><label>표시 이름 (선택, 긴 이름 줄임용)</label><input data-k="displayName" value="${esc(c.displayName)}"></div>
+        <div class="field"><label>종류</label>
+          <select data-k="kind"><option value="machine"${c.kind === 'machine' ? ' selected' : ''}>machine</option><option value="freeweight"${c.kind === 'freeweight' ? ' selected' : ''}>freeweight</option></select>
+        </div>
+        <div></div>
+        <div class="field span4"><label>타겟부위 <i>*</i> (여러 개 가능, 먼저 고른 것이 주 부위)</label><div class="chips" data-role="muscles"></div></div>
+        <div class="field span4"><label>세부 카테고리 <i>*</i> (여러 개 가능, 고른 순서대로 저장)</label>
+          <div class="selected" data-role="catSelected"></div>
+          <div class="chips" data-role="catChips"></div>
+          <div class="catpick" style="margin-top:8px"><input data-role="catInput" list="catAll" placeholder="목록에 없으면 검색하거나 새로 입력 후 Enter"><button data-role="catAdd">추가</button></div>
+        </div>
+      </div>
+      <div class="idrow">
+        <span class="id" data-role="id">—</span>
+        <span class="msgs" data-role="msgs"></span>
+        <button class="remove" data-role="remove">삭제</button>
+      </div>
+    </div>`;
+
+  el.querySelectorAll('[data-k]').forEach(inp => {
+    inp.addEventListener('input', () => {
+      c[inp.dataset.k] = inp.value;
+      if (inp.dataset.k === 'brand') refreshCardOptions(c);
+      refreshAll();
+    });
+  });
+  $('[data-role="remove"]', el).addEventListener('click', () => {
+    URL.revokeObjectURL(c.url);
+    cards = cards.filter(x => x !== c);
+    renderList();
+  });
+  const catInput = $('[data-role="catInput"]', el);
+  const addCat = () => {
+    const v = catInput.value.trim();
+    if (v && !c.cats.includes(v)) { c.cats.push(v); renderCats(c); refreshAll(); }
+    catInput.value = '';
+  };
+  $('[data-role="catAdd"]', el).addEventListener('click', addCat);
+  catInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addCat(); } });
+
+  c.el = el;
+  renderMuscles(c);
+  renderCats(c);
+  refreshCardOptions(c);
+  return el;
+}
+
+function renderMuscles(c) {
+  const box = $('[data-role="muscles"]', c.el);
+  box.innerHTML = MUSCLES.map(m => {
+    const i = c.muscles.indexOf(m);
+    return `<span class="chip${i >= 0 ? ' on' : ''}" data-m="${m}">${i >= 0 ? `<span class="ord">${'①②③④⑤⑥⑦'[i]}</span>` : ''}${m.toUpperCase()}</span>`;
+  }).join('');
+  box.querySelectorAll('.chip').forEach(ch => ch.addEventListener('click', () => {
+    const m = ch.dataset.m;
+    c.muscles = c.muscles.includes(m) ? c.muscles.filter(x => x !== m) : [...c.muscles, m];
+    renderMuscles(c);
+    renderCats(c);
+    refreshAll();
+  }));
+}
+
+function renderCats(c) {
+  const sel = $('[data-role="catSelected"]', c.el);
+  sel.innerHTML = c.cats.length
+    ? c.cats.map((cat, i) => `<span class="sel">${i + 1}. ${esc(cat)}<button data-i="${i}" title="빼기">×</button></span>`).join('')
+    : '<span class="more">아직 고른 카테고리가 없어요</span>';
+  sel.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    c.cats.splice(Number(b.dataset.i), 1);
+    renderCats(c);
+    refreshAll();
+  }));
+
+  // 고른 부위에서 많이 쓰인 카테고리부터 (부위를 안 골랐으면 전체)
+  const counts = new Map();
+  const sources = c.muscles.length ? c.muscles.map(m => db.catsByMuscle.get(m)).filter(Boolean) : [db.allCats];
+  for (const src of sources) for (const [cat, n] of src) bump(counts, cat, n);
+  const options = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([cat]) => cat).filter(cat => !c.cats.includes(cat)).slice(0, 24);
+  const chips = $('[data-role="catChips"]', c.el);
+  chips.innerHTML = db.loaded
+    ? options.map(cat => `<span class="chip" data-c="${esc(cat)}">${esc(cat)}</span>`).join('')
+    : '<span class="more">기존 데이터를 불러오면 추천 카테고리가 나와요</span>';
+  chips.querySelectorAll('.chip').forEach(ch => ch.addEventListener('click', () => {
+    c.cats.push(ch.dataset.c);
+    renderCats(c);
+    refreshAll();
+  }));
+}
+
+function refreshCardOptions(c) {
+  if (!c.el) return;
+  const bk = keyOf(c.brand);
+  const lines = db.linesByBrand.get(bk);
+  $(`#lines-${c.uid}`, c.el).innerHTML = lines
+    ? [...lines.entries()].sort((a, b) => b[1] - a[1]).map(([l]) => `<option value="${esc(l)}">`).join('') : '';
+  const names = db.namesByBrand.get(bk);
+  $(`#names-${c.uid}`, c.el).innerHTML = names ? [...names].sort().map(n => `<option value="${esc(n)}">`).join('') : '';
+  renderCats(c);
+}
+
+// ── ID 자동 지정 + 검사 ────────────────────────────────────
+function brandSlug(brand) {
+  const b = db.brandByKey.get(keyOf(brand));
+  return b ? b.slug : slugify(brand);
+}
+
+function assignIds() {
+  const used = new Set(db.idsLower);
+  const nextByPrefix = new Map();
+  for (const c of cards) {
+    if (!c.brand.trim() || c.muscles.length === 0) { c.id = ''; continue; }
+    const prefix = `${brandSlug(c.brand)}_${c.muscles.map(m => MUSCLE_SLUG[m]).join('_')}`;
+    let n = nextByPrefix.has(prefix) ? nextByPrefix.get(prefix) : (db.prefixMax.get(prefix) || 0) + 1;
+    while (used.has(`${prefix}_${n}`)) n++;
+    c.id = `${prefix}_${n}`;
+    used.add(c.id);
+    nextByPrefix.set(prefix, n + 1);
+  }
+}
+
+function checkCard(c) {
+  const errs = [], warns = [];
+  if (!c.name.trim()) errs.push('머신명 없음');
+  if (!c.brand.trim()) errs.push('브랜드 없음');
+  if (c.muscles.length === 0) errs.push('타겟부위 없음');
+  if (c.cats.length === 0) errs.push('카테고리 없음');
+  if (!db.loaded) errs.push('기존 데이터를 먼저 불러오세요');
+  const bk = keyOf(c.brand);
+  if (db.loaded && c.brand.trim() && !db.brandByKey.has(bk)) warns.push('새 브랜드예요 (브랜드 로고 등록 필요)');
+  const upper = c.name.trim().toUpperCase();
+  if (db.loaded && upper && db.namesByBrand.get(bk)?.has(upper)) warns.push('같은 브랜드에 같은 이름의 머신이 이미 있어요');
+  const dupInBatch = cards.filter(x => x !== c && keyOf(x.brand) === bk && x.name.trim().toUpperCase() === upper && upper).length;
+  if (dupInBatch) warns.push('이번 목록에 같은 브랜드·이름이 또 있어요');
+  for (const cat of c.cats) if (db.loaded && !db.allCats.has(cat)) { warns.push(`새 카테고리: ${cat}`); }
+  return { errs, warns };
+}
+
+function refreshAll() {
+  assignIds();
+  let ready = 0;
+  for (const c of cards) {
+    if (!c.el) continue;
+    $('[data-role="id"]', c.el).textContent = c.id || '—';
+    const { errs, warns } = checkCard(c);
+    c.ok = errs.length === 0;
+    if (c.ok) ready++;
+    $('[data-role="msgs"]', c.el).innerHTML =
+      errs.map(e => `<span class="msg err">${esc(e)}</span>`).join('') +
+      warns.map(w => `<span class="msg warn">${esc(w)}</span>`).join('') +
+      (c.ok && warns.length === 0 ? '<span class="msg ok">준비 완료</span>' : '');
+  }
+  $('#summary').textContent = cards.length ? `${cards.length}개 중 ${ready}개 준비 완료` : '0개';
+  const allOk = cards.length > 0 && ready === cards.length;
+  $('#csvBtn').disabled = !allOk;
+  $('#zipBtn').disabled = !allOk;
+}
+
+// ── 내보내기 ───────────────────────────────────────────────
+function toCsv() {
+  const head = ['id', 'name', 'display_name', 'brand', 'target_muscle', 'category', 'exercise_kind', 'line'];
+  const cell = v => {
+    const s = String(v ?? '');
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const brandName = c => db.brandByKey.get(keyOf(c.brand))?.name ?? c.brand.trim();
+  const rows = cards.map(c => [
+    c.id, c.name.trim().toUpperCase(), c.displayName.trim(), brandName(c),
+    c.muscles.join(MUSCLE_JOIN), c.cats.join(CAT_JOIN), c.kind, c.line.trim(),
+  ]);
+  return [head, ...rows].map(r => r.map(cell).join(',')).join('\n') + '\n';
+}
+
+function stamp() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
+}
+
+function download(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+async function toWebp(file) {
+  const img = await createImageBitmap(file);
+  const S = 800;
+  const canvas = document.createElement('canvas');
+  canvas.width = S; canvas.height = S;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, S, S);
+  const scale = Math.min(S / img.width, S / img.height);
+  const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, Math.round((S - w) / 2), Math.round((S - h) / 2), w, h);
+  return new Promise(res => canvas.toBlob(res, 'image/webp', 0.9));
+}
+
+$('#csvBtn').addEventListener('click', () => {
+  download(new Blob([toCsv()], { type: 'text/csv;charset=utf-8' }), `machines_${stamp()}.csv`);
+});
+
+$('#zipBtn').addEventListener('click', async () => {
+  if (typeof JSZip === 'undefined') { alert('zip 라이브러리를 불러오지 못했어요. 인터넷 연결을 확인해주세요.'); return; }
+  const btn = $('#zipBtn');
+  btn.disabled = true; btn.textContent = '만드는 중...';
+  try {
+    const zip = new JSZip();
+    const name = `machines_${stamp()}`;
+    zip.file(`${name}.csv`, toCsv());
+    const folder = zip.folder('machine-images');
+    for (const c of cards) {
+      if ($('#optWebp').checked) {
+        folder.file(`${c.id}.webp`, await toWebp(c.file));
+      } else {
+        const ext = (c.file.name.match(/\.[^.]+$/) || [''])[0].toLowerCase();
+        folder.file(`${c.id}${ext}`, c.file);
+      }
+    }
+    download(await zip.generateAsync({ type: 'blob' }), `${name}.zip`);
+  } finally {
+    btn.textContent = 'CSV + 이미지(zip) 받기';
+    refreshAll();
+  }
+});
+
+// ── 파일 넣기 ──────────────────────────────────────────────
+const drop = $('#drop');
+$('#pickBtn').addEventListener('click', () => $('#fileInput').click());
+$('#fileInput').addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
+['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => addFiles(e.dataTransfer.files));
+$('#reloadBtn').addEventListener('click', loadDb);
+
+try {
+  const saved = localStorage.getItem(KEY_STORAGE);
+  if (saved) { $('#anonKey').value = saved; loadDb(); }
+} catch {}
+</script>
+</body>
+</html>
