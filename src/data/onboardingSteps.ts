@@ -35,7 +35,7 @@ export const ONBOARDING_MESSAGES: Record<OnboardingPointKey, string> = {
   'set-input':           '무게와 횟수를 입력하고 세트를 기록하세요',
   'set-add-copy':        '세트를 추가하거나, 이전 세트를 그대로 복사할 수 있어요',
   'set-note':            '운동하면서 기억할 내용을 메모해두세요. 그립, 시트 조절 등 나만의 팁을 남길 수 있어요.',
-  'photo-capture':       "'사진 추가'로 인증샷 배경에 내 사진을 넣어보세요. 사진 없이 저장하면 AI 가상 이미지로 저장돼요",
+  'photo-capture':       "'사진 추가'로 인증샷 배경에 내 사진을 넣어보세요. 사진 없이 저장하면 검정 배경으로 저장돼요",
   'photo-camera-hint':   '화면을 탭하면 사진이 촬영돼요!',
   'photo-capture-done':  '인증샷이 적용됐어요! 아래에서 스타일을 꾸며보세요.',
   'photo-overlay':       '인증샷 디자인 스타일을 선택할 수 있어요',
