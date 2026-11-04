@@ -5,6 +5,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { C, R } from '../theme';
 import { brandLogos } from '../constants/brandLogos';
+import { parseMuscles } from '../lib/splitUtils';
 import type {
   WeeklyRankingEntry,
   FavoriteRankingEntry,
@@ -191,7 +192,8 @@ export function RankingTab({ data, loading, olympicRankings, olympicLoading, onP
   }
 
   const weeklyInsufficient = data.weeklyTotal < WEEKLY_THRESHOLD;
-  const weeklyByMuscle     = data.weekly.filter(e => e.targetMuscle === weeklyMuscle);
+  // 2026-11-05: 복합 부위("CHEST, SHOULDER") 머신도 각 부위 랭킹에 포함
+  const weeklyByMuscle     = data.weekly.filter(e => parseMuscles(e.targetMuscle).includes(weeklyMuscle));
   const updatedStr         = formatUpdatedAt(data.updatedAt);
 
   return (

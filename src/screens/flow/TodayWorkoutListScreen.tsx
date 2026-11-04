@@ -29,6 +29,7 @@ import { C, R, T } from '../../theme';
 import { Machine } from '../../data/types';
 import { MACHINES } from '../../data';
 import { perfStart, perfEnd } from '../../lib/perf';
+import { parseMuscles } from '../../lib/splitUtils';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -295,16 +296,18 @@ export default function TodayWorkoutListScreen({
   const idSet = useMemo(() => new Set(orderedIds), [orderedIds]);
   const availableToAdd = useMemo(() => {
     const base = gymMachines.filter((m) => !idSet.has(m.id));
-    if (muscleFilter) return base.filter((m) => m.targetMuscle === muscleFilter);
+    // 2026-11-05: 복합 부위("Chest, Shoulder") 머신도 각 부위에 포함되도록 나눠서 비교
+    if (muscleFilter) return base.filter((m) => parseMuscles(m.targetMuscle).includes(muscleFilter));
     // Default: show selected muscles first, then the rest
-    const inMuscle = base.filter((m) => selectedMuscles.includes(m.targetMuscle));
-    const rest = base.filter((m) => !selectedMuscles.includes(m.targetMuscle));
+    const inSelected = (m: Machine) => parseMuscles(m.targetMuscle).some((t) => selectedMuscles.includes(t));
+    const inMuscle = base.filter(inSelected);
+    const rest = base.filter((m) => !inSelected(m));
     return [...inMuscle, ...rest];
   }, [gymMachines, idSet, muscleFilter, selectedMuscles]);
 
   // Unique muscles available in add list (for filter chips)
   const availableMuscles = useMemo(
-    () => [...new Set(gymMachines.filter((m) => !idSet.has(m.id)).map((m) => m.targetMuscle))],
+    () => [...new Set(gymMachines.filter((m) => !idSet.has(m.id)).flatMap((m) => parseMuscles(m.targetMuscle)))],
     [gymMachines, idSet],
   );
 

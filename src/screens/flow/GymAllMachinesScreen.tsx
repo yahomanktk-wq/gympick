@@ -14,6 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { C, R, T } from '../../theme';
 import SelectableMachineCard, { SelectableMachineCardMachine } from '../../components/SelectableMachineCard';
 import MachineDetailModal from './MachineDetailModal';
+import { parseMuscles } from '../../lib/splitUtils';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const GRID_GAP = 8;
@@ -41,7 +42,8 @@ export default function GymAllMachinesScreen({ visible, gymId, gymName, machines
 
   const filteredMachines = useMemo(() => {
     return machines.filter(m => {
-      const muscleOk = activeMuscle === '전체' || m.targetMuscle === activeMuscle;
+      // 2026-11-05: 복합 부위("Chest, Shoulder") 머신도 각 부위 필터에 나오도록 나눠서 비교
+      const muscleOk = activeMuscle === '전체' || parseMuscles(m.targetMuscle).includes(activeMuscle);
       const brandOk  = activeBrand  === '전체' || m.brand        === activeBrand;
       return muscleOk && brandOk;
     });
