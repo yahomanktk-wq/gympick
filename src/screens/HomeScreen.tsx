@@ -32,7 +32,7 @@ import { fetchWorkoutLogs } from '../lib/db';
 import { getActiveFeedPostsCached } from '../data/feedPostsCache';
 import { fetchActiveFeedPosts } from '../lib/db/feedPosts';
 import { fetchSplitConfig } from '../lib/db/splitRoutine';
-import { getTodayTarget, getTodayTargets, toEnMuscle, toKoMuscle } from '../lib/splitUtils';
+import { getTodayTarget, getTodayTargets, toEnMuscle, toKoMuscle, parseMuscles } from '../lib/splitUtils';
 import { getTransformedImageUrl } from '../lib/photoImageUrl';
 import { track } from '../lib/analytics';
 import { perfStart, perfEnd } from '../lib/perf';
@@ -391,9 +391,10 @@ export default function HomeScreen() {
           );
 
           if (todayLogs.length > 0) {
+            // 2026-11-04: 머신 부위가 "Chest, Shoulder"처럼 묶여 있으면 오운완 부위와 비교되지 않아 낱개로 풀어서 쓴다
             const todayMuscles = (todayLogs[0].targetMuscles && todayLogs[0].targetMuscles.length > 0)
               ? todayLogs[0].targetMuscles
-              : [...new Set(todayLogs[0].machines.map(m => m.targetMuscle).filter(Boolean))];
+              : [...new Set(todayLogs[0].machines.flatMap(m => parseMuscles(m.targetMuscle)))];
             target = config
               ? getTodayTarget(config.splitType, config.workoutSplit, config.splitCurrentIndex)
               : null;
@@ -436,7 +437,14 @@ export default function HomeScreen() {
 
         if (hasFeedMuscleFilter) {
           const filtered = posts.filter(p => p.muscles.some(m => feedMuscleFilter.includes(m)));
-          setOunwanPosts(filtered.length > 0 ? filtered : posts);
+          if (filtered.length > 0) {
+            setOunwanPosts(filtered);
+          } else {
+            // 2026-11-04: 오늘 부위의 오운완이 없으면 전체를 보여주되, 제목에서 부위를 빼서
+            // "오늘 [부위] 운동한 사람들"에 다른 부위 오운완이 섞여 보이지 않게 한다
+            setOunwanPosts(posts);
+            setOunwanDisplayTarget(null);
+          }
         } else {
           setOunwanPosts(posts);
         }
@@ -648,20 +656,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        {/* ── Find Gym CTA ── */}
-        <TouchableOpacity
-          style={st.ctaCard}
-          activeOpacity={0.88}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); nav.navigate('LogWorkout'); }}
-        >
-          <View style={st.ctaLeft}>
-            <Text style={st.ctaEye}>READY TO LIFT?</Text>
-            <Text style={st.ctaTitle}>Find a Gym{'\n'}& Start</Text>
-          </View>
-          <View style={st.ctaBtn}>
-            <Ionicons name="play" size={24} color={C.bg} />
-          </View>
-        </TouchableOpacity>
+        {/* 2026-11-04: 'Find a Gym & Start' 버튼 삭제 (하단 탭 '기록하기'와 같은 기능) */}
 
         {/* ── 오늘의 오운완 피드 ── */}
         <OunwanHeader

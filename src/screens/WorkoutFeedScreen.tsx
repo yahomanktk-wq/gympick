@@ -21,7 +21,7 @@ import { WorkoutFeedPost, WorkoutLog } from '../data/types';
 const MOCK_FEED_POSTS: WorkoutFeedPost[] = [];
 import { filterActivePosts, toggleReaction, convertSessionToFeedPost } from '../lib/feedUtils';
 import { fetchMyLatestGymId } from '../lib/db/feedPosts';
-import { getActiveFeedPostsCached, invalidateActiveFeedPostsCache } from '../data/feedPostsCache';
+import { invalidateActiveFeedPostsCache } from '../data/feedPostsCache';
 import { fetchActiveFeedPosts } from '../lib/db/feedPosts';
 import { fetchSplitConfig } from '../lib/db/splitRoutine';
 import { getTodayTarget, toEnMuscle } from '../lib/splitUtils';
@@ -62,6 +62,12 @@ function sortByLatest(posts: WorkoutFeedPost[]): WorkoutFeedPost[] {
 // ── 탭 정의 ──────────────────────────────────────────────────────────────────
 
 type FeedTab = '내 헬스장' | '주변 5km' | '전국';
+
+/**
+ * 2026-11-04: '전국' 탭 조회 기간. null = 기간 제한 없음.
+ * 아직 게시글이 적어서 '24시간 후 사라지는' 기능을 잠시 멈췄다. 다시 켜려면 24로 바꾼다.
+ */
+const FEED_HOURS_WINDOW: number | null = null;
 const TABS: FeedTab[] = ['내 헬스장', '주변 5km', '전국'];
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -162,8 +168,9 @@ function FeedGridCard({
             const diffH   = Math.floor(diffMs / (1000 * 60 * 60));
             const diffMin = Math.floor(diffMs / (1000 * 60));
             if (diffMin < 1)  return '방금 전';
-            if (diffH < 1)    return `${diffMin}분 후 사라져요`;
-            if (diffH < 24)   return `${24 - diffH}시간 후 사라져요`;
+            // 2026-11-04: 24시간 후 사라지는 기능을 잠시 멈춰서 남은 시간 대신 올린 지 얼마나 됐는지 표시
+            if (diffH < 1)    return `${diffMin}분 전`;
+            if (diffH < 24)   return `${diffH}시간 전`;
             const diffDays = Math.floor(diffH / 24);
             return `${diffDays}일 전`;
           })()}
@@ -225,14 +232,8 @@ export default function WorkoutFeedScreen() {
       async function loadPosts() {
         if (active) setIsFeedFallback(false);
         if (!user?.id) {
-          let serverPosts = await getActiveFeedPostsCached().catch(() => [] as WorkoutFeedPost[]);
-          if (serverPosts.length < 3) {
-            const widened = await fetchActiveFeedPosts(null).catch(() => [] as WorkoutFeedPost[]);
-            if (widened.length > serverPosts.length) {
-              serverPosts = widened;
-              if (active) setIsFeedFallback(true);
-            }
-          }
+          // 2026-11-04: 24시간 제한을 잠시 멈추고 전체 공개 오운완을 보여준다 (FEED_HOURS_WINDOW)
+          const serverPosts = await fetchActiveFeedPosts(FEED_HOURS_WINDOW).catch(() => [] as WorkoutFeedPost[]);
           const previewPosts = serverPosts.slice(0, 4);
           if (active) setPosts(previewPosts);
           return;
@@ -247,7 +248,7 @@ export default function WorkoutFeedScreen() {
         const [mySessions, fetchedGymId, initialServerPosts, splitConfig]: [WorkoutLog[], string | null, WorkoutFeedPost[], Awaited<ReturnType<typeof fetchSplitConfig>> | null] = await Promise.all([
           fetchWorkoutLogs(user.id).catch(() => [] as WorkoutLog[]),
           fetchMyLatestGymId(user.id),
-          getActiveFeedPostsCached().catch(() => [] as WorkoutFeedPost[]),
+          fetchActiveFeedPosts(FEED_HOURS_WINDOW).catch(() => [] as WorkoutFeedPost[]),
           fetchSplitConfig(user.id).catch(() => null),
         ]);
 
@@ -293,14 +294,7 @@ export default function WorkoutFeedScreen() {
           latestGymId = sorted[0].gymId ?? null;
         }
 
-        let serverPosts = initialServerPosts;
-        if (serverPosts.length < 3) {
-          const widened = await fetchActiveFeedPosts(null).catch(() => [] as WorkoutFeedPost[]);
-          if (widened.length > serverPosts.length) {
-            serverPosts = widened;
-            if (active) setIsFeedFallback(true);
-          }
-        }
+        const serverPosts = initialServerPosts;
 
         // 내 게시물: serverPosts에서 가져옴 (routineCardUri 포함)
         // serverPosts가 없으면 로컬 세션으로 fallback
@@ -500,6 +494,13 @@ export default function WorkoutFeedScreen() {
             setPosts(prev => prev.filter(p => p.id !== postId));
             homeFeed.removePost(postId);
             nearby.removePost(postId);
+            invalidateActiveFeedPostsCache();
+          }}
+          onAuthorBlocked={(userId) => {
+            // 2026-11-04: 작성자를 차단하면 모든 탭 목록에서 그 사람 글을 바로 뺀다 (다음 조회부터는 DB에서 제외됨)
+            setPosts(prev => prev.filter(p => p.userId !== userId));
+            homeFeed.posts.filter(p => p.userId === userId).forEach(p => homeFeed.removePost(p.id));
+            nearby.posts.filter(p => p.userId === userId).forEach(p => nearby.removePost(p.id));
             invalidateActiveFeedPostsCache();
           }}
         />
