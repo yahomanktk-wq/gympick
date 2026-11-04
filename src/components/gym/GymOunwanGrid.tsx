@@ -134,6 +134,10 @@ export default function GymOunwanGrid({ gymId, onPressMachine }: Props) {
             // 2026-10-20: 내 오운완을 비공개로 바꾸면 이 목록에서 바로 뺀다
             if (!isPublic) setPosts(prev => prev.filter(p => p.id !== postId));
           }}
+          onAuthorBlocked={(userId) => {
+            // 2026-11-04: 작성자를 차단하면 이 목록에서 그 사람 글을 바로 뺀다
+            setPosts(prev => prev.filter(p => p.userId !== userId));
+          }}
         />
       )}
     </View>

@@ -47,6 +47,7 @@ import { containsBannedWord } from '../../lib/bannedWords';
 import { getGymShareUrl } from '../../lib/share';
 import { shareGymLink } from '../../lib/shareGymLink';
 import GymOunwanStrip from '../../components/gym/GymOunwanStrip';
+import GymReviewPreview from '../../components/gym/reviews/GymReviewPreview';
 import GymHoursRow from '../../components/gym/GymHoursRow';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -233,6 +234,8 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
   const [selectedMachineId,   setSelectedMachineId]   = useState<string | null>(null);
   const [isFav,               setIsFav]               = useState(false);
   const [activeTab,           setActiveTab]           = useState<GymTab>('정보');
+  // 2026-11-04: 후기를 쓰거나 지우면 정보 탭 미리보기도 다시 불러오기 위한 번호
+  const [reviewsVersion,      setReviewsVersion]      = useState(0);
   // ── 좌우 스와이프 탭 (2026-10-20) ──
   // 가로 페이지 ScrollView 하나에 탭 3개를 나란히 두고, 탭 버튼과 스와이프가 같은 상태를 쓴다.
   // 처음 들어간 탭만 렌더한다(머신 그리드가 무거워서 미리 그리지 않음).
@@ -622,6 +625,14 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
               onPressMachine={setSelectedMachineId}
             />
 
+            {/* ── 후기 (최근 3개, 0건이면 숨김) — 2026-11-04 ── */}
+            <GymReviewPreview
+              gymId={gymId}
+              version={reviewsVersion}
+              titleStyle={s.sectionTitle}
+              onPressMore={() => goToTab('커뮤니티')}
+            />
+
             {/* ── Notices ── */}
             {details?.notices && details.notices.length > 0 && (
               <React.Fragment>
@@ -727,7 +738,13 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
         {/* ── 커뮤니티 tab ── */}
         <View style={{ width: pageSize.w, height: pageSize.h }}>
         {visitedTabs.has('커뮤니티') && (
-          <GymCommunityTab gymId={gymId} gymName={gym.name} onPressMachine={setSelectedMachineId} />
+          <GymCommunityTab
+            gymId={gymId}
+            gymName={gym.name}
+            onPressMachine={setSelectedMachineId}
+            reviewsVersion={reviewsVersion}
+            onReviewsChanged={() => setReviewsVersion(v => v + 1)}
+          />
         )}
         </View>
         </ScrollView>

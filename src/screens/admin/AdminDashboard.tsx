@@ -34,6 +34,8 @@ import {
   deleteGymInfoReport,
   type GymInfoReport,
 } from '../../lib/db/gymInfoReports';
+import ContentReportsView from './ContentReportsView';
+import { fetchContentReports } from '../../lib/db/moderation';
 import {
   fetchAdminGyms,
   insertAdminGym,
@@ -106,7 +108,7 @@ const CAT_CARD_W   = Math.floor((SCREEN_W - 40 - 12) / 2);
 
 // --- Types
 
-export type AdminView = 'home' | 'pending-gyms' | 'gym-detail' | 'machine-catalog' | 'brand-copyright' | 'gym-reports' | 'manager-requests' | 'register-gym' | 'gym-registration-requests' | 'gym-official-brands' | 'all-gyms-official' | 'machine-requests' | 'machine-register' | 'user-inquiries' | 'gym-manager-link' | 'gym-manager-link-requests' | 'user-overview' | 'analytics' | 'activity-feed';
+export type AdminView = 'home' | 'pending-gyms' | 'gym-detail' | 'machine-catalog' | 'brand-copyright' | 'gym-reports' | 'manager-requests' | 'register-gym' | 'gym-registration-requests' | 'gym-official-brands' | 'all-gyms-official' | 'machine-requests' | 'machine-register' | 'user-inquiries' | 'gym-manager-link' | 'gym-manager-link-requests' | 'user-overview' | 'analytics' | 'activity-feed' | 'content-reports';
 
 // --- Shared components
 
@@ -171,6 +173,8 @@ interface HomeViewProps {
   machineRequestCount: number;
   userInquiryCount: number;
   linkRequestCount: number;
+  /** 2026-11-04: 콘텐츠 신고(오운완·댓글·후기) 처리 대기 수 */
+  contentReportCount: number;
   onPush: (v: AdminView) => void;
 }
 
@@ -417,7 +421,7 @@ function MachineRequestsView({
   );
 }
 
-function HomeView({ machines, pendingGymCount, gymReportCount, managerRequestCount, registeredGymCount, gymRequestCount, machineRequestCount, userInquiryCount, linkRequestCount, onPush }: HomeViewProps) {
+function HomeView({ machines, pendingGymCount, gymReportCount, managerRequestCount, registeredGymCount, gymRequestCount, machineRequestCount, userInquiryCount, linkRequestCount, contentReportCount, onPush }: HomeViewProps) {
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
       {/* Stats */}
@@ -439,6 +443,14 @@ function HomeView({ machines, pendingGymCount, gymReportCount, managerRequestCou
       {/* Queues */}
       <Text style={[styles.sectionTitle, { marginTop: 8 }]}>검토 대기</Text>
       {[
+        {
+          icon: 'alert-circle-outline' as const,
+          title: '콘텐츠 신고 관리',
+          count: contentReportCount,
+          sub: contentReportCount > 0 ? `${contentReportCount}개 처리 대기` : '오운완 · 댓글 · 후기 신고',
+          onPress: () => onPush('content-reports'),
+          color: C.danger,
+        },
         {
           icon: 'flag-outline' as const,
           title: '정보 제보 관리',
@@ -2149,6 +2161,17 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
     refreshQueues();
   }, [refreshQueues]);
 
+  // 2026-11-04: 콘텐츠 신고 처리 대기 수 (홈으로 돌아올 때마다 갱신)
+  const [contentReportCount, setContentReportCount] = useState(0);
+  useEffect(() => {
+    if (currentView !== 'home') return;
+    let alive = true;
+    fetchContentReports().then(list => {
+      if (alive) setContentReportCount(list.filter(r => r.status === 'pending').length);
+    });
+    return () => { alive = false; };
+  }, [currentView]);
+
   useEffect(() => {
     if (currentView === 'home') {
       refreshQueues();
@@ -2812,6 +2835,7 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
     'gym-manager-link-requests':  '헬스장 매니저 연결 요청',
     'user-overview':              '유저 현황',
     'activity-feed':              '신규 리뷰 · 요청 모아보기',
+    'content-reports':            '콘텐츠 신고 관리',
   };
 
   // --- Render
@@ -2844,9 +2868,11 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
           machineRequestCount={machineRequestCount}
           userInquiryCount={userInquiryCount}
           linkRequestCount={linkRequestCount}
+          contentReportCount={contentReportCount}
           onPush={push}
         />
       )}
+      {currentView === 'content-reports' && <ContentReportsView />}
       {currentView === 'analytics' && <AdminAnalyticsView />}
       {currentView === 'machine-register' && (
         <AdminMachineRegisterView machines={machines} onRegistered={loadMachines} />

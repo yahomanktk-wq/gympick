@@ -7,6 +7,7 @@ export type NotificationType =
   | 'gym_manager_link_approved' | 'gym_manager_link_rejected'
   | 'inquiry_answered'
   | 'new_machine'
+  | 'ounwan_comment' | 'gym_review_reply'
   | 'announcement' | 'general';
 
 export interface AppNotification {

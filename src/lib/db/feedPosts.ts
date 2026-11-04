@@ -471,3 +471,17 @@ export async function deleteFeedPostBySession(
     if (__DEV__) console.warn('[feedPosts] deleteFeedPostBySession 오류:', e);
   }
 }
+
+/**
+ * 2026-11-04: 오운완 1건 조회 (댓글 알림을 눌렀을 때 상세를 열기용).
+ * 비공개로 바뀌었거나 삭제됐거나 차단한 사람의 글이면 null.
+ */
+export async function fetchFeedPostById(postId: string): Promise<WorkoutFeedPost | null> {
+  const { data, error } = await supabase
+    .from('workout_feed_posts')
+    .select('*')
+    .eq('id', postId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return rowToPost(data);
+}

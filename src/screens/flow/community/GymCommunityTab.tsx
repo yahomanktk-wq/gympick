@@ -20,6 +20,7 @@ import { useAuth } from '../../../context/AuthContext';
 import AnnouncementsSection from './AnnouncementsSection';
 import SendRequestSection from './SendRequestSection';
 import GymOunwanGrid from '../../../components/gym/GymOunwanGrid';
+import GymReviewBoard from '../../../components/gym/reviews/GymReviewBoard';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Props
@@ -29,13 +30,16 @@ interface Props {
   gymId: string;
   gymName: string;
   onPressMachine?: (machineId: string) => void;
+  /** 2026-11-04: 후기 게시판 갱신 번호 / 후기가 바뀌었을 때 (정보 탭 미리보기 갱신용) */
+  reviewsVersion?: number;
+  onReviewsChanged?: () => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function GymCommunityTab({ gymId, gymName, onPressMachine }: Props) {
+export default function GymCommunityTab({ gymId, gymName, onPressMachine, reviewsVersion, onReviewsChanged }: Props) {
   const { user } = useAuth();
   const [requestKey, setRequestKey] = useState(0);
 
@@ -57,6 +61,9 @@ export default function GymCommunityTab({ gymId, gymName, onPressMachine }: Prop
 
       {/* ── 오운완 그리드 (0건이면 렌더 안 함) ── */}
       <GymOunwanGrid gymId={gymId} onPressMachine={onPressMachine} />
+
+      {/* ── 후기 게시판 (2026-11-04) ── */}
+      <GymReviewBoard gymId={gymId} version={reviewsVersion} onChanged={onReviewsChanged} />
 
       {/* ── Announcements ── */}
       <AnnouncementsSection gymId={gymId} />

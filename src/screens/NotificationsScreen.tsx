@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
-  TouchableOpacity, SafeAreaView, StatusBar,
+  TouchableOpacity, SafeAreaView, StatusBar, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -14,6 +14,10 @@ import {
   type AppNotification,
 } from '../lib/db/notifications';
 import GymDetailModal from './flow/GymDetailModal';
+import FeedDetailModal from '../components/feed/FeedDetailModal';
+import { fetchFeedPostById } from '../lib/db/feedPosts';
+import { toggleReaction } from '../lib/feedUtils';
+import type { WorkoutFeedPost } from '../data/types';
 
 interface Props {
   onClose: () => void;
@@ -27,6 +31,8 @@ const TYPE_META: Record<string, { icon: React.ComponentProps<typeof Ionicons>['n
   gym_report_reviewed:  { icon: 'flag',                color: '#ff7eb3' },
   inquiry_answered:     { icon: 'chatbox-ellipses',     color: '#5ba4ff' },
   new_machine:          { icon: 'barbell',             color: C.accent  },
+  ounwan_comment:       { icon: 'chatbubble-ellipses', color: C.accent  },
+  gym_review_reply:     { icon: 'chatbox-ellipses',    color: '#3dd68c' },
   announcement:         { icon: 'megaphone',           color: '#ffb547' },
   general:              { icon: 'notifications',       color: '#5ba4ff' },
   default:              { icon: 'notifications',       color: C.accent  },
@@ -52,6 +58,8 @@ export default function NotificationsScreen({ onClose }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   // '새 머신 입고' 알림 탭 시 열 헬스장 상세 (F4-3)
   const [gymDetailId, setGymDetailId] = useState<string | null>(null);
+  // 2026-11-04: '새 댓글' 알림 탭 시 열 오운완 상세
+  const [feedPost, setFeedPost] = useState<WorkoutFeedPost | null>(null);
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -75,6 +83,18 @@ export default function NotificationsScreen({ onClose }: Props) {
     // 새 머신 입고 → 해당 헬스장 상세(정보 탭)를 연다. 펼침/접힘은 하지 않음.
     if (n.type === 'new_machine' && n.relatedId) {
       setGymDetailId(n.relatedId);
+      return;
+    }
+    // 2026-11-04: 헬스장 후기 답글 → 그 헬스장 상세
+    if (n.type === 'gym_review_reply' && n.relatedId) {
+      setGymDetailId(n.relatedId);
+      return;
+    }
+    // 2026-11-04: 오운완 새 댓글 → 그 오운완 상세 (댓글 포함)
+    if (n.type === 'ounwan_comment' && n.relatedId) {
+      const post = await fetchFeedPostById(n.relatedId);
+      if (post) setFeedPost(post);
+      else Alert.alert('볼 수 없는 오운완이에요', '삭제됐거나 비공개로 바뀐 오운완이에요.');
       return;
     }
     // 본문이 2줄 넘게 잘리는 경우가 많아(관리자 코멘트가 뒤에 붙는 경우 등) 탭하면
@@ -140,7 +160,7 @@ export default function NotificationsScreen({ onClose }: Props) {
                 <View style={{ flex: 1, gap: 3 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <Text style={[s.itemTitle, !item.read && s.itemTitleUnread, { flex: 1 }]}>{item.title}</Text>
-                    {item.type === 'new_machine' && item.relatedId ? (
+                    {(item.type === 'new_machine' || item.type === 'ounwan_comment' || item.type === 'gym_review_reply') && item.relatedId ? (
                       <Ionicons name="chevron-forward" size={14} color={C.textDim} />
                     ) : item.body.length > 0 && (
                       <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={14} color={C.textDim} />
@@ -164,6 +184,19 @@ export default function NotificationsScreen({ onClose }: Props) {
         gymId={gymDetailId}
         onClose={() => setGymDetailId(null)}
       />
+
+      {feedPost && (
+        <FeedDetailModal
+          post={feedPost}
+          onClose={() => setFeedPost(null)}
+          onReact={(_postId, key) => setFeedPost(prev => prev ? toggleReaction(prev, key) : prev)}
+          onPressGym={(gymId) => {
+            setFeedPost(null);
+            setTimeout(() => setGymDetailId(gymId), 350);
+          }}
+          onPressMachine={() => setFeedPost(null)}
+        />
+      )}
     </SafeAreaView>
   );
 }
