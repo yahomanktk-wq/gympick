@@ -52,6 +52,7 @@ import { androidFauxBold } from '../../lib/photoOverlayUtils';
 import { containsBannedWord } from '../../lib/bannedWords';
 import { insertFeedPost } from '../../lib/db/feedPosts';
 import OunwanVisibilityNote from '../../components/feed/OunwanVisibilityNote';
+import { DEFAULT_FEED_VISIBILITY, type FeedVisibility } from '../../lib/feedVisibility';
 import { getMachineImageUrl } from '../../lib/machineImageUrl';
 import { invalidateActiveFeedPostsCache } from '../../data/feedPostsCache';
 import GymPickLogo from '../../components/GymPickLogo';
@@ -3412,7 +3413,7 @@ export function RosterOverlay({ exercises, logs, nickname, timestamp, muscleLabe
 
 // --- Step 5: Photo
 
-function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, photoUri, nickname, fontsLoaded, initialColor, initialStyle, onColorChange, onStyleChange, onCapture, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera, onRegisterRect, onboardingActive, onboardingKey, onOnboardingNext, onOnboardingJump }: {
+function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, photoUri, nickname, fontsLoaded, initialColor, initialStyle, onColorChange, onStyleChange, onCapture, onClearPhoto, onCompositeUri, onRoutineCardUri, onSave, onBack, onClose, onCameraCapture, showCamera, onSetShowCamera, onRegisterRect, onboardingActive, onboardingKey, onOnboardingNext, onOnboardingJump, userId, visibility, onVisibilityChange }: {
   gym: GymWithMachines;
   exercises: ExerciseInfo[];
   selectedMuscles: string[];
@@ -3434,6 +3435,8 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
   // 값을 쓴다 (부모가 직접 이 컴포넌트의 로컬 state를 참조할 수 없기 때문).
   onStyleChange: (style: OverlayStyle) => void;
   onCapture: (aspect: [number, number]) => void;
+  /** 2026-11-04: 고른 사진을 지우고 검정 기본 배경으로 되돌린다 */
+  onClearPhoto: () => void;
   onCameraCapture: (uri: string) => void;
   onCompositeUri:    (uri: string) => void;
   onRoutineCardUri?: (uri: string) => void;
@@ -3447,6 +3450,10 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
   onboardingKey?: OnboardingPointKey | null;
   onOnboardingNext?: () => void;
   onOnboardingJump?: (key: OnboardingPointKey) => void;
+  /** 2026-11-09: 오운완 공개 범위 (부모가 들고 있다가 저장 때 쓴다) */
+  userId?: string;
+  visibility: FeedVisibility;
+  onVisibilityChange: (v: FeedVisibility) => void;
 }) {
   const [textColor,     setTextColor]     = useState(initialColor);
   const [saveSuccess,   setSaveSuccess]   = useState(false);
@@ -3484,6 +3491,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
         },
       },
     ];
+    if (photoTaken) options.push({ text: '사진 지우기', style: 'destructive', onPress: onClearPhoto });
     options.push({ text: '취소', style: 'cancel' });
     Alert.alert(photoTaken ? '배경 사진 바꾸기' : '사진 추가', '사진 없이 저장하면 검정 배경으로 저장돼요', options);
   }
@@ -4484,8 +4492,8 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
           </TouchableOpacity>
         </View>
 
-        {/* 2026-10-20: 공개 여부 토글 제거 — 기본 공개, 운동일지에서 비공개 전환 */}
-        <OunwanVisibilityNote />
+        {/* 2026-11-09: 공개 범위 (전체 공개 / 우리 헬스장만 / 나만 보기, 기본 전체 공개) */}
+        <OunwanVisibilityNote gymId={gym.id} userId={userId} value={visibility} onChange={onVisibilityChange} />
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -5054,6 +5062,8 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   // WorkoutPhotoStep의 기본값('s1a')과 동일하게 초기화해서, 사용자가 스타일을
   // 한 번도 안 바꿔도 기본 스타일 값이 저장되게 한다.
   const [overlayStyle,       setOverlayStyle]       = useState<OverlayStyle>('s1a');
+  // 2026-11-09: 오운완 공개 범위 (작성 1회당 기본 전체 공개)
+  const [feedVisibility,     setFeedVisibility]     = useState<FeedVisibility>(DEFAULT_FEED_VISIBILITY);
   const [isSaving,           setIsSaving]           = useState(false);
   const [savingProgress,     setSavingProgress]     = useState(0);
   const savingAnim = useRef(new Animated.Value(0)).current;
@@ -5137,6 +5147,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
       setRoutineCardUri(null);
       setDetectedPRs([]);
       setPrCelebration(null);
+      setFeedVisibility(DEFAULT_FEED_VISIBILITY);
       // 2026-11-02: 인증샷 레이아웃·폰트·글자색은 작성 1회당 처음 한 번 무작위로 정한다.
       // 처음엔 사진이 없어 기본 배경이므로, 배경과 같은 색은 후보에서 뺀다.
       setSelectedColor(pickRandom(
@@ -5614,9 +5625,10 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
           routineCardUri: passedRoutineCardUri ?? routineCardUri ?? undefined,
           sessionId:      dbSessionId ?? sessionId,
           muscles:        Array.from(selectedMuscles).map(toCanonMuscle),
-          // 2026-10-20: 오운완은 기본 공개 — 오늘의 오운완 + 헬스장 페이지 모두 노출
-          isPublic:       true,
-          showOnGym:      true,
+          // 2026-11-09: 공개 범위 선택 (is_public·show_on_gym은 서버가 visibility에 맞춘다)
+          isPublic:       feedVisibility === 'public',
+          showOnGym:      feedVisibility !== 'private',
+          visibility:     feedVisibility,
         }).then(() => {
           invalidateActiveFeedPostsCache();
         }).catch(err => {
@@ -5840,6 +5852,11 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             fontsLoaded={fontsLoaded}
             initialColor={selectedColor}
             initialStyle={overlayStyle}
+            onClearPhoto={() => {
+              setPhotoUri(null);
+              setPhotoTaken(false);
+              setCompositeUri(null);
+            }}
             onSave={requestSaveWorkout}
             onBack={goBack}
             onClose={() => onClose(false)}
@@ -5848,6 +5865,9 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             onboardingKey={onboarding.currentKey}
             onOnboardingNext={onboarding.next}
             onOnboardingJump={onboarding.jumpTo}
+            userId={user?.id}
+            visibility={feedVisibility}
+            onVisibilityChange={setFeedVisibility}
           />
         );
       case 'done':

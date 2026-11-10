@@ -40,6 +40,8 @@ export function convertSessionToFeedPost(
     muscles:      [...new Set(session.machines?.map(m => m.targetMuscle) ?? [])],
     createdAt:    session.date,
     isPublic:     true,
+    visibility:   'public',
+    likeCount:    0,
     isMyPost:     true,
     reactions:    { muscle: 0, fire: 0, clap: 0, trophy: 0, flex: 0 },
     myReaction:   null,

@@ -1,5 +1,10 @@
 import { supabase } from '../supabase';
 import { WorkoutFeedPost } from '../../data/types';
+import { toFeedVisibility, type FeedVisibility } from '../feedVisibility';
+
+// 2026-11-09: 목록에 보여줄 공개 범위 — 전체 공개 + 우리 헬스장만.
+// '우리 헬스장만' 글은 DB 권한 규칙이 그 헬스장 회원에게만 돌려준다 (나만 보기는 목록에서 제외).
+const LISTED_VISIBILITIES: FeedVisibility[] = ['public', 'gym'];
 
 function rowToPost(r: any): WorkoutFeedPost {
   return {
@@ -18,6 +23,8 @@ function rowToPost(r: any): WorkoutFeedPost {
     createdAt:      r.created_at,
     isPublic:       r.is_public,
     showOnGym:      r.show_on_gym ?? true,
+    visibility:     toFeedVisibility(r.visibility, r.is_public),
+    likeCount:      r.like_count ?? 0,
     reactions:      r.reactions ?? { muscle: 0, fire: 0, clap: 0, trophy: 0, flex: 0 },
     myReaction:     null,
   };
@@ -33,7 +40,7 @@ export async function fetchActiveFeedPosts(hoursWindow: number | null = 24): Pro
   let query = supabase
     .from('workout_feed_posts')
     .select('*')
-    .eq('is_public', true);
+    .in('visibility', LISTED_VISIBILITIES);
 
   if (hoursWindow !== null) {
     const cutoff = new Date(Date.now() - hoursWindow * 60 * 60 * 1000).toISOString();
@@ -54,7 +61,7 @@ export async function insertFeedPost(
   post: Pick<WorkoutFeedPost,
     'id' | 'userId' | 'nickname' | 'gymId' | 'gymName' |
     'photoUri' | 'compositeUri' | 'thumbnailUri' | 'blurhash' | 'routineCardUri' | 'sessionId' | 'muscles' | 'isPublic' | 'showOnGym'
-  >,
+  > & { visibility?: FeedVisibility },
 ): Promise<void> {
   const { error } = await supabase
     .from('workout_feed_posts')
@@ -73,6 +80,8 @@ export async function insertFeedPost(
       muscles:          post.muscles,
       is_public:        post.isPublic,
       show_on_gym:      post.showOnGym ?? true,
+      // 2026-11-09: 공개 범위 (없으면 is_public으로 서버가 정함)
+      ...(post.visibility ? { visibility: post.visibility } : {}),
     });
 
   if (error && __DEV__) {
@@ -132,8 +141,7 @@ export async function fetchGymOunwanPosts(
     .from('workout_feed_posts')
     .select('*')
     .eq('gym_id', gymId)
-    .eq('is_public', true)
-    .eq('show_on_gym', true);
+    .in('visibility', LISTED_VISIBILITIES);
   if (before) query = query.lt('created_at', before);
   const { data, error } = await query
     .order('created_at', { ascending: false })
@@ -156,8 +164,7 @@ export async function fetchOunwanPostsByGymIds(
     .from('workout_feed_posts')
     .select('*')
     .in('gym_id', gymIds)
-    .eq('is_public', true)
-    .eq('show_on_gym', true);
+    .in('visibility', LISTED_VISIBILITIES);
   if (before) query = query.lt('created_at', before);
   const { data, error } = await query
     .order('created_at', { ascending: false })
@@ -317,11 +324,18 @@ export async function fetchFeedPostPublicStatus(
  * created_at 내림차순으로 가져오므로 같은 날 여러 게시물이 있어도
  * 기존(limit 1, 최신순)과 동일하게 가장 최근 게시물이 선택된다.
  */
+export interface FeedPostStatus {
+  postId:     string;
+  isPublic:   boolean;
+  showOnGym:  boolean;
+  visibility: FeedVisibility;
+}
+
 export async function fetchFeedPostPublicStatusBatch(
   userId: string,
   sessionDates: string[],
-): Promise<Record<string, { postId: string; isPublic: boolean; showOnGym: boolean } | null>> {
-  const result: Record<string, { postId: string; isPublic: boolean; showOnGym: boolean } | null> = {};
+): Promise<Record<string, FeedPostStatus | null>> {
+  const result: Record<string, FeedPostStatus | null> = {};
   if (sessionDates.length === 0) return result;
 
   const times = sessionDates.map(d => new Date(d).getTime());
@@ -333,7 +347,7 @@ export async function fetchFeedPostPublicStatusBatch(
   try {
     const { data, error } = await supabase
       .from('workout_feed_posts')
-      .select('id, is_public, show_on_gym, created_at')
+      .select('id, is_public, show_on_gym, visibility, created_at')
       .eq('user_id', userId)
       .gte('created_at', rangeStart.toISOString())
       .lte('created_at', rangeEnd.toISOString())
@@ -355,7 +369,10 @@ export async function fetchFeedPostPublicStatusBatch(
         return t >= dayStart.getTime() && t <= dayEnd.getTime();
       });
       result[sessionDate] = match
-        ? { postId: match.id, isPublic: match.is_public, showOnGym: match.show_on_gym ?? true }
+        ? {
+            postId: match.id, isPublic: match.is_public, showOnGym: match.show_on_gym ?? true,
+            visibility: toFeedVisibility(match.visibility, match.is_public),
+          }
         : null;
     });
   } catch {
@@ -366,14 +383,14 @@ export async function fetchFeedPostPublicStatusBatch(
 }
 
 /**
- * 오운완 공개/비공개 (2026-10-20 통합).
- * 공개 = 오늘의 오운완 + 헬스장 페이지 모두 노출, 비공개 = 둘 다 숨김.
- * is_public 과 show_on_gym 을 항상 같은 값으로 함께 저장한다. 실패 시 throw.
+ * 오운완 공개 범위 변경 (2026-11-09: 전체 공개 / 우리 헬스장만 / 나만 보기).
+ * visibility만 바꾸면 is_public·show_on_gym은 서버 트리거가 맞춘다. 실패 시 throw.
+ * '우리 헬스장만'은 그 헬스장 회원일 때만 고를 수 있게 화면에서 막는다.
  */
-export async function setFeedPostVisibility(postId: string, isPublic: boolean): Promise<void> {
+export async function setFeedPostVisibility(postId: string, visibility: FeedVisibility): Promise<void> {
   const { error } = await supabase
     .from('workout_feed_posts')
-    .update({ is_public: isPublic, show_on_gym: isPublic })
+    .update({ visibility })
     .eq('id', postId);
   if (error) {
     if (__DEV__) console.warn('[feedPosts] setFeedPostVisibility 오류:', error.message);

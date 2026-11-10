@@ -1,19 +1,27 @@
 import React from 'react';
 import { View, Text } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { C } from '../../theme';
+import type { FeedVisibility } from '../../lib/feedVisibility';
+import VisibilityOptionList from './visibility/VisibilityOptionList';
+import { useIsGymMember } from './visibility/useIsGymMember';
 
-// 오운완 업로드(운동 사진) 화면 하단 안내 한 줄 (2026-10-20).
-// 공개 여부 토글을 없애고 기본 공개로 바꾸면서, 어디에 보이는지와
-// 비공개로 바꾸는 방법만 짧게 알려준다.
+// 오운완 업로드(운동 사진) 화면 하단 공개 범위 선택.
+// 2026-10-20: 기본 공개 + 안내 한 줄 → 2026-11-09: 전체 공개 / 우리 헬스장만 / 나만 보기 선택 (기본 전체 공개)
 
-export default function OunwanVisibilityNote() {
+interface Props {
+  gymId:    string;
+  userId:   string | null | undefined;
+  value:    FeedVisibility;
+  onChange: (v: FeedVisibility) => void;
+}
+
+export default function OunwanVisibilityNote({ gymId, userId, value, onChange }: Props) {
+  const canUseGym = useIsGymMember(gymId, userId);
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 12, paddingHorizontal: 4 }}>
-      <Ionicons name="information-circle-outline" size={14} color={C.textSub} style={{ marginTop: 2 }} />
-      <Text style={{ flex: 1, fontSize: 12, lineHeight: 18, color: C.textSub }}>
-        오운완은 오늘의 오운완과 헬스장 페이지에 공개돼요. 운동일지에서 비공개로 바꿀 수 있어요.
-      </Text>
+    <View style={{ marginTop: 16, gap: 10 }}>
+      <Text style={{ fontSize: 14, fontWeight: '800', color: C.text, paddingHorizontal: 2 }}>공개 범위</Text>
+      <VisibilityOptionList value={value} canUseGym={canUseGym} onChange={onChange} />
+      <Text style={{ fontSize: 12, color: C.textSub, paddingHorizontal: 2 }}>운동일지에서 언제든 바꿀 수 있어요.</Text>
     </View>
   );
 }

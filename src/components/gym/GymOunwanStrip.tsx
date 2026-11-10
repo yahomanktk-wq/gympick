@@ -8,7 +8,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { C } from '../../theme';
 import { WorkoutFeedPost } from '../../data/types';
 import { fetchGymOunwanPosts } from '../../lib/db/feedPosts';
-import { toggleReaction } from '../../lib/feedUtils';
 import { getTransformedImageUrl } from '../../lib/photoImageUrl';
 import FeedDetailModal from '../feed/FeedDetailModal';
 
@@ -95,11 +94,6 @@ export default function GymOunwanStrip({ gymId, onPressMore, onPressMachine, tit
     return () => { alive = false; };
   }, [gymId]);
 
-  const handleReact = useCallback((postId: string, key: keyof WorkoutFeedPost['reactions']) => {
-    setSelectedPost(prev => (prev && prev.id === postId ? toggleReaction(prev, key) : prev));
-    setPosts(prev => prev.map(p => (p.id === postId ? toggleReaction(p, key) : p)));
-  }, []);
-
   const handlePressMachine = useCallback((machineId: string) => {
     setSelectedPost(null);
     setTimeout(() => onPressMachine?.(machineId), 350);
@@ -120,12 +114,12 @@ export default function GymOunwanStrip({ gymId, onPressMore, onPressMachine, tit
         <FeedDetailModal
           post={selectedPost}
           onClose={() => setSelectedPost(null)}
-          onReact={handleReact}
           onPressGym={() => setSelectedPost(null)}
           onPressMachine={handlePressMachine}
-          onVisibilityChanged={(postId, isPublic) => {
-            // 2026-10-20: 내 오운완을 비공개로 바꾸면 이 목록에서 바로 뺀다
-            if (!isPublic) setPosts(prev => prev.filter(p => p.id !== postId));
+          onVisibilityChanged={(postId, visibility) => {
+            // 2026-11-09: 나만 보기로 바꾸면 이 목록에서 바로 빼고, 그 외에는 공개 범위만 갱신
+            if (visibility === 'private') setPosts(prev => prev.filter(p => p.id !== postId));
+            else setPosts(prev => prev.map(p => (p.id === postId ? { ...p, visibility } : p)));
           }}
         />
       )}

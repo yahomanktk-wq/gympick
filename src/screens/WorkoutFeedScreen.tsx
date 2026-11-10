@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { C, R } from '../theme';
 import { WorkoutFeedPost, WorkoutLog } from '../data/types';
 const MOCK_FEED_POSTS: WorkoutFeedPost[] = [];
-import { filterActivePosts, toggleReaction, convertSessionToFeedPost } from '../lib/feedUtils';
+import { filterActivePosts, convertSessionToFeedPost } from '../lib/feedUtils';
 import { fetchMyLatestGymId } from '../lib/db/feedPosts';
 import { invalidateActiveFeedPostsCache } from '../data/feedPostsCache';
 import { fetchActiveFeedPosts } from '../lib/db/feedPosts';
@@ -350,10 +350,6 @@ export default function WorkoutFeedScreen() {
     return base.filter(p => p.muscles.some(m => m === targetEn));
   }, [posts, homeFeed.posts, nearby.posts, activeTab, muscleFilter]);
 
-  const handleReact = useCallback((postId: string, key: keyof WorkoutFeedPost['reactions']) => {
-    setPosts(prev => prev.map(p => p.id === postId ? toggleReaction(p, key) : p));
-  }, []);
-
   return (
     <SafeAreaView style={s.safe}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
@@ -473,10 +469,6 @@ export default function WorkoutFeedScreen() {
         <FeedDetailModal
           post={detailPost}
           onClose={() => setDetailPost(null)}
-          onReact={(postId, key) => {
-            handleReact(postId, key);
-            setDetailPost(prev => prev ? { ...prev, ...toggleReaction(prev, key) } : prev);
-          }}
           onPressGym={(gymId) => {
             setDetailPost(null);
             setTimeout(() => setGymDetailId(gymId), 350);
@@ -488,9 +480,13 @@ export default function WorkoutFeedScreen() {
               setTimeout(() => setMachineDetailItem(machine), 350);
             }
           }}
-          onVisibilityChanged={(postId, isPublic) => {
-            // 2026-10-20: 내 오운완을 비공개로 바꾸면 모든 탭 목록에서 바로 뺀다
-            if (isPublic) return;
+          onVisibilityChanged={(postId, visibility) => {
+            // 2026-11-09: 나만 보기로 바꾸면 모든 탭 목록에서 바로 뺀다 (그 외에는 다음 조회 때 반영)
+            invalidateActiveFeedPostsCache();
+            if (visibility !== 'private') {
+              setPosts(prev => prev.map(p => (p.id === postId ? { ...p, visibility } : p)));
+              return;
+            }
             setPosts(prev => prev.filter(p => p.id !== postId));
             homeFeed.removePost(postId);
             nearby.removePost(postId);

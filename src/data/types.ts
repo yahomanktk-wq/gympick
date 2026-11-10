@@ -268,6 +268,11 @@ export type WorkoutFeedPost = {
   createdAt:   string;           // ISO 8601
   isPublic:    boolean;
   showOnGym?: boolean;           // 헬스장 페이지(상세/우리 헬스장 탭) 노출 여부 — DB show_on_gym, 기본 true
+  /** 2026-11-09: 공개 범위 (전체 공개 / 우리 헬스장만 / 나만 보기). DB visibility */
+  visibility?: 'public' | 'gym' | 'private';
+  /** 2026-11-09: 하트 수 (DB like_count, 서버 트리거가 관리) */
+  likeCount?:  number;
+  /** (2026-11-09부터 미사용 — 하트로 대체) 이모지 리액션 5종 */
   reactions: {
     muscle: number;              // 💪
     fire:   number;              // 🔥
