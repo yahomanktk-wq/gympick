@@ -35,6 +35,8 @@ const DELETE_TITLE: Record<ReportTargetType, string> = {
   ounwan:     '오운완을 삭제할까요?',
   comment:    '댓글을 삭제할까요?',
   gym_review: '후기를 삭제할까요?',
+  qna_question: '질문을 삭제할까요?',
+  qna_answer:   '답변을 삭제할까요?',
 };
 
 export default function ContentMenuButton({

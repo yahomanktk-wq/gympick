@@ -8,6 +8,10 @@ export type NotificationType =
   | 'inquiry_answered'
   | 'new_machine'
   | 'ounwan_comment' | 'gym_review_reply'
+  | 'member_request' | 'member_approved' | 'member_rejected'
+  | 'trainer_application' | 'trainer_approved' | 'trainer_rejected'
+  | 'ounwan_like'
+  | 'qna_question' | 'qna_answer' | 'pt_request' | 'pt_message'
   | 'announcement' | 'general';
 
 export interface AppNotification {

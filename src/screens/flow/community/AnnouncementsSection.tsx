@@ -21,7 +21,7 @@ import { getAnnouncements, GymAnnouncement } from '../../../data/gymAnnouncement
 
 function fmtDate(iso: string) {
   const d = new Date(iso);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ export default function AnnouncementsSection({ gymId }: Props) {
       {/* Section header */}
       <View style={s.sectionHeader}>
         <Ionicons name="notifications-outline" size={15} color={C.accent} />
-        <Text style={s.sectionLabel}>ANNOUNCEMENTS</Text>
+        <Text style={s.sectionLabel}>공지사항</Text>
         {items.length > 0 && (
           <View style={s.countBadge}>
             <Text style={s.countText}>{items.length}</Text>

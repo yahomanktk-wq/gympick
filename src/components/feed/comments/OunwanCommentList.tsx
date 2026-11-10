@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { C } from '../../../theme';
-import { OunwanComment } from '../../../lib/db/ounwanComments';
+import { OunwanComment, sortStaffCommentsFirst } from '../../../lib/db/ounwanComments';
 import CommentItem from './CommentItem';
 
 // 2026-11-04: 오운완 상세의 댓글 목록 (부모 ScrollView 안에 그리므로 FlatList 대신 map)
@@ -13,10 +13,12 @@ interface Props {
   postOwnerId: string;
   onDelete:   (id: string) => Promise<void>;
   onBlocked:  (userId: string) => void;
+  /** 2026-11-09: 트레이너 댓글 옆 PT 상담 신청 버튼용 */
+  gymId?:     string;
 }
 
 export default function OunwanCommentList({
-  comments, loading, myUserId, postOwnerId, onDelete, onBlocked,
+  comments, loading, myUserId, postOwnerId, onDelete, onBlocked, gymId,
 }: Props) {
   const iOwnPost = !!myUserId && myUserId === postOwnerId;
   return (
@@ -31,13 +33,14 @@ export default function OunwanCommentList({
       ) : comments.length === 0 ? (
         <Text style={s.empty}>첫 댓글을 남겨보세요</Text>
       ) : (
-        comments.map(c => (
+        sortStaffCommentsFirst(comments).map(c => (
           <CommentItem
             key={c.id}
             comment={c}
             canDelete={iOwnPost || (!!myUserId && myUserId === c.userId)}
             onDelete={onDelete}
             onBlocked={onBlocked}
+            gymId={gymId}
           />
         ))
       )}

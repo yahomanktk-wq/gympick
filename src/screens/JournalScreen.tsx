@@ -36,7 +36,7 @@ import { getSessionPRMachines } from '../data/workoutSessions';
 import { fetchWorkoutLogs } from '../lib/db';
 import { deleteWorkoutSession } from '../lib/db/workouts';
 import { removeSession } from '../data/sessionStore';
-import { deleteFeedPostBySession, fetchFeedPostPublicStatusBatch, setFeedPostVisibility } from '../lib/db/feedPosts';
+import { deleteFeedPostBySession, fetchFeedPostPublicStatusBatch } from '../lib/db/feedPosts';
 import { useFetch } from '../lib/useFetch';
 import { perfStart, perfEnd } from '../lib/perf';
 import { useAuth } from '../context/AuthContext';
@@ -47,6 +47,10 @@ import PostWorkoutLogModal, {
 } from './flow/PostWorkoutLogModal';
 import MachineDetailModal from './flow/MachineDetailModal';
 import WorkoutLogSummaryModal from './flow/WorkoutLogSummaryModal';
+import SessionStaffFeedback from '../components/journal/SessionStaffFeedback';
+import VisibilitySheet from '../components/feed/visibility/VisibilitySheet';
+import { VISIBILITY_META } from '../lib/feedVisibility';
+import type { FeedPostStatus } from '../lib/db/feedPosts';
 import GymPickLogo from '../components/GymPickLogo';
 import * as Haptics from 'expo-haptics';
 
@@ -423,9 +427,9 @@ function SessionDetailModal({
   const ROUTINE_CARD_H_J  = Math.round(PHOTO_W_J * 4 / 3);
   const RC_ITEMS_PER_PAGE = Math.max(1, Math.floor((ROUTINE_CARD_H_J - 70 - 36) / 90));
   const routinePageRefs   = useRef<Record<string, (View | null)[]>>({});
-  const [publicStatusMap, setPublicStatusMap] = useState<
-    Record<string, { postId: string; isPublic: boolean; showOnGym: boolean } | null>
-  >({});
+  const [publicStatusMap, setPublicStatusMap] = useState<Record<string, FeedPostStatus | null>>({});
+  // 2026-11-09: 공개 범위 변경 시트를 연 세션
+  const [visSheetSessionId, setVisSheetSessionId] = useState<string | null>(null);
   const [localPhotoUriMap,   setLocalPhotoUriMap]   = useState<Record<string, string>>({});
   const [localMachineImgMap, setLocalMachineImgMap] = useState<Record<string, string>>({});
 
@@ -440,7 +444,7 @@ function SessionDetailModal({
         userId,
         sessions.map(session => session.date),
       );
-      const nextMap: Record<string, { postId: string; isPublic: boolean; showOnGym: boolean } | null> = {};
+      const nextMap: Record<string, FeedPostStatus | null> = {};
       sessions.forEach(session => {
         nextMap[session.id] = statusByDate[session.date] ?? null;
       });
@@ -722,20 +726,10 @@ function SessionDetailModal({
     );
   }
 
-  // 2026-10-20: 공개/비공개 통합 — 공개면 오늘의 오운완 + 헬스장 페이지 모두 노출, 비공개면 둘 다 숨김
-  async function handleToggleVisibility(session: WorkoutLog) {
-    const status = publicStatusMap[session.id];
-    if (!status) return;
-    try {
-      const next = !status.isPublic;
-      await setFeedPostVisibility(status.postId, next);
-      setPublicStatusMap(prev => ({
-        ...prev,
-        [session.id]: { ...status, isPublic: next, showOnGym: next },
-      }));
-    } catch {
-      Alert.alert('오류', '공개 여부 변경에 실패했어요.');
-    }
+  // 2026-11-09: 공개 범위 (전체 공개 / 우리 헬스장만 / 나만 보기) — 시트에서 고르고 저장
+  function handleToggleVisibility(session: WorkoutLog) {
+    if (!publicStatusMap[session.id]) return;
+    setVisSheetSessionId(session.id);
   }
 
   return (
@@ -882,31 +876,44 @@ function SessionDetailModal({
                     <Text style={det.photoActionTxt}>저장 / 공유</Text>
                   </TouchableOpacity>
 
-                  {publicStatusMap[session.id] !== undefined && publicStatusMap[session.id] !== null && (
-                    <TouchableOpacity
-                      style={[
-                        det.photoActionBtn,
-                        { flex: 1 },
-                        publicStatusMap[session.id]?.isPublic
-                          ? { borderColor: C.accent + '60', backgroundColor: C.accentBg }
-                          : { borderColor: C.border },
-                      ]}
-                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); handleToggleVisibility(session); }}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons
-                        name={publicStatusMap[session.id]?.isPublic ? 'eye-outline' : 'eye-off-outline'}
-                        size={16}
-                        color={publicStatusMap[session.id]?.isPublic ? C.accent : C.textSub}
-                      />
-                      <Text style={[
-                        det.photoActionTxt,
-                        { color: publicStatusMap[session.id]?.isPublic ? C.accent : C.textSub },
-                      ]}>
-                        {publicStatusMap[session.id]?.isPublic ? '공개중' : '비공개'}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
+                  {(() => {
+                    const status = publicStatusMap[session.id];
+                    if (!status) return null;
+                    const meta = VISIBILITY_META[status.visibility];
+                    const shown = status.visibility !== 'private';
+                    return (
+                      <>
+                        <TouchableOpacity
+                          style={[
+                            det.photoActionBtn,
+                            { flex: 1 },
+                            shown
+                              ? { borderColor: C.accent + '60', backgroundColor: C.accentBg }
+                              : { borderColor: C.border },
+                          ]}
+                          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); handleToggleVisibility(session); }}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name={meta.icon} size={16} color={shown ? C.accent : C.textSub} />
+                          <Text style={[det.photoActionTxt, { color: shown ? C.accent : C.textSub }]} numberOfLines={1}>
+                            {meta.label}
+                          </Text>
+                        </TouchableOpacity>
+                        <VisibilitySheet
+                          visible={visSheetSessionId === session.id}
+                          postId={status.postId}
+                          gymId={session.gymId ?? ''}
+                          userId={userId}
+                          value={status.visibility}
+                          onClose={() => setVisSheetSessionId(null)}
+                          onChanged={(v) => setPublicStatusMap(prev => ({
+                            ...prev,
+                            [session.id]: { ...status, visibility: v, isPublic: v === 'public', showOnGym: v !== 'private' },
+                          }))}
+                        />
+                      </>
+                    );
+                  })()}
 
                   <TouchableOpacity
                     style={[det.photoActionBtn, { flex: 1, borderColor: C.danger + '60' }]}
@@ -927,6 +934,9 @@ function SessionDetailModal({
                   <Ionicons name="stats-chart-outline" size={16} color={C.bg} />
                   <Text style={det.summaryBtnTxt}>운동일지 요약 보기</Text>
                 </TouchableOpacity>
+
+                {/* 2026-11-09: 그날 오운완에 달린 트레이너·관장님 피드백 (없으면 숨김) */}
+                <SessionStaffFeedback postId={publicStatusMap[session.id]?.postId} />
 
                 {/* 운동 노트 */}
                 {machines.some(m => m.note) && (

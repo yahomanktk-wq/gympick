@@ -48,6 +48,9 @@ import { getGymShareUrl } from '../../lib/share';
 import { shareGymLink } from '../../lib/shareGymLink';
 import GymOunwanStrip from '../../components/gym/GymOunwanStrip';
 import GymReviewPreview from '../../components/gym/reviews/GymReviewPreview';
+import GymMembershipCard from '../../components/gym/membership/GymMembershipCard';
+import GymTrainerRow from '../../components/gym/trainer/GymTrainerRow';
+import GymTrainerList from '../../components/gym/trainer/GymTrainerList';
 import GymHoursRow from '../../components/gym/GymHoursRow';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -234,6 +237,8 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
   const [selectedMachineId,   setSelectedMachineId]   = useState<string | null>(null);
   const [isFav,               setIsFav]               = useState(false);
   const [activeTab,           setActiveTab]           = useState<GymTab>('정보');
+  // 2026-11-09: 트레이너 소개 수정·그만두기 후 트레이너 목록 다시 불러오기
+  const [trainerVersion,      setTrainerVersion]      = useState(0);
   // 2026-11-04: 후기를 쓰거나 지우면 정보 탭 미리보기도 다시 불러오기 위한 번호
   const [reviewsVersion,      setReviewsVersion]      = useState(0);
   // ── 좌우 스와이프 탭 (2026-10-20) ──
@@ -572,20 +577,7 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
             {/* ── 헬스장 사진 ── */}
             <GymPhotoStrip gymId={gymId} onPressPhoto={openPhotoViewer} />
 
-            {/* ── Gym name + location ── */}
-            <View style={s.gymHeader}>
-              <Text style={s.gymName}>{gym.name}</Text>
-              <View style={s.gymLocRow}>
-                <Ionicons name="location-outline" size={13} color={C.textSub} />
-                <Text style={s.gymLoc}>{gym.location}</Text>
-              </View>
-              {gym.managerId && (
-                <View style={s.managerBadge}>
-                  <Ionicons name="shield-checkmark" size={11} color="#4A90E2" />
-                  <Text style={s.managerBadgeText}>헬스장 직접 관리</Text>
-                </View>
-              )}
-            </View>
+            {/* 2026-11-09: 헬스장 이름·주소(상단 헤더와 중복), '헬스장 직접 관리' 배지(목록 화면에서만 표시) 삭제 */}
 
             {/* ── 헬스장 소개 ── */}
             {gym.description ? (
@@ -616,6 +608,9 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
               {/* 영업시간: 오늘만 보여주고 탭하면 월~일 + 메모 펼침 (2026-10-20) */}
               <GymHoursRow hours={gym.hours} legacyHours={details?.hours} note={gym.hoursNote} />
             </View>
+
+            {/* ── 트레이너 목록 + PT 상담 신청 (없으면 숨김) — 2026-11-09 ── */}
+            <GymTrainerList gymId={gymId} titleStyle={s.sectionTitle} style={{ marginBottom: 28 }} version={trainerVersion} managerId={gym.managerId} />
 
             {/* ── 오운완 (최근 5개) ── */}
             <GymOunwanStrip
@@ -729,6 +724,16 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
               <Text style={s.reportBtnCta}>제보하기</Text>
               <Ionicons name="chevron-forward" size={16} color={C.accent} />
             </TouchableOpacity>
+
+            {/* ── 헬스장 회원 · 트레이너 신청 (맨 아래, 관장님이 있는 헬스장만) — 2026-11-09 ── */}
+            <GymMembershipCard gymId={gymId} gymName={gym.name} managerId={gym.managerId} userId={user?.id} />
+            <GymTrainerRow
+              gymId={gymId}
+              gymName={gym.name}
+              managerId={gym.managerId}
+              userId={user?.id}
+              onChanged={() => setTrainerVersion(v => v + 1)}
+            />
 
             <View style={{ height: 40 }} />
           </ScrollView>
@@ -1046,7 +1051,8 @@ const s = StyleSheet.create({
     width: 28, height: 28, borderRadius: 8,
     backgroundColor: C.accentBg, alignItems: 'center', justifyContent: 'center',
   },
-  infoText: { fontSize: 14, color: C.text },
+  // 2026-11-09: 긴 주소가 화면 밖으로 잘리던 문제 — 남은 폭 안에서 줄바꿈
+  infoText: { flex: 1, flexShrink: 1, fontSize: 14, lineHeight: 20, color: C.text },
 
   // Section title
   sectionTitle: { ...T.section, color: C.text, marginBottom: 10 },

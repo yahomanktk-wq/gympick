@@ -27,28 +27,20 @@ import { useOunwanComments } from './comments/useOunwanComments';
 import OunwanCommentList from './comments/OunwanCommentList';
 import CommentInput from './comments/CommentInput';
 import { COMMENT_MAX_LENGTH } from '../../lib/db/ounwanComments';
+import OunwanLikeButton from './likes/OunwanLikeBar';
+import { toFeedVisibility, type FeedVisibility } from '../../lib/feedVisibility';
 
 const IMAGE_PIXEL_RATIO = PixelRatio.get();
-
-// ── 이모지 리액션 상수 ────────────────────────────────────────────────────────
-
-const EMOJI_MAP: Record<keyof WorkoutFeedPost['reactions'], string> = {
-  muscle: '💪', fire: '🔥', clap: '👏', trophy: '🏆', flex: '😤',
-};
-const REACTION_KEYS: (keyof WorkoutFeedPost['reactions'])[] = [
-  'muscle', 'fire', 'clap', 'trophy', 'flex',
-];
 
 // ── 상세 모달 ─────────────────────────────────────────────────────────────────
 
 export interface FeedDetailModalProps {
   post:           WorkoutFeedPost;
   onClose:        () => void;
-  onReact:        (postId: string, key: keyof WorkoutFeedPost['reactions']) => void;
   onPressGym:     (gymId: string) => void;
   onPressMachine: (machineId: string) => void;
-  /** 내 글을 비공개로 바꿨을 때 (목록에서 제거용). 넘기지 않으면 '공개중' 버튼을 숨긴다 */
-  onVisibilityChanged?: (postId: string, isPublic: boolean) => void;
+  /** 내 글의 공개 범위를 바꿨을 때 (나만 보기면 목록에서 제거용). 넘기지 않으면 공개 범위 버튼을 숨긴다 */
+  onVisibilityChanged?: (postId: string, visibility: FeedVisibility) => void;
   /** 2026-11-04: 이 오운완의 작성자를 차단했을 때 (목록에서 그 사람 글을 빼기용). 모달은 자동으로 닫힌다 */
   onAuthorBlocked?: (userId: string) => void;
 }
@@ -56,7 +48,6 @@ export interface FeedDetailModalProps {
 export default function FeedDetailModal({
   post,
   onClose,
-  onReact,
   onPressGym,
   onPressMachine,
   onVisibilityChanged,
@@ -80,7 +71,9 @@ export default function FeedDetailModal({
   const [routine,        setRoutine]        = useState<OunwanRoutine | null>(null);
   // 2026-11-04: 오운완 댓글 (비공개 오운완·차단한 사람 댓글은 DB에서 자동으로 숨겨짐)
   const comments = useOunwanComments(post.id);
-  const canComment = !!user?.id && post.isPublic !== false;
+  // 2026-11-09: 나만 보기 글에는 댓글·하트를 남길 수 없다
+  const visibility = toFeedVisibility(post.visibility, post.isPublic);
+  const canComment = !!user?.id && visibility !== 'private';
 
   function handleBlocked(userId: string) {
     if (userId === post.userId) {
@@ -161,44 +154,17 @@ export default function FeedDetailModal({
             transition={200}
           />
 
-          {/* 내 오운완: 공개중 → 비공개 전환 (2026-10-20) */}
+          {/* 내 오운완: 공개 범위 (전체 공개 / 우리 헬스장만 / 나만 보기). 하트는 아래 댓글 입력칸 왼쪽으로 이동 (2026-11-09) */}
           {isMine && onVisibilityChanged && (
-            <OwnerVisibilityButton
-              postId={post.id}
-              onChanged={(isPublic) => { onVisibilityChanged(post.id, isPublic); onClose(); }}
-            />
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 12 }}>
+              <OwnerVisibilityButton
+                postId={post.id}
+                gymId={post.gymId}
+                value={visibility}
+                onChanged={(v) => { onVisibilityChanged(post.id, v); onClose(); }}
+              />
+            </View>
           )}
-
-          {/* 이모지 리액션 */}
-          <View style={{
-            flexDirection: 'row', justifyContent: 'space-around',
-            paddingHorizontal: 8, paddingVertical: 16,
-            borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border,
-          }}>
-            {REACTION_KEYS.map(key => {
-              const active = post.myReaction === key;
-              return (
-                <TouchableOpacity
-                  key={key}
-                  style={{
-                    flex: 1, alignItems: 'center', paddingVertical: 8,
-                    borderRadius: R.inner,
-                    backgroundColor: active ? C.accentBg : 'transparent',
-                  }}
-                  onPress={() => !post.isMyPost && onReact(post.id, key)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={{ fontSize: 24 }}>{EMOJI_MAP[key]}</Text>
-                  <Text style={{
-                    fontSize: 12, fontWeight: '700', marginTop: 2,
-                    color: active ? C.accent : C.textSub,
-                  }}>
-                    {post.reactions[key]}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
 
           {/* 운동 루틴 섹션 — 운동일지 상세와 같은 레이아웃 (2026-10-20) */}
           {sessionLoading ? (
@@ -235,27 +201,39 @@ export default function FeedDetailModal({
             postOwnerId={post.userId}
             onDelete={comments.remove}
             onBlocked={handleBlocked}
+            gymId={post.gymId}
           />
 
         </ScrollView>
 
         {/* 2026-11-04: 댓글 입력 (화면 아래 고정) */}
         <View style={{
+          flexDirection: 'row', alignItems: 'center', gap: 8,
           paddingHorizontal: 12, paddingTop: 8, paddingBottom: 10,
           borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border,
           backgroundColor: C.bg,
         }}>
-          {canComment ? (
-            <CommentInput
-              placeholder="댓글을 남겨보세요"
-              maxLength={COMMENT_MAX_LENGTH}
-              onSubmit={comments.add}
-            />
-          ) : (
-            <Text style={{ fontSize: 13, color: C.textSub, textAlign: 'center', paddingVertical: 8 }}>
-              {user?.id ? '비공개 오운완에는 댓글을 남길 수 없어요' : '로그인하면 댓글을 남길 수 있어요'}
-            </Text>
-          )}
+          {/* 2026-11-09: 하트 — 댓글 입력칸 왼쪽 */}
+          <OunwanLikeButton
+            postId={post.id}
+            likeCount={post.likeCount ?? 0}
+            isMine={isMine}
+            userId={user?.id}
+            disabled={visibility === 'private'}
+          />
+          <View style={{ flex: 1 }}>
+            {canComment ? (
+              <CommentInput
+                placeholder="댓글을 남겨보세요"
+                maxLength={COMMENT_MAX_LENGTH}
+                onSubmit={comments.add}
+              />
+            ) : (
+              <Text style={{ fontSize: 13, color: C.textSub, textAlign: 'center', paddingVertical: 8 }}>
+                {user?.id ? '나만 보기 오운완에는 댓글을 남길 수 없어요' : '로그인하면 댓글을 남길 수 있어요'}
+              </Text>
+            )}
+          </View>
         </View>
        </KeyboardAvoidingView>
       </SafeAreaView>

@@ -36,6 +36,9 @@ import ManagerManualScreen from './manager/ManagerManualScreen';
 import ManagerOnboardingModal from './manager/ManagerOnboardingModal';
 import MyRequestsModal from './MyRequestsModal';
 import BlockedUsersModal from '../components/moderation/BlockedUsersModal';
+import PtRequestsModal from '../components/pt/PtRequestsModal';
+import MyGymDashboard from '../components/profile/myGym/MyGymDashboard';
+import { useIsTrainer } from '../components/profile/myGym/useIsTrainer';
 import { fetchUnreadCount } from '../lib/db/notifications';
 import { fetchGymRegistrationRequests } from '../lib/db/gymRegistrationRequests';
 import { fetchGymInfoReports } from '../lib/db/gymInfoReports';
@@ -65,18 +68,21 @@ const ACHIEVEMENTS = [
   { id: '6', icon: 'medal',   label: '센추리 클럽',  earned: false },
 ];
 
-const SETTINGS_LIST: { icon: IoniconName; label: string; toggle?: boolean; danger?: boolean; privacy?: boolean; splitSetup?: boolean; deleteAccount?: boolean; inquiry?: boolean; myRequests?: boolean; blockedUsers?: boolean }[] = [
+const SETTINGS_LIST: { icon: IoniconName; label: string; toggle?: boolean; danger?: boolean; privacy?: boolean; splitSetup?: boolean; deleteAccount?: boolean; inquiry?: boolean; myRequests?: boolean; blockedUsers?: boolean; ptRequests?: boolean }[] = [
   { icon: 'barbell-outline',        label: '단위 (kg / lbs)'                     },
   { icon: 'git-branch-outline',     label: '운동 분할 설정',   splitSetup: true  },
   { icon: 'document-text-outline',  label: '개인정보처리방침', privacy: true     },
   { icon: 'help-circle-outline',    label: '도움말 및 피드백'                     },
   { icon: 'chatbox-ellipses-outline', label: '관리자에게 문의하기', inquiry: true },
   { icon: 'time-outline',           label: '내 요청 내역',      myRequests: true },
+  { icon: 'chatbubbles-outline',    label: 'PT 상담',          ptRequests: true },
   { icon: 'ban-outline',            label: '차단한 사용자',     blockedUsers: true },
   { icon: 'log-out-outline',        label: '로그아웃',          danger: true     },
 ];
 
 // --- Role palette
+
+const TRAINER_ROLE_META = { label: '트레이너', color: C.accent, bg: C.accentBg, icon: 'fitness' as IoniconName };
 
 const ROLE_META: Record<UserRole, { label: string; color: string; bg: string; icon: IoniconName }> = {
   user:    { label: 'Member',  color: C.textSub, bg: C.surfaceHigh, icon: 'person-outline'           },
@@ -513,6 +519,8 @@ export default function ProfileScreen() {
   const nav = useNavigation<any>();
   const route = useRoute<any>();
   const { user, signOut, updateNickname, updateProfileImage, updateWeightUnit, signInGoogle, signInApple } = useAuth();
+  // 2026-11-09: 일반 회원이 트레이너로 승인되면 'Member' 대신 '트레이너' 배지
+  const isTrainer = useIsTrainer(user?.id);
 
   function handleSettingPress(label: string) {
     if (label === '단위 (kg / lbs)') {
@@ -548,6 +556,8 @@ export default function ProfileScreen() {
   const [showMyRequests,    setShowMyRequests]    = useState(false);
   // 2026-11-04: 차단한 사용자 목록
   const [showBlockedUsers,  setShowBlockedUsers]  = useState(false);
+  // 2026-11-09: PT 상담 목록
+  const [showPtRequests,    setShowPtRequests]    = useState(false);
   const [showManagerManual, setShowManagerManual] = useState(false);
   // 도움말 > 헬스장 운영 가이드 "가이드 보기" — 신규 매니저 온보딩 슬라이드를 즉시 재생
   const [showManagerGuideReplay, setShowManagerGuideReplay] = useState(false);
@@ -934,7 +944,7 @@ export default function ProfileScreen() {
     );
   }
 
-  const roleMeta = ROLE_META[user.role];
+  const roleMeta = user.role === 'user' && isTrainer ? TRAINER_ROLE_META : ROLE_META[user.role];
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -1041,6 +1051,9 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         )}
 
+        {/* ── 내 헬스장 (회원·트레이너로 가입한 헬스장이 있을 때만) — 2026-11-09 ── */}
+        <MyGymDashboard userId={user?.id} horizontalPadding={screenPad} />
+
         {/* ── Personal stats ── */}
         <SectionLabel text="내 통계" />
         <View style={styles.statsGrid}>
@@ -1110,6 +1123,7 @@ export default function ProfileScreen() {
                   : s.inquiry ? () => setShowInquiryModal(true)
                   : s.myRequests ? () => setShowMyRequests(true)
                   : s.blockedUsers ? () => setShowBlockedUsers(true)
+                  : s.ptRequests ? () => setShowPtRequests(true)
                   : undefined
                 }
               />
@@ -1439,6 +1453,9 @@ export default function ProfileScreen() {
 
       {/* 2026-11-04: 차단한 사용자 */}
       <BlockedUsersModal visible={showBlockedUsers} onClose={() => setShowBlockedUsers(false)} />
+
+      {/* 2026-11-09: PT 상담 */}
+      <PtRequestsModal visible={showPtRequests} onClose={() => setShowPtRequests(false)} />
 
       {/* ── 닉네임 수정 모달 ── */}
       <Modal

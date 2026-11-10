@@ -14,9 +14,10 @@ import {
   type AppNotification,
 } from '../lib/db/notifications';
 import GymDetailModal from './flow/GymDetailModal';
+import GymQuestionModal from '../components/gym/qna/GymQuestionModal';
+import PtRequestsModal from '../components/pt/PtRequestsModal';
 import FeedDetailModal from '../components/feed/FeedDetailModal';
 import { fetchFeedPostById } from '../lib/db/feedPosts';
-import { toggleReaction } from '../lib/feedUtils';
 import type { WorkoutFeedPost } from '../data/types';
 
 interface Props {
@@ -33,10 +34,28 @@ const TYPE_META: Record<string, { icon: React.ComponentProps<typeof Ionicons>['n
   new_machine:          { icon: 'barbell',             color: C.accent  },
   ounwan_comment:       { icon: 'chatbubble-ellipses', color: C.accent  },
   gym_review_reply:     { icon: 'chatbox-ellipses',    color: '#3dd68c' },
+  member_request:       { icon: 'person-add',          color: C.accent  },
+  member_approved:      { icon: 'people',              color: '#3dd68c' },
+  member_rejected:      { icon: 'close-circle',        color: C.danger  },
+  trainer_application:  { icon: 'fitness',             color: C.accent  },
+  trainer_approved:     { icon: 'fitness',             color: '#3dd68c' },
+  trainer_rejected:     { icon: 'close-circle',        color: C.danger  },
+  ounwan_like:          { icon: 'heart',               color: C.danger  },
+  qna_question:         { icon: 'help-circle',         color: C.accent  },
+  qna_answer:           { icon: 'chatbubbles',         color: '#3dd68c' },
+  pt_request:           { icon: 'fitness',             color: C.accent  },
+  pt_message:           { icon: 'chatbubbles',         color: '#5ba4ff' },
   announcement:         { icon: 'megaphone',           color: '#ffb547' },
   general:              { icon: 'notifications',       color: '#5ba4ff' },
   default:              { icon: 'notifications',       color: C.accent  },
 };
+
+const DETAIL_TYPES = new Set<string>(['qna_question', 'qna_answer', 'pt_request', 'pt_message']);
+
+const GYM_LINK_TYPES = new Set<string>([
+  'member_request', 'member_approved', 'member_rejected',
+  'trainer_application', 'trainer_approved', 'trainer_rejected',
+]);
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -60,6 +79,9 @@ export default function NotificationsScreen({ onClose }: Props) {
   const [gymDetailId, setGymDetailId] = useState<string | null>(null);
   // 2026-11-04: '새 댓글' 알림 탭 시 열 오운완 상세
   const [feedPost, setFeedPost] = useState<WorkoutFeedPost | null>(null);
+  // 2026-11-09: Q&A 알림 → 질문 상세 / PT 알림 → 그 상담 대화방
+  const [questionId, setQuestionId] = useState<string | null>(null);
+  const [ptRequestId, setPtRequestId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -86,12 +108,26 @@ export default function NotificationsScreen({ onClose }: Props) {
       return;
     }
     // 2026-11-04: 헬스장 후기 답글 → 그 헬스장 상세
+    // 2026-11-09: 헬스장 회원·트레이너 신청(관장님) / 승인 / 거절 → 그 헬스장 상세 (관장님은 회원 카드에서 승인)
+    if (GYM_LINK_TYPES.has(n.type) && n.relatedId) {
+      setGymDetailId(n.relatedId);
+      return;
+    }
     if (n.type === 'gym_review_reply' && n.relatedId) {
       setGymDetailId(n.relatedId);
       return;
     }
     // 2026-11-04: 오운완 새 댓글 → 그 오운완 상세 (댓글 포함)
-    if (n.type === 'ounwan_comment' && n.relatedId) {
+    if ((n.type === 'qna_question' || n.type === 'qna_answer') && n.relatedId) {
+      setQuestionId(n.relatedId);
+      return;
+    }
+    if ((n.type === 'pt_request' || n.type === 'pt_message') && n.relatedId) {
+      setPtRequestId(n.relatedId);
+      return;
+    }
+    // 2026-11-09: 하트 알림도 그 오운완 상세로
+    if ((n.type === 'ounwan_comment' || n.type === 'ounwan_like') && n.relatedId) {
       const post = await fetchFeedPostById(n.relatedId);
       if (post) setFeedPost(post);
       else Alert.alert('볼 수 없는 오운완이에요', '삭제됐거나 비공개로 바뀐 오운완이에요.');
@@ -160,7 +196,7 @@ export default function NotificationsScreen({ onClose }: Props) {
                 <View style={{ flex: 1, gap: 3 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <Text style={[s.itemTitle, !item.read && s.itemTitleUnread, { flex: 1 }]}>{item.title}</Text>
-                    {(item.type === 'new_machine' || item.type === 'ounwan_comment' || item.type === 'gym_review_reply') && item.relatedId ? (
+                    {(item.type === 'new_machine' || item.type === 'ounwan_comment' || item.type === 'ounwan_like' || DETAIL_TYPES.has(item.type) || item.type === 'gym_review_reply' || GYM_LINK_TYPES.has(item.type)) && item.relatedId ? (
                       <Ionicons name="chevron-forward" size={14} color={C.textDim} />
                     ) : item.body.length > 0 && (
                       <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={14} color={C.textDim} />
@@ -189,7 +225,6 @@ export default function NotificationsScreen({ onClose }: Props) {
         <FeedDetailModal
           post={feedPost}
           onClose={() => setFeedPost(null)}
-          onReact={(_postId, key) => setFeedPost(prev => prev ? toggleReaction(prev, key) : prev)}
           onPressGym={(gymId) => {
             setFeedPost(null);
             setTimeout(() => setGymDetailId(gymId), 350);
@@ -197,6 +232,8 @@ export default function NotificationsScreen({ onClose }: Props) {
           onPressMachine={() => setFeedPost(null)}
         />
       )}
+      {questionId && <GymQuestionModal questionId={questionId} onClose={() => setQuestionId(null)} />}
+      <PtRequestsModal visible={!!ptRequestId} initialRequestId={ptRequestId} onClose={() => setPtRequestId(null)} />
     </SafeAreaView>
   );
 }

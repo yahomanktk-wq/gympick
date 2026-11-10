@@ -53,6 +53,9 @@ import { fetchGymFavoriteCount } from '../../lib/db/gymFavorites';
 import { getGymShareUrl } from '../../lib/share';
 import { shareGymLink } from '../../lib/shareGymLink';
 import GymQrPosterModal from '../../components/manager/GymQrPosterModal';
+import GymMembersModal from '../../components/manager/members/GymMembersModal';
+import GymShareButton from '../../components/manager/GymShareButton';
+import PtRequestsModal from '../../components/pt/PtRequestsModal';
 import GymSlugEditor from '../../components/GymSlugEditor';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -355,6 +358,8 @@ interface HomeViewProps {
   onOpenManage: (gym: ManagedGym, tab?: ManagerTab) => void;
   onOpenStats: (gym: ManagedGym) => void;
   onOpenQr: (gym: ManagedGym) => void;
+  onOpenMembers: (gym: ManagedGym) => void;
+  onOpenPt: (gym: ManagedGym) => void;
   onRegister: () => void;
 }
 
@@ -438,6 +443,9 @@ interface RequestTabProps {
 }
 
 interface ManageViewProps {
+  /** 2026-11-09: 홈에서 옮겨온 '정보 수정'·'머신 관리' */
+  onOpenEdit: () => void;
+  onOpenMachines: () => void;
   activeManagerTab: ManagerTab;
   setActiveManagerTab: (t: ManagerTab) => void;
   routineTabProps: RoutineTabProps;
@@ -449,7 +457,7 @@ interface ManageViewProps {
 
 const STEP_LABELS = ['기본 정보', '연락처 정보', '검토'];
 
-function HomeView({ gyms, weeklyVisitors, gymFavCount, machineCount, onOpenEdit, onOpenMachines, onOpenManage, onOpenStats, onOpenQr, onRegister }: HomeViewProps) {
+function HomeView({ gyms, weeklyVisitors, gymFavCount, machineCount, onOpenEdit, onOpenMachines, onOpenManage, onOpenStats, onOpenQr, onOpenMembers, onOpenPt, onRegister }: HomeViewProps) {
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
       <View style={styles.homeSummary}>
@@ -483,19 +491,10 @@ function HomeView({ gyms, weeklyVisitors, gymFavCount, machineCount, onOpenEdit,
             <View style={styles.metaChip}><Ionicons name="image-outline" size={11} color={C.textSub} /><Text style={styles.metaChipText}>{gym.photoCount}장 사진</Text></View>
             <View style={styles.metaChip}><Ionicons name="time-outline" size={11} color={C.textSub} /><Text style={styles.metaChipText}>{gym.submittedAt}</Text></View>
           </View>
-          <View style={styles.gymCardActions}>
-            <TouchableOpacity style={styles.gymActionBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpenEdit(gym); }} activeOpacity={0.8}>
-              <Ionicons name="create-outline" size={14} color={C.accent} />
-              <Text style={styles.gymActionBtnText}>정보 수정</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.gymActionBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpenMachines(gym); }} activeOpacity={0.8}>
-              <Ionicons name="barbell-outline" size={14} color={C.accent} />
-              <Text style={styles.gymActionBtnText}>머신 관리</Text>
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity style={[styles.gymActionBtn, { marginTop: 8 }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpenManage(gym); }} activeOpacity={0.8}>
+          {/* 2026-11-09: '정보 수정'·'머신 관리'는 관리 센터 안으로 이동 */}
+          <TouchableOpacity style={[styles.gymActionBtn, { marginTop: 12 }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpenManage(gym); }} activeOpacity={0.8}>
             <Ionicons name="grid-outline" size={14} color={C.accent} />
-            <Text style={styles.gymActionBtnText}>관리 센터 (루틴·공지·요청)</Text>
+            <Text style={styles.gymActionBtnText}>관리 센터</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.gymActionBtn, { marginTop: 8, backgroundColor: C.accentBg, borderColor: C.accent + '40' }]}
@@ -505,25 +504,36 @@ function HomeView({ gyms, weeklyVisitors, gymFavCount, machineCount, onOpenEdit,
             <Ionicons name="bar-chart-outline" size={14} color={C.accent} />
             <Text style={[styles.gymActionBtnText, { color: C.accent }]}>이용 통계</Text>
           </TouchableOpacity>
+          {/* 2026-11-09: 헬스장 회원 (초대 QR·코드 / 가입 신청 / 회원 목록) */}
           {gym.status === 'approved' && (
             <TouchableOpacity
               style={[styles.gymActionBtn, { marginTop: 8 }]}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); shareGymLink(getGymShareUrl(gym)); }}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpenMembers(gym); }}
               activeOpacity={0.8}
             >
-              <Ionicons name="share-outline" size={14} color={C.accent} />
-              <Text style={styles.gymActionBtnText}>보유머신 웹페이지 공유</Text>
+              <Ionicons name="people-outline" size={14} color={C.accent} />
+              <Text style={styles.gymActionBtnText}>회원 · 트레이너 관리</Text>
             </TouchableOpacity>
           )}
+          {/* 2026-11-09: 이 헬스장 PT 상담 (트레이너·회원 대화 전체 조회, 상담 완료 처리) */}
           {gym.status === 'approved' && (
             <TouchableOpacity
               style={[styles.gymActionBtn, { marginTop: 8 }]}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpenQr(gym); }}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpenPt(gym); }}
               activeOpacity={0.8}
             >
-              <Ionicons name="qr-code-outline" size={14} color={C.accent} />
-              <Text style={styles.gymActionBtnText}>QR 포스터 받기</Text>
+              <Ionicons name="chatbubbles-outline" size={14} color={C.accent} />
+              <Text style={styles.gymActionBtnText}>PT 상담</Text>
             </TouchableOpacity>
+          )}
+          {/* 2026-11-09: 웹페이지 공유 + QR 포스터 → '보유 머신 링크 공유' 하나로 (탭하면 QR 저장 / 링크 공유 선택) */}
+          {gym.status === 'approved' && (
+            <GymShareButton
+              gym={gym}
+              onOpenQr={() => onOpenQr(gym)}
+              style={[styles.gymActionBtn, { marginTop: 8 }]}
+              textStyle={styles.gymActionBtnText}
+            />
           )}
         </View>
       ))}
@@ -1415,11 +1425,23 @@ function RequestTab({ requests, readIds, onMarkRead }: RequestTabProps) {
 }
 
 function ManageView({
+  onOpenEdit, onOpenMachines,
   activeManagerTab, setActiveManagerTab,
   routineTabProps, noticeTabProps, requestTabProps,
 }: ManageViewProps) {
   return (
     <View style={{ flex: 1 }}>
+      {/* 정보 수정 · 머신 관리 (2026-11-09: 홈 카드에서 이동) */}
+      <View style={[styles.gymCardActions, { paddingHorizontal: 16, paddingTop: 12 }]}>
+        <TouchableOpacity style={styles.gymActionBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpenEdit(); }} activeOpacity={0.8}>
+          <Ionicons name="create-outline" size={14} color={C.accent} />
+          <Text style={styles.gymActionBtnText}>정보 수정</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.gymActionBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpenMachines(); }} activeOpacity={0.8}>
+          <Ionicons name="barbell-outline" size={14} color={C.accent} />
+          <Text style={styles.gymActionBtnText}>머신 관리</Text>
+        </TouchableOpacity>
+      </View>
       {/* Tab bar */}
       <View style={styles.tabBar}>
         {([
@@ -1513,6 +1535,8 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
   const [selectedGym, setSelectedGym] = useState<ManagedGym | null>(null);
   // QR 포스터 모달 대상 헬스장 (F6-1)
   const [qrGym, setQrGym] = useState<ManagedGym | null>(null);
+  const [membersGym, setMembersGym] = useState<ManagedGym | null>(null);
+  const [ptGym, setPtGym] = useState<ManagedGym | null>(null);
   const [machineReqVisible, setMachineReqVisible] = useState(false);
 
   const [weeklyVisitors, setWeeklyVisitors] = useState<number | null>(null);
@@ -2188,7 +2212,7 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
     register: { title: '헬스장 등록 신청', subtitle: step < 4 ? `${step}단계 / 3단계` : undefined },
     edit:     { title: selectedGym?.name ?? '정보 수정', subtitle: '프로필 수정' },
     machines: { title: selectedGym?.name ?? '머신 관리', subtitle: `${gymMachineIds.length}개 선택됨` },
-    manage:   { title: selectedGym?.name ?? '관리 센터', subtitle: '루틴 · 공지 · 요청' },
+    manage:   { title: selectedGym?.name ?? '관리 센터', subtitle: '정보 · 머신 · 루틴 · 공지 · 요청' },
     stats:    { title: selectedGym?.name ?? '이용 통계', subtitle: '머신별 통계' },
   };
 
@@ -2244,6 +2268,8 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
           onOpenManage={openManage}
           onOpenStats={openStats}
           onOpenQr={setQrGym}
+          onOpenMembers={setMembersGym}
+          onOpenPt={setPtGym}
           onRegister={onRegister}
         />
       )}
@@ -2360,6 +2386,8 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
       )}
       {currentView === 'manage' && (
         <ManageView
+          onOpenEdit={() => { if (selectedGym) openEdit(selectedGym); }}
+          onOpenMachines={() => { if (selectedGym) openMachines(selectedGym); }}
           activeManagerTab={activeManagerTab}
           setActiveManagerTab={setActiveManagerTab}
           routineTabProps={{
@@ -2400,6 +2428,20 @@ export default function ManagerDashboard({ onClose, initialView }: { onClose: ()
         gym={qrGym ?? { id: '' }}
         gymName={qrGym?.name ?? ''}
         onClose={() => setQrGym(null)}
+      />
+
+      <GymMembersModal
+        visible={!!membersGym}
+        gymId={membersGym?.id ?? null}
+        gymName={membersGym?.name ?? ''}
+        onClose={() => setMembersGym(null)}
+      />
+
+      <PtRequestsModal
+        visible={!!ptGym}
+        gymId={ptGym?.id ?? null}
+        title={ptGym ? `${ptGym.name} PT 상담` : 'PT 상담'}
+        onClose={() => setPtGym(null)}
       />
     </SafeAreaView>
   );

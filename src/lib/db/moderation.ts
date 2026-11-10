@@ -4,7 +4,7 @@ import { supabase } from '../supabase';
 // - 차단: user_blocks. 차단한 사람의 오운완·댓글·후기는 DB 권한 규칙(RLS)에서 자동으로 빠진다.
 // - 신고: content_reports. 어드민이 직접 확인하고 처리한다 (자동 숨김 없음).
 
-export type ReportTargetType = 'ounwan' | 'comment' | 'gym_review';
+export type ReportTargetType = 'ounwan' | 'comment' | 'gym_review' | 'qna_question' | 'qna_answer';
 export type ReportReason = 'abuse' | 'sexual' | 'spam' | 'privacy' | 'other';
 
 export const REPORT_REASONS: { key: ReportReason; label: string }[] = [
@@ -19,6 +19,8 @@ export const REPORT_TARGET_LABEL: Record<ReportTargetType, string> = {
   ounwan:     '오운완',
   comment:    '오운완 댓글',
   gym_review: '헬스장 후기',
+  qna_question: 'Q&A 질문',
+  qna_answer:   'Q&A 답변',
 };
 
 export function reportReasonLabel(reason: string): string {
@@ -183,6 +185,21 @@ export async function fetchReportTargetPreview(
       ? { nickname: data.nickname, text: data.content, gone: false }
       : { nickname: '', text: '삭제된 후기예요', gone: true };
   }
+  // 2026-11-09: 헬스장 Q&A
+  if (type === 'qna_question') {
+    const { data } = await supabase
+      .from('gym_questions').select('nickname, title, content').eq('id', id).maybeSingle();
+    return data
+      ? { nickname: data.nickname, text: `${data.title}\n${data.content}`, gone: false }
+      : { nickname: '', text: '삭제된 질문이에요', gone: true };
+  }
+  if (type === 'qna_answer') {
+    const { data } = await supabase
+      .from('gym_answers').select('nickname, content').eq('id', id).maybeSingle();
+    return data
+      ? { nickname: data.nickname, text: data.content, gone: false }
+      : { nickname: '', text: '삭제된 답변이에요', gone: true };
+  }
   const { data } = await supabase
     .from('workout_feed_posts')
     .select('nickname, gym_name, composite_uri, photo_uri, is_public')
@@ -205,6 +222,12 @@ export async function adminRemoveReportTarget(type: ReportTargetType, id: string
   }
   if (type === 'gym_review') {
     const { error } = await supabase.from('gym_reviews').delete().eq('id', id);
+    if (error) throw error;
+    return;
+  }
+  if (type === 'qna_question' || type === 'qna_answer') {
+    const table = type === 'qna_question' ? 'gym_questions' : 'gym_answers';
+    const { error } = await supabase.from(table).delete().eq('id', id);
     if (error) throw error;
     return;
   }

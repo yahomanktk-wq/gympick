@@ -103,7 +103,8 @@ export async function fetchGyms(): Promise<Gym[]> {
 export async function fetchGym(id: string): Promise<Gym | undefined> {
   const { data, error } = await supabase
     .from('gyms')
-    .select('id, name, location, address_detail, description, latitude, longitude, hours, hours_note, phone, website, slug, short_code')
+    // 2026-11-09: manager_id 포함 — 빠져 있어서 헬스장 상세에서 관장님 여부(회원 카드·관리 줄·직접 관리 배지)를 알 수 없었다
+    .select('id, name, location, address_detail, description, latitude, longitude, hours, hours_note, phone, website, manager_id, slug, short_code')
     .eq('id', id)
     .single();
 

@@ -73,7 +73,7 @@ export default function SendRequestSection({ gymId, gymName, onSent, user }: Pro
       {/* Section header */}
       <View style={s.sectionHeader}>
         <Ionicons name="paper-plane-outline" size={15} color={C.accent} />
-        <Text style={s.sectionLabel}>SEND REQUEST</Text>
+        <Text style={s.sectionLabel}>요청사항</Text>
       </View>
 
       <View style={s.card}>
