@@ -9,17 +9,16 @@ import {
   Modal,
   Dimensions,
   ActivityIndicator,
-  PixelRatio,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R } from '../../theme';
 import { WorkoutFeedPost } from '../../data/types';
 import { fetchOunwanRoutine, OunwanRoutine } from '../../lib/db/ounwanRoutine';
 import OunwanRoutineSection from './OunwanRoutineSection';
-import { getTransformedImageUrl } from '../../lib/photoImageUrl';
+import { getOunwanImageSources } from '../../lib/photoImageUrl';
+import FallbackImage from '../common/FallbackImage';
 import OwnerVisibilityButton from './OwnerVisibilityButton';
 import { useAuth } from '../../context/AuthContext';
 import ContentMenuButton from '../moderation/ContentMenuButton';
@@ -29,8 +28,8 @@ import CommentInput from './comments/CommentInput';
 import { COMMENT_MAX_LENGTH } from '../../lib/db/ounwanComments';
 import OunwanLikeButton from './likes/OunwanLikeBar';
 import { toFeedVisibility, type FeedVisibility } from '../../lib/feedVisibility';
-
-const IMAGE_PIXEL_RATIO = PixelRatio.get();
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useKeyboardHeight } from '../../lib/useKeyboardHeight';
 
 // ── 상세 모달 ─────────────────────────────────────────────────────────────────
 
@@ -58,15 +57,9 @@ export default function FeedDetailModal({
   const isMine = post.isMyPost === true || (!!user?.id && user.id === post.userId);
   const rawUri  = post.compositeUri ?? post.photoUri;
   const MODAL_W = Dimensions.get('window').width;
-  // 화면에 보여줄 수 있는 실제 픽셀 수(화면 너비 × 기기 배율)로만 리사이즈 —
-  // 핀치줌 등 확대 기능이 없는 고정 크기 이미지라 화질 손실 없이 전송량만
-  // 줄어든다. 그리드 카드보다 화면에서 차지하는 비중이 큰 '메인' 사진이라
-  // quality는 기본값(75)보다 높은 95로 지정.
-  const displayUri = getTransformedImageUrl(rawUri, {
-    width:  Math.round(MODAL_W * IMAGE_PIXEL_RATIO),
-    height: Math.round(MODAL_W * (4 / 3) * IMAGE_PIXEL_RATIO),
-    quality: 95,
-  });
+  // 상세 화면은 긴 변 2048px 변형(고해상도 폰 전체 폭 기준)을 쓰고, 없으면 원본으로 대체.
+  // 목록에서 이미 받아 둔 썸네일을 placeholder로 깔아 사진이 바로 보이게 한다.
+  const sources = getOunwanImageSources({ original: rawUri }, 'full');
   // 2026-10-20: 다른 사람의 오운완도 루틴이 보이도록 get_ounwan_routine RPC로 불러온다
   const [routine,        setRoutine]        = useState<OunwanRoutine | null>(null);
   // 2026-11-04: 오운완 댓글 (비공개 오운완·차단한 사람 댓글은 DB에서 자동으로 숨겨짐)
@@ -84,6 +77,11 @@ export default function FeedDetailModal({
     comments.removeByUser(userId);
   }
   const [sessionLoading, setSessionLoading] = useState(false);
+  // 2026-11-13: pageSheet 모달에서 KeyboardAvoidingView가 키보드 높이를 잘못 계산해 댓글 입력칸이 가려졌다.
+  // 키보드 높이를 직접 받아 아래 여백으로 쓴다 (SafeAreaView가 이미 하단 여백만큼 띄워 두므로 그만큼 뺀다).
+  const insets = useSafeAreaInsets();
+  const kbHeight = useKeyboardHeight();
+  const kbPad = kbHeight > 0 ? Math.max(0, kbHeight - insets.bottom) : 0;
 
   useEffect(() => {
     let alive = true;
@@ -103,10 +101,7 @@ export default function FeedDetailModal({
       onRequestClose={onClose}
     >
       <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
-       <KeyboardAvoidingView
-         style={{ flex: 1 }}
-         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-       >
+       <View style={{ flex: 1, paddingBottom: kbPad }}>
         {/* 헤더 */}
         <View style={{
           flexDirection: 'row', alignItems: 'center',
@@ -146,11 +141,15 @@ export default function FeedDetailModal({
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 24 }}>
 
           {/* 인증샷 */}
-          <Image
-            source={{ uri: displayUri }}
+          <FallbackImage
+            sources={sources}
             style={{ width: MODAL_W, aspectRatio: 3 / 4 }}
             contentFit="cover"
-            placeholder={post.blurhash ? { blurhash: post.blurhash } : undefined}
+            placeholder={
+              post.thumbnailUri ? { uri: post.thumbnailUri }
+              : post.blurhash ? { blurhash: post.blurhash } : undefined
+            }
+            placeholderContentFit="cover"
             transition={200}
           />
 
@@ -235,7 +234,7 @@ export default function FeedDetailModal({
             )}
           </View>
         </View>
-       </KeyboardAvoidingView>
+       </View>
       </SafeAreaView>
     </Modal>
   );
