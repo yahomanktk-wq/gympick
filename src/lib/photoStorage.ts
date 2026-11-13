@@ -1,15 +1,16 @@
 import { supabase } from './supabase';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { generatePhotoBlurhash } from './blurhash';
+import { PHOTO_VARIANTS, PHOTO_VARIANT_QUALITY, type PhotoVariantTier } from './photoVariants';
 
 const BUCKET = 'workout-photos';
 
-// 썸네일 — 홈/피드 그리드 카드(가장 큰 컨텍스트가 WorkoutFeedScreen의 절반 화면 폭
-// 그리드 카드)보다 여유 있게 크리스프하도록 세로변 기준 480px, WebP 0.8 품질로 생성.
-// WebP는 JPEG와 달리 알파 채널을 지원해 합성 이미지의 둥근 모서리 투명도를 보존한다.
-// 원본은 그대로 유지되고 별도 파일로만 업로드된다.
-const THUMB_LONG_EDGE = 480;
-const THUMB_QUALITY   = 0.8;
+// 표시용 변형 — Supabase Image Transformations(유료 한도 초과) 대신 업로드 시점에
+// 미리 만들어 둔다. 규격·파일명 규칙은 photoVariants.ts / photoImageUrl.ts 참고.
+//   {base}.png         원본 (보관용, 그대로 유지)
+//   {base}_w1024.webp  그리드·홈·일지 칸 (DB thumbnail_uri에 저장)
+//   {base}_w2048.webp  피드 상세 전체 화면
+// WebP는 알파 채널을 지원해 합성 이미지의 둥근 모서리 투명도를 보존한다.
 
 export interface UploadWorkoutPhotoResult {
   url:           string;
@@ -33,7 +34,12 @@ async function uploadToBucket(
 
   const { data, error } = await supabase.storage
     .from(BUCKET)
-    .upload(fileName, arrayBuffer, { contentType, upsert: false });
+    .upload(fileName, arrayBuffer, {
+      contentType,
+      upsert: false,
+      // 파일명이 매번 고유하고 내용이 바뀌지 않으므로 기기·CDN 캐시를 길게 유지
+      cacheControl: '31536000',
+    });
 
   if (error || !data) {
     console.warn('[photoStorage] upload failed:', error?.message, fileName);
@@ -44,37 +50,38 @@ async function uploadToBucket(
   return urlData.publicUrl;
 }
 
-interface ThumbnailResult {
-  url:       string | undefined;
+interface VariantResult {
+  gridUrl?:  string;
   blurhash?: string;
 }
 
-/** 원본은 건드리지 않고, 그리드 썸네일 전용의 작은 별도 변형만 생성해 업로드한다. */
-async function uploadThumbnail(
-  localUri: string,
-  userId: string,
-  sessionId: string,
-): Promise<ThumbnailResult> {
+/** 원본은 건드리지 않고 표시용 WebP 변형(1024/2048)을 만들어 업로드한다. 원본보다 크게 늘리지 않는다. */
+async function uploadVariants(localUri: string, baseName: string): Promise<VariantResult> {
   try {
-    const context  = ImageManipulator.manipulate(localUri);
-    const rendered = await context.resize({ height: THUMB_LONG_EDGE }).renderAsync();
-    // WebP — JPEG와 달리 알파 채널을 보존해 합성 이미지의 둥근 모서리 투명도가 깨지지 않는다
-    // (JPEG는 알파를 지원하지 않아 저장 시 모서리가 불투명 색상으로 채워짐 — iOS는 흰색으로 채움)
-    const result   = await rendered.saveAsync({ compress: THUMB_QUALITY, format: SaveFormat.WEBP });
+    const source   = await ImageManipulator.manipulate(localUri).renderAsync();
+    const isPortrait = source.height >= source.width;
+    const longEdge = Math.max(source.width, source.height);
 
-    // blurhash는 이미 리사이즈된 작은 썸네일 로컬 파일에서 바로 계산 — 네트워크
-    // 왕복 없이 기기에서 즉시 생성되고, 실패해도(undefined) 업로드는 계속 진행된다.
-    const [url, blurhash] = await Promise.all([
-      (async () => {
-        const thumbFileName = `${userId}/${sessionId}_${Date.now()}_thumb.webp`;
-        return uploadToBucket(result.uri, thumbFileName, 'image/webp');
-      })(),
-      generatePhotoBlurhash(result.uri),
-    ]);
-    return { url: url ?? undefined, blurhash };
+    const make = async (tier: PhotoVariantTier) => {
+      const { longEdge: target, suffix } = PHOTO_VARIANTS[tier];
+      const base = ImageManipulator.manipulate(localUri);
+      const ctx  = longEdge > target
+        ? base.resize(isPortrait ? { height: target } : { width: target })
+        : base;
+      const rendered = await ctx.renderAsync();
+      const saved    = await rendered.saveAsync({ compress: PHOTO_VARIANT_QUALITY, format: SaveFormat.WEBP });
+      const url      = await uploadToBucket(saved.uri, `${baseName}${suffix}`, 'image/webp');
+      return { localUri: saved.uri, url };
+    };
+
+    const [grid, full] = await Promise.all([make('grid'), make('full')]);
+    if (!full.url) console.warn('[photoStorage] full variant upload failed:', baseName);
+    // blurhash는 작은 그리드 변형 로컬 파일에서 바로 계산 (네트워크 왕복 없음)
+    const blurhash = await generatePhotoBlurhash(grid.localUri);
+    return { gridUrl: grid.url ?? undefined, blurhash };
   } catch (err) {
-    console.warn('[photoStorage] thumbnail generation failed:', err);
-    return { url: undefined };
+    console.warn('[photoStorage] variant generation failed:', err);
+    return {};
   }
 }
 
@@ -86,8 +93,13 @@ export async function uploadWorkoutPhoto(
 ): Promise<UploadWorkoutPhotoResult> {
   try {
     // PNG로 저장 (투명 배경 보존) — 원본 그대로, 기존 동작 변경 없음
-    const fileName  = `${userId}/${sessionId}_${Date.now()}.png`;
-    const publicUrl = await uploadToBucket(localUri, fileName, 'image/png');
+    const baseName  = `${userId}/${sessionId}_${Date.now()}`;
+    const fileName  = `${baseName}.png`;
+    // 원본 업로드와 표시용 변형 생성·업로드를 동시에 진행해 기다리는 시간을 줄인다
+    const [publicUrl, variants] = await Promise.all([
+      uploadToBucket(localUri, fileName, 'image/png'),
+      uploadVariants(localUri, baseName),
+    ]);
 
     if (!publicUrl) {
       return { url: localUri };
@@ -104,9 +116,7 @@ export async function uploadWorkoutPhoto(
         photo_uri:     isComposite ? null : publicUrl,
       });
 
-    const thumbnail = await uploadThumbnail(localUri, userId, sessionId);
-
-    return { url: publicUrl, thumbnailUrl: thumbnail.url, blurhash: thumbnail.blurhash };
+    return { url: publicUrl, thumbnailUrl: variants.gridUrl, blurhash: variants.blurhash };
   } catch (err) {
     console.warn('[photoStorage] upload error:', err);
     return { url: localUri };

@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, Dimensions, PixelRatio } from 'react-native';
-import { Image } from 'expo-image';
+import { View, Text, TouchableOpacity, Dimensions } from 'react-native';
 import { C } from '../../theme';
 import { WorkoutFeedPost } from '../../data/types';
 import { fetchGymOunwanPosts } from '../../lib/db/feedPosts';
-import { getTransformedImageUrl } from '../../lib/photoImageUrl';
+import { getOunwanImageSources } from '../../lib/photoImageUrl';
+import FallbackImage from '../common/FallbackImage';
 import FeedDetailModal from '../feed/FeedDetailModal';
 
 // 헬스장 상세 커뮤니티 탭의 오운완 3열 사진 그리드 (F1-3).
@@ -15,7 +15,6 @@ const PAGE_SIZE = 30;
 const GAP       = 2;
 // 부모 ScrollView의 paddingHorizontal 16 × 2 = 32
 const TILE      = Math.floor((Dimensions.get('window').width - 32 - GAP * 2) / 3);
-const TILE_PX   = Math.round(TILE * PixelRatio.get());
 
 interface Props {
   gymId: string;
@@ -29,18 +28,18 @@ interface GridTileProps {
 }
 
 const GridTile = React.memo(({ post, size, onPress }: GridTileProps) => {
-  const uri = getTransformedImageUrl(post.thumbnailUri ?? post.compositeUri ?? post.photoUri, {
-    width:  TILE_PX,
-    height: TILE_PX,
-  });
+  const sources = getOunwanImageSources(
+    { original: post.compositeUri ?? post.photoUri, thumbnail: post.thumbnailUri },
+    'grid',
+  );
   return (
     <TouchableOpacity
       style={{ width: size, height: size, backgroundColor: C.surfaceHigh }}
       onPress={() => onPress(post)}
       activeOpacity={0.85}
     >
-      <Image
-        source={{ uri }}
+      <FallbackImage
+        sources={sources}
         style={{ width: size, height: size }}
         contentFit="cover"
         placeholder={post.blurhash ? { blurhash: post.blurhash } : undefined}

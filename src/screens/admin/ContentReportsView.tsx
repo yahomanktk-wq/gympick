@@ -2,13 +2,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, RefreshControl,
 } from 'react-native';
-import { Image } from 'expo-image';
 import { C, R } from '../../theme';
 import {
   fetchContentReports, fetchReportTargetPreview, resolveContentReport, adminRemoveReportTarget,
   ContentReport, ReportTargetPreview, REPORT_TARGET_LABEL, reportReasonLabel,
 } from '../../lib/db/moderation';
-import { getTransformedImageUrl } from '../../lib/photoImageUrl';
+import { getOunwanImageSources } from '../../lib/photoImageUrl';
+import FallbackImage from '../../components/common/FallbackImage';
 
 // 2026-11-04: 어드민 > 콘텐츠 신고 관리 (오운완 · 댓글 · 헬스장 후기)
 // 자동 숨김 없이 어드민이 직접 확인하고 처리한다.
@@ -31,9 +31,9 @@ interface CardProps {
 
 function ReportCard({ report, preview, sameCount, busy, onRemove, onDismiss }: CardProps) {
   const pending = report.status === 'pending';
-  const thumb = preview?.imageUri
-    ? getTransformedImageUrl(preview.imageUri, { width: 160, height: 213 })
-    : undefined;
+  const thumbSources = preview?.imageUri
+    ? getOunwanImageSources({ original: preview.imageUri }, 'grid')
+    : [];
   return (
     <View style={[s.card, !pending && { opacity: 0.55 }]}>
       <View style={s.cardHead}>
@@ -45,7 +45,7 @@ function ReportCard({ report, preview, sameCount, busy, onRemove, onDismiss }: C
       {report.detail ? <Text style={s.detail}>“{report.detail}”</Text> : null}
 
       <View style={s.preview}>
-        {thumb ? <Image source={{ uri: thumb }} style={s.thumb} contentFit="cover" /> : null}
+        {thumbSources.length > 0 ? <FallbackImage sources={thumbSources} style={s.thumb} contentFit="cover" /> : null}
         <View style={{ flex: 1, gap: 2 }}>
           {preview ? (
             <>

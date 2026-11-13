@@ -2,17 +2,14 @@ import { GYMVISUAL_GIF_IDS } from '../data/freeWeightsGymVisual';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 const BUCKET       = 'machine-images';
-const DEFAULT_QUALITY = 75;
 
 /**
- * Supabase Dashboard → Storage → Settings에서 "Enable Image Transformations"를
- * 켜고 프로젝트가 Pro 플랜 이상인 것을 직접 확인한 뒤에만 true로 바꿀 것.
- * false인 동안은 width/quality 옵션을 전부 무시하고 항상 원본(object/public)
- * URL을 반환한다 — render 엔드포인트 자체를 호출하지 않으므로, 사전 조건이
- * 아직 갖춰지지 않은 상태에서도 기존과 동일하게 안전하게 동작한다.
+ * Supabase Image Transformations(render 엔드포인트)는 결제 주기마다 "변환된 원본
+ * 이미지 수"로 과금되고 Pro 기본 제공량이 100장뿐이라, 머신 이미지 ~2,000장만으로도
+ * 매달 한도를 초과했다(2026-11 기준 3,478장). 머신 원본은 이미 800×800 WebP
+ * (평균 ~114KB)로 충분히 가볍고, 고해상도 폰의 카드 크기에서도 원본이 가장 선명하므로
+ * 더 이상 변환을 쓰지 않고 항상 원본을 그대로 반환한다.
  */
-export const IMAGE_TRANSFORM_ENABLED = true;
-
 export interface MachineImageUrlOptions {
   width?:   number;
   height?:  number;
@@ -20,43 +17,20 @@ export interface MachineImageUrlOptions {
 }
 
 /**
- * 머신 이미지(machine-images 버킷, 800×800 WebP) URL을 생성한다.
- * - options 없이 호출하거나 IMAGE_TRANSFORM_ENABLED가 false면 원본 그대로의
- *   public URL을 반환한다.
- * - width를 주고 변환이 활성화된 경우에만 Supabase Storage의 Image
- *   Transformation render 엔드포인트로 리사이즈된 URL을 반환한다.
- * - height를 명시하지 않으면 width와 같은 값으로 채워 항상 정사각형으로
- *   요청한다 — Supabase render 엔드포인트는 생략된 축을 원본 픽셀 크기
- *   그대로 남겨두므로(예: width만 주면 800×800 원본이 실제로는 width×800로
- *   찌그러진 채 반환됨), height를 반드시 함께 보내야 정상적인 정사각형
- *   축소본이 나온다. 원본이 1:1 정사각형이고 MachineCard.tsx가 이미
- *   contentFit="contain"으로 9:16 박스 안에 정사각형 이미지를 letterbox하는
- *   구조이므로, 정사각형 요청이 기존 표시 결과를 그대로 유지한다.
- * - 같은 machineId + 같은 width/height/quality 조합이면 항상 같은 문자열을
- *   반환하므로(랜덤/타임스탬프 쿼리 없음) 클라이언트 이미지 캐시가 정상적으로
- *   재사용된다.
+ * 머신 이미지(machine-images 버킷, 800×800 WebP / 애니메이션 GIF) 원본 public URL을 반환한다.
+ * options(width/height/quality)는 기존 호출처 호환을 위해 받기만 하고 무시한다.
+ * 항상 같은 machineId → 같은 URL이라 이미지 캐시가 화면 간에 그대로 공유된다.
  */
 export function getMachineImageUrl(
   machineId: string,
   options?: MachineImageUrlOptions,
 ): string {
-  // Gym Visual에서 구매한 애니메이션 GIF 프리웨이트(fw45~fw173)는 항상 원본
-  // .gif object URL을 그대로 반환한다 — Supabase의 render/image 변환
-  // 엔드포인트는 정적 리사이즈용이라 애니메이션이 보존되지 않을 수 있으므로,
-  // GIF 항목은 width/height 옵션이 있어도 변환 엔드포인트를 타지 않는다.
   const isGif = GYMVISUAL_GIF_IDS.has(machineId);
   const ext   = isGif ? 'gif' : 'webp';
 
   const path        = `${BUCKET}/${machineId}.${ext}`;
   const originalUrl = `${SUPABASE_URL}/storage/v1/object/public/${path}`;
 
-  if (isGif || !IMAGE_TRANSFORM_ENABLED || !options?.width) {
-    return originalUrl;
-  }
-
-  const width   = Math.round(options.width);
-  const height  = Math.round(options.height ?? options.width);
-  const quality = options.quality ?? DEFAULT_QUALITY;
-
-  return `${SUPABASE_URL}/storage/v1/render/image/public/${path}?width=${width}&height=${height}&quality=${quality}`;
+  void options; // 호출처 호환용 — 크기 옵션은 더 이상 사용하지 않는다
+  return originalUrl;
 }

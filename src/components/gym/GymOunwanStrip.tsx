@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, TouchableOpacity, PixelRatio, Dimensions,
+  View, Text, TouchableOpacity, Dimensions,
   StyleProp, TextStyle,
 } from 'react-native';
-import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { C } from '../../theme';
 import { WorkoutFeedPost } from '../../data/types';
 import { fetchGymOunwanPosts } from '../../lib/db/feedPosts';
-import { getTransformedImageUrl } from '../../lib/photoImageUrl';
+import { getOunwanImageSources } from '../../lib/photoImageUrl';
+import FallbackImage from '../common/FallbackImage';
 import FeedDetailModal from '../feed/FeedDetailModal';
 
 // 헬스장 상세 정보 탭의 '다른 사람들은 이렇게 운동해요' 섹션 (F1-4 → 2026-10-20 개편).
@@ -23,8 +23,6 @@ const GAP     = 4;
 // GymDetailModal 정보 탭 contentContainer 좌우 padding 16
 const TILE_W  = Math.floor((Dimensions.get('window').width - 32 - GAP * (COLS - 1)) / COLS);
 const TILE_H  = Math.round(TILE_W * 4 / 3);
-const TILE_PX_W = Math.round(TILE_W * PixelRatio.get());
-const TILE_PX_H = Math.round(TILE_H * PixelRatio.get());
 
 interface Props {
   gymId: string;
@@ -39,18 +37,18 @@ interface GridTileProps {
 }
 
 const GridTile = React.memo(({ post, onPress }: GridTileProps) => {
-  const uri = getTransformedImageUrl(post.thumbnailUri ?? post.compositeUri ?? post.photoUri, {
-    width:  TILE_PX_W,
-    height: TILE_PX_H,
-  });
+  const sources = getOunwanImageSources(
+    { original: post.compositeUri ?? post.photoUri, thumbnail: post.thumbnailUri },
+    'grid',
+  );
   return (
     <TouchableOpacity
       style={{ width: TILE_W, height: TILE_H, backgroundColor: C.surfaceHigh }}
       onPress={() => onPress(post)}
       activeOpacity={0.85}
     >
-      <Image
-        source={{ uri }}
+      <FallbackImage
+        sources={sources}
         style={{ width: TILE_W, height: TILE_H }}
         contentFit="cover"
         placeholder={post.blurhash ? { blurhash: post.blurhash } : undefined}

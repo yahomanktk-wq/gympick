@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   StatusBar,
   Dimensions,
-  PixelRatio,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
@@ -33,7 +32,8 @@ import { getActiveFeedPostsCached } from '../data/feedPostsCache';
 import { fetchActiveFeedPosts } from '../lib/db/feedPosts';
 import { fetchSplitConfig } from '../lib/db/splitRoutine';
 import { getTodayTarget, getTodayTargets, toEnMuscle, toKoMuscle, parseMuscles } from '../lib/splitUtils';
-import { getTransformedImageUrl } from '../lib/photoImageUrl';
+import { getOunwanImageSources } from '../lib/photoImageUrl';
+import FallbackImage from '../components/common/FallbackImage';
 import { track } from '../lib/analytics';
 import { perfStart, perfEnd } from '../lib/perf';
 import * as Haptics from 'expo-haptics';
@@ -114,7 +114,6 @@ const HOME_THUMB_H   = Math.round(HOME_THUMB_W * (4 / 3));
 const OUNWAN_CARD_W  = 160;
 const OUNWAN_CARD_H  = Math.round(OUNWAN_CARD_W * (4 / 3));
 const OUNWAN_CARD_GAP = 10;
-const IMAGE_PIXEL_RATIO = PixelRatio.get();
 
 function greeting() {
   const h = new Date().getHours();
@@ -163,19 +162,18 @@ function computeStreak(logs: WorkoutLog[]): number {
 
 // ── OunwanCard ────────────────────────────────────────────────────────────────
 
-function getOunwanDisplayUri(post: WorkoutFeedPost): string | undefined {
-  const raw = post.thumbnailUri ?? post.photoUri ?? post.compositeUri;
-  return getTransformedImageUrl(raw, {
-    width:  Math.round(OUNWAN_CARD_W * IMAGE_PIXEL_RATIO),
-    height: Math.round(OUNWAN_CARD_H * IMAGE_PIXEL_RATIO),
-  });
+function getOunwanCardSources(post: WorkoutFeedPost): string[] {
+  return getOunwanImageSources(
+    { original: post.photoUri ?? post.compositeUri, thumbnail: post.thumbnailUri },
+    'grid',
+  );
 }
 
 const OunwanCard = React.memo(({ post, onPress }: {
   post:    WorkoutFeedPost;
   onPress: () => void;
 }) => {
-  const displayUri = getOunwanDisplayUri(post);
+  const sources = getOunwanCardSources(post);
 
   return (
     <TouchableOpacity
@@ -184,9 +182,9 @@ const OunwanCard = React.memo(({ post, onPress }: {
       onPress={onPress}
     >
       <View style={st.ounwanCardInner}>
-        {displayUri ? (
-          <ExpoImage
-            source={{ uri: displayUri }}
+        {sources.length > 0 ? (
+          <FallbackImage
+            sources={sources}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
             cachePolicy="memory-disk"
@@ -223,7 +221,7 @@ const AutoScrollOunwan = React.memo(({ posts, onPressPost }: {
     if (list.length === 0) return;
     for (let offset = 1; offset <= 2; offset++) {
       const target = list[(idx + offset) % list.length];
-      const uri = target ? getOunwanDisplayUri(target) : undefined;
+      const uri = target ? getOunwanCardSources(target)[0] : undefined;
       if (uri) {
         ExpoImage.prefetch(uri).catch(() => {});
       }
@@ -575,13 +573,11 @@ export default function HomeScreen() {
                 const isToday  = isSameDay(day, today);
                 const isPast   = !isToday && day < today;
                 const isFuture = !isToday && !isPast;
-                const photoSrc = getTransformedImageUrl(
-                  session?.thumbnailUri ?? session?.compositeUri ?? session?.photoUri,
-                  {
-                    width:  Math.round(HOME_THUMB_W * IMAGE_PIXEL_RATIO),
-                    height: Math.round(HOME_THUMB_H * IMAGE_PIXEL_RATIO),
-                  },
+                const photoSources = getOunwanImageSources(
+                  { original: session?.compositeUri ?? session?.photoUri, thumbnail: session?.thumbnailUri },
+                  'grid',
                 );
+                const photoSrc = photoSources.length > 0;
                 const targetForDay = weekTargetMap[day.toDateString()];
                 return (
                   <TouchableOpacity
@@ -606,8 +602,8 @@ export default function HomeScreen() {
                       isToday && !photoSrc && st.weekThumbBoxToday,
                     ]}>
                       {photoSrc ? (
-                        <ExpoImage
-                          source={{ uri: photoSrc }}
+                        <FallbackImage
+                          sources={photoSources}
                           style={st.weekThumbImg}
                           contentFit="cover"
                           cachePolicy="memory-disk"

@@ -9,11 +9,9 @@ import {
   TouchableOpacity,
   ScrollView,
   Dimensions,
-  PixelRatio,
   Alert,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { Image } from 'expo-image';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R } from '../theme';
@@ -38,7 +36,8 @@ import { useHomeGymFeed } from '../hooks/useHomeGymFeed';
 import { useNearbyFeed } from '../hooks/useNearbyFeed';
 import LocationPermissionPrompt from '../components/feed/LocationPermissionPrompt';
 import { MACHINES } from '../data';
-import { getTransformedImageUrl } from '../lib/photoImageUrl';
+import { getOunwanImageSources } from '../lib/photoImageUrl';
+import FallbackImage from '../components/common/FallbackImage';
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
@@ -46,7 +45,6 @@ const SCREEN_W    = Dimensions.get('window').width;
 const GRID_GAP    = 8;
 const GRID_PAD    = 16;
 const GRID_CARD_W = Math.floor((SCREEN_W - GRID_PAD * 2 - GRID_GAP) / 2);
-const IMAGE_PIXEL_RATIO = PixelRatio.get();
 
 const MUSCLE_FILTERS = ['전체', '가슴', '등', '하체', '어깨', '팔'] as const;
 type MuscleFilter = (typeof MUSCLE_FILTERS)[number];
@@ -128,11 +126,10 @@ function FeedGridCard({
   onPress: () => void;
 }) {
   const CARD_H = Math.round(width * 4 / 3);
-  const rawUri = post.thumbnailUri ?? post.compositeUri ?? post.photoUri;
-  const displayUri = getTransformedImageUrl(rawUri, {
-    width:  Math.round(width * IMAGE_PIXEL_RATIO),
-    height: Math.round(CARD_H * IMAGE_PIXEL_RATIO),
-  });
+  const sources = getOunwanImageSources(
+    { original: post.compositeUri ?? post.photoUri, thumbnail: post.thumbnailUri },
+    'grid',
+  );
 
   return (
     <TouchableOpacity
@@ -140,8 +137,8 @@ function FeedGridCard({
       onPress={onPress}
       activeOpacity={0.85}
     >
-      <Image
-        source={{ uri: displayUri }}
+      <FallbackImage
+        sources={sources}
         style={{ width, height: CARD_H }}
         contentFit="cover"
         cachePolicy="memory-disk"

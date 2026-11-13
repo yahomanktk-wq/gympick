@@ -25,7 +25,8 @@ import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/nativ
 import { Image as ExpoImage } from 'expo-image';
 import { brandLogos } from '../constants/brandLogos';
 import { getMachineImageUrl } from '../lib/machineImageUrl';
-import { getTransformedImageUrl } from '../lib/photoImageUrl';
+import { getOunwanImageSources } from '../lib/photoImageUrl';
+import FallbackImage from '../components/common/FallbackImage';
 import { C, R, T } from '../theme';
 import { WorkoutLog, Machine, UserSplitConfig, WeekdaySplit } from '../data/types';
 import { fetchSplitConfig } from '../lib/db/splitRoutine';
@@ -64,7 +65,6 @@ const DET_PHOTO_H = Math.round(DET_PHOTO_W * (4 / 3));
 const RETRO_CELL_W = Math.floor((SCREEN_W - 32) / 3.5);
 const RETRO_CELL_H = Math.round(RETRO_CELL_W * 4 / 3);
 
-const IMAGE_PIXEL_RATIO = PixelRatio.get();
 
 // --- Helpers
 
@@ -340,11 +340,11 @@ function RetroWeeklyGrid({
                 const session  = sessions.find(s => isSameDay(new Date(s.date), day));
                 const isToday  = isSameDay(day, today);
                 const isFuture = day > today;
-                const rawPhotoSrc = session?.thumbnailUri ?? session?.compositeUri ?? session?.photoUri;
-                const photoSrc = getTransformedImageUrl(rawPhotoSrc, {
-                  width:  Math.round(RETRO_CELL_W * IMAGE_PIXEL_RATIO),
-                  height: Math.round(RETRO_CELL_H * IMAGE_PIXEL_RATIO),
-                });
+                const photoSources = getOunwanImageSources(
+                  { original: session?.compositeUri ?? session?.photoUri, thumbnail: session?.thumbnailUri },
+                  'grid',
+                );
+                const photoSrc = photoSources.length > 0;
 
                 return (
                   <TouchableOpacity
@@ -362,12 +362,11 @@ function RetroWeeklyGrid({
                     }}
                   >
                     {photoSrc ? (
-                      <ExpoImage
-                        source={{ uri: photoSrc }}
+                      <FallbackImage
+                        sources={photoSources}
                         style={StyleSheet.absoluteFill}
                         contentFit="cover"
                         cachePolicy="memory-disk"
-                        onError={() => {}}
                       />
                     ) : (
                       <View style={rg.emptyCell}>
