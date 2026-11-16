@@ -6,6 +6,7 @@ import type { GymAnswer } from '../../../lib/db/gymQna';
 import ContentMenuButton from '../../moderation/ContentMenuButton';
 import TrainerBadge from '../trainer/TrainerBadge';
 import PtConsultButton from '../../pt/PtConsultButton';
+import UserNameLink from '../../userJournal/UserNameLink';
 
 // 2026-11-09: Q&A 답변 한 줄. 트레이너·관장님 답변은 배지 + 강조, 트레이너 답변엔 'PT 상담 신청'
 
@@ -23,7 +24,7 @@ export default function AnswerItem({ answer, gymId, canDelete, onDelete, onBlock
       <View style={{ flex: 1 }}>
         <View style={s.head}>
           {answer.authorBadge && <TrainerBadge kind={answer.authorBadge} />}
-          <Text style={s.nick} numberOfLines={1}>{answer.nickname}</Text>
+          <UserNameLink userId={answer.userId} nickname={answer.nickname} style={s.nick} />
           <Text style={s.time}>{timeAgo(answer.createdAt)}</Text>
         </View>
         <Text style={s.body}>{answer.content}</Text>

@@ -6,7 +6,7 @@ import { toFeedVisibility, type FeedVisibility } from '../feedVisibility';
 // '우리 헬스장만' 글은 DB 권한 규칙이 그 헬스장 회원에게만 돌려준다 (나만 보기는 목록에서 제외).
 const LISTED_VISIBILITIES: FeedVisibility[] = ['public', 'gym'];
 
-function rowToPost(r: any): WorkoutFeedPost {
+export function rowToPost(r: any): WorkoutFeedPost {
   return {
     id:             r.id,
     userId:         r.user_id,

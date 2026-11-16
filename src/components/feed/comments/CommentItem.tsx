@@ -6,6 +6,7 @@ import { timeAgo } from '../../../lib/timeAgo';
 import ContentMenuButton from '../../moderation/ContentMenuButton';
 import TrainerBadge from '../../gym/trainer/TrainerBadge';
 import PtConsultButton from '../../pt/PtConsultButton';
+import UserNameLink from '../../userJournal/UserNameLink';
 
 // 2026-11-04: 오운완 댓글 한 줄. '…' 메뉴로 신고 · 차단 · 삭제
 
@@ -25,7 +26,7 @@ export default function CommentItem({ comment, canDelete, onDelete, onBlocked, g
       <View style={{ flex: 1 }}>
         <View style={s.head}>
           {comment.authorBadge && <TrainerBadge kind={comment.authorBadge} />}
-          <Text style={s.nick} numberOfLines={1}>{comment.nickname}</Text>
+          <UserNameLink userId={comment.userId} nickname={comment.nickname} style={s.nick} />
           <Text style={s.time}>{timeAgo(comment.createdAt)}</Text>
         </View>
         <Text style={s.body}>{comment.content}</Text>

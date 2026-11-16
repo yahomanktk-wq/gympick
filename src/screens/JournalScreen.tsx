@@ -26,6 +26,8 @@ import { Image as ExpoImage } from 'expo-image';
 import { brandLogos } from '../constants/brandLogos';
 import { getMachineImageUrl } from '../lib/machineImageUrl';
 import { getOunwanImageSources } from '../lib/photoImageUrl';
+import { publicNickname } from '../lib/displayName';
+import JournalShareButton from '../components/userJournal/JournalShareButton';
 import FallbackImage from '../components/common/FallbackImage';
 import { C, R, T } from '../theme';
 import { WorkoutLog, Machine, UserSplitConfig, WeekdaySplit } from '../data/types';
@@ -1283,10 +1285,14 @@ export default function JournalScreen() {
           </Text>
         </View>
         {user && (
-          <TouchableOpacity style={st.logBtn} activeOpacity={0.85} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setLogVisible(true); }}>
-            <Ionicons name="add" size={18} color={C.bg} />
-            <Text style={st.logBtnText}>기록</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {/* 2026-11-16: 내 운동일지 공유 링크 (gympick.app/u/코드) */}
+            <JournalShareButton userId={user.id} nickname={publicNickname(user)} />
+            <TouchableOpacity style={st.logBtn} activeOpacity={0.85} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setLogVisible(true); }}>
+              <Ionicons name="add" size={18} color={C.bg} />
+              <Text style={st.logBtnText}>기록</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
 
@@ -1363,7 +1369,7 @@ export default function JournalScreen() {
           <SessionDetailModal
             sessions={detailSessions}
             prMachines={detailSessions.length > 0 ? (sessionPRMap[detailSessions[0].id] ?? new Set()) : new Set()}
-            nickname={user?.nickname ?? user?.name}
+            nickname={publicNickname(user)}
             onClose={() => setDetailSessions([])}
             onOpenMachine={(machineId, machineName, machineBrand, targetMuscle) => {
               setDetailMachine({

@@ -23,6 +23,7 @@ import CommentInput from '../../feed/comments/CommentInput';
 import FeedDetailModal from '../../feed/FeedDetailModal';
 import AnswerItem from './AnswerItem';
 import QnaStatusPill from './QnaStatusPill';
+import UserNameLink from '../../userJournal/UserNameLink';
 
 // 2026-11-09: Q&A 질문 상세 (회원만). 본문 · 붙인 오운완 · 답변 목록 · 답변 입력
 // 트레이너·관장님 답변은 맨 위. 삭제: 작성자 / 어드민 (관장님 삭제 불가)
@@ -132,7 +133,10 @@ export default function GymQuestionModal({ questionId, onClose, onChanged }: Pro
               <View style={s.qBox}>
                 <QnaStatusPill done={question.staffAnswered} long />
                 <Text style={s.title}>{question.title}</Text>
-                <Text style={s.meta}>{question.nickname} · {timeAgo(question.createdAt)}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <UserNameLink userId={question.userId} nickname={question.nickname} style={s.meta} />
+                  <Text style={s.meta}> · {timeAgo(question.createdAt)}</Text>
+                </View>
                 <Text style={s.body}>{question.content}</Text>
 
                 {question.attachedPostId && (

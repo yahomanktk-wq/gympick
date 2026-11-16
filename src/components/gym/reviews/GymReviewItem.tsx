@@ -5,6 +5,7 @@ import { C, R } from '../../../theme';
 import { GymReview } from '../../../lib/db/gymReviews';
 import { timeAgo } from '../../../lib/timeAgo';
 import ContentMenuButton from '../../moderation/ContentMenuButton';
+import UserNameLink from '../../userJournal/UserNameLink';
 
 // 2026-11-04: 헬스장 후기 한 개 + 관장님 답글.
 // - '…' 메뉴: 남의 후기 신고·차단 / 내 후기 삭제 (관장님은 삭제 불가)
@@ -30,7 +31,7 @@ export default function GymReviewItem({
   return (
     <View style={s.wrap}>
       <View style={s.head}>
-        <Text style={s.nick} numberOfLines={1}>{review.nickname}</Text>
+        <UserNameLink userId={review.userId} nickname={review.nickname} style={s.nick} />
         <Text style={s.time}>{timeAgo(review.createdAt)}</Text>
         <View style={{ flex: 1 }} />
         {!compact && (

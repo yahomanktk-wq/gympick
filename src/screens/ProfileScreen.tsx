@@ -18,6 +18,7 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
 import { pickAndUploadProfileImage, saveProfileImageUrl, loadProfileImageUrl } from '../lib/profileImageStorage';
+import JournalPrivacyToggle from '../components/userJournal/JournalPrivacyToggle';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { C, R, T } from '../theme';
@@ -1083,6 +1084,12 @@ export default function ProfileScreen() {
             <Text style={styles.settingLabel}>즐겨찾기</Text>
             <Ionicons name="chevron-forward" size={15} color={C.textDim} />
           </TouchableOpacity>
+        </View>
+
+        {/* ── 2026-11-16: 운동일지 공개 설정 ── */}
+        <SectionLabel text="운동일지" />
+        <View style={styles.card}>
+          <JournalPrivacyToggle userId={user.id} />
         </View>
 
         {/* ── Settings ── */}

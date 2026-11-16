@@ -30,6 +30,7 @@ import OunwanLikeButton from './likes/OunwanLikeBar';
 import { toFeedVisibility, type FeedVisibility } from '../../lib/feedVisibility';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardHeight } from '../../lib/useKeyboardHeight';
+import UserNameLink from '../userJournal/UserNameLink';
 
 // ── 상세 모달 ─────────────────────────────────────────────────────────────────
 
@@ -109,10 +110,13 @@ export default function FeedDetailModal({
           paddingHorizontal: 16, paddingVertical: 12,
           borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border,
         }}>
-          <View style={{ gap: 6 }}>
-            <Text style={{ fontSize: 15, fontWeight: '800', color: C.text }}>
-              {post.nickname}
-            </Text>
+          <View style={{ gap: 6, flexShrink: 1, alignItems: 'flex-start' }}>
+            {/* 2026-11-16: 닉네임을 누르면 작성자의 운동일지 */}
+            <UserNameLink
+              userId={post.userId}
+              nickname={post.nickname}
+              style={{ fontSize: 15, fontWeight: '800', color: C.text }}
+            />
             <TouchableOpacity onPress={() => onPressGym(post.gymId)} activeOpacity={0.75}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <Ionicons name="location-outline" size={12} color={C.accent} />
