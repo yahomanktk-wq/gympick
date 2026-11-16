@@ -29,7 +29,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { C, R } from '../theme';
 import { brandLogos } from '../constants/brandLogos';
-import { lineKey, pruneLines } from '../lib/machineFilters/lineSelection';
+import { lineKey, pruneLines, hasLinesForBrand } from '../lib/machineFilters/lineSelection';
 
 type FilterTabKey = 'muscle' | 'category' | 'brand';
 
@@ -149,6 +149,16 @@ export default function MachineFilterSheet({
       const next = new Set(prev);
       next.has(key) ? next.delete(key) : next.add(key);
       return next;
+    });
+  }
+
+  /** 'All' — 이 브랜드의 라인 선택을 모두 풀어 브랜드 전체로 */
+  function clearBrandLines(brand: string) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const prefix = `${brand.toLowerCase()}::`;
+    setDraftLines(prev => {
+      const next = new Set([...prev].filter(k => !k.startsWith(prefix)));
+      return next.size === prev.size ? prev : next;
     });
   }
 
@@ -296,8 +306,10 @@ export default function MachineFilterSheet({
                         {lines.length > 0 && (
                           <LineList
                             lines={lines}
+                            allOn={!hasLinesForBrand(draftLines, item)}
                             isOn={line => draftLines.has(lineKey(item, line))}
                             onToggle={line => toggleLine(item, line)}
+                            onAll={() => clearBrandLines(item)}
                           />
                         )}
                       </View>
@@ -363,20 +375,23 @@ function BrandRow({ name, logo, selected, onPress }: { name: string; logo?: numb
   );
 }
 
-function LineList({ lines, isOn, onToggle }: { lines: string[]; isOn: (line: string) => boolean; onToggle: (line: string) => void }) {
-  const anyOn = lines.some(isOn);
+function LineList({ lines, allOn, isOn, onToggle, onAll }: {
+  lines:    string[];
+  allOn:    boolean;
+  isOn:     (line: string) => boolean;
+  onToggle: (line: string) => void;
+  onAll:    () => void;
+}) {
+  // 'All'이 기본값 — 라인을 하나도 안 고르면 All이 선택된 상태(브랜드 전체)
+  const rows = [{ label: 'All', on: allOn, press: onAll }, ...lines.map(line => ({ label: line, on: isOn(line), press: () => onToggle(line) }))];
   return (
     <View style={fs.lineWrap}>
-      <Text style={fs.lineHint}>{anyOn ? '라인' : '라인 · 선택 안 하면 전체'}</Text>
-      {lines.map(line => {
-        const on = isOn(line);
-        return (
-          <TouchableOpacity key={line} style={fs.lineRow} onPress={() => onToggle(line)} activeOpacity={0.7}>
-            <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={16} color={on ? C.accent : C.textDim} />
-            <Text style={[fs.lineText, on && fs.optionRowTextActive]} numberOfLines={1}>{line}</Text>
-          </TouchableOpacity>
-        );
-      })}
+      {rows.map(r => (
+        <TouchableOpacity key={r.label} style={fs.lineRow} onPress={r.press} activeOpacity={0.7}>
+          <Ionicons name={r.on ? 'checkmark-circle' : 'ellipse-outline'} size={16} color={r.on ? C.accent : C.textDim} />
+          <Text style={[fs.lineText, r.on && fs.optionRowTextActive]} numberOfLines={1}>{r.label}</Text>
+        </TouchableOpacity>
+      ))}
     </View>
   );
 }
@@ -442,8 +457,7 @@ const fs = StyleSheet.create({
   brandRowText: { flex: 1, fontSize: 14, color: C.text },
 
   // 2026-11-16: 브랜드 아래 펼쳐지는 라인 목록 — 들여쓰기 + 작은 글자로 가볍게
-  lineWrap: { marginLeft: 50, marginRight: 20, marginBottom: 6, paddingLeft: 12, borderLeftWidth: 1, borderLeftColor: C.border },
-  lineHint: { fontSize: 11, color: C.textDim, fontWeight: '600', paddingTop: 2, paddingBottom: 4 },
+  lineWrap: { marginLeft: 50, marginRight: 20, marginBottom: 6, paddingLeft: 12, paddingTop: 2, borderLeftWidth: 1, borderLeftColor: C.border },
   lineRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7 },
   lineText: { flex: 1, fontSize: 13, color: C.textSub },
 
