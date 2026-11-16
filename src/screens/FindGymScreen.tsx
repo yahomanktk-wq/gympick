@@ -49,35 +49,13 @@ import { calcDistanceKm, formatDistance } from '../lib/geocoding';
 import FavoriteGymRecommendation from '../components/FavoriteGymRecommendation';
 import { toEnMuscle, parseMuscles } from '../lib/splitUtils';
 import { isCardioMachine, shouldShowCardio } from '../lib/machineVisibility';
+import { getCategoriesForMuscle } from '../lib/machineFilters/categoryOrder';
+import { getLinesForBrand } from '../lib/machineFilters/machineLines';
+import { machinePassesLines, pruneLines } from '../lib/machineFilters/lineSelection';
+import { matchesMachineKeyword } from '../lib/machineFilters/koreanSearch';
 import * as Haptics from 'expo-haptics';
 
-const CATEGORY_ORDER: Record<string, string[]> = {
-  Chest: [
-    'Chest Press', 'Incline Press', 'Decline Press',
-    'Fly', 'Incline Fly', 'Chest_Etc',
-  ],
-  Back: [
-    'Pull Down', 'High Row', 'Middle Row', 'Low Row',
-    'T-Bar', 'Pullover', 'Chin Dip', 'Back_Etc',
-  ],
-  Leg: [
-    'Leg Press', 'Hack Squat', 'Pendulum Squat', 'Squat Machine',
-    'Leg Curl', 'Leg Extention', 'Calf', 'Viking Press', 'Leg_Etc',
-  ],
-  Shoulder: [
-    'Shoulder Press', 'Raise_Side Lateral', 'Rear Delt',
-    'Rear Delt / Pec Fly', 'Shoulder_Etc',
-  ],
-  Arms: [
-    'Biceps', 'Triceps', 'Arm_Etc',
-  ],
-  'Hip (Glutes)': [
-    'Hip Press', 'Hip Thrust', 'Hip Abduction', 'Inner Outer', 'Glute_Etc',
-  ],
-  Other: [
-    'Free Weight', 'Etc',
-  ],
-};
+// 2026-11-16: 부위별 세부 종류 순서(CATEGORY_ORDER)는 lib/machineFilters/categoryOrder.ts로 옮김 (보유 머신 수정 화면과 공용)
 
 // --- Muscle colour palette
 
@@ -259,6 +237,8 @@ export default function FindGymScreen() {
   const [activeMuscle,     setActiveMuscle]     = useState('All');
   // 2026-09-09: 브랜드 필터를 단일선택 → 다중선택으로 변경(바텀시트 UI 개편).
   const [activeBrands,     setActiveBrands]     = useState<Set<string>>(new Set());
+  // 2026-11-16: 브랜드별 제품 라인 선택 ("브랜드::라인", 비어 있으면 브랜드 전체)
+  const [activeLines,      setActiveLines]      = useState<Set<string>>(new Set());
   const [activeCategory,   setActiveCategory]   = useState('All');
   const [filterSheetVisible, setFilterSheetVisible] = useState(false);
   const [filterSheetTab,     setFilterSheetTab]     = useState<'muscle' | 'category' | 'brand'>('muscle');
@@ -445,39 +425,17 @@ export default function FindGymScreen() {
     return [...new Set(sourceMachines.map(m => m.brand))].sort();
   }, [allMachines]);
 
-  const categoriesForMuscle = useCallback((muscle: string) => {
-    if (muscle === 'All') return [];
+  const categoriesForMuscle = useCallback(
+    (muscle: string) => getCategoriesForMuscle(allMachines, muscle),
+    [allMachines],
+  );
 
-    const muscleFiltered = allMachines.filter(m =>
-      parseMuscles(m.targetMuscle).some(t => t.toLowerCase() === muscle.toLowerCase())
-    );
-
-    const available = new Set(
-      muscleFiltered.flatMap(m =>
-        m.category
-          ? m.category.split(',').map((c: string) => c.trim()).filter((c: string) => c.length > 0)
-          : []
-      )
-    );
-
-    const muscleEn    = toEnMuscle(muscle) || muscle;
-    const orderedList = CATEGORY_ORDER[muscleEn] ?? [];
-
-    const ordered   = orderedList.filter(cat => available.has(cat));
-
-    const remaining = [...available]
-      .filter(cat => !orderedList.includes(cat))
-      .sort();
-
-    // 2026-09-09: 'Etc'가 들어간 카테고리(Chest_Etc, Leg_Etc, 그냥 'Etc' 등)는
-    // 부위별 CATEGORY_ORDER 안에서 이미 각 목록 맨 끝에 있긴 하지만, 혹시
-    // CATEGORY_ORDER에 없어서 remaining으로 빠지는 경우까지 포함해 항상
-    // 최종 목록 제일 하단에 오도록 마지막에 한 번 더 정리.
-    const combined = [...ordered, ...remaining];
-    const nonEtc   = combined.filter(cat => !cat.toLowerCase().includes('etc'));
-    const etcOnly  = combined.filter(cat => cat.toLowerCase().includes('etc'));
-
-    return [...nonEtc, ...etcOnly];
+  // 2026-11-16: 필터 시트에서 체크한 브랜드 아래로 펼칠 라인 (지금 고른 부위에 있는 것만)
+  const linesForBrand = useCallback((brand: string, muscle: string) => {
+    const source = muscle === 'All'
+      ? allMachines
+      : allMachines.filter(m => parseMuscles(m.targetMuscle).some(t => t.toLowerCase() === muscle.toLowerCase()));
+    return getLinesForBrand(source, brand);
   }, [allMachines]);
 
   const brands     = useMemo(() => ['All', ...brandsForMuscle(activeMuscle)], [brandsForMuscle, activeMuscle]);
@@ -489,6 +447,10 @@ export default function FindGymScreen() {
     const filtered = new Set([...activeBrands].filter(b => validSet.has(b.toLowerCase())));
     if (filtered.size !== activeBrands.size) setActiveBrands(filtered);
   }, [brands, activeBrands]);
+
+  useEffect(() => {
+    setActiveLines(prev => pruneLines(prev, activeBrands));
+  }, [activeBrands]);
 
   // 2026-09-09: 예전엔 activeMuscle이 바뀌면 무조건 카테고리를 'All'로
   // 리셋했는데, 바텀시트에서 "부위+카테고리"를 한 번에 적용(onApply)하면
@@ -502,14 +464,15 @@ export default function FindGymScreen() {
 
   // 결과 개수 계산 — MachineFilterSheet의 "OOO개 머신보기" 버튼에서
   // 임시(적용 전) 선택값 기준으로 실시간 계산할 때 재사용.
-  const computeMachineCount = useCallback((muscle: string, category: string, brandSet: Set<string>) => {
+  const computeMachineCount = useCallback((muscle: string, category: string, brandSet: Set<string>, lineSet: Set<string>) => {
     const showCardio = shouldShowCardio(muscle, keyword, brandSet.size > 0);
     return shuffledMachines.filter(m => {
       const muscleOk   = muscle === 'All' || parseMuscles(m.targetMuscle).some(t => t.toLowerCase() === muscle.toLowerCase());
       const brandOk    = brandSet.size === 0 || [...brandSet].some(b => b.toLowerCase() === m.brand?.toLowerCase());
       const categoryOk = category === 'All' || m.category?.split(',').map(c => c.trim()).includes(category);
+      const lineOk     = machinePassesLines(m, lineSet);
       const cardioOk   = showCardio || !isCardioMachine(m);
-      return muscleOk && brandOk && categoryOk && cardioOk;
+      return muscleOk && brandOk && categoryOk && lineOk && cardioOk;
     }).length;
   }, [shuffledMachines, keyword]);
 
@@ -527,6 +490,7 @@ export default function FindGymScreen() {
     setKeyword('');
     setActiveMuscle('All');
     setActiveBrands(new Set());
+    setActiveLines(new Set());
     setActiveCategory('All');
     flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
   }
@@ -584,16 +548,14 @@ export default function FindGymScreen() {
       const brandOk    = activeBrands.size === 0 || [...activeBrands].some(b => b.toLowerCase() === m.brand?.toLowerCase());
       const categoryOk = activeCategory === 'All' ||
         m.category?.split(',').map(c => c.trim()).includes(activeCategory);
-      const kw         = keyword.trim().toLowerCase();
-      const keyOk      = !kw ||
-        m.name.toLowerCase().includes(kw)     ||
-        m.category.toLowerCase().includes(kw) ||
-        m.brand?.toLowerCase().includes(kw);
+      // 2026-11-16: 한글 검색 (해머 → Hammer Strength, 체스트프레스 → Chest Press, 띄어쓰기 무시)
+      const keyOk      = matchesMachineKeyword(m, keyword);
+      const lineOk     = machinePassesLines(m, activeLines);
       // 유산소 머신은 OTHER 필터·검색·브랜드 필터 중 하나가 있을 때만 노출
       const cardioOk   = showCardio || !isCardioMachine(m);
-      return muscleOk && brandOk && categoryOk && keyOk && cardioOk;
+      return muscleOk && brandOk && categoryOk && keyOk && lineOk && cardioOk;
     });
-  }, [keyword, activeMuscle, activeBrands, activeCategory, shuffledMachines]);
+  }, [keyword, activeMuscle, activeBrands, activeLines, activeCategory, shuffledMachines]);
 
   useEffect(() => {
     flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
@@ -1009,10 +971,11 @@ export default function FindGymScreen() {
         visible={filterSheetVisible}
         initialTab={filterSheetTab}
         onClose={() => setFilterSheetVisible(false)}
-        onApply={({ muscle, category, brands: newBrands }) => {
+        onApply={({ muscle, category, brands: newBrands, lines: newLines }) => {
           setActiveMuscle(muscle);
           setActiveCategory(category);
           setActiveBrands(newBrands);
+          setActiveLines(newLines);
         }}
         muscleOptions={muscleOptions}
         initialMuscle={activeMuscle}
@@ -1021,6 +984,8 @@ export default function FindGymScreen() {
         getBrandOptions={brandsForMuscle}
         initialBrands={activeBrands}
         computeCount={computeMachineCount}
+        getLineOptions={linesForBrand}
+        initialLines={activeLines}
       />
 
       <Modal visible={showGymRequestModal} transparent animationType="slide" onRequestClose={() => setShowGymRequestModal(false)}>

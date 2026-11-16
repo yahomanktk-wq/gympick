@@ -1,4 +1,10 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { sortMuscles } from '../../lib/machineFilters/muscleOrder';
+import { getCategoriesForMuscle, categoryLabel, machineHasCategory } from '../../lib/machineFilters/categoryOrder';
+import { getLinesForBrand, machineHasLine } from '../../lib/machineFilters/machineLines';
+import SubChipRow from '../../components/machineFilters/SubChipRow';
+import ScrollToSectionFab from '../../components/machineFilters/ScrollToSectionFab';
+import { useScrollToSection } from '../../components/machineFilters/useScrollToSection';
 import {
   View,
   Text,
@@ -1210,10 +1216,23 @@ function RegisterGymAdminView({ machines, registeredGyms, onSave, onUpdate, onOf
   const [selectedIds,      setSelectedIds]      = useState<Set<string>>(new Set());
   const [muscleFilter,     setMuscleFilter]     = useState('All');
   const [brandFilter,      setBrandFilter]      = useState('All');
+  // 2026-11-16: 부위 → 세부 종류, 브랜드 → 라인 (null = 전체)
+  const [categoryFilter,   setCategoryFilter]   = useState<string | null>(null);
+  const [lineFilter,       setLineFilter]       = useState<string | null>(null);
+  const machinePicker = useScrollToSection<any>();
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
   const [gymSearchQuery,   setGymSearchQuery]   = useState('');
 
-  const ADMIN_GYM_MUSCLES = useMemo(() => ['All', ...Array.from(new Set(machines.flatMap(m => parseMuscles(m.targetMuscle)))).sort()], [machines]);
+  // 2026-11-16: 부위 칩 순서 CHEST / BACK / LEG / SHOULDER / ARM / GLUTE / OTHER
+  const ADMIN_GYM_MUSCLES = useMemo(() => ['All', ...sortMuscles(machines.flatMap(m => parseMuscles(m.targetMuscle)))], [machines]);
+  const adminCategoryOptions = useMemo(
+    () => getCategoriesForMuscle(machines, muscleFilter).map(c => ({ value: c, label: categoryLabel(c) })),
+    [machines, muscleFilter],
+  );
+  const adminLineOptions = useMemo(
+    () => getLinesForBrand(machines, brandFilter).map(l => ({ value: l, label: l })),
+    [machines, brandFilter],
+  );
   // NONE(노브랜드 카탈로그)는 항상 맨 뒤로
   const ADMIN_GYM_BRANDS  = useMemo(() => ['All', ...Array.from(new Set(machines.map(m => m.brand))).sort((a, b) => {
     if (a === 'NONE') return 1;
@@ -1232,8 +1251,10 @@ function RegisterGymAdminView({ machines, registeredGyms, onSave, onUpdate, onOf
     if (!m || !m.name || !m.brand || !m.targetMuscle) return false;
     const muscleOk   = muscleFilter === 'All' || parseMuscles(m.targetMuscle).includes(muscleFilter);
     const brandOk    = brandFilter  === 'All' || m.brand        === brandFilter;
+    const categoryOk = !categoryFilter || machineHasCategory(m, categoryFilter);
+    const lineOk     = !lineFilter || machineHasLine(m, lineFilter);
     const selectedOk = !showSelectedOnly || selectedIds.has(m.id);
-    return muscleOk && brandOk && selectedOk;
+    return muscleOk && brandOk && categoryOk && lineOk && selectedOk;
   });
 
   const selectedMuscleCount = new Set(machines.filter(m => selectedIds.has(m.id)).map(m => m.targetMuscle)).size;
@@ -1320,7 +1341,7 @@ function RegisterGymAdminView({ machines, registeredGyms, onSave, onUpdate, onOf
         )}
 
         {/* ── 보유 머신 선택 ── */}
-        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>보유 머신 선택</Text>
+        <Text style={[styles.sectionTitle, { marginTop: 24 }]} onLayout={machinePicker.onSectionLayout}>보유 머신 선택</Text>
 
         <View style={styles.regGymStatsRow}>
           {[
@@ -1345,21 +1366,25 @@ function RegisterGymAdminView({ machines, registeredGyms, onSave, onUpdate, onOf
           </TouchableOpacity>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catChipRow} contentContainerStyle={{ gap: 8, paddingHorizontal: 0 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catChipRow} contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}>
           {ADMIN_GYM_MUSCLES.map(m => (
-            <TouchableOpacity key={m} style={[styles.catChip, muscleFilter === m && styles.catChipActive]} onPress={() => setMuscleFilter(m)} activeOpacity={0.8}>
+            <TouchableOpacity key={m} style={[styles.catChip, muscleFilter === m && styles.catChipActive]} onPress={() => { setMuscleFilter(m); setCategoryFilter(null); }} activeOpacity={0.8}>
               <Text style={[styles.catChipText, muscleFilter === m && styles.catChipTextActive]}>{m}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
+        {/* 2026-11-16: 부위를 고르면 세부 종류 */}
+        <SubChipRow title="종류" options={adminCategoryOptions} selected={categoryFilter} onSelect={setCategoryFilter} style={{ marginHorizontal: -20 }} inset={20} />
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.catChipRow, { marginBottom: 12 }]} contentContainerStyle={{ gap: 8, paddingHorizontal: 0 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.catChipRow, { marginBottom: adminLineOptions.length > 0 ? 8 : 12 }]} contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}>
           {ADMIN_GYM_BRANDS.map(b => (
-            <TouchableOpacity key={b} style={[styles.catChip, brandFilter === b && styles.catChipActive]} onPress={() => setBrandFilter(b)} activeOpacity={0.8}>
+            <TouchableOpacity key={b} style={[styles.catChip, brandFilter === b && styles.catChipActive]} onPress={() => { setBrandFilter(b); setLineFilter(null); }} activeOpacity={0.8}>
               <Text style={[styles.catChipText, brandFilter === b && styles.catChipTextActive]}>{b}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
+        {/* 2026-11-16: 브랜드를 고르면 라인 (라인 정보가 있는 브랜드만) */}
+        <SubChipRow title="라인" options={adminLineOptions} selected={lineFilter} onSelect={setLineFilter} style={{ marginHorizontal: -20, marginBottom: 12 }} inset={20} />
 
         <View style={styles.catCountBar}>
           <Text style={styles.catCount}>{filteredMachines.length}개 머신</Text>
@@ -1406,6 +1431,9 @@ function RegisterGymAdminView({ machines, registeredGyms, onSave, onUpdate, onOf
           </TouchableOpacity>
         </View>
         <FlatList
+          ref={machinePicker.listRef}
+          onScroll={machinePicker.onScroll}
+          scrollEventThrottle={64}
           data={filteredMachines}
           keyExtractor={(item) => item.id}
           numColumns={2}
@@ -1428,6 +1456,8 @@ function RegisterGymAdminView({ machines, registeredGyms, onSave, onUpdate, onOf
             />
           )}
         />
+        {/* 2026-11-16: 많이 내리면 '보유 머신 선택'으로 올라가는 버튼 */}
+        <ScrollToSectionFab visible={machinePicker.showFab} onPress={machinePicker.scrollToSection} />
       </KeyboardAvoidingView>
     );
   }

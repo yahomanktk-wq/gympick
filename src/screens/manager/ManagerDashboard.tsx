@@ -1,4 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { sortMuscles } from '../../lib/machineFilters/muscleOrder';
+import { getCategoriesForMuscle, categoryLabel, machineHasCategory } from '../../lib/machineFilters/categoryOrder';
+import { getLinesForBrand, machineHasLine } from '../../lib/machineFilters/machineLines';
+import SubChipRow from '../../components/machineFilters/SubChipRow';
+import ScrollToSectionFab from '../../components/machineFilters/ScrollToSectionFab';
+import { useScrollToSection } from '../../components/machineFilters/useScrollToSection';
 import {
   View,
   Text,
@@ -1031,7 +1037,22 @@ function MachinesView({
   showOwnedOnly, setShowOwnedOnly,
   onToggleMachine, onRequestMachine,
 }: MachinesViewProps) {
-  const CATALOG_MUSCLES = useMemo(() => [...new Set(machines.flatMap(m => parseMuscles(m.targetMuscle)))].sort(), [machines]);
+  // 2026-11-16: 부위 칩 순서 CHEST / BACK / LEG / SHOULDER / ARM / GLUTE / OTHER
+  const CATALOG_MUSCLES = useMemo(() => sortMuscles(machines.flatMap(m => parseMuscles(m.targetMuscle))), [machines]);
+  // 2026-11-16: 부위 → 세부 종류, 브랜드 → 라인 (null = 전체). 부위·브랜드가 바뀌면 초기화
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [lineFilter,     setLineFilter]     = useState<string | null>(null);
+  useEffect(() => { setCategoryFilter(null); }, [machineMusclFilter]);
+  useEffect(() => { setLineFilter(null); }, [machineBrandFilter]);
+  const categoryOptions = useMemo(
+    () => getCategoriesForMuscle(machines, machineMusclFilter).map(c => ({ value: c, label: categoryLabel(c) })),
+    [machines, machineMusclFilter],
+  );
+  const lineOptions = useMemo(
+    () => getLinesForBrand(machines, machineBrandFilter).map(l => ({ value: l, label: l })),
+    [machines, machineBrandFilter],
+  );
+  const picker = useScrollToSection<Machine>();
   // NONE(노브랜드 카탈로그)는 항상 맨 뒤로 — 실제 브랜드들이 먼저 보이게
   const CATALOG_BRANDS  = useMemo(() => [...new Set(machines.map(m => m.brand))].sort((a, b) => {
     if (a === 'NONE') return 1;
@@ -1044,7 +1065,9 @@ function MachinesView({
     const muscleOk = machineMusclFilter === '전체' || parseMuscles(m.targetMuscle).some(t => t.toLowerCase() === machineMusclFilter.toLowerCase());
     const brandOk  = machineBrandFilter === '전체' || m.brand.toLowerCase() === machineBrandFilter.toLowerCase();
     const ownedOk  = !showOwnedOnly || gymMachineIds.includes(m.id);
-    return muscleOk && brandOk && ownedOk;
+    const categoryOk = !categoryFilter || machineHasCategory(m, categoryFilter);
+    const lineOk     = !lineFilter || machineHasLine(m, lineFilter);
+    return muscleOk && brandOk && ownedOk && categoryOk && lineOk;
   });
 
   const listHeader = (
@@ -1095,21 +1118,29 @@ function MachinesView({
           </TouchableOpacity>
         ))}
       </ScrollView>
+      {/* 2026-11-16: 부위를 고르면 세부 종류 */}
+      <SubChipRow title="종류" options={categoryOptions} selected={categoryFilter} onSelect={setCategoryFilter} />
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.filterRow, { marginTop: 0, marginBottom: 12 }]} contentContainerStyle={styles.filterRowContent}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.filterRow, { marginTop: 0, marginBottom: lineOptions.length > 0 ? 4 : 12 }]} contentContainerStyle={styles.filterRowContent}>
         {['전체', ...CATALOG_BRANDS].map(b => (
           <TouchableOpacity key={b} style={[styles.filterChip, machineBrandFilter === b && styles.filterChipActive]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMachineBrandFilter(machineBrandFilter === b && b !== '전체' ? '전체' : b); }}>
             <Text style={[styles.filterChipText, machineBrandFilter === b && styles.filterChipTextActive]}>{b}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
+      {/* 2026-11-16: 브랜드를 고르면 라인 (라인 정보가 있는 브랜드만) */}
+      <SubChipRow title="라인" options={lineOptions} selected={lineFilter} onSelect={setLineFilter} style={{ marginBottom: 12 }} />
 
       <Text style={[styles.countText, { paddingHorizontal: 0, marginBottom: 8 }]}>{filteredMachines.length}개 머신 · {gymMachineIds.length}개 선택됨</Text>
     </View>
   );
 
   return (
+    <View style={{ flex: 1 }}>
     <FlatList
+      ref={picker.listRef}
+      onScroll={picker.onScroll}
+      scrollEventThrottle={64}
       data={filteredMachines}
       keyExtractor={(item) => item.id}
       numColumns={2}
@@ -1130,6 +1161,9 @@ function MachinesView({
         />
       )}
     />
+    {/* 2026-11-16: 많이 내리면 필터 칩(맨 위)으로 올라가는 버튼 */}
+    <ScrollToSectionFab visible={picker.showFab} onPress={picker.scrollToSection} />
+    </View>
   );
 }
 

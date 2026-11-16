@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { sortMuscles } from '../../lib/machineFilters/muscleOrder';
 import { Image as ExpoImage } from 'expo-image';
 import { fetchGymPhotoUrls } from '../../lib/db/gymPhotos';
 import { parseMuscles } from '../../lib/splitUtils';
@@ -359,8 +360,8 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
   const gymMachines = gym?.machines ?? [];
 
   const muscleOptions = useMemo(() => {
-    const unique = [...new Set(gymMachines.flatMap(m => parseMuscles(m.targetMuscle)))].sort();
-    return ['전체', ...unique];
+    // 2026-11-16: 부위 칩 순서 CHEST / BACK / LEG / SHOULDER / ARM / GLUTE / OTHER
+    return ['전체', ...sortMuscles(gymMachines.flatMap(m => parseMuscles(m.targetMuscle)))];
   }, [gymMachines]);
 
   const brandOptions = useMemo(() => {

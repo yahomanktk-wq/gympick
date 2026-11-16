@@ -29,6 +29,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { C, R } from '../theme';
 import { brandLogos } from '../constants/brandLogos';
+import { lineKey, pruneLines } from '../lib/machineFilters/lineSelection';
 
 type FilterTabKey = 'muscle' | 'category' | 'brand';
 
@@ -42,7 +43,7 @@ interface MachineFilterSheetProps {
   visible:      boolean;
   initialTab:   FilterTabKey;
   onClose:      () => void;
-  onApply:      (result: { muscle: string; category: string; brands: Set<string> }) => void;
+  onApply:      (result: { muscle: string; category: string; brands: Set<string>; lines: Set<string> }) => void;
 
   muscleOptions:      string[];               // 'All' 포함
   initialMuscle:      string;
@@ -50,7 +51,11 @@ interface MachineFilterSheetProps {
   initialCategory:    string;
   getBrandOptions:    (muscle: string) => string[]; // 'All' 미포함, 순수 브랜드명 목록
   initialBrands:      Set<string>;
-  computeCount:       (muscle: string, category: string, brands: Set<string>) => number;
+  computeCount:       (muscle: string, category: string, brands: Set<string>, lines: Set<string>) => number;
+  /** 2026-11-16: 브랜드의 제품 라인 (없으면 빈 배열 → 라인 목록을 펼치지 않음) */
+  getLineOptions:     (brand: string, muscle: string) => string[];
+  /** "브랜드::라인" 키 */
+  initialLines:       Set<string>;
 }
 
 function brandLogoFor(name: string) {
@@ -70,12 +75,15 @@ export default function MachineFilterSheet({
   getBrandOptions,
   initialBrands,
   computeCount,
+  getLineOptions,
+  initialLines,
 }: MachineFilterSheetProps) {
   const [activeTab,     setActiveTab]     = useState<FilterTabKey>(initialTab);
   const [draftMuscle,   setDraftMuscle]   = useState(initialMuscle);
   const [draftCategory, setDraftCategory] = useState(initialCategory);
   const [draftBrands,   setDraftBrands]   = useState<Set<string>>(initialBrands);
   const [brandSearch,   setBrandSearch]   = useState('');
+  const [draftLines,    setDraftLines]    = useState<Set<string>>(initialLines);
 
   // 시트가 열릴 때마다 마지막으로 "적용"된 값으로 초기화 (이전에 만지다 만
   // 임시 선택은 버림 — 다시 열었을 때 항상 실제 적용 상태부터 시작).
@@ -85,8 +93,14 @@ export default function MachineFilterSheet({
     setDraftMuscle(initialMuscle);
     setDraftCategory(initialCategory);
     setDraftBrands(new Set(initialBrands));
+    setDraftLines(new Set(initialLines));
     setBrandSearch('');
   }, [visible]);
+
+  // 브랜드 선택이 풀리면 그 브랜드의 라인 선택도 지운다
+  useEffect(() => {
+    setDraftLines(prev => pruneLines(prev, draftBrands));
+  }, [draftBrands]);
 
   // 부위가 바뀌면 카테고리/브랜드 옵션도 바뀌므로, 더는 유효하지 않은
   // 선택은 정리한다 (카테고리는 단일값이라 'All'로, 브랜드는 다중선택이라
@@ -124,9 +138,19 @@ export default function MachineFilterSheet({
   }, [draftMuscle, brandSearch, getBrandOptions]);
 
   const resultCount = useMemo(
-    () => computeCount(draftMuscle, draftCategory, draftBrands),
-    [draftMuscle, draftCategory, draftBrands, computeCount],
+    () => computeCount(draftMuscle, draftCategory, draftBrands, draftLines),
+    [draftMuscle, draftCategory, draftBrands, draftLines, computeCount],
   );
+
+  function toggleLine(brand: string, line: string) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const key = lineKey(brand, line);
+    setDraftLines(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
 
   function toggleBrand(name: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -152,12 +176,13 @@ export default function MachineFilterSheet({
     setDraftMuscle('All');
     setDraftCategory('All');
     setDraftBrands(new Set());
+    setDraftLines(new Set());
     setBrandSearch('');
   }
 
   function handleApply() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onApply({ muscle: draftMuscle, category: draftCategory, brands: draftBrands });
+    onApply({ muscle: draftMuscle, category: draftCategory, brands: draftBrands, lines: draftLines });
     onClose();
   }
 
@@ -256,14 +281,28 @@ export default function MachineFilterSheet({
                   renderSectionHeader={({ section }) => (
                     <Text style={fs.sectionHeader}>{section.title}</Text>
                   )}
-                  renderItem={({ item }) => (
-                    <BrandRow
-                      name={item}
-                      logo={brandLogoFor(item)}
-                      selected={draftBrands.has(item)}
-                      onPress={() => toggleBrand(item)}
-                    />
-                  )}
+                  renderItem={({ item }) => {
+                    const selected = draftBrands.has(item);
+                    // 2026-11-16: 체크한 브랜드에 라인이 있으면 바로 아래로 라인 목록을 펼친다
+                    const lines = selected ? getLineOptions(item, draftMuscle) : [];
+                    return (
+                      <View>
+                        <BrandRow
+                          name={item}
+                          logo={brandLogoFor(item)}
+                          selected={selected}
+                          onPress={() => toggleBrand(item)}
+                        />
+                        {lines.length > 0 && (
+                          <LineList
+                            lines={lines}
+                            isOn={line => draftLines.has(lineKey(item, line))}
+                            onToggle={line => toggleLine(item, line)}
+                          />
+                        )}
+                      </View>
+                    );
+                  }}
                   ListEmptyComponent={
                     <View style={fs.emptyWrap}>
                       <Text style={fs.emptyText}>일치하는 브랜드가 없어요</Text>
@@ -321,6 +360,24 @@ function BrandRow({ name, logo, selected, onPress }: { name: string; logo?: numb
       </View>
       <Text style={[fs.brandRowText, selected && fs.optionRowTextActive]} numberOfLines={1}>{name}</Text>
     </TouchableOpacity>
+  );
+}
+
+function LineList({ lines, isOn, onToggle }: { lines: string[]; isOn: (line: string) => boolean; onToggle: (line: string) => void }) {
+  const anyOn = lines.some(isOn);
+  return (
+    <View style={fs.lineWrap}>
+      <Text style={fs.lineHint}>{anyOn ? '라인' : '라인 · 선택 안 하면 전체'}</Text>
+      {lines.map(line => {
+        const on = isOn(line);
+        return (
+          <TouchableOpacity key={line} style={fs.lineRow} onPress={() => onToggle(line)} activeOpacity={0.7}>
+            <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={16} color={on ? C.accent : C.textDim} />
+            <Text style={[fs.lineText, on && fs.optionRowTextActive]} numberOfLines={1}>{line}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
   );
 }
 
@@ -383,6 +440,12 @@ const fs = StyleSheet.create({
   },
   brandLogoFallback: { fontSize: 12, fontWeight: '800', color: C.textDim },
   brandRowText: { flex: 1, fontSize: 14, color: C.text },
+
+  // 2026-11-16: 브랜드 아래 펼쳐지는 라인 목록 — 들여쓰기 + 작은 글자로 가볍게
+  lineWrap: { marginLeft: 50, marginRight: 20, marginBottom: 6, paddingLeft: 12, borderLeftWidth: 1, borderLeftColor: C.border },
+  lineHint: { fontSize: 11, color: C.textDim, fontWeight: '600', paddingTop: 2, paddingBottom: 4 },
+  lineRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7 },
+  lineText: { flex: 1, fontSize: 13, color: C.textSub },
 
   emptyWrap: { padding: 40, alignItems: 'center' },
   emptyText: { fontSize: 13, color: C.textDim },
