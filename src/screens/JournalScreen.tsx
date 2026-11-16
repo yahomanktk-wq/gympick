@@ -27,6 +27,7 @@ import { brandLogos } from '../constants/brandLogos';
 import { getMachineImageUrl } from '../lib/machineImageUrl';
 import { getOunwanImageSources } from '../lib/photoImageUrl';
 import { publicNickname } from '../lib/displayName';
+import { routineBadgeLabel } from '../lib/routineBadge';
 import JournalShareButton from '../components/userJournal/JournalShareButton';
 import FallbackImage from '../components/common/FallbackImage';
 import { C, R, T } from '../theme';
@@ -972,19 +973,9 @@ function SessionDetailModal({
                   ))}
                 </View>
 
-                {/* 운동 루틴 + 타겟부위 칩 */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                {/* 운동 루틴 (2026-11-16: 타겟부위 칩은 아래 루틴 카드에 이미 나와서 제거) */}
+                <View style={{ marginBottom: 12 }}>
                   <Text style={[det.sectionTitle, { marginBottom: 0 }]}>운동 루틴</Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, justifyContent: 'flex-end', flex: 1, marginLeft: 8 }}>
-                    {muscles.map(m => {
-                      const col = mp(m);
-                      return (
-                        <View key={m} style={[det.muscleChip, { backgroundColor: col.bg, borderColor: col.fg + '40' }]}>
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: col.fg }}>{m}</Text>
-                        </View>
-                      );
-                    })}
-                  </View>
                 </View>
 
                 {/* 루틴 카드 */}
@@ -1009,18 +1000,7 @@ function SessionDetailModal({
                           letterSpacing: 0.5,
                           textTransform: 'uppercase',
                         }}>
-                          {(() => {
-                            const muscleCounts = machines.reduce<Record<string, number>>((acc, m) => {
-                              acc[m.targetMuscle] = (acc[m.targetMuscle] ?? 0) + 1;
-                              return acc;
-                            }, {});
-                            const sorted = Object.entries(muscleCounts)
-                              .sort(([, a], [, b]) => b - a)
-                              .map(([m]) => m);
-                            return sorted.length > 1
-                              ? sorted.slice(0, 2).join(' + ')
-                              : `${sorted[0] ?? 'WORKOUT'}`;
-                          })()}
+                          {routineBadgeLabel(session.targetMuscles, machines.map(m => m.targetMuscle))}
                         </Text>
                       </View>
                     </View>

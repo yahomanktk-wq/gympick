@@ -1,4 +1,5 @@
 import React from 'react';
+import { routineBadgeLabel } from '../../lib/routineBadge';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
@@ -32,15 +33,6 @@ function formatRoutineDate(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}(${ENG_DAYS[d.getDay()]})_${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-/** 카드 헤더 배지: 머신 부위 빈도 상위 1~2개 */
-function headerBadge(routine: OunwanRoutine, chips: string[]): string {
-  const counts: Record<string, number> = {};
-  routine.entries.forEach(e => { if (e.targetMuscle) counts[e.targetMuscle] = (counts[e.targetMuscle] ?? 0) + 1; });
-  const sorted = Object.entries(counts).sort(([, a], [, b]) => b - a).map(([m]) => m);
-  const list = sorted.length > 0 ? sorted : chips;
-  return list.length > 1 ? list.slice(0, 2).join(' + ') : (list[0] ?? 'WORKOUT');
-}
-
 interface Props {
   routine:        OunwanRoutine;
   /** 루틴 데이터에 부위가 없을 때 쓰는 글의 부위 목록 */
@@ -53,9 +45,8 @@ export default function OunwanRoutineSection({ routine, fallbackMuscles, onPress
   const entries   = routine.entries;
   const totalSets = entries.reduce((a, e) => a + e.sets.length, 0);
   const vol       = entries.reduce((a, e) => a + e.sets.reduce((b, s) => b + s.weight * s.reps, 0), 0);
-  const chips     = routine.targetMuscles.length > 0
-    ? routine.targetMuscles
-    : (fallbackMuscles.length > 0 ? [...new Set(fallbackMuscles)] : [...new Set(entries.map(e => e.targetMuscle).filter(Boolean))]);
+  // 기록할 때 직접 고른 타겟 부위 (없으면 글에 저장된 부위). 둘 다 없으면 배지가 머신 기준으로 계산
+  const chips     = routine.targetMuscles.length > 0 ? routine.targetMuscles : fallbackMuscles;
   const borderColor = routine.overlayTextColor ?? '#ffffff';
 
   return (
@@ -77,19 +68,9 @@ export default function OunwanRoutineSection({ routine, fallbackMuscles, onPress
         ))}
       </View>
 
-      {/* 운동 루틴 + 부위 칩 */}
+      {/* 운동 루틴 (2026-11-16: 부위 칩은 아래 루틴 카드 배지와 겹쳐서 제거) */}
       <View style={st.titleRow}>
         <Text style={st.sectionTitle}>운동 루틴</Text>
-        <View style={st.chipWrap}>
-          {chips.map(m => {
-            const col = mp(m);
-            return (
-              <View key={m} style={[st.muscleChip, { backgroundColor: col.bg, borderColor: col.fg + '40' }]}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: col.fg }}>{m}</Text>
-              </View>
-            );
-          })}
-        </View>
       </View>
 
       {/* 루틴 카드 */}
@@ -98,7 +79,7 @@ export default function OunwanRoutineSection({ routine, fallbackMuscles, onPress
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
             <Text style={[st.gymName, { flex: 1, marginRight: 8 }]} numberOfLines={1}>{routine.gymName}</Text>
             <View style={[st.badge, { backgroundColor: borderColor }]}>
-              <Text style={st.badgeText}>{headerBadge(routine, chips)}</Text>
+              <Text style={st.badgeText}>{routineBadgeLabel(chips, routine.entries.map(e => e.targetMuscle))}</Text>
             </View>
           </View>
           <Text style={st.date}>{formatRoutineDate(routine.date)}</Text>
