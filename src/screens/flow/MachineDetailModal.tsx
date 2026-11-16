@@ -29,6 +29,7 @@ import GymMapView from '../../components/GymMapView';
 import * as Location from 'expo-location';
 import { calcDistanceKm, formatDistance } from '../../lib/geocoding';
 import { fetchGymsWithMachines } from '../../lib/db/gyms';
+import { publicNickname } from '../../lib/displayName';
 import { GymWithMachines } from '../../data/types';
 import { containsBannedWord } from '../../lib/bannedWords';
 import { track } from '../../lib/analytics';
@@ -277,7 +278,7 @@ export default function MachineDetailModal({ visible, machine, onClose, onToggle
     }
     if (!reviewText.trim()) return;
 
-    const displayName     = user?.nickname ?? user?.name ?? 'GymPick User';
+    const displayName     = publicNickname(user);
     const initials        = displayName.slice(0, 2).toUpperCase();
     const profileImageUrl = user?.profileImageUrl ?? null;
     const id              = `review-${Date.now()}`;

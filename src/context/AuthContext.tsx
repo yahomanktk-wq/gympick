@@ -73,7 +73,8 @@ function mapSupabaseUser(sbUser: SupabaseUser, profileData?: ProfileData): AuthU
   return {
     id:              sbUser.id,
     name:            sbUser.user_metadata?.name ?? sbUser.email?.split('@')[0] ?? 'User',
-    nickname:        profileData?.nickname ?? sbUser.user_metadata?.nickname,
+    // 닉네임은 profiles 기준(서버 자동 생성). 예전 가입 메타데이터의 숫자형 닉네임은 쓰지 않는다.
+    nickname:        profileData?.nickname,
     email:           sbUser.email ?? '',
     role:            (profileData?.role ?? 'user') as UserRole,
     managedGymIds:   profileData?.managedGymIds ?? [],
@@ -144,18 +145,6 @@ async function ensureProfileExists(sbUser: SupabaseUser): Promise<void> {
     });
     if (__DEV__) console.log('[ensureProfile] upsert 결과:', upsertError?.message ?? 'OK');
   }
-}
-
-function generateNickname(): string {
-  const adjectives = [
-    '단단한', '탄탄한', '강인한', '날렵한', '묵직한', '거대한', '다부진',
-    '열정적인', '꾸준한', '폭발적인', '맹렬한', '끈질긴', '집중하는', '도전하는',
-    '철벽같은', '파워풀한', '불굴의', '맹수같은',
-    '무적의', '최강의', '전설의', '압도적인', '위대한',
-  ];
-  const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
-  const num = String(Math.floor(Math.random() * 9000) + 1000);
-  return `${adj}_${num}`;
 }
 
 // --- Context
@@ -287,7 +276,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const mockUser: AuthUser = {
         id:            `mock-${Date.now()}`,
         name,
-        nickname:      generateNickname(),
+        nickname:      undefined,
         email:         trimmedEmail,
         role:          'user',
         managedGymIds: [],
@@ -296,12 +285,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: null, needsVerification: false };
     }
 
-    const nickname = generateNickname();
-
+    // 닉네임은 서버(profiles 생성 트리거)가 "형용사 동물" 형식으로 자동 생성한다.
     const { data, error } = await supabase.auth.signUp({
       email: trimmedEmail,
       password,
-      options: { data: { name, nickname } },
+      options: { data: { name } },
     });
     if (error) {
       const msg = error.message ?? '';
@@ -317,11 +305,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (data.user) {
+      // profiles에 birth_date 칸이 없어 예전에는 이 저장 전체가 실패했다 → 이름만 저장
+      // (생년월일은 가입 화면의 나이 확인에만 쓰고 저장하지 않는다)
       await supabase.from('profiles').upsert({
-        id:         data.user.id,
+        id:   data.user.id,
         name,
-        nickname,
-        birth_date: birthDate,
       });
     }
 

@@ -45,6 +45,7 @@ import { saveTemplate, getTemplates, deleteTemplate, WorkoutTemplate } from '../
 import { recordPR } from '../../data/prStore';
 import { useAuth } from '../../context/AuthContext';
 import { track } from '../../lib/analytics';
+import { publicNickname } from '../../lib/displayName';
 import { submitGymRegistrationRequest } from '../../lib/db/gymRegistrationRequests';
 import { insertWorkoutSession, insertWorkoutEntries, insertWorkoutSets, insertWorkoutPhoto, fetchWorkoutEntriesForSessions, fetchWorkoutSetsForEntries } from '../../lib/db/workouts';
 import { uploadWorkoutPhoto } from '../../lib/photoStorage';
@@ -5615,7 +5616,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
         insertFeedPost({
           id:             `feed-${Date.now()}`,
           userId:         user.id,
-          nickname:       user.nickname ?? user.name,
+          nickname:       publicNickname(user),
           gymId:          gym.id,
           gymName:        gym.name,
           photoUri:       finalPhotoUrl ?? photoUri ?? effectiveCompositeUri ?? '',
@@ -5836,7 +5837,7 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
             logs={logs}
             photoTaken={photoTaken}
             photoUri={photoUri ?? undefined}
-            nickname={user?.nickname ?? user?.name ?? undefined}
+            nickname={publicNickname(user)}
             onColorChange={setSelectedColor}
             onStyleChange={setOverlayStyle}
             onCapture={(aspect) => handleCapture(aspect)}

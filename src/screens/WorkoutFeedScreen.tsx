@@ -37,6 +37,7 @@ import { useNearbyFeed } from '../hooks/useNearbyFeed';
 import LocationPermissionPrompt from '../components/feed/LocationPermissionPrompt';
 import { MACHINES } from '../data';
 import { getOunwanImageSources } from '../lib/photoImageUrl';
+import { publicNickname } from '../lib/displayName';
 import FallbackImage from '../components/common/FallbackImage';
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
@@ -305,7 +306,7 @@ export default function WorkoutFeedScreen() {
               .map(session => convertSessionToFeedPost(
                 session,
                 user.id,
-                user?.nickname ?? user?.name ?? 'me',
+                publicNickname(user),
                 latestGymId ?? 'g01',
               ))
               .filter((p): p is WorkoutFeedPost => p !== null);
