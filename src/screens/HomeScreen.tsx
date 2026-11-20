@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,8 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { C, R, T } from '../theme';
 import { btnHeight, cardPadH, cardPadV, iconSize, screenPad } from '../theme/responsive';
 import GymDetailModal from './flow/GymDetailModal';
-import HomeRankingSections from '../components/HomeRankingSections';
+import StreakSection from '../components/home/streak/StreakSection';
+import OunwanGrid from '../components/home/OunwanGrid';
 import RecentWorkoutSummaryPopup from '../components/RecentWorkoutSummaryPopup';
 import WorkoutLogSummaryModal from './flow/WorkoutLogSummaryModal';
 import {
@@ -111,9 +112,6 @@ function getWeekTargetMap(
 const { width: SCREEN_W } = Dimensions.get('window');
 const HOME_THUMB_W   = Math.floor((SCREEN_W - 32) / 3.5);
 const HOME_THUMB_H   = Math.round(HOME_THUMB_W * (4 / 3));
-const OUNWAN_CARD_W  = 160;
-const OUNWAN_CARD_H  = Math.round(OUNWAN_CARD_W * (4 / 3));
-const OUNWAN_CARD_GAP = 10;
 
 function greeting() {
   const h = new Date().getHours();
@@ -121,173 +119,6 @@ function greeting() {
   if (h < 17) return '안녕하세요';
   return '좋은 저녁이에요';
 }
-
-// 로컬(KST) 달력일 기준 키 — isSameDay와 동일한 방식(local Date 컴포넌트)으로 통일
-function localDayKey(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function computeStreak(logs: WorkoutLog[]): number {
-  if (!logs.length) return 0;
-  const uniqueDates = [...new Set(logs.map(l => localDayKey(new Date(l.date))))].sort().reverse();
-  if (!uniqueDates.length) return 0;
-
-  // 가장 최근 기록이 오늘 또는 어제가 아니면 스트릭은 이미 끊긴 것
-  const today = new Date();
-  const todayStr = localDayKey(today);
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = localDayKey(yesterday);
-
-  if (uniqueDates[0] !== todayStr && uniqueDates[0] !== yesterdayStr) {
-    return 0;
-  }
-
-  let streak = 1;
-  for (let i = 1; i < uniqueDates.length; i++) {
-    const [py, pm, pd] = uniqueDates[i - 1].split('-').map(Number);
-    const prev = new Date(py, pm - 1, pd);
-    prev.setDate(prev.getDate() - 1);
-    if (uniqueDates[i] === localDayKey(prev)) {
-      streak++;
-    } else {
-      break;
-    }
-  }
-  return streak;
-}
-
-// ── OunwanCard ────────────────────────────────────────────────────────────────
-
-function getOunwanCardSources(post: WorkoutFeedPost): string[] {
-  return getOunwanImageSources(
-    { original: post.photoUri ?? post.compositeUri, thumbnail: post.thumbnailUri },
-    'grid',
-  );
-}
-
-const OunwanCard = React.memo(({ post, onPress }: {
-  post:    WorkoutFeedPost;
-  onPress: () => void;
-}) => {
-  const sources = getOunwanCardSources(post);
-
-  return (
-    <TouchableOpacity
-      style={[st.ounwanCardOuter, { height: OUNWAN_CARD_H }]}
-      activeOpacity={0.85}
-      onPress={onPress}
-    >
-      <View style={st.ounwanCardInner}>
-        {sources.length > 0 ? (
-          <FallbackImage
-            sources={sources}
-            style={StyleSheet.absoluteFill}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-            placeholder={post.blurhash ? { blurhash: post.blurhash } : undefined}
-            transition={200}
-          />
-        ) : (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: C.surfaceHigh }]} />
-        )}
-      </View>
-    </TouchableOpacity>
-  );
-});
-
-// ── AutoScrollOunwan ──────────────────────────────────────────────────────────
-
-const AutoScrollOunwan = React.memo(({ posts, onPressPost }: {
-  posts:       WorkoutFeedPost[];
-  onPressPost: () => void;
-}) => {
-  const scrollRef   = useRef<ScrollView>(null);
-  const currentIdx  = useRef(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Keep a ref so setInterval callback always reads the latest length without being a dep
-  const postsLenRef = useRef(posts.length);
-  postsLenRef.current = posts.length;
-  // Always-latest posts array for prefetching (posts prop may change identity on re-render)
-  const postsRef = useRef(posts);
-  postsRef.current = posts;
-
-  // Prefetch the next 1~2 cards' display images so scrolling doesn't stall on load
-  const prefetchAround = useCallback((idx: number) => {
-    const list = postsRef.current;
-    if (list.length === 0) return;
-    for (let offset = 1; offset <= 2; offset++) {
-      const target = list[(idx + offset) % list.length];
-      const uri = target ? getOunwanCardSources(target)[0] : undefined;
-      if (uri) {
-        ExpoImage.prefetch(uri).catch(() => {});
-      }
-    }
-  }, []);
-
-  // Only depends on posts.length — no useCallback chain
-  useEffect(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = null;
-    if (posts.length <= 1) return;
-    prefetchAround(currentIdx.current);
-    const STEP = OUNWAN_CARD_W + OUNWAN_CARD_GAP;
-    intervalRef.current = setInterval(() => {
-      currentIdx.current = (currentIdx.current + 1) % postsLenRef.current;
-      scrollRef.current?.scrollTo({ x: currentIdx.current * STEP, animated: true });
-      prefetchAround(currentIdx.current);
-    }, 2500);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    };
-  }, [posts.length, prefetchAround]);
-
-  // Stable handlers — only read/write refs, no state involved
-  const handleScrollBegin = useCallback(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = null;
-  }, []);
-
-  const handleScrollEnd = useCallback(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = null;
-    if (postsLenRef.current <= 1) return;
-    const STEP = OUNWAN_CARD_W + OUNWAN_CARD_GAP;
-    intervalRef.current = setInterval(() => {
-      currentIdx.current = (currentIdx.current + 1) % postsLenRef.current;
-      scrollRef.current?.scrollTo({ x: currentIdx.current * STEP, animated: true });
-      prefetchAround(currentIdx.current);
-    }, 2500);
-  }, [prefetchAround]);
-
-  if (posts.length === 0) {
-    return (
-      <View style={st.feedEmpty}>
-        <Text style={st.feedEmptyText}>아직 오늘의 오운완이 없어요</Text>
-      </View>
-    );
-  }
-
-  return (
-    <ScrollView
-      ref={scrollRef}
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      scrollEventThrottle={16}
-      contentContainerStyle={{ gap: OUNWAN_CARD_GAP, paddingHorizontal: 20 }}
-      onScrollBeginDrag={handleScrollBegin}
-      onScrollEndDrag={handleScrollEnd}
-    >
-      {posts.map(post => (
-        <OunwanCard key={post.id} post={post} onPress={onPressPost} />
-      ))}
-    </ScrollView>
-  );
-});
 
 // ── OunwanHeader ─────────────────────────────────────────────────────────────
 
@@ -474,8 +305,6 @@ export default function HomeScreen() {
     return () => { cancelled = true; };
   }, [sessions, todayTarget, user?.id]);
 
-  const streak = useMemo(() => computeStreak(sessions), [sessions]);
-
   const thisWeekSessions = useMemo(() => {
     const ws = getThisWeekStart();
     const we = new Date(ws);
@@ -535,22 +364,13 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* ── Streak banner ── */}
+        {/* ── 연속 운동 기록 (2026-11-21: 루틴 반영 + 체크 줄) ── */}
         {user && (
-          <View style={st.streakBanner}>
-            {streak > 0 ? (
-              <>
-                <Text style={st.streakEmoji}>🔥</Text>
-                <Text style={st.streakText}>{streak} 일 연속</Text>
-                <Text style={st.streakSub}>계속 유지하세요!</Text>
-              </>
-            ) : (
-              <>
-                <Ionicons name="flame-outline" size={16} color={C.textDim} />
-                <Text style={st.streakEmpty}>첫 운동을 기록하면 연속 기록이 시작돼요.</Text>
-              </>
-            )}
-          </View>
+          <StreakSection
+            sessions={sessions}
+            splitConfig={splitConfig}
+            onPress={() => nav.navigate('Journal')}
+          />
         )}
 
         {/* ── 이번 주 운동일지 (retro thumbnail row) ── */}
@@ -667,10 +487,8 @@ export default function HomeScreen() {
           }
           onMorePress={handleFeedMorePress}
         />
-        <AutoScrollOunwan posts={ounwanPosts} onPressPost={handleFeedPress} />
-
-        {/* ── 이번 주 인기 머신 / 인기 헬스장 (2026-09-09: 랭킹 탭에서 이전) ── */}
-        <HomeRankingSections />
+        {/* 2026-11-21: 가로 자동 스크롤 → 3x3 그리드, 인기 머신/인기 헬스장 섹션 삭제 */}
+        <OunwanGrid posts={ounwanPosts} onPressPost={handleFeedPress} />
 
         <View style={{ height: 32 }} />
       </ScrollView>
@@ -710,44 +528,6 @@ export default function HomeScreen() {
 const st = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: C.bg },
   scroll: { paddingBottom: 32 },
-
-  // Ounwan auto-scroll
-  ounwanCardOuter: {
-    width:           OUNWAN_CARD_W,
-    backgroundColor: C.surfaceHigh,
-  },
-  ounwanCardInner: {
-    flex:            1,
-    backgroundColor: C.surfaceHigh,
-  },
-
-  // Feed empty state
-  feedEmpty: {
-    marginHorizontal: screenPad,
-    marginBottom:     16,
-    backgroundColor:  C.surface,
-    borderRadius:     R.inner,
-    paddingVertical:  20,
-    alignItems:       'center',
-  },
-  feedEmptyText: { fontSize: 13, color: C.textDim },
-
-  // Streak banner
-  streakBanner: {
-    flexDirection:     'row',
-    alignItems:        'center',
-    gap:               8,
-    marginHorizontal:  screenPad,
-    marginBottom:      12,
-    backgroundColor:   C.accentBg,
-    borderRadius:      R.inner,
-    paddingHorizontal: cardPadH,
-    paddingVertical:   10,
-  },
-  streakEmoji: { fontSize: 18 },
-  streakText:  { fontSize: 15, fontWeight: '800', color: C.accent },
-  streakSub:   { fontSize: 12, color: C.accent, opacity: 0.7, marginLeft: 2 },
-  streakEmpty: { flex: 1, fontSize: 13, color: C.textDim, lineHeight: 18 },
 
   // Guest header
   guestHeaderSub: { fontSize: 13, color: C.textSub, fontWeight: '500', marginTop: 4 },
