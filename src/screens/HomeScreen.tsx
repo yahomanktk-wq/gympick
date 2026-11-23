@@ -12,9 +12,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { C, R, T } from '../theme';
-import { btnHeight, cardPadH, cardPadV, iconSize, screenPad } from '../theme/responsive';
-import GymDetailModal from './flow/GymDetailModal';
+import { C, R } from '../theme';
+import { cardPadH, screenPad } from '../theme/responsive';
 import StreakSection from '../components/home/streak/StreakSection';
 import OunwanGrid from '../components/home/OunwanGrid';
 import RecentWorkoutSummaryPopup from '../components/RecentWorkoutSummaryPopup';
@@ -32,7 +31,7 @@ import { fetchWorkoutLogs } from '../lib/db';
 import { getActiveFeedPostsCached } from '../data/feedPostsCache';
 import { fetchActiveFeedPosts } from '../lib/db/feedPosts';
 import { fetchSplitConfig } from '../lib/db/splitRoutine';
-import { getTodayTarget, getTodayTargets, toEnMuscle, toKoMuscle, parseMuscles } from '../lib/splitUtils';
+import { getTodayTarget, getTodayTargets, toEnMuscle, parseMuscles } from '../lib/splitUtils';
 import { getOunwanImageSources } from '../lib/photoImageUrl';
 import FallbackImage from '../components/common/FallbackImage';
 import { track } from '../lib/analytics';
@@ -125,15 +124,11 @@ function greeting() {
 export default function HomeScreen() {
   const { user, refreshUser } = useAuth();
   const nav = useNavigation<any>();
-  const [gymDetailVisible, setGymDetailVisible] = useState(false);
-  const [gymDetailId,      setGymDetailId]      = useState<string | null>(null);
   const [sessions,         setSessions]          = useState<WorkoutLog[]>([]);
   const [splitConfig,      setSplitConfig]       = useState<UserSplitConfig | null>(null);
   const [todayTarget,      setTodayTarget]       = useState<string | null>(null);
   const [ounwanPosts,        setOunwanPosts]         = useState<WorkoutFeedPost[]>([]);
   const [weekTargetMap,      setWeekTargetMap]       = useState<Record<string, string | null>>({});
-  const [ounwanDisplayTarget, setOunwanDisplayTarget] = useState<string | null>(null);
-  const [ounwanIsFallback, setOunwanIsFallback] = useState(false);
   const [recentWorkoutPick,    setRecentWorkoutPick]    = useState<RecentWorkoutPopupPick | null>(null);
   const [showRecentWorkoutPopup, setShowRecentWorkoutPopup] = useState(false);
   // 2026-10-20: 팝업 '요약 보기' → 운동일지 요약 화면
@@ -152,7 +147,6 @@ export default function HomeScreen() {
     useCallback(() => {
       let active = true;
       async function load() {
-        setOunwanIsFallback(false);
         let target: string | null = null;
         let todayTargetsArr: string[] = [];
         // 오운완 피드를 필터링할 부위 목록 — 분기에 따라 채워지며, 실제 조회는 아래에서 한 번만 한다
@@ -193,7 +187,6 @@ export default function HomeScreen() {
             hasFeedMuscleFilter = todayMuscles.length > 0;
 
             setTodayTarget(target);
-            setOunwanDisplayTarget(todayMuscles.length > 0 ? todayMuscles.map(toKoMuscle).join(', ') : (todayTargetsArr.join(', ') || null));
             const weekDates = getThisWeekDates();
             setWeekTargetMap(getWeekTargetMap(config, weekDates));
           } else {
@@ -201,7 +194,6 @@ export default function HomeScreen() {
               ? getTodayTarget(config.splitType, config.workoutSplit, config.splitCurrentIndex)
               : null;
             setTodayTarget(target);
-            setOunwanDisplayTarget(todayTargetsArr.join(', ') || null);
 
             const weekDates = getThisWeekDates();
             setWeekTargetMap(getWeekTargetMap(config, weekDates));
@@ -219,10 +211,7 @@ export default function HomeScreen() {
         if (posts.length < 3) {
           const widened = await fetchActiveFeedPosts(null).catch(() => [] as WorkoutFeedPost[]);
           if (!active) return;
-          if (widened.length > posts.length) {
-            posts = widened;
-            setOunwanIsFallback(true);
-          }
+          if (widened.length > posts.length) posts = widened;
         }
 
         if (hasFeedMuscleFilter) {
@@ -230,10 +219,8 @@ export default function HomeScreen() {
           if (filtered.length > 0) {
             setOunwanPosts(filtered);
           } else {
-            // 2026-11-04: 오늘 부위의 오운완이 없으면 전체를 보여주되, 제목에서 부위를 빼서
-            // "오늘 [부위] 운동한 사람들"에 다른 부위 오운완이 섞여 보이지 않게 한다
+            // 2026-11-04: 오늘 부위의 오운완이 없으면 전체를 보여준다
             setOunwanPosts(posts);
-            setOunwanDisplayTarget(null);
           }
         } else {
           setOunwanPosts(posts);
@@ -285,7 +272,6 @@ export default function HomeScreen() {
     });
   }, []);
 
-  function openNearby() { nav.navigate('FindGym', { initialTab: 'gym', viewMode: 'map' }); }
   const handleFeedPress = useCallback(() => nav.navigate('WorkoutFeed'), [nav]);
   // "더보기" 버튼 전용 — 개별 오운완 게시물 탭(handleFeedPress)과는 별도로,
   // "더보기" 버튼 탭 횟수만 집계하기 위해 분리함.
@@ -437,12 +423,6 @@ export default function HomeScreen() {
         <View style={{ height: 32 }} />
       </ScrollView>
 
-      <GymDetailModal
-        visible={gymDetailVisible}
-        gymId={gymDetailId}
-        onClose={() => setGymDetailVisible(false)}
-      />
-
       <RecentWorkoutSummaryPopup
         visible={showRecentWorkoutPopup}
         session={recentWorkoutPick?.session ?? null}
@@ -547,20 +527,4 @@ const st = StyleSheet.create({
   weekThumbDot:        { width: 6, height: 6, borderRadius: 3, backgroundColor: C.accent },
   weekThumbDateNum:    { fontSize: 16, fontWeight: '700', color: C.text },
   weekThumbTarget:     { fontSize: 10, fontWeight: '700', color: C.accent, marginTop: 2 },
-
-  // CTA
-  ctaCard: {
-    flexDirection:    'row',
-    alignItems:       'center',
-    backgroundColor:  C.surface,
-    borderRadius:     R.card,
-    marginHorizontal: screenPad,
-    marginBottom:     24,
-    padding:          cardPadH,
-    gap:              16,
-  },
-  ctaLeft:  { flex: 1 },
-  ctaEye:   { fontSize: 9, fontWeight: '900', color: C.accent, letterSpacing: 1.5, marginBottom: 6 },
-  ctaTitle: { fontSize: 24, fontWeight: '900', color: C.text, lineHeight: 26, letterSpacing: -0.8 },
-  ctaBtn:   { width: btnHeight, height: btnHeight, borderRadius: btnHeight / 2, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
 });
