@@ -1,10 +1,10 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WorkoutLog } from '../data/types';
 // 2026-10-31: 부위 판단은 sessionTargets.ts의 공통 기준(작성 때 고른 타겟 부위)을 쓴다.
 // 예전에는 머신 중 하나라도 그 부위가 섞여 있으면 일치로 봐서, 가슴 운동 날 DIP ARM 머신
 // 하나 때문에 그 가슴 세션이 "지난 팔 운동 기록"으로 뜨는 문제가 있었다.
 import { sessionMatchesTargetKo } from './sessionTargets';
 
+// 2026-11-23: 팝업 대신 홈 한 줄 안내(components/home/RecentWorkoutHint)에서 쓴다.
 // 2026-10-16: 로그인 유저가 홈 화면에 들어왔을 때 "이전에 비슷한 부위를 어떻게
 // 했었는지" 참고할 수 있도록 가장 최근 운동일지 1건을 팝업으로 보여주기 위한
 // 선택 로직 + "오늘 이미 봤는지" 체크. HomeScreen이 이미 들고 있는
@@ -43,25 +43,4 @@ export function pickRecentWorkoutForPopup(
   }
 
   return { session: candidates[0], matchedMuscle: false };
-}
-
-function seenKey(userId: string): string {
-  return `recent_workout_popup_seen_${userId}_${new Date().toDateString()}`;
-}
-
-/** 오늘 이 유저에게 이미 팝업을 보여줬는지 */
-export async function hasSeenRecentWorkoutPopupToday(userId: string): Promise<boolean> {
-  try {
-    const v = await AsyncStorage.getItem(seenKey(userId));
-    return v === 'true';
-  } catch {
-    return false; // 읽기 실패 시 "안 본 것"으로 간주 — 팝업을 못 보여주는 것보단 나은 쪽으로
-  }
-}
-
-/** 오늘 이 유저에게 팝업을 보여줬다고 기록 */
-export async function markRecentWorkoutPopupSeenToday(userId: string): Promise<void> {
-  try {
-    await AsyncStorage.setItem(seenKey(userId), 'true');
-  } catch {}
 }

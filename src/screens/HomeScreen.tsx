@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,21 +9,14 @@ import {
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { C, R } from '../theme';
 import { cardPadH, screenPad } from '../theme/responsive';
 import StreakSection from '../components/home/streak/StreakSection';
 import OunwanGrid from '../components/home/OunwanGrid';
-import RecentWorkoutSummaryPopup from '../components/RecentWorkoutSummaryPopup';
+import RecentWorkoutHint from '../components/home/RecentWorkoutHint';
 import WorkoutLogSummaryModal from './flow/WorkoutLogSummaryModal';
-import {
-  pickRecentWorkoutForPopup,
-  hasSeenRecentWorkoutPopupToday,
-  markRecentWorkoutPopupSeenToday,
-  type RecentWorkoutPopupPick,
-} from '../lib/recentWorkoutPopup';
 import { useAuth } from '../context/AuthContext';
 
 import { WorkoutLog, WorkoutFeedPost, UserSplitConfig, WeekdaySplit } from '../data/types';
@@ -129,8 +122,6 @@ export default function HomeScreen() {
   const [todayTarget,      setTodayTarget]       = useState<string | null>(null);
   const [ounwanPosts,        setOunwanPosts]         = useState<WorkoutFeedPost[]>([]);
   const [weekTargetMap,      setWeekTargetMap]       = useState<Record<string, string | null>>({});
-  const [recentWorkoutPick,    setRecentWorkoutPick]    = useState<RecentWorkoutPopupPick | null>(null);
-  const [showRecentWorkoutPopup, setShowRecentWorkoutPopup] = useState(false);
   // 2026-10-20: 팝업 '요약 보기' → 운동일지 요약 화면
   const [summarySession,       setSummarySession]       = useState<WorkoutLog | null>(null);
 
@@ -232,27 +223,6 @@ export default function HomeScreen() {
     }, [user?.id])
   );
 
-  // 2026-10-16: 로그인 + 운동일지 작성 경험이 있는 유저에게, 오늘 타겟부위와
-  // 겹치는(없으면 가장 최근) 운동일지를 홈 화면 팝업으로 하루 1번만 보여준다.
-  // sessions/todayTarget은 위 load()가 이미 불러온 값을 그대로 쓰므로 여기서
-  // 추가 네트워크 호출은 하지 않는다.
-  useEffect(() => {
-    if (!user?.id) return;
-    if (sessions.length === 0) return; // 이전에 작성한 운동일지가 없는 유저는 대상 아님
-
-    let cancelled = false;
-    (async () => {
-      const seen = await hasSeenRecentWorkoutPopupToday(user.id);
-      if (cancelled || seen) return;
-      const pick = pickRecentWorkoutForPopup(sessions, todayTarget);
-      if (!pick || cancelled) return;
-      setRecentWorkoutPick(pick);
-      setShowRecentWorkoutPopup(true);
-      markRecentWorkoutPopupSeenToday(user.id);
-    })();
-    return () => { cancelled = true; };
-  }, [sessions, todayTarget, user?.id]);
-
   const thisWeekSessions = useMemo(() => {
     const ws = getThisWeekStart();
     const we = new Date(ws);
@@ -282,34 +252,12 @@ export default function HomeScreen() {
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={st.scroll}>
 
-        {/* ── Header ── */}
-        {user ? (
-          <View style={st.header}>
-            <View>
-              <Text style={st.greet}>{greeting()},</Text>
-              <Text style={st.name}>{user.nickname ?? user.name.split(' ')[0]}</Text>
-            </View>
-            <View style={st.avatar}>
-              {user.profileImageUrl ? (
-                <ExpoImage
-                  source={{ uri: user.profileImageUrl }}
-                  style={st.avatarImg}
-                  contentFit="cover"
-                />
-              ) : null}
-            </View>
-          </View>
-        ) : (
-          <View style={st.header}>
-            <View>
-              <Text style={st.greet}>GymPick에 오신 걸 환영해요</Text>
-              <Text style={st.guestHeaderSub}>헬스장과 머신을 탐색해보세요.</Text>
-            </View>
-            <View style={[st.avatar, st.guestAvatar]}>
-              <Ionicons name="person-outline" size={20} color={C.textSub} />
-            </View>
-          </View>
-        )}
+        {/* ── Header (2026-11-23: 인사말 한 줄, 닉네임·프로필 사진 삭제) ── */}
+        <View style={st.header}>
+          <Text style={st.greet} numberOfLines={1}>
+            {user ? greeting() : 'GymPick에 오신 걸 환영해요'}
+          </Text>
+        </View>
 
         {/* ── 연속 운동 기록 (2026-11-21: 루틴 반영 + 체크 줄) ── */}
         {user && (
@@ -317,6 +265,15 @@ export default function HomeScreen() {
             sessions={sessions}
             splitConfig={splitConfig}
             onPress={() => nav.navigate('Journal')}
+          />
+        )}
+
+        {/* ── 지난 운동 한 줄 안내 (2026-11-23: 하루 1번 팝업 → 한 줄) ── */}
+        {user && (
+          <RecentWorkoutHint
+            sessions={sessions}
+            todayTarget={todayTarget}
+            onOpen={setSummarySession}
           />
         )}
 
@@ -423,19 +380,6 @@ export default function HomeScreen() {
         <View style={{ height: 32 }} />
       </ScrollView>
 
-      <RecentWorkoutSummaryPopup
-        visible={showRecentWorkoutPopup}
-        session={recentWorkoutPick?.session ?? null}
-        matchedMuscle={recentWorkoutPick?.matchedMuscle ?? false}
-        todayTarget={todayTarget}
-        onClose={() => setShowRecentWorkoutPopup(false)}
-        onOpenSummary={(session) => {
-          setShowRecentWorkoutPopup(false);
-          // iOS는 모달 두 개를 동시에 띄울 수 없어서, 팝업이 닫힌 뒤에 연다
-          setTimeout(() => setSummarySession(session), 350);
-        }}
-      />
-
       {summarySession && (
         <WorkoutLogSummaryModal
           session={summarySession}
@@ -454,8 +398,6 @@ const st = StyleSheet.create({
   scroll: { paddingBottom: 32 },
 
   // Guest header
-  guestHeaderSub: { fontSize: 13, color: C.textSub, fontWeight: '500', marginTop: 4 },
-  guestAvatar:    { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border },
 
   // Guest banner
   guestBanner: {
@@ -473,17 +415,11 @@ const st = StyleSheet.create({
 
   // Header
   header: {
-    flexDirection:     'row',
-    justifyContent:    'space-between',
-    alignItems:        'flex-start',
     paddingHorizontal: screenPad,
-    paddingTop:        24,
-    paddingBottom:     16,
+    paddingTop:        16,
+    paddingBottom:     12,
   },
-  greet:     { fontSize: 14, color: C.textSub, fontWeight: '500' },
-  name:      { fontSize: 30, fontWeight: '900', color: C.text, letterSpacing: -1 },
-  avatar:    { width: 42, height: 42, borderRadius: 21, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center', marginTop: 4, overflow: 'hidden' },
-  avatarImg: { width: '100%', height: '100%' },
+  greet: { fontSize: 17, color: C.text, fontWeight: '800', letterSpacing: -0.3 },
 
 
   // Weekly retro thumbnail row

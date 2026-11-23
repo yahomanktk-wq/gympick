@@ -1,5 +1,5 @@
 // 2026-11-21: 홈 상단 연속 운동 기록 카드
-// 2026-11-23: 왼쪽 칸을 불꽃 → 50단계 단어(Black Han Sans) + 일수로 변경
+// 2026-11-23: 왼쪽 칸을 불꽃 → 50단계 단어(Black Han Sans) + 일수로 변경, 카드 높이 축소
 // 왼쪽: 단계 단어 + 연속 일수 / 오른쪽: 루틴에 맞춘 체크 줄 (미설정·요일형은 이번 주, 순서형은 이번 루틴)
 
 import React, { useMemo } from 'react';
@@ -60,10 +60,10 @@ const st = StyleSheet.create({
   card: {
     flexDirection:    'row',
     alignItems:       'stretch',
-    gap:              10,
+    gap:              8,
     marginHorizontal: screenPad,
-    marginBottom:     20,
-    padding:          10,
+    marginBottom:     10,
+    padding:          8,
     backgroundColor:  C.surface,
     borderRadius:     R.card,
     borderWidth:      1,
@@ -71,7 +71,7 @@ const st = StyleSheet.create({
   },
   left: {
     width:             100,
-    paddingVertical:   14,
+    paddingVertical:   8,
     paddingHorizontal: 6,
     borderRadius:      14,
     backgroundColor:   C.surfaceHigh,
@@ -81,9 +81,9 @@ const st = StyleSheet.create({
   word: {
     fontFamily:    'BlackHanSans-Regular',
     fontSize:      40,
-    lineHeight:    46,
+    lineHeight:    42,
     letterSpacing: -1,
     textAlign:     'center',
   },
-  days: { fontSize: 12, fontWeight: '600', color: C.textSub, marginTop: 6 },
+  days: { fontSize: 11, fontWeight: '600', color: C.textSub, marginTop: 1 },
 });

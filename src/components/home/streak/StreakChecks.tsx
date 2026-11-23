@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { C } from '../../../theme';
 import type { CheckItem, CheckRow } from '../../../lib/streak/weekChecks';
 
-const DOT = 26;
+const DOT = 24;
 const SCROLL_ITEM_W = 40;
 const MAX_FIT = 7;
 
@@ -47,7 +47,7 @@ export default function StreakChecks({ row }: { row: CheckRow }) {
   const scroll = row.items.length > MAX_FIT;
   return (
     <View style={st.wrap}>
-      <Text style={st.title}>{row.title}</Text>
+      {/* 2026-11-23: '이번 주' 제목 삭제 (미니멀) */}
       <View style={st.panel}>
         {scroll ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.scrollContent}>
@@ -65,12 +65,11 @@ export default function StreakChecks({ row }: { row: CheckRow }) {
 
 const st = StyleSheet.create({
   wrap:   { flex: 1, minWidth: 0, justifyContent: 'center' },
-  title:  { fontSize: 12, fontWeight: '700', color: C.textSub, marginBottom: 8, marginLeft: 2 },
-  panel:  { backgroundColor: C.surfaceHigh, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 4 },
+  panel:  { flex: 1, justifyContent: 'center', backgroundColor: C.surfaceHigh, borderRadius: 14, paddingVertical: 8, paddingHorizontal: 4 },
   rowFit: { flexDirection: 'row', justifyContent: 'space-between' },
   scrollContent: { paddingHorizontal: 2 },
 
-  cell:     { alignItems: 'center', gap: 4 },
+  cell:     { alignItems: 'center', gap: 3 },
   cellFlex: { flex: 1, minWidth: 0 },
 
   dot: {
