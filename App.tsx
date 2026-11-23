@@ -83,6 +83,7 @@ export default function App() {
     'HeirofLightRegular':    require('./assets/fonts/heiroflightregular.ttf'),
     'BMkkubulimTTF-Regular': require('./assets/fonts/bmkkubulim.ttf'),
     'biergartenlt':          require('./assets/fonts/biergartenlt.ttf'),
+    'BlackHanSans-Regular':  require('./assets/fonts/black_han_sans.ttf'),   // 2026-11-23 홈 연속 기록 단어 (OFL)
     ...((() => {
       try {
         return { 'Oklahoma': require('./assets/fonts/oklahoma.ttf') };
