@@ -120,45 +120,6 @@ function greeting() {
   return '좋은 저녁이에요';
 }
 
-// ── OunwanHeader ─────────────────────────────────────────────────────────────
-
-const ounwanHeaderStyle = {
-  flexDirection:  'row' as const,
-  alignItems:     'center' as const,
-  justifyContent: 'space-between' as const,
-  paddingHorizontal: 20,
-  marginBottom:   12,
-};
-const ounwanHeaderTextStyle = {
-  flex:       1,
-  fontSize:   18,
-  fontWeight: '800' as const,
-  color:      C.text,
-};
-const moreBtnStyle = {
-  fontSize:   13,
-  fontWeight: '600' as const,
-  color:      C.accent,
-  marginLeft: 8,
-};
-
-const OunwanHeader = React.memo(({
-  message,
-  onMorePress,
-}: {
-  message:      string;
-  onMorePress:  () => void;
-}) => (
-  <View style={ounwanHeaderStyle}>
-    <Text style={ounwanHeaderTextStyle} numberOfLines={1}>
-      {message}
-    </Text>
-    <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onMorePress(); }} activeOpacity={0.7}>
-      <Text style={moreBtnStyle}>더보기</Text>
-    </TouchableOpacity>
-  </View>
-));
-
 // --- Screen
 
 export default function HomeScreen() {
@@ -376,12 +337,7 @@ export default function HomeScreen() {
         {/* ── 이번 주 운동일지 (retro thumbnail row) ── */}
         {user && (
           <>
-            <View style={st.sectionRow}>
-              <Text style={st.sectionTitle}>이번 주 운동</Text>
-              <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); nav.navigate('Journal'); }}>
-                <Text style={st.seeAll}>더보기</Text>
-              </TouchableOpacity>
-            </View>
+            {/* 2026-11-23: '이번 주 운동 · 더보기' 제목 줄 삭제 (미니멀) */}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -475,20 +431,8 @@ export default function HomeScreen() {
         {/* 2026-11-04: 'Find a Gym & Start' 버튼 삭제 (하단 탭 '기록하기'와 같은 기능) */}
 
         {/* ── 오늘의 오운완 피드 ── */}
-        <OunwanHeader
-          message={
-            ounwanIsFallback
-              ? (ounwanDisplayTarget && ounwanDisplayTarget !== '휴식'
-                  ? `최근 ${ounwanDisplayTarget} 운동한 사람들이에요! 💪`
-                  : '최근 운동한 사람들이에요! 💪')
-              : (ounwanDisplayTarget && ounwanDisplayTarget !== '휴식'
-                  ? `오늘 ${ounwanDisplayTarget} 운동한 사람들이에요! 💪`
-                  : '오늘 운동한 사람들이에요! 💪')
-          }
-          onMorePress={handleFeedMorePress}
-        />
-        {/* 2026-11-21: 가로 자동 스크롤 → 3x3 그리드, 인기 머신/인기 헬스장 섹션 삭제 */}
-        <OunwanGrid posts={ounwanPosts} onPressPost={handleFeedPress} />
+        {/* 2026-11-23: 제목 줄('최근 ○○ 운동한 사람들이에요 · 더보기') 삭제, 더보기는 그리드 아래로 */}
+        <OunwanGrid posts={ounwanPosts} onPressPost={handleFeedPress} onMorePress={handleFeedMorePress} />
 
         <View style={{ height: 32 }} />
       </ScrollView>
@@ -561,11 +505,6 @@ const st = StyleSheet.create({
   avatar:    { width: 42, height: 42, borderRadius: 21, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center', marginTop: 4, overflow: 'hidden' },
   avatarImg: { width: '100%', height: '100%' },
 
-  // Section headers
-  sectionRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: screenPad, marginBottom: 8 },
-  sectionTitle: { fontSize: 15, fontWeight: '800', color: C.text, letterSpacing: -0.3 },
-  sectionHint:  { fontSize: 12, color: C.textDim },
-  seeAll:       { fontSize: 13, fontWeight: '700', color: C.accent },
 
   // Weekly retro thumbnail row
   weekThumbScroll: {
