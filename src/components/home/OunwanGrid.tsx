@@ -68,12 +68,11 @@ const st = StyleSheet.create({
     gap:               GAP,
     paddingHorizontal: PAD_H,
   },
+  // 2026-11-23: 오운완 이미지에 둥근 테두리가 이미 그려져 있어서, 셀에서 다시 둥글게 자르면
+  // 모서리 테두리가 잘려 보임 → 셀은 자르지 않고 배경도 투명(기존 가로 스크롤 카드와 같은 방식)
   cell: {
-    width:           CELL_W,
-    height:          CELL_H,
-    borderRadius:    8,
-    overflow:        'hidden',
-    backgroundColor: C.surfaceHigh,
+    width:  CELL_W,
+    height: CELL_H,
   },
   empty: {
     marginHorizontal: screenPad,
