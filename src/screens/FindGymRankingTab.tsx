@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R } from '../theme';
-import { brandLogos } from '../constants/brandLogos';
+import { getBrandLogo } from '../lib/brands/brandLogoStore';
 import { parseMuscles } from '../lib/splitUtils';
 import type {
   WeeklyRankingEntry,
@@ -16,9 +16,7 @@ import type { OlympicRankingEntry } from '../lib/db/olympicRankings';
 
 // 2026-09-09: '이번 주 인기 머신' 랭킹 행에 브랜드 로고를 머신명 옆에 표시하기 위한 조회 헬퍼.
 function brandLogoFor(brand: string | undefined) {
-  if (!brand) return undefined;
-  const key = brand.toUpperCase().replace(/\s+/g, '_');
-  return brandLogos[key];
+  return getBrandLogo(brand);
 }
 
 // ── Constants ───────────────────────────────────────────────────────────────

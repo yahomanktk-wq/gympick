@@ -6,7 +6,7 @@ import Svg, { Rect } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R } from '../theme';
 import GymPickLogo from './GymPickLogo';
-import { brandLogos } from '../constants/brandLogos';
+import { getBrandLogo } from '../lib/brands/brandLogoStore';
 import { getBrandCopyrightStatus } from '../data/brandCopyrightStore';
 import { parseMuscles } from '../lib/splitUtils';
 import { getMachineImageUrl } from '../lib/machineImageUrl';
@@ -73,8 +73,7 @@ export default function MachineCard({ machine, width, variant = 'detail', autopl
   const logoW   = isGrid ? 36 : LOGO_SIZE;
 
   const COPYRIGHT_KO = '해당 기구 이미지는 제조사의 저작권 보호를 받으며, 본 페이지는 정보 제공 목적입니다.';
-  const brandKey     = machine.brand.toUpperCase().replace(/\s+/g, '_');
-  const brandLogo    = brandLogos[brandKey];
+  const brandLogo    = getBrandLogo(machine.brand);
   const imageApproved = getBrandCopyrightStatus(machine.brand);
   const resolvedImageUrl = getMachineImageUrl(machine.id, {
     width: Math.round(cardW * PixelRatio.get()),

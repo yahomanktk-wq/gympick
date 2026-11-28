@@ -15,6 +15,7 @@ import { C, R, T } from '../../theme';
 import SelectableMachineCard, { SelectableMachineCardMachine } from '../../components/SelectableMachineCard';
 import MachineDetailModal from './MachineDetailModal';
 import { parseMuscles } from '../../lib/splitUtils';
+import { displayBrand } from '../../lib/brands/brandDisplay';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const GRID_GAP = 8;
@@ -95,7 +96,7 @@ export default function GymAllMachinesScreen({ visible, gymId, gymName, machines
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveBrand(opt); }}
                   activeOpacity={0.75}
                 >
-                  <Text style={[s.filterChipText, active && s.filterChipTextActive]}>{opt}</Text>
+                  <Text style={[s.filterChipText, active && s.filterChipTextActive]}>{displayBrand(opt)}</Text>
                 </TouchableOpacity>
               );
             })}

@@ -3,6 +3,7 @@ import { sortMuscles } from '../../lib/machineFilters/muscleOrder';
 import { getCategoriesForMuscle, categoryLabel, machineHasCategory } from '../../lib/machineFilters/categoryOrder';
 import { getLinesForBrand, machineHasLine } from '../../lib/machineFilters/machineLines';
 import SubChipRow from '../../components/machineFilters/SubChipRow';
+import { displayBrand } from '../../lib/brands/brandDisplay';
 import ScrollToSectionFab from '../../components/machineFilters/ScrollToSectionFab';
 import { useScrollToSection } from '../../components/machineFilters/useScrollToSection';
 import {
@@ -1124,7 +1125,7 @@ function MachinesView({
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.filterRow, { marginTop: 0, marginBottom: lineOptions.length > 0 ? 4 : 12 }]} contentContainerStyle={styles.filterRowContent}>
         {['전체', ...CATALOG_BRANDS].map(b => (
           <TouchableOpacity key={b} style={[styles.filterChip, machineBrandFilter === b && styles.filterChipActive]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMachineBrandFilter(machineBrandFilter === b && b !== '전체' ? '전체' : b); }}>
-            <Text style={[styles.filterChipText, machineBrandFilter === b && styles.filterChipTextActive]}>{b}</Text>
+            <Text style={[styles.filterChipText, machineBrandFilter === b && styles.filterChipTextActive]}>{displayBrand(b)}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>

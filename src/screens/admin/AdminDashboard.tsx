@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { sortMuscles } from '../../lib/machineFilters/muscleOrder';
+import { matchesMachineKeyword } from '../../lib/machineFilters/koreanSearch';
 import { getCategoriesForMuscle, categoryLabel, machineHasCategory } from '../../lib/machineFilters/categoryOrder';
 import { getLinesForBrand, machineHasLine } from '../../lib/machineFilters/machineLines';
 import SubChipRow from '../../components/machineFilters/SubChipRow';
@@ -85,6 +86,8 @@ import {
   removeGymOfficialBrand,
 } from '../../lib/db/gymOfficialBrands';
 import { brandLogos } from '../../constants/brandLogos';
+import { getBrandLogo } from '../../lib/brands/brandLogoStore';
+import { displayBrand } from '../../lib/brands/brandDisplay';
 import {
   fetchManagerRequests,
   updateManagerRequestStatus,
@@ -716,7 +719,8 @@ function MachineCatalogView({
   const filtered = machines.filter(m => {
     if (catMuscle !== 'All' && !parseMuscles(m.targetMuscle).includes(catMuscle)) return false;
     if (catBrand  !== 'All' && m.brand          !== catBrand)  return false;
-    if (q && !m.name.toLowerCase().includes(q) && !m.brand.toLowerCase().includes(q)) return false;
+    // 2026-11-25: 한글 검색 (머신명·브랜드·종류)
+    if (q && !matchesMachineKeyword(m, q)) return false;
     return true;
   });
 
@@ -1379,7 +1383,7 @@ function RegisterGymAdminView({ machines, registeredGyms, onSave, onUpdate, onOf
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.catChipRow, { marginBottom: adminLineOptions.length > 0 ? 8 : 12 }]} contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}>
           {ADMIN_GYM_BRANDS.map(b => (
             <TouchableOpacity key={b} style={[styles.catChip, brandFilter === b && styles.catChipActive]} onPress={() => { setBrandFilter(b); setLineFilter(null); }} activeOpacity={0.8}>
-              <Text style={[styles.catChipText, brandFilter === b && styles.catChipTextActive]}>{b}</Text>
+              <Text style={[styles.catChipText, brandFilter === b && styles.catChipTextActive]}>{displayBrand(b)}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -1864,8 +1868,7 @@ function GymOfficialBrandsView({
         <Text style={{ fontSize: 13, color: C.textDim, paddingVertical: 20, textAlign: 'center' }}>로딩 중...</Text>
       ) : (
         allBrands.map(brand => {
-          const key = brand.toUpperCase().replace(/\s+/g, '_');
-          const logoSrc = brandLogos[key];
+          const logoSrc = getBrandLogo(brand);
           const isActive = officialBrands.includes(brand);
           return (
             <TouchableOpacity
@@ -2013,7 +2016,7 @@ function GymManagerLinkView({
 
 type FeedItem = {
   id:        string;
-  kind:      'review' | 'manager_request' | 'gym_registration' | 'gym_info_report' | 'machine_request' | 'gym_manager_link';
+  kind:      'review' | 'manager_request' | 'gym_registration' | 'manager_gym_registration' | 'gym_info_report' | 'machine_request' | 'gym_manager_link';
   createdAt: string;
   title:     string;
   sub:       string;
@@ -2024,6 +2027,7 @@ const FEED_KIND_META: Record<FeedItem['kind'], { label: string; color: string; i
   review:            { label: '신규 리뷰',        color: '#fbbf24', icon: 'star' },
   manager_request:   { label: '매니저 신청',      color: '#a78bfa', icon: 'person-add-outline' },
   gym_registration:  { label: '헬스장 등록 제안', color: '#fb923c', icon: 'business-outline' },
+  manager_gym_registration: { label: '매니저 헬스장 등록', color: '#ffb547', icon: 'business' },
   gym_info_report:   { label: '정보 제보',        color: '#ff7eb3', icon: 'flag-outline' },
   machine_request:   { label: '머신 등록 신청',   color: '#22d3ee', icon: 'barbell-outline' },
   gym_manager_link:  { label: '매니저 연결 요청', color: '#818cf8', icon: 'link-outline' },
@@ -2810,6 +2814,18 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
         onPress:   () => push('gym-registration-requests'),
       }));
 
+    // 2026-11-27: 매니저 직접 등록(승인 없이 바로 공개)도 최근 활동에 표시 → '헬스장 승인 대기' 화면에서 기록 확인
+    const managerGymRegItems: FeedItem[] = gymRequests
+      .filter(r => (r.requesterRole ?? 'user') === 'manager')
+      .map(r => ({
+        id:        `manager_gym_registration-${r.id}`,
+        kind:      'manager_gym_registration',
+        createdAt: r.createdAt,
+        title:     r.gymName,
+        sub:       `매니저 등록 · 바로 공개 · ${r.location}`,
+        onPress:   () => push('pending-gyms'),
+      }));
+
     const gymReportItems: FeedItem[] = gymReports.map(r => ({
       id:        `gym_info_report-${r.id}`,
       kind:      'gym_info_report',
@@ -2838,7 +2854,7 @@ export default function AdminDashboard({ onClose, initialView }: { onClose: () =
     }));
 
     return [
-      ...reviewItems, ...managerReqItems, ...gymRegItems,
+      ...reviewItems, ...managerReqItems, ...gymRegItems, ...managerGymRegItems,
       ...gymReportItems, ...machineReqItems, ...linkReqItems,
     ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [allReviews, machines, managerRequests, gymRequests, gymReports, machineRequests, linkRequests, push]);

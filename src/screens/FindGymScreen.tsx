@@ -16,7 +16,7 @@ import {
   Platform,
   Image,
 } from 'react-native';
-import { brandLogos } from '../constants/brandLogos';
+import { getBrandLogo } from '../lib/brands/brandLogoStore';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -152,8 +152,7 @@ function GymCard({
         {gym.officialBrands && gym.officialBrands.length > 0 && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
             {gym.officialBrands.map(brand => {
-              const key = brand.toUpperCase().replace(/\s+/g, '_');
-              const logo = brandLogos[key];
+              const logo = getBrandLogo(brand);
               return logo ? (
                 <View key={brand} style={{ backgroundColor: '#ffffff', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 3 }}>
                   <Image

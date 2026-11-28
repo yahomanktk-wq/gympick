@@ -12,6 +12,9 @@ export type NotificationType =
   | 'trainer_application' | 'trainer_approved' | 'trainer_rejected'
   | 'ounwan_like'
   | 'qna_question' | 'qna_answer' | 'pt_request' | 'pt_message'
+  | 'gym_registered'   // 2026-11-27: 매니저 새 헬스장 등록 → 어드민 (DB 트리거 notify_gym_registered)
+  | 'gym_link_requested' // 2026-11-27: 매니저 헬스장 연결 요청 → 어드민 (DB 트리거 notify_gym_link_requested)
+  | 'machine_registered' // 2026-11-27: 머신 등록 신청 처리 완료 → 신청한 매니저 (tools/machine-register에서 insert)
   | 'announcement' | 'general';
 
 export interface AppNotification {

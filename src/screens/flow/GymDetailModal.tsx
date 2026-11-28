@@ -24,7 +24,8 @@ import {
   NativeScrollEvent,
   LayoutChangeEvent,
 } from 'react-native';
-import { brandLogos } from '../../constants/brandLogos';
+import { getBrandLogo } from '../../lib/brands/brandLogoStore';
+import { displayBrand } from '../../lib/brands/brandDisplay';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { GymReportType } from '../../lib/db/gymReports';
@@ -553,7 +554,7 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
                       activeOpacity={0.8}
                     >
                       <Text style={[s.filterChipText, machineBrandFilter === opt && s.filterChipTextActive]}>
-                        {opt}
+                        {displayBrand(opt)}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -677,8 +678,7 @@ export default function GymDetailModal({ visible, gymId, onClose, initialMachine
                 </View>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                   {gym.officialBrands.map(brand => {
-                    const key = brand.toUpperCase().replace(/\s+/g, '_');
-                    const logo = brandLogos[key];
+                    const logo = getBrandLogo(brand);
                     return (
                       <View
                         key={brand}

@@ -17,6 +17,7 @@ import { C, R, T } from '../../theme';
 import type { MachineWithGyms, ExerciseKind } from '../../data/types';
 import { insertMachine, updateMachine } from '../../lib/db/machines';
 import { parseMuscles } from '../../lib/splitUtils';
+import { matchesMachineKeyword, matchesBrandKeyword } from '../../lib/machineFilters/koreanSearch';
 
 // 타겟부위 7종 — Supabase machines 테이블에 실제로 쓰이고 있는 표기(Title
 // Case, Leg/Shoulder는 단수)와 맞춘다. 프로젝트 문서의 "CHEST, BACK, LEGS..."
@@ -76,7 +77,8 @@ export default function AdminMachineRegisterView({ machines, onRegistered }: Pro
     const q = brand.trim().toLowerCase();
     if (!q) return [];
     return existingBrands
-      .filter(b => b.toLowerCase() !== q && b.toLowerCase().includes(q))
+      // 2026-11-25: 한글로 입력해도 브랜드 추천 (해머 → Hammer Strength)
+      .filter(b => b.toLowerCase() !== q && matchesBrandKeyword(b, q))
       .slice(0, 6);
   }, [brand, existingBrands]);
 
@@ -106,11 +108,8 @@ export default function AdminMachineRegisterView({ machines, onRegistered }: Pro
     const q = searchQuery.trim().toLowerCase();
     if (!q) return [];
     return machines
-      .filter(m =>
-        m.name.toLowerCase().includes(q) ||
-        m.brand.toLowerCase().includes(q) ||
-        m.id.toLowerCase().includes(q),
-      )
+      // 2026-11-25: 한글 검색 (머신명·브랜드·종류) + id
+      .filter(m => matchesMachineKeyword(m, q) || m.id.toLowerCase().includes(q))
       .slice(0, MAX_SEARCH_RESULTS);
   }, [searchQuery, machines]);
 

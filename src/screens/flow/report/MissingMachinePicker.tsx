@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { C, R } from '../../../theme';
 import { getMachineImageUrl } from '../../../lib/machineImageUrl';
+import { matchesMachineKeyword, normalizeSearch } from '../../../lib/machineFilters/koreanSearch';
 
 // 2026-11-02: 머신 이름만으로는 헷갈리니 썸네일을 같이 보여준다.
 const THUMB = 44;
@@ -21,6 +22,9 @@ export interface PickerMachine {
   displayName?: string;
   brand:        string;
   blurhash?:    string;
+  /** 2026-11-25: 한글 검색용 (머신 종류·라인) — 있으면 사용 */
+  category?:    string | null;
+  line?:        string | null;
 }
 
 interface Props {
@@ -38,11 +42,13 @@ export function MissingMachinePicker({ machines, selectedIds, onToggle }: Props)
   const selected = useMemo(() => new Set(selectedIds), [selectedIds]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = query.trim();
     const sorted = [...machines].sort((a, b) => labelOf(a).localeCompare(labelOf(b)));
     if (!q) return sorted;
+    // 2026-11-25: 한글 검색 (해머, 체스트프레스 …) + 표시 이름
+    const nq = normalizeSearch(q);
     return sorted.filter(m =>
-      labelOf(m).toLowerCase().includes(q) || (m.brand ?? '').toLowerCase().includes(q),
+      matchesMachineKeyword(m, q) || normalizeSearch(labelOf(m)).includes(nq),
     );
   }, [machines, query]);
 

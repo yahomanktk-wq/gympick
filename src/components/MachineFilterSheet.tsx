@@ -28,8 +28,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { C, R } from '../theme';
-import { brandLogos } from '../constants/brandLogos';
+import { getBrandLogo } from '../lib/brands/brandLogoStore';
+import { displayBrand } from '../lib/brands/brandDisplay';
 import { lineKey, pruneLines, hasLinesForBrand } from '../lib/machineFilters/lineSelection';
+import { matchesBrandKeyword } from '../lib/machineFilters/koreanSearch';
 
 type FilterTabKey = 'muscle' | 'category' | 'brand';
 
@@ -59,8 +61,7 @@ interface MachineFilterSheetProps {
 }
 
 function brandLogoFor(name: string) {
-  const key = name.toUpperCase().replace(/\s+/g, '_');
-  return brandLogos[key];
+  return getBrandLogo(name);
 }
 
 export default function MachineFilterSheet({
@@ -123,8 +124,9 @@ export default function MachineFilterSheet({
 
   const brandSections = useMemo(() => {
     const all = getBrandOptions(draftMuscle);
-    const kw  = brandSearch.trim().toLowerCase();
-    const filtered = kw ? all.filter(b => b.toLowerCase().includes(kw)) : all;
+    // 2026-11-25: 한글 브랜드 검색 (해머 → Hammer Strength)
+    const kw  = brandSearch.trim();
+    const filtered = kw ? all.filter(b => matchesBrandKeyword(b, kw)) : all;
     const sorted = [...filtered].sort((a, b) => a.localeCompare(b));
 
     const groups: Record<string, string[]> = {};
@@ -370,7 +372,7 @@ function BrandRow({ name, logo, selected, onPress }: { name: string; logo?: numb
           <Text style={fs.brandLogoFallback}>{name[0]?.toUpperCase()}</Text>
         )}
       </View>
-      <Text style={[fs.brandRowText, selected && fs.optionRowTextActive]} numberOfLines={1}>{name}</Text>
+      <Text style={[fs.brandRowText, selected && fs.optionRowTextActive]} numberOfLines={1}>{displayBrand(name)}</Text>
     </TouchableOpacity>
   );
 }

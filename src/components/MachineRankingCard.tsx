@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
 import { C, R } from '../theme';
 import { MachineRankingEntry } from '../data/types';
-import { brandLogos } from '../constants/brandLogos';
+import { getBrandLogo } from '../lib/brands/brandLogoStore';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -41,8 +41,7 @@ function ChangeIcon({ change }: { change: MachineRankingEntry['usageChange'] }) 
 
 export default function MachineRankingCard({ entry, onPress }: Props) {
   const usageLabel  = entry.usageCount.toLocaleString() + '회';
-  const brandKey    = entry.brandName.toUpperCase().replace(/\s+/g, '_');
-  const logoSource  = brandLogos[brandKey];
+  const logoSource  = getBrandLogo(entry.brandName);
 
   return (
     <TouchableOpacity

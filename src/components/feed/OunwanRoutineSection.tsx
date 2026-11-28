@@ -4,7 +4,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { C, R, T } from '../../theme';
-import { brandLogos } from '../../constants/brandLogos';
+import { getBrandLogo } from '../../lib/brands/brandLogoStore';
 import { getMachineImageUrl } from '../../lib/machineImageUrl';
 import { OunwanRoutine } from '../../lib/db/ounwanRoutine';
 import GymPickLogo from '../GymPickLogo';
@@ -87,8 +87,7 @@ export default function OunwanRoutineSection({ routine, fallbackMuscles, onPress
         <View style={st.divider} />
 
         {entries.map((e, i) => {
-          const brandKey  = e.machineBrand.toUpperCase().replace(/\s+/g, '_');
-          const brandLogo = brandLogos[brandKey];
+          const brandLogo = getBrandLogo(e.machineBrand);
           return (
             <React.Fragment key={`${e.machineId}-${i}`}>
               {i > 0 && <View style={st.divider} />}

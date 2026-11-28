@@ -15,8 +15,7 @@ import { C, R } from '../theme';
 import { cardPadH, screenPad } from '../theme/responsive';
 import StreakSection from '../components/home/streak/StreakSection';
 import OunwanGrid from '../components/home/OunwanGrid';
-import RecentWorkoutHint from '../components/home/RecentWorkoutHint';
-import WorkoutLogSummaryModal from './flow/WorkoutLogSummaryModal';
+import GymPickLogo from '../components/GymPickLogo';
 import { useAuth } from '../context/AuthContext';
 
 import { WorkoutLog, WorkoutFeedPost, UserSplitConfig, WeekdaySplit } from '../data/types';
@@ -24,7 +23,8 @@ import { fetchWorkoutLogs } from '../lib/db';
 import { getActiveFeedPostsCached } from '../data/feedPostsCache';
 import { fetchActiveFeedPosts } from '../lib/db/feedPosts';
 import { fetchSplitConfig } from '../lib/db/splitRoutine';
-import { getTodayTarget, getTodayTargets, toEnMuscle, parseMuscles } from '../lib/splitUtils';
+import { getTodayTargets, toEnMuscle, parseMuscles } from '../lib/splitUtils';
+import { getWeekTargetMap } from '../lib/streak/weekTargets';
 import { getOunwanImageSources } from '../lib/photoImageUrl';
 import FallbackImage from '../components/common/FallbackImage';
 import { track } from '../lib/analytics';
@@ -56,51 +56,6 @@ function isSameDay(a: Date, b: Date): boolean {
     a.getDate() === b.getDate();
 }
 
-function getWeekTargetMap(
-  splitConfig: UserSplitConfig | null,
-  weekDates: Date[]
-): Record<string, string | null> {
-  const result: Record<string, string | null> = {};
-
-  if (!splitConfig || !splitConfig.workoutSplit) {
-    weekDates.forEach(d => { result[d.toDateString()] = null; });
-    return result;
-  }
-
-  if (splitConfig.splitType === 'weekday') {
-    const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-    const split = splitConfig.workoutSplit as WeekdaySplit;
-    weekDates.forEach(d => {
-      const key = DAY_KEYS[d.getDay()] as keyof WeekdaySplit;
-      const targets = (split[key] ?? []) as string[];
-      const work = targets.filter(m => m !== '휴식');
-      result[d.toDateString()] = work.length > 0 ? work.join('·') : (targets.length > 0 ? '휴식' : null);
-    });
-    return result;
-  }
-
-  // sequential: assign from today onwards
-  const split = splitConfig.workoutSplit as string[][];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  let idx = splitConfig.splitCurrentIndex;
-
-  weekDates.forEach(d => {
-    const date = new Date(d);
-    date.setHours(0, 0, 0, 0);
-    if (date < today) {
-      result[d.toDateString()] = null;
-    } else {
-      const slot = split[idx % split.length] ?? [];
-      const work = slot.filter(m => m !== '휴식');
-      result[d.toDateString()] = work.length > 0 ? work.join('·') : (slot.length > 0 ? '휴식' : null);
-      idx++;
-    }
-  });
-
-  return result;
-}
-
 const { width: SCREEN_W } = Dimensions.get('window');
 const HOME_THUMB_W   = Math.floor((SCREEN_W - 32) / 3.5);
 const HOME_THUMB_H   = Math.round(HOME_THUMB_W * (4 / 3));
@@ -119,11 +74,8 @@ export default function HomeScreen() {
   const nav = useNavigation<any>();
   const [sessions,         setSessions]          = useState<WorkoutLog[]>([]);
   const [splitConfig,      setSplitConfig]       = useState<UserSplitConfig | null>(null);
-  const [todayTarget,      setTodayTarget]       = useState<string | null>(null);
   const [ounwanPosts,        setOunwanPosts]         = useState<WorkoutFeedPost[]>([]);
   const [weekTargetMap,      setWeekTargetMap]       = useState<Record<string, string | null>>({});
-  // 2026-10-20: 팝업 '요약 보기' → 운동일지 요약 화면
-  const [summarySession,       setSummarySession]       = useState<WorkoutLog | null>(null);
 
   // 홈 화면 focus마다 최신 role/managerOnboarded를 확인 — 매니저 승인 알림을
   // 직접 탭하지 않아도 홈에 들어올 때마다 승인 여부가 반영되도록 한다.
@@ -138,7 +90,6 @@ export default function HomeScreen() {
     useCallback(() => {
       let active = true;
       async function load() {
-        let target: string | null = null;
         let todayTargetsArr: string[] = [];
         // 오운완 피드를 필터링할 부위 목록 — 분기에 따라 채워지며, 실제 조회는 아래에서 한 번만 한다
         let feedMuscleFilter: string[] = [];
@@ -170,22 +121,13 @@ export default function HomeScreen() {
             const todayMuscles = (todayLogs[0].targetMuscles && todayLogs[0].targetMuscles.length > 0)
               ? todayLogs[0].targetMuscles
               : [...new Set(todayLogs[0].machines.flatMap(m => parseMuscles(m.targetMuscle)))];
-            target = config
-              ? getTodayTarget(config.splitType, config.workoutSplit, config.splitCurrentIndex)
-              : null;
-
             feedMuscleFilter = todayMuscles;
             hasFeedMuscleFilter = todayMuscles.length > 0;
 
-            setTodayTarget(target);
+            // 오늘 운동을 마쳤으면 다음 차례는 내일부터 배정 (연속 기록 카드와 일치)
             const weekDates = getThisWeekDates();
-            setWeekTargetMap(getWeekTargetMap(config, weekDates));
+            setWeekTargetMap(getWeekTargetMap(config, weekDates, true));
           } else {
-            target = config
-              ? getTodayTarget(config.splitType, config.workoutSplit, config.splitCurrentIndex)
-              : null;
-            setTodayTarget(target);
-
             const weekDates = getThisWeekDates();
             setWeekTargetMap(getWeekTargetMap(config, weekDates));
 
@@ -253,10 +195,19 @@ export default function HomeScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={st.scroll}>
 
         {/* ── Header (2026-11-23: 인사말 한 줄, 닉네임·프로필 사진 삭제) ── */}
+        {/* 2026-11-24: 비로그인은 '[로고]에 오신 걸 환영해요.' + 안내 한 줄 */}
         <View style={st.header}>
-          <Text style={st.greet} numberOfLines={1}>
-            {user ? greeting() : 'GymPick에 오신 걸 환영해요'}
-          </Text>
+          {user ? (
+            <Text style={st.greet} numberOfLines={1}>{greeting()}</Text>
+          ) : (
+            <>
+              <View style={st.welcomeRow}>
+                <GymPickLogo color={C.text} height={14} />
+                <Text style={st.greet} numberOfLines={1}>에 오신 걸 환영해요.</Text>
+              </View>
+              <Text style={st.welcomeSub}>헬스장과 머신을 탐색해보세요.</Text>
+            </>
+          )}
         </View>
 
         {/* ── 연속 운동 기록 (2026-11-21: 루틴 반영 + 체크 줄) ── */}
@@ -268,14 +219,7 @@ export default function HomeScreen() {
           />
         )}
 
-        {/* ── 지난 운동 한 줄 안내 (2026-11-23: 하루 1번 팝업 → 한 줄) ── */}
-        {user && (
-          <RecentWorkoutHint
-            sessions={sessions}
-            todayTarget={todayTarget}
-            onOpen={setSummarySession}
-          />
-        )}
+        {/* 2026-11-24: '지난 운동' 한 줄은 운동일지 작성 첫 화면(헬스장 선택)으로 이동 */}
 
         {/* ── 이번 주 운동일지 (retro thumbnail row) ── */}
         {user && (
@@ -375,18 +319,17 @@ export default function HomeScreen() {
 
         {/* ── 오늘의 오운완 피드 ── */}
         {/* 2026-11-23: 제목 줄('최근 ○○ 운동한 사람들이에요 · 더보기') 삭제, 더보기는 그리드 아래로 */}
-        <OunwanGrid posts={ounwanPosts} onPressPost={handleFeedPress} onMorePress={handleFeedMorePress} />
+        {/* 2026-11-24: 비로그인만 제목 '최근 운동한 사람들이에요!💪' */}
+        <OunwanGrid
+          posts={ounwanPosts}
+          title={user ? undefined : '최근 운동한 사람들이에요!💪'}
+          onPressPost={handleFeedPress}
+          onMorePress={handleFeedMorePress}
+        />
 
         <View style={{ height: 32 }} />
       </ScrollView>
 
-      {summarySession && (
-        <WorkoutLogSummaryModal
-          session={summarySession}
-          allSessions={sessions}
-          onClose={() => setSummarySession(null)}
-        />
-      )}
     </SafeAreaView>
   );
 }
@@ -420,6 +363,8 @@ const st = StyleSheet.create({
     paddingBottom:     12,
   },
   greet: { fontSize: 17, color: C.text, fontWeight: '800', letterSpacing: -0.3 },
+  welcomeRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  welcomeSub: { fontSize: 13, color: C.textSub, fontWeight: '500', marginTop: 6 },
 
 
   // Weekly retro thumbnail row
@@ -442,7 +387,7 @@ const st = StyleSheet.create({
   weekThumbBox: {
     width:           HOME_THUMB_W,
     height:          HOME_THUMB_H,
-    borderRadius:    10,
+    borderRadius:    6,
     backgroundColor: C.surface,
     overflow:        'hidden',
     alignItems:      'center',

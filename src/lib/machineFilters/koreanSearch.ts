@@ -188,6 +188,14 @@ export function machineSearchText(m: SearchSource): string {
   return text;
 }
 
+/** 2026-11-25: 브랜드 이름만 검색할 때 (필터 시트 브랜드 검색, 어드민 브랜드 추천) — "해머" → Hammer Strength */
+export function matchesBrandKeyword(brand: string, keyword: string): boolean {
+  const kw = normalizeSearch(keyword);
+  if (!kw) return true;
+  const key = brand.toLowerCase().trim();
+  return [brand, ...(BRAND_KO[key] ?? [])].some(b => normalizeSearch(b).includes(kw));
+}
+
 /** 검색어(한글·영문)가 이 머신에 맞는지 */
 export function matchesMachineKeyword(m: SearchSource, keyword: string): boolean {
   const kw = normalizeSearch(keyword);

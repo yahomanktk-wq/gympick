@@ -23,7 +23,7 @@ import { captureRef } from 'react-native-view-shot';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { Image as ExpoImage } from 'expo-image';
-import { brandLogos } from '../constants/brandLogos';
+import { getBrandLogo } from '../lib/brands/brandLogoStore';
 import { getMachineImageUrl } from '../lib/machineImageUrl';
 import { getOunwanImageSources } from '../lib/photoImageUrl';
 import { publicNickname } from '../lib/displayName';
@@ -1013,8 +1013,7 @@ function SessionDetailModal({
                   </View>
                   <View style={det.routineDivider} />
                   {machines.map((m, i) => {
-                    const brandKey  = m.machineBrand.toUpperCase().replace(/\s+/g, '_');
-                    const brandLogo = brandLogos[brandKey];
+                    const brandLogo = getBrandLogo(m.machineBrand);
                     const imageUrl  = getMachineImageUrl(m.machineId, { width: 128 });
                     return (
                       <React.Fragment key={m.machineId}>
@@ -1118,8 +1117,7 @@ function SessionDetailModal({
                           <View style={{ height: 1, backgroundColor: '#E5E5E5' }} />
                           <View style={{ flex: 1, overflow: 'hidden' }}>
                             {pageMachines.map((m, i) => {
-                              const brandKey  = m.machineBrand.toUpperCase().replace(/\s+/g, '_');
-                              const brandLogo = brandLogos[brandKey];
+                              const brandLogo = getBrandLogo(m.machineBrand);
                               const imageUrl  = getMachineImageUrl(m.machineId, { width: 128 });
                               return (
                                 <React.Fragment key={m.machineId}>

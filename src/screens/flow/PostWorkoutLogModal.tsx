@@ -74,11 +74,14 @@ import { fetchMachines, getMachinesCacheSync } from '../../lib/db/machines';
 import * as Location from 'expo-location';
 import { calcDistanceKm, formatDistance } from '../../lib/geocoding';
 import { fetchGymsWithMachines } from '../../lib/db/gyms';
-import { brandLogos } from '../../constants/brandLogos';
+import { getBrandLogo } from '../../lib/brands/brandLogoStore';
 import { fetchSplitConfig } from '../../lib/db/splitRoutine';
 import { syncSplitProgress } from '../../lib/splitProgress';
 import { DefaultOunwanBackground, COLORS_HIDDEN_ON_DEFAULT_BG } from './photo/defaultOunwanBackground';
-import { getTodayTargets, isRestToday, toEnMuscle, parseMuscles } from '../../lib/splitUtils';
+import { getTodayTarget, getTodayTargets, isRestToday, toEnMuscle, parseMuscles } from '../../lib/splitUtils';
+import RecentWorkoutHint from '../../components/home/RecentWorkoutHint';
+import SetCardHeader from '../../components/workoutLog/SetCardHeader';
+import LocationPermissionInfo from '../../components/workoutLog/LocationPermissionInfo';
 import { isCardioMachine } from '../../lib/machineVisibility';
 import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -536,8 +539,10 @@ function MuscleSelectStep({ selected, onToggle, onNext, onBack, onClose, isRestD
 
 // --- Step 1 (was Step 2): Gym Select
 
-function GymSelectStep({ onSelect, onClose, onRegisterRect, onboardingActive, onboardingKey }: {
+function GymSelectStep({ onSelect, onClose, onRegisterRect, onboardingActive, onboardingKey, topSlot }: {
   onSelect: (gym: GymWithMachines) => void;
+  /** 2026-11-24: 목록 맨 위에 넣을 내용 ('지난 운동' 한 줄) */
+  topSlot?: React.ReactNode;
   onClose: () => void;
   onRegisterRect?: (key: OnboardingPointKey, rect: SpotlightRect) => void;
   onboardingActive?: boolean;
@@ -655,6 +660,7 @@ function GymSelectStep({ onSelect, onClose, onRegisterRect, onboardingActive, on
       <StepBar total={5} current={0} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
         <Text style={s.hint}>오늘 운동한 헬스장을 선택하세요</Text>
+        {topSlot}
 
         <View
           ref={gymRequestLinkRef}
@@ -666,8 +672,9 @@ function GymSelectStep({ onSelect, onClose, onRegisterRect, onboardingActive, on
             }
           }}
         >
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
           <TouchableOpacity
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 14 }}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowGymRequestModal(true); }}
             activeOpacity={0.7}
           >
@@ -676,14 +683,11 @@ function GymSelectStep({ onSelect, onClose, onRegisterRect, onboardingActive, on
               내가 다니는 헬스장이 없나요? 등록 요청하기
             </Text>
           </TouchableOpacity>
-        </View>
-
-        {locError && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12, backgroundColor: C.surfaceHigh, borderRadius: R.inner, padding: 10 }}>
-            <Ionicons name="location-outline" size={13} color={C.textSub} />
-            <Text style={{ fontSize: 12, color: C.textSub }}>위치 권한이 없어 거리 정보를 표시할 수 없어요</Text>
+          <View style={{ flex: 1 }} />
+          {/* 2026-11-28: 위치 권한 안내는 ? 아이콘을 탭하면 보여준다 (권한 없을 때만) */}
+          {locError && <LocationPermissionInfo />}
           </View>
-        )}
+        </View>
 
         {loading ? (
           <View style={{ paddingVertical: 48, alignItems: 'center', gap: 10 }}>
@@ -1592,29 +1596,19 @@ function SetCard({ ex, sets, realPR, prefill, freeWeights, onChange, onAdd, onCo
 
   return (
     <View style={s.logCard}>
-      <View style={s.logCardHead}>
-        <View style={[s.logExIcon, { backgroundColor: col.bg }]}>
-          <Ionicons name={isFW ? 'fitness-outline' : 'barbell'} size={18} color={col.fg} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={s.logExName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{ex.name}</Text>
-          <Text style={s.logExBrand}>{ex.brand}</Text>
-        </View>
-        {/* 신기록 배지 제거 */}
-        {/* 타겟부위 칩 제거 */}
-      </View>
+      <SetCardHeader
+        machineId={isFW ? '' : machineIdFromKey(ex.id)}
+        name={ex.name}
+        brand={ex.brand}
+        isFreeWeight={isFW}
+        iconColor={col}
+        pr={histPR}
+      />
 
-      {/* Your PR reference */}
-      {histPR && (
-        <View style={s.yourPRRow}>
-          <Text style={s.yourPRLabel}>내 PR</Text>
-          <Text style={s.yourPRVal}>{histPR.weight} kg × {histPR.reps}</Text>
-        </View>
-      )}
       {prefill && (
         <View style={s.prefillRow}>
           <Ionicons name="time-outline" size={12} color={C.textDim} />
-          <Text style={s.prefillText}>지난 기록을 불러왔어요 ({formatAgoForCard(prefill.date)})</Text>
+          <Text style={s.prefillText}>지난 기록을 불러왔어요</Text>
         </View>
       )}
 
@@ -1651,8 +1645,9 @@ function SetCard({ ex, sets, realPR, prefill, freeWeights, onChange, onAdd, onCo
             <Stepper value={set.weight} onChange={v => onChange(idx, 'weight', v)} step={2.5} directInput />
           </View>
 
-          {/* Reps */}
-          <View style={[s.inputRow, { marginTop: 10 }]}>
+          {/* Reps — 무게 구역과 구분선으로 나눈다 */}
+          <View style={s.inputDivider} />
+          <View style={s.inputRow}>
             <Text style={s.inputLabel}>횟수</Text>
             <PresetScrollRow presets={REPS_PRESETS} value={set.reps} onSelect={v => onChange(idx, 'reps', v)} />
           </View>
@@ -1686,7 +1681,7 @@ function SetCard({ ex, sets, realPR, prefill, freeWeights, onChange, onAdd, onCo
         </TouchableOpacity>
         {sets.length > 0 && (
           <TouchableOpacity style={s.copySetBtn} onPress={onCopyPrev} activeOpacity={0.75}>
-            <Ionicons name="copy-outline" size={13} color={C.textSub} />
+            <Ionicons name="copy-outline" size={16} color={C.accent} />
             <Text style={s.copySetText}>이전 세트 복사</Text>
           </TouchableOpacity>
         )}
@@ -1769,7 +1764,6 @@ function SetLoggingStep({ exercise, sets, note, freeWeights, onChange, onAdd, on
         />
       )}
       <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={s.listPad}>
-        <Text style={s.hint}>프리셋 또는 스테퍼로 입력하세요</Text>
         <SetCard
           ex={exercise}
           sets={sets}
@@ -4133,8 +4127,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
             {/* 머신 목록 */}
             {exercises.map((ex, i) => {
               const exSets    = logs[ex.id] ?? [];
-              const brandKey  = ex.brand.toUpperCase().replace(/\s+/g, '_');
-              const brandLogo = brandLogos[brandKey];
+              const brandLogo = getBrandLogo(ex.brand);
               const imageUrl  = getMachineImageUrl(machineIdFromKey(ex.id), { width: 128 });
 
               return (
@@ -4187,8 +4180,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
         <View style={{ position: 'absolute', top: -9999, left: -9999, width: PHOTO_W, backgroundColor: 'transparent' }} pointerEvents="none">
           {exercises.map((ex, i) => {
             const exSets    = logs[ex.id] ?? [];
-            const brandKey  = ex.brand.toUpperCase().replace(/\s+/g, '_');
-            const brandLogo = brandLogos[brandKey];
+            const brandLogo = getBrandLogo(ex.brand);
             return (
               <View
                 key={`measure-${ex.id}`}
@@ -4269,8 +4261,7 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
                 <View style={{ flex: 1, overflow: 'hidden' }}>
                   {pageExercises.map((ex, i) => {
                     const exSets    = logs[ex.id] ?? [];
-                    const brandKey  = ex.brand.toUpperCase().replace(/\s+/g, '_');
-                    const brandLogo = brandLogos[brandKey];
+                    const brandLogo = getBrandLogo(ex.brand);
                     const imageUrl  = getMachineImageUrl(machineIdFromKey(ex.id), { width: 128 });
                     return (
                       <React.Fragment key={ex.id}>
@@ -4442,117 +4433,118 @@ function WorkoutPhotoStep({ gym, exercises, selectedMuscles, logs, photoTaken, p
           </>
         )}
 
-        {/* 저장 / 인스타그램 버튼 */}
+        {/* 2026-11-09: 공개 범위 (전체 공개 / 우리 헬스장만 / 나만 보기, 기본 전체 공개) */}
+        <OunwanVisibilityNote gymId={gym.id} userId={userId} value={visibility} onChange={onVisibilityChange} />
+
+        {/* 2026-11-28: '운동 저장'을 하단 고정 바에서 스크롤 맨 아래로 옮겨 휠 피커가 가려지지 않게 */}
         <View
-          ref={shareRowRef}
-          style={s.shareRow}
+          ref={ctaBarRef}
+          style={[s.ctaBar, { paddingHorizontal: 0, marginTop: 8, flexDirection: 'row', gap: 10, alignItems: 'stretch' }]}
           onLayout={() => {
-            if (onboardingActive && onboardingKey === 'photo-save-share') {
-              shareRowRef.current?.measureInWindow((x, y, width, height) => {
-                onRegisterRect?.('photo-save-share', { x, y, width, height });
+            if (onboardingActive && onboardingKey === 'workout-save') {
+              ctaBarRef.current?.measureInWindow((x, y, width, height) => {
+                onRegisterRect?.('workout-save', { x, y, width, height });
               });
             }
           }}
         >
-          <TouchableOpacity
-            style={[s.shareBtn, { flex: 1 }]}
-            activeOpacity={0.8}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              if (Platform.OS === 'ios') {
-                ActionSheetIOS.showActionSheetWithOptions(
-                  {
-                    options: ['취소', '기기에 저장', '인스타그램에 업로드', '오버레이만 저장'],
-                    cancelButtonIndex: 0,
-                    title: '저장 방식 선택',
-                  },
-                  (buttonIndex) => {
-                    if (buttonIndex === 1) handleSaveImage();
-                    if (buttonIndex === 2) handleInstagramShare();
-                    if (buttonIndex === 3) handleSaveLayoutOnly();
-                  }
-                );
-              } else {
-                Alert.alert(
-                  '저장 방식 선택',
-                  '어떻게 저장할까요?',
-                  [
-                    { text: '취소', style: 'cancel' },
-                    { text: '기기에 저장', onPress: handleSaveImage },
-                    { text: '인스타그램에 업로드', onPress: handleInstagramShare },
-                    { text: '오버레이만 저장', onPress: handleSaveLayoutOnly },
-                  ]
-                );
+          {/* 2026-11-28: 저장 / 공유 — '운동 저장'과 같은 줄 왼쪽 (운동 저장이 더 넓게) */}
+          <View
+            ref={shareRowRef}
+            style={{ flex: 1 }}
+            onLayout={() => {
+              if (onboardingActive && onboardingKey === 'photo-save-share') {
+                shareRowRef.current?.measureInWindow((x, y, width, height) => {
+                  onRegisterRect?.('photo-save-share', { x, y, width, height });
+                });
               }
             }}
           >
-            <Ionicons name="share-outline" size={18} color={C.text} />
-            <Text style={s.shareBtnTxt}>
-              {saveSuccess ? '저장됨 ✓' : '저장 / 공유'}
-            </Text>
+            <TouchableOpacity
+              style={[s.shareBtn, { flex: 1, paddingVertical: 0 }]}
+              activeOpacity={0.8}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                if (Platform.OS === 'ios') {
+                  ActionSheetIOS.showActionSheetWithOptions(
+                    {
+                      options: ['취소', '기기에 저장', '인스타그램에 업로드', '오버레이만 저장'],
+                      cancelButtonIndex: 0,
+                      title: '저장 방식 선택',
+                    },
+                    (buttonIndex) => {
+                      if (buttonIndex === 1) handleSaveImage();
+                      if (buttonIndex === 2) handleInstagramShare();
+                      if (buttonIndex === 3) handleSaveLayoutOnly();
+                    }
+                  );
+                } else {
+                  Alert.alert(
+                    '저장 방식 선택',
+                    '어떻게 저장할까요?',
+                    [
+                      { text: '취소', style: 'cancel' },
+                      { text: '기기에 저장', onPress: handleSaveImage },
+                      { text: '인스타그램에 업로드', onPress: handleInstagramShare },
+                      { text: '오버레이만 저장', onPress: handleSaveLayoutOnly },
+                    ]
+                  );
+                }
+              }}
+            >
+              <Ionicons name="share-outline" size={18} color={C.text} />
+              <Text style={s.shareBtnTxt}>
+                {saveSuccess ? '저장됨 ✓' : '저장 / 공유'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity
+            style={[s.ctaBtn, { flex: 2 }, !fontsLoaded && { opacity: 0.5 }]}
+            activeOpacity={0.85}
+            disabled={!fontsLoaded}
+            onPress={async () => {
+            // 2026-11-02: 사진이 없어도 기본 배경 인증샷으로 저장한다
+            let captured: string | undefined;
+            let capturedRoutineUri: string | undefined;
+            if (overlayRef.current) {
+              try {
+                await new Promise(resolve => requestAnimationFrame(resolve));
+                await new Promise<void>(resolve => InteractionManager.runAfterInteractions(() => resolve()));
+                const ratio = Math.max(PixelRatio.get(), 4);
+                if (overlayRef.current) {
+                  captured = await captureRef(overlayRef, {
+                    format: 'png', quality: 1, result: 'tmpfile',
+                    pixelRatio: ratio,
+                    ...(Platform.OS === 'android' ? { width: Math.round(PHOTO_W * ratio), height: Math.round(photoH * ratio) } : {}),
+                  });
+                  onCompositeUri(captured);
+                }
+                if (routineCardRef.current) {
+                  await new Promise(resolve => requestAnimationFrame(resolve));
+                  let measuredHeight = 0;
+                  if (Platform.OS === 'android') {
+                    measuredHeight = await new Promise<number>((resolve) => {
+                      routineCardRef.current!.measure((_x, _y, _w, h) => resolve(h > 0 ? h : ROUTINE_CARD_H));
+                    });
+                  }
+                  capturedRoutineUri = await captureRef(routineCardRef, {
+                    format: 'png', quality: 1, result: 'tmpfile',
+                    pixelRatio: ratio,
+                    ...(Platform.OS === 'android' ? { width: Math.round(PHOTO_W * ratio), height: Math.round(measuredHeight * ratio) } : {}),
+                  });
+                  onRoutineCardUri?.(capturedRoutineUri);
+                }
+              } catch (_) {}
+            }
+            onSave(captured, capturedRoutineUri);
+          }}>
+            <Ionicons name="checkmark-done" size={18} color={C.bg} />
+            <Text style={s.ctaTxt}>운동 저장</Text>
           </TouchableOpacity>
         </View>
 
-        {/* 2026-11-09: 공개 범위 (전체 공개 / 우리 헬스장만 / 나만 보기, 기본 전체 공개) */}
-        <OunwanVisibilityNote gymId={gym.id} userId={userId} value={visibility} onChange={onVisibilityChange} />
-
-        <View style={{ height: 100 }} />
+        <View style={{ height: 24 }} />
       </ScrollView>
-      <View
-        ref={ctaBarRef}
-        style={s.ctaBar}
-        onLayout={() => {
-          if (onboardingActive && onboardingKey === 'workout-save') {
-            ctaBarRef.current?.measureInWindow((x, y, width, height) => {
-              onRegisterRect?.('workout-save', { x, y, width, height });
-            });
-          }
-        }}
-      >
-        <TouchableOpacity
-          style={[s.ctaBtn, !fontsLoaded && { opacity: 0.5 }]}
-          activeOpacity={0.85}
-          disabled={!fontsLoaded}
-          onPress={async () => {
-          // 2026-11-02: 사진이 없어도 기본 배경 인증샷으로 저장한다
-          let captured: string | undefined;
-          let capturedRoutineUri: string | undefined;
-          if (overlayRef.current) {
-            try {
-              await new Promise(resolve => requestAnimationFrame(resolve));
-              await new Promise<void>(resolve => InteractionManager.runAfterInteractions(() => resolve()));
-              const ratio = Math.max(PixelRatio.get(), 4);
-              if (overlayRef.current) {
-                captured = await captureRef(overlayRef, {
-                  format: 'png', quality: 1, result: 'tmpfile',
-                  pixelRatio: ratio,
-                  ...(Platform.OS === 'android' ? { width: Math.round(PHOTO_W * ratio), height: Math.round(photoH * ratio) } : {}),
-                });
-                onCompositeUri(captured);
-              }
-              if (routineCardRef.current) {
-                await new Promise(resolve => requestAnimationFrame(resolve));
-                let measuredHeight = 0;
-                if (Platform.OS === 'android') {
-                  measuredHeight = await new Promise<number>((resolve) => {
-                    routineCardRef.current!.measure((_x, _y, _w, h) => resolve(h > 0 ? h : ROUTINE_CARD_H));
-                  });
-                }
-                capturedRoutineUri = await captureRef(routineCardRef, {
-                  format: 'png', quality: 1, result: 'tmpfile',
-                  pixelRatio: ratio,
-                  ...(Platform.OS === 'android' ? { width: Math.round(PHOTO_W * ratio), height: Math.round(measuredHeight * ratio) } : {}),
-                });
-                onRoutineCardUri?.(capturedRoutineUri);
-              }
-            } catch (_) {}
-          }
-          onSave(captured, capturedRoutineUri);
-        }}>
-          <Ionicons name="checkmark-done" size={18} color={C.bg} />
-          <Text style={s.ctaTxt}>운동 저장</Text>
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 }
@@ -5089,6 +5081,9 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
   const [routineReadOnly,     setRoutineReadOnly]     = useState(false);
   const [routineExtraInfo,    setRoutineExtraInfo]    = useState<MachineExtraInfo | undefined>(undefined);
   const [sessions,            setSessions]            = React.useState<WorkoutLog[]>([]);
+  // 2026-11-24: 헬스장 선택 화면의 '지난 운동' 한 줄용 (홈에서 이동)
+  const [todayTarget,         setTodayTarget]         = React.useState<string | null>(null);
+  const [summarySession,      setSummarySession]      = React.useState<WorkoutLog | null>(null);
   const [pastEntries, setPastEntries] = useState<WorkoutEntry[]>([]);
   const [pastSets,    setPastSets]    = useState<WorkoutSet[]>([]);
   const [realPRs,     setRealPRs]     = useState<Record<string, { weight: number; reps: number }>>({});
@@ -5165,7 +5160,9 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
 
   React.useEffect(() => {
     if (!visible || !user?.id) return;
+    setSummarySession(null);
     fetchSplitConfig(user.id).then(config => {
+      setTodayTarget(config ? getTodayTarget(config.splitType, config.workoutSplit, config.splitCurrentIndex) : null);
       if (!config) return;
       if (isRestToday(config.splitType, config.workoutSplit, config.splitCurrentIndex)) {
         setIsRestDay(true);
@@ -5719,6 +5716,14 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
           <GymSelectStep
             onSelect={handleSelectGym}
             onClose={() => onClose(false)}
+            topSlot={
+              <RecentWorkoutHint
+                sessions={sessions}
+                todayTarget={todayTarget}
+                onOpen={setSummarySession}
+                style={s.recentHint}
+              />
+            }
             onRegisterRect={onboarding.registerRect}
             onboardingActive={onboarding.active}
             onboardingKey={onboarding.currentKey}
@@ -5903,6 +5908,20 @@ export default function PostWorkoutLogModal({ visible, onClose }: PostWorkoutLog
       <View style={{ flex: 1, backgroundColor: C.bg }}>
           {renderStep()}
 
+          {/* 2026-11-24: '지난 운동' 한 줄 → 운동 요약 (홈에서 이동).
+              WorkoutLogSummaryModal이 이 파일의 WorkoutDoneStep을 import하므로
+              순환 import를 피하려고 화면에 띄울 때만 require한다. */}
+          {summarySession && (() => {
+            const WorkoutLogSummaryModal = require('./WorkoutLogSummaryModal').default;
+            return (
+              <WorkoutLogSummaryModal
+                session={summarySession}
+                allSessions={sessions}
+                onClose={() => setSummarySession(null)}
+              />
+            );
+          })()}
+
           <OnboardingTooltip
             visible={onboarding.active}
             rect={onboarding.currentRect}
@@ -5974,6 +5993,7 @@ const s = StyleSheet.create({
   safe:    { flex: 1, backgroundColor: C.bg },
   listPad: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24 },
   hint:    { fontSize: 13, color: C.textSub, marginBottom: 20, lineHeight: 18 },
+  recentHint: { marginHorizontal: 0, marginBottom: 14 },
   sectionTitle: { ...T.section, color: C.text, marginBottom: 12 },
   sectionTitleRow: {
     flexDirection: 'row',
@@ -6097,7 +6117,7 @@ const s = StyleSheet.create({
   yourPRRow:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: C.accentBg, borderRadius: R.inner, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 8 },
   yourPRLabel:      { fontSize: 9, fontWeight: '900', color: C.accent, letterSpacing: 1 },
   yourPRVal:        { fontSize: 13, fontWeight: '800', color: C.accent },
-  prefillRow:       { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
+  prefillRow:       { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2, marginBottom: 14 },
   prefillText:      { fontSize: 12, color: C.textDim, fontWeight: '600' },
 
   setBlock:       { backgroundColor: C.surfaceHigh, borderRadius: R.inner, padding: 16, marginBottom: 10 },
@@ -6105,7 +6125,8 @@ const s = StyleSheet.create({
   setBlockLabel:  { fontSize: 13, fontWeight: '800', color: C.text, letterSpacing: 0.5, textTransform: 'uppercase' },
 
   inputRow:    { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  inputLabel:  { fontSize: 10, fontWeight: '700', color: C.textSub, width: 44, letterSpacing: 0.5, textTransform: 'uppercase' },
+  inputLabel:  { fontSize: 14, fontWeight: '800', color: C.text, width: 44, letterSpacing: 0.2 },
+  inputDivider: { height: 1, backgroundColor: C.border, marginTop: 16, marginBottom: 16 },
 
   presetRow:           { flexDirection: 'row', gap: 6 },
   presetChip:          { minWidth: 40, paddingHorizontal: 12, paddingVertical: 8, borderRadius: R.pill, backgroundColor: C.surfaceHigh, alignItems: 'center' },
@@ -6132,8 +6153,8 @@ const s = StyleSheet.create({
   // '세트 추가' 버튼에는 적용되지 않음, 기존 크기 그대로 유지).
   addSetBtnEmpty:  { paddingVertical: 18, borderRadius: R.btn },
   addSetTextEmpty: { fontSize: 16 },
-  copySetBtn:   { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: R.inner, backgroundColor: C.surfaceHigh },
-  copySetText:  { fontSize: 12, fontWeight: '700', color: C.textSub },
+  copySetBtn:   { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: R.inner, backgroundColor: C.accentBg, borderWidth: 1, borderColor: C.accent },
+  copySetText:  { fontSize: 13, fontWeight: '800', color: C.accent },
 
   ctaBar:     { padding: 16, backgroundColor: C.bg },
   ctaBtn:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: C.accent, borderRadius: R.btn, paddingVertical: 16 },

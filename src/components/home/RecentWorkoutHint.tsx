@@ -1,9 +1,10 @@
 // 2026-11-23: '최근 운동일지 참고' 팝업 → 연속 기록 카드 아래 한 줄 안내로 교체
 // 오늘 부위와 같은 지난 운동(없으면 가장 최근 운동)을 한 줄로 보여주고, 누르면 요약을 연다.
 // 고르는 기준은 기존 팝업과 같다(lib/recentWorkoutPopup.ts).
+// 2026-11-24: 홈에서 운동일지 작성 첫 화면(헬스장 선택)으로 이동 — 바깥 여백은 style로 조정
 
 import React, { useMemo } from 'react';
-import { StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, StyleProp, ViewStyle } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { C } from '../../theme';
@@ -27,9 +28,10 @@ interface Props {
   sessions:    WorkoutLog[];
   todayTarget: string | null;
   onOpen:      (session: WorkoutLog) => void;
+  style?:      StyleProp<ViewStyle>;
 }
 
-function RecentWorkoutHint({ sessions, todayTarget, onOpen }: Props) {
+function RecentWorkoutHint({ sessions, todayTarget, onOpen, style }: Props) {
   const pick = useMemo(() => pickRecentWorkoutForPopup(sessions, todayTarget), [sessions, todayTarget]);
   if (!pick) return null;
 
@@ -40,7 +42,7 @@ function RecentWorkoutHint({ sessions, todayTarget, onOpen }: Props) {
 
   return (
     <TouchableOpacity
-      style={st.row}
+      style={[st.row, style]}
       activeOpacity={0.7}
       onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onOpen(session); }}
     >

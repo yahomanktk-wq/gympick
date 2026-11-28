@@ -1,5 +1,6 @@
 // 2026-11-21: 홈 '오늘의 오운완' 3x3 그리드 (가로 자동 스크롤 대체)
 // 2026-11-23: 제목 줄 삭제 → 더보기는 그리드 아래, 간격·좌우 여백을 줄여 화면을 꽉 채움
+// 2026-11-24: 선택 제목(title) — 비로그인 홈에서 '최근 운동한 사람들이에요!💪'
 // 최대 9개. 사진을 탭하면 오운완 피드로 이동(기존 동작과 같음).
 
 import React from 'react';
@@ -58,11 +59,12 @@ const MoreButton = React.memo(({ onPress }: { onPress: () => void }) => (
 
 interface Props {
   posts:       WorkoutFeedPost[];
+  title?:      string;
   onPressPost: () => void;
   onMorePress: () => void;
 }
 
-function OunwanGrid({ posts, onPressPost, onMorePress }: Props) {
+function OunwanGrid({ posts, title, onPressPost, onMorePress }: Props) {
   if (posts.length === 0) {
     return (
       <View style={st.empty}>
@@ -72,6 +74,7 @@ function OunwanGrid({ posts, onPressPost, onMorePress }: Props) {
   }
   return (
     <View>
+      {title ? <Text style={st.title}>{title}</Text> : null}
       <View style={st.grid}>
         {posts.slice(0, MAX_ITEMS).map(post => (
           <OunwanGridCell key={post.id} post={post} onPress={onPressPost} />
@@ -85,6 +88,13 @@ function OunwanGrid({ posts, onPressPost, onMorePress }: Props) {
 export default React.memo(OunwanGrid);
 
 const st = StyleSheet.create({
+  title: {
+    fontSize:         15,
+    fontWeight:       '800',
+    color:            C.text,
+    marginHorizontal: screenPad,
+    marginBottom:     10,
+  },
   grid: {
     flexDirection:     'row',
     flexWrap:          'wrap',

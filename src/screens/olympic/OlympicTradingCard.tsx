@@ -13,7 +13,7 @@ import {
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import GymPickLogo from '../../components/GymPickLogo';
-import { brandLogos } from '../../constants/brandLogos';
+import { getBrandLogo } from '../../lib/brands/brandLogoStore';
 import { getBrandCopyrightStatus } from '../../data/brandCopyrightStore';
 import { Machine } from '../../data/types';
 import { getMachineImageUrl } from '../../lib/machineImageUrl';
@@ -53,8 +53,7 @@ export default function OlympicTradingCard({
   const footerH   = Math.max(26, Math.round(34 * scale));
   const bandBottom = footerH + Math.round(8 * scale);
 
-  const brandKey   = machine.brand.toUpperCase().replace(/\s+/g, '_');
-  const brandLogo  = brandLogos[brandKey];
+  const brandLogo  = getBrandLogo(machine.brand);
   const approved   = getBrandCopyrightStatus(machine.brand);
   const displayName = machine.displayName ?? machine.name;
 

@@ -45,6 +45,9 @@ const TYPE_META: Record<string, { icon: React.ComponentProps<typeof Ionicons>['n
   qna_answer:           { icon: 'chatbubbles',         color: '#3dd68c' },
   pt_request:           { icon: 'fitness',             color: C.accent  },
   pt_message:           { icon: 'chatbubbles',         color: '#5ba4ff' },
+  gym_registered:       { icon: 'business',            color: '#ffb547' },
+  gym_link_requested:   { icon: 'link',                color: '#818cf8' },
+  machine_registered:   { icon: 'barbell',             color: '#3dd68c' },
   announcement:         { icon: 'megaphone',           color: '#ffb547' },
   general:              { icon: 'notifications',       color: '#5ba4ff' },
   default:              { icon: 'notifications',       color: C.accent  },
@@ -55,6 +58,10 @@ const DETAIL_TYPES = new Set<string>(['qna_question', 'qna_answer', 'pt_request'
 const GYM_LINK_TYPES = new Set<string>([
   'member_request', 'member_approved', 'member_rejected',
   'trainer_application', 'trainer_approved', 'trainer_rejected',
+  // 2026-11-27: 매니저 새 헬스장 등록·연결 요청(어드민 알림) → 그 헬스장 상세
+  'gym_registered', 'gym_link_requested',
+  // 2026-11-27: 머신 등록 신청 처리 완료(매니저 알림) → 그 헬스장 상세
+  'machine_registered',
 ]);
 
 function formatDate(iso: string): string {

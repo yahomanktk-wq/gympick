@@ -68,8 +68,12 @@ function machineName(id: string) {
 
 /** Format "2026-03-10" → "Mar 10" */
 function fmtDate(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  // 'YYYY-MM-DD'는 로컬 날짜로 해석 (UTC로 읽혀 하루 밀리는 것 방지)
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  const d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 (${DOW[d.getDay()]})`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -141,36 +145,35 @@ function PastSessionCard({
   session: WorkoutLog;
   onPress: () => void;
 }) {
-  const machineList = session.machines.map((m) => m.machineName).join(' · ');
+  const machineNames = session.machines.map((m) => m.machineName);
   const muscles = [...new Set(session.machines.map((m) => m.targetMuscle))];
 
   return (
     <TouchableOpacity style={s.card} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPress(); }} activeOpacity={0.8}>
       <View style={s.cardRow}>
-        <View style={s.cardIcon}>
-          <Ionicons name="calendar-outline" size={18} color={C.accent} />
-        </View>
         <View style={{ flex: 1 }}>
           <View style={s.cardTopRow}>
-            <Text style={s.cardTitle}>{fmtDate(session.date)}</Text>
+            <Text style={s.pastTitle}>{fmtDate(session.date)}</Text>
             <View style={s.tagRow}>
               {muscles.slice(0, 2).map((m) => (
-                <View key={m} style={s.muscleTag}>
-                  <Text style={s.muscleTagText}>{m}</Text>
+                <View key={m} style={s.pastMuscleTag}>
+                  <Text style={s.pastMuscleTagText}>{m}</Text>
                 </View>
               ))}
             </View>
+            <View style={{ flex: 1 }} />
+            <Text style={s.pastHint}>머신 {session.machines.length}개</Text>
           </View>
-          <Text style={s.cardSub} numberOfLines={1}>
-            {machineList}
-          </Text>
-          <Text style={s.cardHint}>
-            {session.machines.length} machine{session.machines.length !== 1 ? 's' : ''}
-            {'  ·  '}
-            Machine list only — sets not copied
-          </Text>
+          {/* 2026-11-28: 머신명 하나가 중간에서 줄바꿈되지 않게 머신 단위로 나눠 감싼다 */}
+          <View style={s.pastNameWrap}>
+            {machineNames.map((name, i) => (
+              <Text key={`${name}-${i}`} style={s.pastSub} numberOfLines={1}>
+                {name}{i < machineNames.length - 1 ? '  · ' : ''}
+              </Text>
+            ))}
+          </View>
         </View>
-        <Ionicons name="chevron-forward" size={15} color={C.textDim} style={s.cardChevron} />
+        <Ionicons name="chevron-forward" size={17} color={C.textSub} style={s.cardChevron} />
       </View>
     </TouchableOpacity>
   );
@@ -354,7 +357,7 @@ export default function RoutineReferenceScreen({
 
   return (
     <SafeAreaView style={s.safe}>
-      <NavHeader title="Choose a Routine" onBack={onBack} onClose={onClose} />
+      <NavHeader title="루틴을 선택할까요?" onBack={onBack} onClose={onClose} />
       <StepBar total={6} current={2} />
 
       <ScrollView
@@ -612,6 +615,42 @@ const s = StyleSheet.create({
   cardChevron: {
     alignSelf: 'center',
     marginLeft: 4,
+  },
+
+  // 이전 운동일지 카드 (2026-11-28: 아이콘 제거, 글자 확대)
+  pastTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: C.text,
+    letterSpacing: -0.3,
+  },
+  pastNameWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 6,
+  },
+  pastSub: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: C.textSub,
+    lineHeight: 20,
+  },
+  pastHint: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: C.accent,
+  },
+  pastMuscleTag: {
+    backgroundColor: C.tagMachine.bg,
+    borderRadius: R.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  pastMuscleTagText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    color: C.tagMachine.fg,
   },
 
   // Muscle tags

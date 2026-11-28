@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R } from '../theme';
 import GymPickLogo from './GymPickLogo';
-import { brandLogos } from '../constants/brandLogos';
+import { getBrandLogo } from '../lib/brands/brandLogoStore';
 import { getBrandCopyrightStatus } from '../data/brandCopyrightStore';
 
 // ---------------------------------------------------------------------------
@@ -45,8 +45,7 @@ const COPYRIGHT_KO = '해당 기구 이미지는 제조사의 저작권 보호�
 
 export default function SelectableMachineCard({ machine, width, selected, completed, onSelect }: Props) {
   const cardH         = Math.round(width * (16 / 9));
-  const brandKey      = machine.brand.toUpperCase().replace(/\s+/g, '_');
-  const brandLogo     = brandLogos[brandKey];
+  const brandLogo     = getBrandLogo(machine.brand);
   const imageApproved = getBrandCopyrightStatus(machine.brand);
 
   const borderColor  = completed
