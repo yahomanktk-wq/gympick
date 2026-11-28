@@ -19,10 +19,13 @@ interface Props {
 export default function OunwanVisibilityNote({ gymId, userId, value, onChange }: Props) {
   const canUseGym = useIsGymMember(gymId, userId);
   return (
-    <View style={{ marginTop: 16, gap: 10 }}>
-      <Text style={{ fontSize: 14, fontWeight: '800', color: C.text, paddingHorizontal: 2 }}>공개 범위</Text>
+    <View style={{ marginTop: 0, gap: 10 }}>
+      {/* 2026-11-28: 안내 문구를 제목과 같은 줄 오른쪽으로 */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 2 }}>
+        <Text style={{ fontSize: 14, fontWeight: '800', color: C.text }}>공개 범위</Text>
+        <Text style={{ fontSize: 12, color: C.textSub, flexShrink: 1, textAlign: 'right' }} numberOfLines={1}>운동일지에서 언제든 바꿀 수 있어요</Text>
+      </View>
       <VisibilitySegment value={value} canUseGym={canUseGym} onChange={onChange} />
-      <Text style={{ fontSize: 12, color: C.textSub, paddingHorizontal: 2 }}>운동일지에서 언제든 바꿀 수 있어요.</Text>
     </View>
   );
 }
